@@ -1,0 +1,8 @@
+/target
+/web/node_modules
+.DS_Store
+
+# The folder itself has to exist for rust-embed to compile; its contents are
+# built artefacts.
+/web/dist/*
+!/web/dist/.gitkeep
