@@ -1,3 +1,4 @@
+pub mod cmd;
 pub mod diff;
 pub mod map;
 pub mod progress;

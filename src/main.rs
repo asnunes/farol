@@ -1,3 +1,6 @@
 fn main() {
-    println!("farol");
+    if let Err(e) = farol::cmd::run() {
+        eprintln!("{e}");
+        std::process::exit(1);
+    }
 }

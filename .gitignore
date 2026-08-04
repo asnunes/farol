@@ -6,3 +6,4 @@
 # built artefacts.
 /web/dist/*
 !/web/dist/.gitkeep
+web/tsconfig.tsbuildinfo
