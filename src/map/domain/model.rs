@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
-use crate::shared::error::{Error, Result};
 pub use crate::shared::WORKING;
+use crate::shared::error::{Error, Result};
 
 pub const MAP_VERSION: u32 = 1;
 
