@@ -127,7 +127,7 @@ impl DiffSource for GixSource {
         let from_id = resolve(&repo, from)?;
         let old = blob_at(&repo, from_id, path)?;
 
-        let new = if to == crate::map::domain::WORKING {
+        let new = if to == crate::shared::WORKING {
             std::fs::read(
                 repo.workdir()
                     .unwrap_or_else(|| std::path::Path::new("."))
@@ -174,7 +174,7 @@ impl DiffSource for GixSource {
     }
 
     fn commits_ahead_of(&self, sha: &str) -> Result<u32> {
-        if sha == crate::map::domain::WORKING {
+        if sha == crate::shared::WORKING {
             return Ok(0);
         }
         let repo = self.repo();
@@ -202,7 +202,7 @@ impl DiffSource for GixSource {
     }
 
     fn is_ancestor(&self, sha: &str) -> Result<bool> {
-        if sha == crate::map::domain::WORKING {
+        if sha == crate::shared::WORKING {
             return Ok(false);
         }
         let repo = self.repo();
