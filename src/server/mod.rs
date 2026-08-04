@@ -14,16 +14,13 @@ use serde::Deserialize;
 use tokio::sync::broadcast;
 
 use crate::diff::domain::DiffSource;
-use crate::diff::infra::GixSource;
 use crate::map::domain::ReviewMap;
 use crate::progress::domain::ProgressRepository;
-use crate::progress::infra::JsonProgressRepository;
 use crate::shared::error::{Error, Result};
-use crate::shared::paths::Store;
 
 pub struct ServeConfig {
-    pub source: GixSource,
-    pub progress: JsonProgressRepository,
+    pub source: Arc<dyn DiffSource>,
+    pub progress: Arc<dyn ProgressRepository>,
     pub map: ReviewMap,
     pub port: u16,
     pub open_browser: bool,
@@ -38,17 +35,29 @@ struct AppState {
     changes: broadcast::Sender<String>,
 }
 
-pub fn serve(config: ServeConfig) -> Result<()> {
-    let runtime = tokio::runtime::Runtime::new().map_err(|e| Error::msg(e.to_string()))?;
-    runtime.block_on(async move { run(config).await })
+/// Owns the HTTP surface. Everything it serves arrives injected, so the routes
+/// can be exercised over fakes.
+pub struct Server {
+    config: ServeConfig,
 }
 
-async fn run(config: ServeConfig) -> Result<()> {
+impl Server {
+    pub fn new(config: ServeConfig) -> Self {
+        Self { config }
+    }
+
+    pub fn run(self) -> Result<()> {
+        let runtime = tokio::runtime::Runtime::new().map_err(|e| Error::msg(e.to_string()))?;
+        runtime.block_on(async move { serve(self.config).await })
+    }
+}
+
+async fn serve(config: ServeConfig) -> Result<()> {
     let (tx, _) = broadcast::channel(16);
 
     let state = Arc::new(AppState {
-        source: Arc::new(config.source),
-        progress: Arc::new(config.progress),
+        source: config.source,
+        progress: config.progress,
         map: Mutex::new(config.map),
         changes: tx.clone(),
     });
@@ -90,7 +99,7 @@ async fn review(State(state): State<Arc<AppState>>) -> impl IntoResponse {
         Err(e) => return fail(e),
     };
     let map = state.map.lock().unwrap().clone();
-    match view::build(&map, state.source.as_ref(), &progress) {
+    match view::ReviewView::build(&map, state.source.as_ref(), &progress) {
         Ok(v) => Json(v).into_response(),
         Err(e) => fail(e),
     }
@@ -118,15 +127,14 @@ async fn viewed(
     State(state): State<Arc<AppState>>,
     Json(body): Json<ViewedBody>,
 ) -> impl IntoResponse {
+    let service = crate::progress::application::ProgressService::new(
+        state.progress.as_ref(),
+        state.source.as_ref(),
+    );
     let result = if body.viewed {
-        crate::progress::application::mark_viewed(
-            state.progress.as_ref(),
-            state.source.as_ref(),
-            &body.path,
-            &now(),
-        )
+        service.mark(&body.path, &now())
     } else {
-        crate::progress::application::unmark_viewed(state.progress.as_ref(), &body.path)
+        service.unmark(&body.path)
     };
     match result {
         Ok(_) => StatusCode::NO_CONTENT.into_response(),
@@ -207,9 +215,4 @@ fn now() -> String {
         .map(|d| d.as_secs())
         .unwrap_or(0);
     secs.to_string()
-}
-
-/// Kept so callers outside this module never need to know how state is stored.
-pub fn store_for(git_dir: &std::path::Path, branch: &str) -> Store {
-    Store::new(git_dir, branch)
 }

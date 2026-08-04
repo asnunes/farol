@@ -39,22 +39,20 @@ pub enum Error {
     #[error("invalid range '{raw}' — expected <from>-<to>, for example 82-116")]
     BadRange { raw: String },
 
-    #[error("no line note at {from}-{to} on '{path}' in block '{slug}'")]
+    #[error("no line note at {range} on '{path}' in block '{slug}'")]
     NoSuchLineNote {
         slug: String,
         path: String,
-        from: u32,
-        to: u32,
+        range: crate::map::domain::LineRange,
     },
 
     #[error(
-        "no deactivated note at {from}-{to} on '{path}' in block '{slug}'\nRun `farol map derive` to see what is pending."
+        "no deactivated note at {range} on '{path}' in block '{slug}'\nRun `farol map derive` to see what is pending."
     )]
     NoSuchOrphan {
         slug: String,
         path: String,
-        from: u32,
-        to: u32,
+        range: crate::map::domain::LineRange,
     },
 
     #[error("HEAD is detached — check out a branch first")]

@@ -1,0 +1,242 @@
+//! Stand-ins for the ports, so behaviour can be driven without a repository on
+//! disk.
+//!
+//! This is what the injection buys: derivation, re-anchoring and the view rules
+//! are exercised against hand-built diffs, where a case that would take three
+//! commits to set up is four lines instead.
+
+use std::sync::Mutex;
+
+use crate::diff::domain::{
+    DiffSource, FileChange, FileDiff, FileStatus, Hunk, Line, LineKind, Scope,
+};
+use crate::map::domain::{MapRepository, ReviewMap};
+use crate::progress::domain::{Progress, ProgressRepository};
+use crate::shared::error::{Error, Result};
+
+/// A diff source you assemble by hand.
+pub struct FakeDiffSource {
+    scope: Scope,
+    /// (from, to, path) -> the diff between those two commits.
+    between: Vec<((String, String, String), FileDiff)>,
+    line_counts: Vec<(String, u32)>,
+    ancestors: Vec<String>,
+    distances: Vec<(String, u32)>,
+}
+
+impl FakeDiffSource {
+    pub fn with_paths(paths: &[&str]) -> Self {
+        Self {
+            scope: Scope {
+                branch: "feature/x".into(),
+                base_ref: "main".into(),
+                head_ref: "feature/x".into(),
+                base_sha: "base".into(),
+                head_sha: "head".into(),
+                merge_base: true,
+                dirty: false,
+                files: paths.iter().map(|p| change(p)).collect(),
+            },
+            between: Vec::new(),
+            line_counts: Vec::new(),
+            ancestors: Vec::new(),
+            distances: Vec::new(),
+        }
+    }
+
+    /// Declare how a file changed between two commits, which is what
+    /// re-anchoring reads.
+    pub fn changed_between(mut self, from: &str, to: &str, path: &str, hunks: Vec<Hunk>) -> Self {
+        self.between.push((
+            (from.into(), to.into(), path.into()),
+            FileDiff {
+                path: path.into(),
+                old_path: None,
+                status: FileStatus::Modified,
+                hunks,
+                additions: 0,
+                deletions: 0,
+                new_content_hash: format!("hash-of-{path}-at-{to}"),
+            },
+        ));
+        self
+    }
+
+    pub fn with_line_count(mut self, path: &str, lines: u32) -> Self {
+        self.line_counts.push((path.into(), lines));
+        self
+    }
+
+    pub fn with_ancestors(mut self, shas: &[&str]) -> Self {
+        self.ancestors = shas.iter().map(|s| s.to_string()).collect();
+        self
+    }
+
+    pub fn at_distance(mut self, sha: &str, commits: u32) -> Self {
+        self.distances.push((sha.into(), commits));
+        self
+    }
+
+    pub fn on_commit(mut self, sha: &str) -> Self {
+        self.scope.head_sha = sha.into();
+        self
+    }
+}
+
+fn change(path: &str) -> FileChange {
+    FileChange {
+        path: path.to_string(),
+        old_path: None,
+        status: FileStatus::Modified,
+        additions: 3,
+        deletions: 1,
+    }
+}
+
+impl DiffSource for FakeDiffSource {
+    fn scope(&self) -> Result<&Scope> {
+        Ok(&self.scope)
+    }
+
+    fn file_diff(&self, path: &str) -> Result<FileDiff> {
+        Ok(FileDiff {
+            path: path.to_string(),
+            old_path: None,
+            status: FileStatus::Modified,
+            hunks: vec![],
+            additions: 3,
+            deletions: 1,
+            new_content_hash: format!("hash-of-{path}"),
+        })
+    }
+
+    fn file_diff_between(&self, from: &str, to: &str, path: &str) -> Result<Option<FileDiff>> {
+        Ok(self
+            .between
+            .iter()
+            .find(|((f, t, p), _)| f == from && t == to && p == path)
+            .map(|(_, diff)| diff.clone()))
+    }
+
+    fn file_line_count(&self, path: &str) -> Result<u32> {
+        self.line_counts
+            .iter()
+            .find(|(p, _)| p == path)
+            .map(|(_, n)| *n)
+            .ok_or_else(|| Error::msg(format!("no line count declared for {path}")))
+    }
+
+    fn head_sha(&self) -> Result<String> {
+        Ok(self.scope.head_sha.clone())
+    }
+
+    fn commits_ahead_of(&self, sha: &str) -> Result<u32> {
+        Ok(self
+            .distances
+            .iter()
+            .find(|(s, _)| s == sha)
+            .map(|(_, n)| *n)
+            .unwrap_or(0))
+    }
+
+    fn is_ancestor(&self, sha: &str) -> Result<bool> {
+        Ok(self.ancestors.iter().any(|s| s == sha))
+    }
+}
+
+/// Map storage that never touches the filesystem.
+#[derive(Default)]
+pub struct InMemoryMapRepository {
+    maps: Mutex<Vec<ReviewMap>>,
+}
+
+impl InMemoryMapRepository {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn seed(&self, map: ReviewMap) {
+        self.maps.lock().unwrap().push(map);
+    }
+}
+
+impl MapRepository for InMemoryMapRepository {
+    fn load_at(&self, sha: &str) -> Result<Option<ReviewMap>> {
+        Ok(self
+            .maps
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|m| m.generated_at == sha)
+            .cloned())
+    }
+
+    fn stored_shas(&self) -> Result<Vec<String>> {
+        Ok(self
+            .maps
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|m| m.generated_at.clone())
+            .collect())
+    }
+
+    fn save(&self, map: &ReviewMap) -> Result<()> {
+        let mut maps = self.maps.lock().unwrap();
+        maps.retain(|m| m.generated_at != map.generated_at);
+        maps.push(map.clone());
+        Ok(())
+    }
+
+    fn delete(&self, sha: &str) -> Result<()> {
+        self.maps.lock().unwrap().retain(|m| m.generated_at != sha);
+        Ok(())
+    }
+}
+
+#[derive(Default)]
+pub struct InMemoryProgressRepository {
+    progress: Mutex<Progress>,
+}
+
+impl ProgressRepository for InMemoryProgressRepository {
+    fn load(&self) -> Result<Progress> {
+        Ok(self.progress.lock().unwrap().clone())
+    }
+
+    fn save(&self, progress: &Progress) -> Result<()> {
+        *self.progress.lock().unwrap() = progress.clone();
+        Ok(())
+    }
+}
+
+/// A hunk with only the counts filled in — enough for range arithmetic.
+pub fn hunk(old_start: u32, old_lines: u32, new_lines: u32) -> Hunk {
+    Hunk {
+        old_start,
+        old_lines,
+        new_start: old_start,
+        new_lines,
+        lines: vec![],
+    }
+}
+
+/// A hunk that also carries line bodies, so snapshots have something to quote.
+pub fn hunk_with_lines(old_start: u32, contents: &[&str]) -> Hunk {
+    Hunk {
+        old_start,
+        old_lines: contents.len() as u32,
+        new_start: old_start,
+        new_lines: contents.len() as u32,
+        lines: contents
+            .iter()
+            .enumerate()
+            .map(|(i, c)| Line {
+                kind: LineKind::Removed,
+                old_number: Some(old_start + i as u32),
+                new_number: None,
+                content: c.to_string(),
+            })
+            .collect(),
+    }
+}

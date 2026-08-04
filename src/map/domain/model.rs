@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use super::range::LineRange;
+
 pub use crate::shared::WORKING;
 use crate::shared::error::{Error, Result};
 
@@ -39,15 +41,9 @@ impl OrphanReason {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LineNote {
-    pub from: u32,
-    pub to: u32,
+    #[serde(flatten)]
+    pub range: LineRange,
     pub text: String,
-}
-
-impl LineNote {
-    pub fn range(&self) -> String {
-        format!("{}-{}", self.from, self.to)
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -111,17 +107,11 @@ pub struct SkimEntry {
 pub struct Orphan {
     pub block: String,
     pub path: String,
-    pub old_from: u32,
-    pub old_to: u32,
+    #[serde(flatten)]
+    pub old_range: LineRange,
     pub snapshot: String,
     pub reason: OrphanReason,
     pub text: String,
-}
-
-impl Orphan {
-    pub fn old_range(&self) -> String {
-        format!("{}-{}", self.old_from, self.old_to)
-    }
 }
 
 /// Where a newly added block or file goes.
@@ -279,8 +269,7 @@ impl ReviewMap {
                 self.orphans.push(Orphan {
                     block: block.slug.clone(),
                     path: file.path.clone(),
-                    old_from: note.from,
-                    old_to: note.to,
+                    old_range: note.range,
                     snapshot: String::new(),
                     reason: OrphanReason::BlockRemoved,
                     text: note.text.clone(),
@@ -424,18 +413,16 @@ impl ReviewMap {
         &mut self,
         slug: &str,
         path: &str,
-        from: u32,
-        to: u32,
+        range: LineRange,
         text: impl Into<String>,
     ) -> Result<()> {
         let file = self.block_file_mut(slug, path)?;
-        file.line_notes.retain(|n| !(n.from == from && n.to == to));
+        file.line_notes.retain(|n| n.range != range);
         file.line_notes.push(LineNote {
-            from,
-            to,
+            range,
             text: text.into(),
         });
-        file.line_notes.sort_by_key(|n| (n.from, n.to));
+        file.line_notes.sort_by_key(|n| n.range);
         Ok(())
     }
 
@@ -443,35 +430,32 @@ impl ReviewMap {
         &mut self,
         slug: &str,
         path: &str,
-        from: u32,
-        to: u32,
+        range: LineRange,
         text: impl Into<String>,
     ) -> Result<()> {
         let file = self.block_file_mut(slug, path)?;
         let note = file
             .line_notes
             .iter_mut()
-            .find(|n| n.from == from && n.to == to)
+            .find(|n| n.range == range)
             .ok_or_else(|| Error::NoSuchLineNote {
                 slug: slug.to_string(),
                 path: path.to_string(),
-                from,
-                to,
+                range,
             })?;
         note.text = text.into();
         Ok(())
     }
 
-    pub fn remove_line_note(&mut self, slug: &str, path: &str, from: u32, to: u32) -> Result<()> {
+    pub fn remove_line_note(&mut self, slug: &str, path: &str, range: LineRange) -> Result<()> {
         let file = self.block_file_mut(slug, path)?;
         let before = file.line_notes.len();
-        file.line_notes.retain(|n| !(n.from == from && n.to == to));
+        file.line_notes.retain(|n| n.range != range);
         if file.line_notes.len() == before {
             return Err(Error::NoSuchLineNote {
                 slug: slug.to_string(),
                 path: path.to_string(),
-                from,
-                to,
+                range,
             });
         }
         Ok(())
@@ -497,16 +481,15 @@ impl ReviewMap {
 
     // ---- orphans ------------------------------------------------------
 
-    pub fn take_orphan(&mut self, slug: &str, path: &str, from: u32, to: u32) -> Result<Orphan> {
+    pub fn take_orphan(&mut self, slug: &str, path: &str, range: LineRange) -> Result<Orphan> {
         let idx = self
             .orphans
             .iter()
-            .position(|o| o.block == slug && o.path == path && o.old_from == from && o.old_to == to)
+            .position(|o| o.block == slug && o.path == path && o.old_range == range)
             .ok_or_else(|| Error::NoSuchOrphan {
                 slug: slug.to_string(),
                 path: path.to_string(),
-                from,
-                to,
+                range,
             })?;
         Ok(self.orphans.remove(idx))
     }
@@ -671,9 +654,12 @@ mod tests {
     fn line_notes_stay_sorted_and_re_adding_replaces() {
         let mut m = map_with(&["one"]);
         m.add_file("one", "a.rs", None, None).unwrap();
-        m.add_line_note("one", "a.rs", 40, 50, "second").unwrap();
-        m.add_line_note("one", "a.rs", 10, 20, "first").unwrap();
-        m.add_line_note("one", "a.rs", 40, 50, "replaced").unwrap();
+        m.add_line_note("one", "a.rs", LineRange::new(40, 50).unwrap(), "second")
+            .unwrap();
+        m.add_line_note("one", "a.rs", LineRange::new(10, 20).unwrap(), "first")
+            .unwrap();
+        m.add_line_note("one", "a.rs", LineRange::new(40, 50).unwrap(), "replaced")
+            .unwrap();
         let notes = &m.block("one").unwrap().file("a.rs").unwrap().line_notes;
         assert_eq!(notes.len(), 2);
         assert_eq!(notes[0].text, "first");
@@ -684,8 +670,13 @@ mod tests {
     fn removing_a_block_keeps_its_line_notes_as_orphans() {
         let mut m = map_with(&["one"]);
         m.add_file("one", "a.rs", None, None).unwrap();
-        m.add_line_note("one", "a.rs", 10, 20, "worth keeping")
-            .unwrap();
+        m.add_line_note(
+            "one",
+            "a.rs",
+            LineRange::new(10, 20).unwrap(),
+            "worth keeping",
+        )
+        .unwrap();
         m.remove_block("one").unwrap();
         assert_eq!(m.orphans.len(), 1);
         assert_eq!(m.orphans[0].reason, OrphanReason::BlockRemoved);

@@ -72,36 +72,61 @@ pub struct ReviewView {
     pub viewed_files: usize,
 }
 
-pub fn build(map: &ReviewMap, source: &dyn DiffSource, progress: &Progress) -> Result<ReviewView> {
-    let scope = source.scope()?;
-    let commits_behind = source.commits_ahead_of(&map.generated_at).unwrap_or(0);
+impl ReviewView {
+    pub fn build(map: &ReviewMap, source: &dyn DiffSource, progress: &Progress) -> Result<Self> {
+        let scope = source.scope()?;
+        let commits_behind = source.commits_ahead_of(&map.generated_at).unwrap_or(0);
 
-    let mut blocks = Vec::new();
-    let mut placed: Vec<String> = Vec::new();
+        let mut blocks = Vec::new();
+        let mut placed: Vec<String> = Vec::new();
 
-    for block in &map.blocks {
-        let mut files = Vec::new();
+        for block in &map.blocks {
+            let mut files = Vec::new();
 
-        for bf in &block.files {
-            // Only the earliest block renders it; later ones would repeat the
-            // same diff under a different heading.
-            if placed.contains(&bf.path) {
-                continue;
+            for bf in &block.files {
+                // Only the earliest block renders it; later ones would repeat the
+                // same diff under a different heading.
+                if placed.contains(&bf.path) {
+                    continue;
+                }
+                placed.push(bf.path.clone());
+                files.push(FileView::build(map, scope, progress, &bf.path, false, None));
             }
-            placed.push(bf.path.clone());
-            files.push(file_view(map, scope, progress, &bf.path, false, None));
+
+            for entry in map
+                .skim
+                .iter()
+                .filter(|s| s.block.as_deref() == Some(block.slug.as_str()))
+            {
+                if placed.contains(&entry.path) {
+                    continue;
+                }
+                placed.push(entry.path.clone());
+                files.push(FileView::build(
+                    map,
+                    scope,
+                    progress,
+                    &entry.path,
+                    true,
+                    Some(entry.reason.clone()),
+                ));
+            }
+
+            blocks.push(BlockView {
+                slug: block.slug.clone(),
+                title: block.title.clone(),
+                context: block.context.clone(),
+                files,
+            });
         }
 
-        for entry in map
-            .skim
-            .iter()
-            .filter(|s| s.block.as_deref() == Some(block.slug.as_str()))
-        {
+        let mut loose_skim = Vec::new();
+        for entry in map.skim.iter().filter(|s| s.block.is_none()) {
             if placed.contains(&entry.path) {
                 continue;
             }
             placed.push(entry.path.clone());
-            files.push(file_view(
+            loose_skim.push(FileView::build(
                 map,
                 scope,
                 progress,
@@ -111,172 +136,97 @@ pub fn build(map: &ReviewMap, source: &dyn DiffSource, progress: &Progress) -> R
             ));
         }
 
-        blocks.push(BlockView {
-            slug: block.slug.clone(),
-            title: block.title.clone(),
-            context: block.context.clone(),
-            files,
-        });
+        let unmapped: Vec<String> = scope
+            .files
+            .iter()
+            .map(|f| f.path.clone())
+            .filter(|p| !placed.contains(p))
+            .collect();
+
+        let total_files = placed.len();
+        let viewed_files = blocks
+            .iter()
+            .flat_map(|b| b.files.iter())
+            .chain(loose_skim.iter())
+            .filter(|f| f.viewed)
+            .count();
+
+        Ok(ReviewView {
+            branch: map.branch.clone(),
+            base: map.base.clone(),
+            generated_at: map.generated_at.clone(),
+            commits_behind,
+            blocks,
+            loose_skim,
+            unmapped,
+            total_files,
+            viewed_files,
+        })
     }
-
-    let mut loose_skim = Vec::new();
-    for entry in map.skim.iter().filter(|s| s.block.is_none()) {
-        if placed.contains(&entry.path) {
-            continue;
-        }
-        placed.push(entry.path.clone());
-        loose_skim.push(file_view(
-            map,
-            scope,
-            progress,
-            &entry.path,
-            true,
-            Some(entry.reason.clone()),
-        ));
-    }
-
-    let unmapped: Vec<String> = scope
-        .files
-        .iter()
-        .map(|f| f.path.clone())
-        .filter(|p| !placed.contains(p))
-        .collect();
-
-    let total_files = placed.len();
-    let viewed_files = blocks
-        .iter()
-        .flat_map(|b| b.files.iter())
-        .chain(loose_skim.iter())
-        .filter(|f| f.viewed)
-        .count();
-
-    Ok(ReviewView {
-        branch: map.branch.clone(),
-        base: map.base.clone(),
-        generated_at: map.generated_at.clone(),
-        commits_behind,
-        blocks,
-        loose_skim,
-        unmapped,
-        total_files,
-        viewed_files,
-    })
 }
 
-fn file_view(
-    map: &ReviewMap,
-    scope: &crate::diff::domain::Scope,
-    progress: &Progress,
-    path: &str,
-    skim: bool,
-    skim_reason: Option<String>,
-) -> FileView {
-    let change = scope.files.iter().find(|f| f.path == path);
+impl FileView {
+    fn build(
+        map: &ReviewMap,
+        scope: &crate::diff::domain::Scope,
+        progress: &Progress,
+        path: &str,
+        skim: bool,
+        skim_reason: Option<String>,
+    ) -> FileView {
+        let change = scope.files.iter().find(|f| f.path == path);
 
-    // Notes from every block the file appears in, so nothing is lost by
-    // rendering it only once.
-    let mut notes = Vec::new();
-    let mut line_notes = Vec::new();
-    for block in map.blocks_of(path) {
-        if let Some(bf) = block.file(path) {
-            if let Some(text) = &bf.note {
-                notes.push(TaggedNote {
-                    block: block.slug.clone(),
-                    text: text.clone(),
-                });
-            }
-            for n in &bf.line_notes {
-                line_notes.push(TaggedLineNote {
-                    block: block.slug.clone(),
-                    from: n.from,
-                    to: n.to,
-                    text: n.text.clone(),
-                });
+        // Notes from every block the file appears in, so nothing is lost by
+        // rendering it only once.
+        let mut notes = Vec::new();
+        let mut line_notes = Vec::new();
+        for block in map.blocks_of(path) {
+            if let Some(bf) = block.file(path) {
+                if let Some(text) = &bf.note {
+                    notes.push(TaggedNote {
+                        block: block.slug.clone(),
+                        text: text.clone(),
+                    });
+                }
+                for n in &bf.line_notes {
+                    line_notes.push(TaggedLineNote {
+                        block: block.slug.clone(),
+                        from: n.range.from,
+                        to: n.range.to,
+                        text: n.text.clone(),
+                    });
+                }
             }
         }
-    }
-    line_notes.sort_by_key(|n| (n.from, n.to));
+        line_notes.sort_by_key(|n| (n.from, n.to));
 
-    let viewed = progress
-        .viewed
-        .iter()
-        .any(|v| v.path == path && change.is_some());
+        let viewed = progress
+            .viewed
+            .iter()
+            .any(|v| v.path == path && change.is_some());
 
-    FileView {
-        path: path.to_string(),
-        status: change
-            .map(|c| c.status.label())
-            .unwrap_or(FileStatus::Modified.label()),
-        additions: change.map(|c| c.additions).unwrap_or(0),
-        deletions: change.map(|c| c.deletions).unwrap_or(0),
-        viewed,
-        notes,
-        line_notes,
-        tags: map.blocks_of(path).iter().map(|b| b.slug.clone()).collect(),
-        skim,
-        skim_reason,
+        FileView {
+            path: path.to_string(),
+            status: change
+                .map(|c| c.status.label())
+                .unwrap_or(FileStatus::Modified.label()),
+            additions: change.map(|c| c.additions).unwrap_or(0),
+            deletions: change.map(|c| c.deletions).unwrap_or(0),
+            viewed,
+            notes,
+            line_notes,
+            tags: map.blocks_of(path).iter().map(|b| b.slug.clone()).collect(),
+            skim,
+            skim_reason,
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::diff::domain::{FileChange, FileDiff, Scope};
-    use crate::map::domain::Position;
-
-    struct FakeSource {
-        scope: Scope,
-    }
-
-    impl FakeSource {
-        fn with(paths: &[&str]) -> Self {
-            Self {
-                scope: Scope {
-                    branch: "feature/x".into(),
-                    base_ref: "main".into(),
-                    head_ref: "feature/x".into(),
-                    base_sha: "base".into(),
-                    head_sha: "head".into(),
-                    merge_base: true,
-                    dirty: false,
-                    files: paths
-                        .iter()
-                        .map(|p| FileChange {
-                            path: p.to_string(),
-                            old_path: None,
-                            status: FileStatus::Modified,
-                            additions: 3,
-                            deletions: 1,
-                        })
-                        .collect(),
-                },
-            }
-        }
-    }
-
-    impl DiffSource for FakeSource {
-        fn scope(&self) -> Result<&Scope> {
-            Ok(&self.scope)
-        }
-        fn file_diff(&self, _path: &str) -> Result<FileDiff> {
-            unimplemented!()
-        }
-        fn file_diff_between(&self, _: &str, _: &str, _: &str) -> Result<Option<FileDiff>> {
-            Ok(None)
-        }
-        fn file_line_count(&self, _path: &str) -> Result<u32> {
-            Ok(500)
-        }
-        fn head_sha(&self) -> Result<String> {
-            Ok("head".into())
-        }
-        fn commits_ahead_of(&self, _sha: &str) -> Result<u32> {
-            Ok(0)
-        }
-        fn is_ancestor(&self, _sha: &str) -> Result<bool> {
-            Ok(true)
-        }
-    }
+    use crate::map::domain::{LineRange, Position};
+    use crate::testing::FakeDiffSource;
 
     fn map_of(paths: &[(&str, &str)]) -> ReviewMap {
         let mut m = ReviewMap::new("feature/x", "main", "head");
@@ -294,8 +244,8 @@ mod tests {
     #[test]
     fn a_file_in_two_blocks_is_rendered_once_in_the_earlier_one() {
         let map = map_of(&[("first", "shared.rs"), ("second", "shared.rs")]);
-        let source = FakeSource::with(&["shared.rs"]);
-        let view = build(&map, &source, &Progress::new()).unwrap();
+        let source = FakeDiffSource::with_paths(&["shared.rs"]);
+        let view = ReviewView::build(&map, &source, &Progress::new()).unwrap();
 
         assert_eq!(view.blocks[0].files.len(), 1);
         assert_eq!(view.blocks[1].files.len(), 0);
@@ -310,11 +260,16 @@ mod tests {
             .unwrap();
         map.update_file("second", "shared.rs", Some("why it matters again".into()))
             .unwrap();
-        map.add_line_note("second", "shared.rs", 10, 12, "late note")
-            .unwrap();
+        map.add_line_note(
+            "second",
+            "shared.rs",
+            LineRange::new(10, 12).unwrap(),
+            "late note",
+        )
+        .unwrap();
 
-        let source = FakeSource::with(&["shared.rs"]);
-        let view = build(&map, &source, &Progress::new()).unwrap();
+        let source = FakeDiffSource::with_paths(&["shared.rs"]);
+        let view = ReviewView::build(&map, &source, &Progress::new()).unwrap();
 
         let file = &view.blocks[0].files[0];
         assert_eq!(file.notes.len(), 2);
@@ -330,8 +285,8 @@ mod tests {
             .unwrap();
         map.add_skim("go.sum", "generated", None).unwrap();
 
-        let source = FakeSource::with(&["a.rs", "a_test.rs", "go.sum"]);
-        let view = build(&map, &source, &Progress::new()).unwrap();
+        let source = FakeDiffSource::with_paths(&["a.rs", "a_test.rs", "go.sum"]);
+        let view = ReviewView::build(&map, &source, &Progress::new()).unwrap();
 
         assert_eq!(view.blocks[0].files.len(), 2);
         assert!(view.blocks[0].files[1].skim);
@@ -342,19 +297,19 @@ mod tests {
     #[test]
     fn files_the_map_never_mentions_are_reported_not_hidden() {
         let map = map_of(&[("one", "a.rs")]);
-        let source = FakeSource::with(&["a.rs", "arrived_later.rs"]);
-        let view = build(&map, &source, &Progress::new()).unwrap();
+        let source = FakeDiffSource::with_paths(&["a.rs", "arrived_later.rs"]);
+        let view = ReviewView::build(&map, &source, &Progress::new()).unwrap();
         assert_eq!(view.unmapped, vec!["arrived_later.rs"]);
     }
 
     #[test]
     fn viewed_count_reflects_progress() {
         let map = map_of(&[("one", "a.rs"), ("one", "b.rs")]);
-        let source = FakeSource::with(&["a.rs", "b.rs"]);
+        let source = FakeDiffSource::with_paths(&["a.rs", "b.rs"]);
         let mut progress = Progress::new();
         progress.mark("a.rs", "hash", "now");
 
-        let view = build(&map, &source, &progress).unwrap();
+        let view = ReviewView::build(&map, &source, &progress).unwrap();
         assert_eq!(view.total_files, 2);
         assert_eq!(view.viewed_files, 1);
     }

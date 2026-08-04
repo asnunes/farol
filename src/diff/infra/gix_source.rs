@@ -27,8 +27,11 @@ pub struct GixSource {
 }
 
 impl GixSource {
-    pub fn open(repo: gix::Repository, req: &ScopeRequest) -> Result<Self> {
-        let current = crate::shared::paths::current_branch(&repo)?;
+    /// The branch comes from the workspace rather than being rediscovered
+    /// here: one place decides what branch we are on, and it already refused a
+    /// detached HEAD.
+    pub fn open(repo: gix::Repository, current: &str, req: &ScopeRequest) -> Result<Self> {
+        let current = current.to_string();
 
         let base_ref = match &req.base {
             Some(b) => b.clone(),

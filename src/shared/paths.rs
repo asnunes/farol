@@ -1,16 +1,78 @@
 use std::path::{Path, PathBuf};
 
+use serde::Serialize;
+use serde::de::DeserializeOwned;
+
 use crate::shared::error::{Error, Result};
+
+/// The repository farol was invoked in, resolved once.
+///
+/// Owning discovery, the branch name and the git dir together keeps callers
+/// from re-deriving any of them — and from assembling the git dir by hand,
+/// which is the mistake that breaks inside a worktree.
+pub struct Workspace {
+    repo: gix::Repository,
+    branch: String,
+    git_dir: PathBuf,
+}
+
+impl Workspace {
+    /// Open the repository containing `start`.
+    pub fn discover(start: &Path) -> Result<Self> {
+        let repo = gix::discover(start)
+            .map_err(|e| Error::msg(format!("not inside a git repository: {e}")))?;
+        let branch = Self::branch_of(&repo)?;
+        let git_dir = repo.git_dir().to_path_buf();
+        Ok(Self {
+            repo,
+            branch,
+            git_dir,
+        })
+    }
+
+    pub fn here() -> Result<Self> {
+        Self::discover(&std::env::current_dir()?)
+    }
+
+    pub fn repo(&self) -> &gix::Repository {
+        &self.repo
+    }
+
+    pub fn into_repo(self) -> gix::Repository {
+        self.repo
+    }
+
+    pub fn branch(&self) -> &str {
+        &self.branch
+    }
+
+    pub fn git_dir(&self) -> &Path {
+        &self.git_dir
+    }
+
+    /// Where farol keeps everything for this branch.
+    pub fn store(&self) -> Store {
+        Store::new(&self.git_dir, &self.branch)
+    }
+
+    /// Branch the worktree is on. Detached HEAD has no name to key state on, so
+    /// it is refused rather than silently keyed by sha.
+    fn branch_of(repo: &gix::Repository) -> Result<String> {
+        let head = repo
+            .head()
+            .map_err(|e| Error::msg(format!("cannot read HEAD: {e}")))?;
+        match head.referent_name() {
+            Some(name) => Ok(name.shorten().to_string()),
+            None => Err(Error::DetachedHead),
+        }
+    }
+}
 
 /// Everything farol stores for one branch.
 ///
 /// Deliberately under the *worktree's own* git dir rather than the shared one:
 /// removing a worktree means the feature is done, and taking the review state
 /// with it is free cleanup instead of a graveyard of dead branches.
-///
-/// The path is asked of git, never built by hand — inside a worktree `.git` is
-/// a file pointing elsewhere, and joining onto it would try to create a
-/// directory inside a regular file.
 pub struct Store {
     root: PathBuf,
 }
@@ -18,7 +80,7 @@ pub struct Store {
 impl Store {
     pub fn new(git_dir: &Path, branch: &str) -> Self {
         Self {
-            root: git_dir.join("farol").join(sanitize_branch(branch)),
+            root: git_dir.join("farol").join(Self::sanitize(branch)),
         }
     }
 
@@ -38,54 +100,55 @@ impl Store {
         std::fs::create_dir_all(self.maps_dir())?;
         Ok(())
     }
-}
 
-/// Branch names carry slashes; file names should not.
-pub fn sanitize_branch(branch: &str) -> String {
-    branch
-        .chars()
-        .map(|c| match c {
-            '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' => '-',
-            other => other,
-        })
-        .collect()
-}
+    /// Serialise and write so that a crash never leaves half a file behind.
+    ///
+    /// The write goes to a sibling temp file, is flushed to disk, then renamed
+    /// over the target. Rename within a filesystem is atomic, so the old copy
+    /// survives intact until the new one is complete. Review state accumulates
+    /// over days; losing it to a mistimed Ctrl-C is not acceptable.
+    pub fn write_json<T: Serialize>(&self, path: &Path, value: &T) -> Result<()> {
+        use std::io::Write;
 
-/// Write a file so that a crash never leaves a half-written one behind: write
-/// a sibling temp file, flush it to disk, then rename over the target. Rename
-/// within a filesystem is atomic, so the old copy survives intact until the new
-/// one is complete. Review state accumulates over days — losing it to a
-/// mistimed Ctrl-C is not acceptable.
-pub fn write_atomic(target: &Path, contents: &[u8]) -> Result<()> {
-    use std::io::Write;
-
-    if let Some(parent) = target.parent() {
-        std::fs::create_dir_all(parent)?;
+        self.ensure()?;
+        let body = serde_json::to_vec_pretty(value)?;
+        let tmp = path.with_extension("tmp");
+        {
+            let mut file = std::fs::File::create(&tmp)?;
+            file.write_all(&body)?;
+            file.sync_all()?;
+        }
+        std::fs::rename(&tmp, path)?;
+        Ok(())
     }
-    let tmp = target.with_extension("tmp");
-    {
-        let mut file = std::fs::File::create(&tmp)?;
-        file.write_all(contents)?;
-        file.sync_all()?;
+
+    /// Read and parse, treating anything unreadable as absent. `on_stale` is
+    /// called with the reason so the caller can say so out loud — silence would
+    /// look like the review had simply never been mapped.
+    pub fn read_json<T: DeserializeOwned>(
+        &self,
+        path: &Path,
+        on_stale: impl FnOnce(String),
+    ) -> Option<T> {
+        let raw = std::fs::read_to_string(path).ok()?;
+        match serde_json::from_str::<T>(&raw) {
+            Ok(value) => Some(value),
+            Err(e) => {
+                on_stale(e.to_string());
+                None
+            }
+        }
     }
-    std::fs::rename(&tmp, target)?;
-    Ok(())
-}
 
-/// Open the repository containing `start`.
-pub fn discover(start: &Path) -> Result<gix::Repository> {
-    gix::discover(start).map_err(|e| Error::msg(format!("not inside a git repository: {e}")))
-}
-
-/// Branch the worktree is on. Detached HEAD has no name to key state on, so it
-/// is refused rather than silently keyed by sha.
-pub fn current_branch(repo: &gix::Repository) -> Result<String> {
-    let head = repo
-        .head()
-        .map_err(|e| Error::msg(format!("cannot read HEAD: {e}")))?;
-    match head.referent_name() {
-        Some(name) => Ok(name.shorten().to_string()),
-        None => Err(Error::DetachedHead),
+    /// Branch names carry slashes; file names should not.
+    fn sanitize(branch: &str) -> String {
+        branch
+            .chars()
+            .map(|c| match c {
+                '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' => '-',
+                other => other,
+            })
+            .collect()
     }
 }
 
@@ -95,9 +158,9 @@ mod tests {
 
     #[test]
     fn slashes_in_branch_names_become_dashes() {
-        assert_eq!(sanitize_branch("fix/bull-signing"), "fix-bull-signing");
-        assert_eq!(sanitize_branch("feat/a/b"), "feat-a-b");
-        assert_eq!(sanitize_branch("main"), "main");
+        assert_eq!(Store::sanitize("fix/bull-signing"), "fix-bull-signing");
+        assert_eq!(Store::sanitize("feat/a/b"), "feat-a-b");
+        assert_eq!(Store::sanitize("main"), "main");
     }
 
     #[test]
@@ -115,15 +178,35 @@ mod tests {
     }
 
     #[test]
-    fn atomic_write_replaces_content_and_leaves_no_temp_behind() {
+    fn writing_replaces_content_and_leaves_no_temp_behind() {
         let dir = tempfile::tempdir().unwrap();
-        let target = dir.path().join("nested").join("f.json");
+        let store = Store::new(dir.path(), "b");
+        let target = store.map_file("abc");
 
-        write_atomic(&target, b"first").unwrap();
-        assert_eq!(std::fs::read_to_string(&target).unwrap(), "first");
+        store.write_json(&target, &vec![1, 2, 3]).unwrap();
+        let back: Vec<i32> = store.read_json(&target, |_| ()).unwrap();
+        assert_eq!(back, vec![1, 2, 3]);
 
-        write_atomic(&target, b"second").unwrap();
-        assert_eq!(std::fs::read_to_string(&target).unwrap(), "second");
+        store.write_json(&target, &vec![9]).unwrap();
+        let back: Vec<i32> = store.read_json(&target, |_| ()).unwrap();
+        assert_eq!(back, vec![9]);
         assert!(!target.with_extension("tmp").exists());
+    }
+
+    #[test]
+    fn unreadable_json_reports_why_and_reads_as_absent() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::new(dir.path(), "b");
+        let target = store.map_file("abc");
+        store.ensure().unwrap();
+        std::fs::write(&target, "{ truncated").unwrap();
+
+        let mut reason = None;
+        let back: Option<Vec<i32>> = store.read_json(&target, |e| reason = Some(e));
+        assert!(back.is_none());
+        assert!(
+            reason.is_some(),
+            "the caller must be told, not left guessing"
+        );
     }
 }

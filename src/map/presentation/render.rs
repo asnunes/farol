@@ -3,220 +3,223 @@
 //! Not JSON. The model has to reason about the map — is this block still true,
 //! does this note still hold — and prose buried in escaped strings fights that
 //! for no gain. Labelled, indented text reads the way the model needs it.
+//!
+//! Each report borrows what it prints and implements `Display`, so callers hand
+//! it straight to `print!` and nothing builds a `String` it does not need.
 
-use std::fmt::Write;
+use std::fmt::{self, Display, Write as _};
 
 use crate::diff::domain::Scope;
 use crate::map::application::CheckReport;
 use crate::map::domain::{Orphan, ReviewMap, WORKING};
 
-pub fn render_scope(scope: &Scope) -> String {
-    let mut out = String::new();
-    let window = if scope.merge_base {
-        format!("{}...{}", scope.base_ref, scope.head_ref)
-    } else {
-        format!("{}..{}", scope.base_ref, scope.head_ref)
-    };
-    let _ = writeln!(out, "review scope for {window}");
-    if scope.dirty {
-        let _ = writeln!(out, "including uncommitted changes");
-    }
-    let _ = writeln!(out, "{} files\n", scope.files.len());
+/// The files under review, as farol resolved them.
+pub struct ScopeReport<'a>(pub &'a Scope);
 
-    for f in &scope.files {
-        let rename = f
-            .old_path
-            .as_ref()
-            .map(|p| format!(" (was {p})"))
-            .unwrap_or_default();
-        let _ = writeln!(
-            out,
-            "  {:<10} +{:<5} -{:<5} {}{}",
-            f.status.label(),
-            f.additions,
-            f.deletions,
-            f.path,
-            rename
-        );
+impl Display for ScopeReport<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let scope = self.0;
+        let separator = if scope.merge_base { "..." } else { ".." };
+        writeln!(
+            f,
+            "review scope for {}{separator}{}",
+            scope.base_ref, scope.head_ref
+        )?;
+        if scope.dirty {
+            writeln!(f, "including uncommitted changes")?;
+        }
+        writeln!(f, "{} files\n", scope.files.len())?;
+
+        for file in &scope.files {
+            let rename = file
+                .old_path
+                .as_ref()
+                .map(|p| format!(" (was {p})"))
+                .unwrap_or_default();
+            writeln!(
+                f,
+                "  {:<10} +{:<5} -{:<5} {}{rename}",
+                file.status.label(),
+                file.additions,
+                file.deletions,
+                file.path,
+            )?;
+        }
+        Ok(())
     }
-    out
 }
 
-pub fn render_map(map: &ReviewMap, behind: u32) -> String {
-    let mut out = String::new();
-    let _ = writeln!(out, "map for {} → {}", map.branch, map.base);
+/// The map itself. Deliberately without the deactivated notes: this stays a
+/// picture of the map rather than a picture of the map plus a work queue.
+pub struct MapReport<'a> {
+    pub map: &'a ReviewMap,
+    pub behind: u32,
+}
 
-    let at = if map.generated_at == WORKING {
-        "uncommitted work".to_string()
-    } else {
-        short(&map.generated_at)
-    };
-    if behind > 0 {
-        let plural = if behind == 1 { "commit" } else { "commits" };
-        let _ = writeln!(out, "generated at {at} ({behind} {plural} behind HEAD)");
-    } else {
-        let _ = writeln!(out, "generated at {at}");
-    }
-    if let Some(parent) = &map.parent {
-        let _ = writeln!(out, "derived from {}", short(parent));
-    }
+impl Display for MapReport<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let map = self.map;
+        writeln!(f, "map for {} → {}", map.branch, map.base)?;
 
-    if map.is_empty() {
-        let _ = writeln!(out, "\nThe map is empty — nothing has been mapped yet.");
-        return out;
-    }
-
-    for (i, block) in map.blocks.iter().enumerate() {
-        let _ = writeln!(
-            out,
-            "\nblock {}  {}  \"{}\"",
-            i + 1,
-            block.slug,
-            block.title
-        );
-        if !block.context.trim().is_empty() {
-            let _ = writeln!(out, "  context: {}", indent_rest(&block.context, 4));
+        let at = if map.generated_at == WORKING {
+            "uncommitted work".to_string()
+        } else {
+            short(&map.generated_at)
+        };
+        match self.behind {
+            0 => writeln!(f, "generated at {at}")?,
+            1 => writeln!(f, "generated at {at} (1 commit behind HEAD)")?,
+            n => writeln!(f, "generated at {at} ({n} commits behind HEAD)")?,
         }
-        if !block.files.is_empty() {
-            let _ = writeln!(out, "  files:");
-            for file in &block.files {
-                let _ = writeln!(out, "    {}", file.path);
-                if let Some(note) = &file.note {
-                    let _ = writeln!(out, "      note: {}", indent_rest(note, 8));
+        if let Some(parent) = &map.parent {
+            writeln!(f, "derived from {}", short(parent))?;
+        }
+
+        if map.is_empty() {
+            return writeln!(f, "\nThe map is empty — nothing has been mapped yet.");
+        }
+
+        for (i, block) in map.blocks.iter().enumerate() {
+            writeln!(f, "\nblock {}  {}  \"{}\"", i + 1, block.slug, block.title)?;
+            if !block.context.trim().is_empty() {
+                writeln!(f, "  context: {}", indent_rest(&block.context, 4))?;
+            }
+            if !block.files.is_empty() {
+                writeln!(f, "  files:")?;
+                for file in &block.files {
+                    writeln!(f, "    {}", file.path)?;
+                    if let Some(note) = &file.note {
+                        writeln!(f, "      note: {}", indent_rest(note, 8))?;
+                    }
+                    for note in &file.line_notes {
+                        writeln!(
+                            f,
+                            "      lines {}: {}",
+                            note.range,
+                            indent_rest(&note.text, 8)
+                        )?;
+                    }
                 }
-                for note in &file.line_notes {
-                    let _ = writeln!(
-                        out,
-                        "      lines {}: {}",
-                        note.range(),
-                        indent_rest(&note.text, 8)
-                    );
+            }
+            let attached: Vec<_> = map
+                .skim
+                .iter()
+                .filter(|s| s.block.as_deref() == Some(block.slug.as_str()))
+                .collect();
+            if !attached.is_empty() {
+                writeln!(f, "  skim:")?;
+                for entry in attached {
+                    writeln!(f, "    {} — {}", entry.path, entry.reason)?;
                 }
             }
         }
-        let attached: Vec<_> = map
-            .skim
-            .iter()
-            .filter(|s| s.block.as_deref() == Some(block.slug.as_str()))
-            .collect();
-        if !attached.is_empty() {
-            let _ = writeln!(out, "  skim:");
-            for s in attached {
-                let _ = writeln!(out, "    {} — {}", s.path, s.reason);
+
+        let loose: Vec<_> = map.skim.iter().filter(|s| s.block.is_none()).collect();
+        if !loose.is_empty() {
+            writeln!(f, "\nunassigned skim:")?;
+            for entry in loose {
+                writeln!(f, "  {} — {}", entry.path, entry.reason)?;
             }
         }
+        Ok(())
     }
-
-    let loose: Vec<_> = map.skim.iter().filter(|s| s.block.is_none()).collect();
-    if !loose.is_empty() {
-        let _ = writeln!(out, "\nunassigned skim:");
-        for s in loose {
-            let _ = writeln!(out, "  {} — {}", s.path, s.reason);
-        }
-    }
-
-    out
 }
 
-/// Deactivated notes, printed by `map derive` and nowhere else — `map show`
-/// stays a picture of the map rather than a picture of the map plus a work
-/// queue.
-pub fn render_orphans(orphans: &[Orphan]) -> String {
-    if orphans.is_empty() {
-        return String::new();
-    }
-    let mut out = String::new();
-    let plural = if orphans.len() == 1 { "note" } else { "notes" };
-    let _ = writeln!(
-        out,
-        "\n{} line {plural} deactivated — decide each one before finishing.",
-        orphans.len()
-    );
-    let _ = writeln!(
-        out,
-        "Find where the code went using the snapshot, not the old line numbers."
-    );
+/// Deactivated notes, printed by `map derive` and nowhere else.
+pub struct OrphanReport<'a>(pub &'a [Orphan]);
 
-    for o in orphans {
-        let _ = writeln!(out, "\n  {} in block {}", o.path, o.block);
-        let _ = writeln!(
-            out,
-            "    was at {} · {} — {}",
-            o.old_range(),
-            o.reason.label(),
-            o.reason.guidance()
-        );
-        let _ = writeln!(out, "    note: {}", indent_rest(&o.text, 10));
-        if !o.snapshot.trim().is_empty() {
-            let _ = writeln!(out, "    code it covered:");
-            for line in o.snapshot.lines().take(12) {
-                let _ = writeln!(out, "      {line}");
+impl Display for OrphanReport<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.0.is_empty() {
+            return Ok(());
+        }
+        let plural = if self.0.len() == 1 { "note" } else { "notes" };
+        writeln!(
+            f,
+            "\n{} line {plural} deactivated — decide each one before finishing.",
+            self.0.len()
+        )?;
+        writeln!(
+            f,
+            "Find where the code went using the snapshot, not the old line numbers."
+        )?;
+
+        for orphan in self.0 {
+            writeln!(f, "\n  {} in block {}", orphan.path, orphan.block)?;
+            writeln!(
+                f,
+                "    was at {} · {} — {}",
+                orphan.old_range,
+                orphan.reason.label(),
+                orphan.reason.guidance()
+            )?;
+            writeln!(f, "    note: {}", indent_rest(&orphan.text, 10))?;
+            if !orphan.snapshot.trim().is_empty() {
+                writeln!(f, "    code it covered:")?;
+                for line in orphan.snapshot.lines().take(12) {
+                    writeln!(f, "      {line}")?;
+                }
+            }
+            // Printing the exact commands spares the skill from deducing the
+            // syntax, which is one more thing it could get subtly wrong.
+            writeln!(
+                f,
+                "    restore: farol line restore {} {} {} --range <new-range>",
+                orphan.block, orphan.path, orphan.old_range
+            )?;
+            writeln!(
+                f,
+                "    discard: farol line discard {} {} {}",
+                orphan.block, orphan.path, orphan.old_range
+            )?;
+        }
+        Ok(())
+    }
+}
+
+/// What the self-test found.
+pub struct CheckSummary<'a>(pub &'a CheckReport);
+
+impl Display for CheckSummary<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let report = self.0;
+
+        if !report.uncovered.is_empty() {
+            writeln!(
+                f,
+                "{} file(s) in the review are in no block and not marked skim:",
+                report.uncovered.len()
+            )?;
+            for path in &report.uncovered {
+                writeln!(f, "  {path}")?;
+            }
+            writeln!(
+                f,
+                "\nA file nobody assigned never appears on screen. Put each one in a\nblock, in the `outros` block, or mark it skim."
+            )?;
+        }
+
+        if report.pending_orphans > 0 {
+            if !report.uncovered.is_empty() {
+                writeln!(f)?;
+            }
+            writeln!(
+                f,
+                "{} deactivated line note(s) still undecided. Run `farol map derive`\nto list them, then restore or discard each one.",
+                report.pending_orphans
+            )?;
+        }
+
+        if report.passed() {
+            writeln!(f, "Map is complete.")?;
+            match report.commits_behind {
+                0 => {}
+                1 => writeln!(f, "Note: the map is 1 commit behind HEAD.")?,
+                n => writeln!(f, "Note: the map is {n} commits behind HEAD.")?,
             }
         }
-        let _ = writeln!(
-            out,
-            "    restore: farol line restore {} {} {} --range <new-range>",
-            o.block,
-            o.path,
-            o.old_range()
-        );
-        let _ = writeln!(
-            out,
-            "    discard: farol line discard {} {} {}",
-            o.block,
-            o.path,
-            o.old_range()
-        );
+        Ok(())
     }
-    out
-}
-
-pub fn render_check(report: &CheckReport) -> String {
-    let mut out = String::new();
-
-    if !report.uncovered.is_empty() {
-        let _ = writeln!(
-            out,
-            "{} file(s) in the review are in no block and not marked skim:",
-            report.uncovered.len()
-        );
-        for p in &report.uncovered {
-            let _ = writeln!(out, "  {p}");
-        }
-        let _ = writeln!(
-            out,
-            "\nA file nobody assigned never appears on screen. Put each one in a\nblock, in the `outros` block, or mark it skim."
-        );
-    }
-
-    if report.pending_orphans > 0 {
-        if !out.is_empty() {
-            let _ = writeln!(out);
-        }
-        let _ = writeln!(
-            out,
-            "{} deactivated line note(s) still undecided. Run `farol map derive`\nto list them, then restore or discard each one.",
-            report.pending_orphans
-        );
-    }
-
-    if report.passed() {
-        let _ = writeln!(out, "Map is complete.");
-        if report.commits_behind > 0 {
-            let plural = if report.commits_behind == 1 {
-                "commit"
-            } else {
-                "commits"
-            };
-            let _ = writeln!(
-                out,
-                "Note: the map is {} {plural} behind HEAD.",
-                report.commits_behind
-            );
-        }
-    }
-
-    out
 }
 
 fn short(sha: &str) -> String {
@@ -230,14 +233,21 @@ fn short(sha: &str) -> String {
 /// Keep wrapped prose lined up under its label instead of falling back to
 /// column zero, where it would read as a new field.
 fn indent_rest(text: &str, spaces: usize) -> String {
+    let mut out = String::new();
     let pad = " ".repeat(spaces);
-    text.trim().replace('\n', &format!("\n{pad}"))
+    for (i, line) in text.trim().lines().enumerate() {
+        if i > 0 {
+            let _ = write!(out, "\n{pad}");
+        }
+        let _ = write!(out, "{line}");
+    }
+    out
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::map::domain::{Position, ReviewMap};
+    use crate::map::domain::{LineRange, Position, ReviewMap};
 
     fn sample() -> ReviewMap {
         let mut m = ReviewMap::new("fix/bull-signing-handoff", "main", "a3f1e9c1234567");
@@ -253,8 +263,7 @@ mod tests {
         m.add_line_note(
             "recover-link",
             "services/bull_acceptance.go",
-            82,
-            116,
+            LineRange::new(82, 116).unwrap(),
             "Recovery only happens on a fresh transition.",
         )
         .unwrap();
@@ -270,9 +279,13 @@ mod tests {
         m
     }
 
+    fn render(map: &ReviewMap, behind: u32) -> String {
+        MapReport { map, behind }.to_string()
+    }
+
     #[test]
     fn the_map_renders_blocks_files_and_both_note_levels() {
-        let out = render_map(&sample(), 2);
+        let out = render(&sample(), 2);
         assert!(out.contains("map for fix/bull-signing-handoff → main"));
         assert!(out.contains("generated at a3f1e9c (2 commits behind HEAD)"));
         assert!(out.contains("block 1  recover-link  \"Recover the Bull link before signing\""));
@@ -284,12 +297,12 @@ mod tests {
 
     #[test]
     fn a_single_commit_behind_is_not_pluralised() {
-        assert!(render_map(&sample(), 1).contains("(1 commit behind HEAD)"));
+        assert!(render(&sample(), 1).contains("(1 commit behind HEAD)"));
     }
 
     #[test]
     fn an_up_to_date_map_says_nothing_about_distance() {
-        assert!(!render_map(&sample(), 0).contains("behind HEAD"));
+        assert!(!render(&sample(), 0).contains("behind HEAD"));
     }
 
     #[test]
@@ -301,10 +314,9 @@ mod tests {
             Some("recover-link".into()),
         )
         .unwrap();
-        let out = render_map(&m, 0);
-        let under_block = out.find("  skim:\n    controller_test.go").is_some();
+        let out = render(&m, 0);
         assert!(
-            under_block,
+            out.contains("  skim:\n    controller_test.go"),
             "expected the attached skim inside the block:\n{out}"
         );
         assert!(out.contains("unassigned skim:\n  go.sum"));
@@ -313,7 +325,7 @@ mod tests {
     #[test]
     fn an_empty_map_says_so_instead_of_printing_nothing() {
         let m = ReviewMap::new("b", "main", "abc1234");
-        assert!(render_map(&m, 0).contains("The map is empty"));
+        assert!(render(&m, 0).contains("The map is empty"));
     }
 
     #[test]
@@ -322,13 +334,12 @@ mod tests {
         let orphans = vec![Orphan {
             block: "recover-link".into(),
             path: "a.go".into(),
-            old_from: 82,
-            old_to: 116,
+            old_range: LineRange::new(82, 116).unwrap(),
             snapshot: "if offer.Status == StatusSigning {".into(),
             reason: OrphanReason::HunkOverlap,
             text: "Recovery only happens on a fresh transition.".into(),
         }];
-        let out = render_orphans(&orphans);
+        let out = OrphanReport(&orphans).to_string();
         assert!(out.contains("1 line note deactivated"));
         assert!(out.contains("hunk-overlap"));
         assert!(out.contains("if offer.Status == StatusSigning {"));
@@ -338,17 +349,16 @@ mod tests {
 
     #[test]
     fn no_orphans_prints_nothing_at_all() {
-        assert_eq!(render_orphans(&[]), "");
+        assert_eq!(OrphanReport(&[]).to_string(), "");
     }
 
     #[test]
     fn check_reports_uncovered_files_and_explains_why_it_matters() {
         let report = CheckReport {
             uncovered: vec!["forgotten.rs".into()],
-            pending_orphans: 0,
-            commits_behind: 0,
+            ..Default::default()
         };
-        let out = render_check(&report);
+        let out = CheckSummary(&report).to_string();
         assert!(out.contains("forgotten.rs"));
         assert!(out.contains("never appears on screen"));
         assert!(!out.contains("Map is complete"));
@@ -356,7 +366,10 @@ mod tests {
 
     #[test]
     fn a_clean_check_says_so() {
-        let out = render_check(&CheckReport::default());
-        assert!(out.contains("Map is complete."));
+        assert!(
+            CheckSummary(&CheckReport::default())
+                .to_string()
+                .contains("Map is complete.")
+        );
     }
 }

@@ -1,16 +1,14 @@
 use clap::{Args, Parser, Subcommand};
 
-use crate::diff::domain::DiffSource;
-use crate::diff::infra::{GixSource, ScopeRequest};
-use crate::map::application::{
-    MapWriter, check, derive, parse_range, position_from, require_in_scope, require_range_in_file,
-};
-use crate::map::domain::{MapRepository, ReviewMap, WORKING};
-use crate::map::infra::JsonMapRepository;
-use crate::map::presentation::{render_check, render_map, render_orphans, render_scope};
-use crate::progress::infra::JsonProgressRepository;
-use crate::shared::error::{Error, Result};
-use crate::shared::paths::{Store, current_branch, discover};
+mod wiring;
+
+pub use wiring::Ctx;
+
+use crate::diff::infra::ScopeRequest;
+use crate::map::application::{ResetOutcome, position_from};
+use crate::map::domain::{LineRange, ReviewMap};
+use crate::map::presentation::{CheckSummary, MapReport, OrphanReport, ScopeReport};
+use crate::shared::error::Result;
 
 #[derive(Parser)]
 #[command(
@@ -21,6 +19,12 @@ use crate::shared::paths::{Store, current_branch, discover};
 pub struct Cli {
     #[command(subcommand)]
     command: Command,
+}
+
+impl Cli {
+    pub fn run() -> Result<()> {
+        Self::parse().command.run()
+    }
 }
 
 /// How to read the review window. `serve` takes its refs positionally, so the
@@ -36,8 +40,16 @@ pub struct ScopeFlags {
     dirty: bool,
 }
 
-/// Everything `serve` takes positionally, for the commands that have no
-/// positional slots to spare.
+impl ScopeFlags {
+    fn with_base(&self, base: Option<String>) -> ScopeArgs {
+        ScopeArgs {
+            base,
+            flags: self.clone(),
+        }
+    }
+}
+
+/// The window, for commands with no positional slots to spare.
 #[derive(Args, Clone, Debug, Default)]
 pub struct ScopeArgs {
     /// Compare against this ref instead of main (falling back to master).
@@ -56,14 +68,29 @@ impl ScopeArgs {
             dirty: self.flags.dirty,
         }
     }
+
+    fn open(&self) -> Result<Ctx> {
+        Ctx::from_workspace(self.request(None))
+    }
 }
 
-impl ScopeFlags {
-    fn with_base(&self, base: Option<String>) -> ScopeArgs {
-        ScopeArgs {
-            base,
-            flags: self.clone(),
-        }
+/// Reporting is the command layer's job, so it hangs off Ctx here rather than
+/// inside the wiring.
+trait Reporting {
+    fn edit<F>(&self, done: impl FnOnce() -> String, edit: F) -> Result<()>
+    where
+        F: FnOnce(&mut ReviewMap) -> Result<()>;
+}
+
+impl Reporting for Ctx {
+    fn edit<F>(&self, done: impl FnOnce() -> String, edit: F) -> Result<()>
+    where
+        F: FnOnce(&mut ReviewMap) -> Result<()>,
+    {
+        let map = self.map().edit(edit)?;
+        println!("{}", done());
+        print!("{}", OrphanReport(&map.orphans));
+        Ok(())
     }
 }
 
@@ -100,6 +127,24 @@ enum Command {
     },
 }
 
+impl Command {
+    fn run(self) -> Result<()> {
+        match self {
+            Command::Serve(args) => args.run(),
+            Command::Scope(args) => {
+                let ctx = args.scope.open()?;
+                print!("{}", ScopeReport(ctx.source().scope()?));
+                Ok(())
+            }
+            Command::Map { action } => action.run(),
+            Command::Block { action } => action.run(),
+            Command::File { action } => action.run(),
+            Command::Line { action } => action.run(),
+            Command::Skim { action } => action.run(),
+        }
+    }
+}
+
 #[derive(Args)]
 pub struct ServeArgs {
     /// Base ref. Defaults to main, then master.
@@ -119,6 +164,30 @@ pub struct ServeArgs {
     no_watch: bool,
 }
 
+impl ServeArgs {
+    fn run(self) -> Result<()> {
+        let scope = self.scope.with_base(self.base.clone());
+        let ctx = Ctx::from_workspace(scope.request(self.head.clone()))?;
+
+        // Without a map there is nothing farol can show. Falling back to a plain
+        // diff viewer would make it a worse version of tools that already do
+        // that well, so it refuses in the terminal instead of opening a browser
+        // onto an apology.
+        let map = ctx.map().require_current()?;
+
+        crate::server::Server::new(crate::server::ServeConfig {
+            source: ctx.source_arc(),
+            progress: ctx.progress_arc(),
+            map,
+            port: self.port,
+            open_browser: !self.no_open,
+            watch: !self.no_watch,
+            git_dir: ctx.git_dir().clone(),
+        })
+        .run()
+    }
+}
+
 #[derive(Args)]
 pub struct ScopeOnlyArgs {
     #[command(flatten)]
@@ -135,6 +204,84 @@ enum MapAction {
     Check(ScopeOnlyArgs),
     /// Delete the newest version and fall back to the one before it.
     Reset(ScopeOnlyArgs),
+}
+
+impl MapAction {
+    fn run(self) -> Result<()> {
+        match self {
+            MapAction::Derive(args) => {
+                let ctx = args.scope.open()?;
+                let session = ctx.map();
+                let derived = session.derive()?;
+                println!(
+                    "{}",
+                    if derived.created {
+                        "Created the map version for this commit."
+                    } else {
+                        "A map version for this commit already exists — continuing from it."
+                    }
+                );
+                print!(
+                    "{}",
+                    MapReport {
+                        behind: session.behind(&derived.map),
+                        map: &derived.map,
+                    }
+                );
+                print!("{}", OrphanReport(&derived.map.orphans));
+                Ok(())
+            }
+            MapAction::Show(args) => {
+                let ctx = args.scope.open()?;
+                let session = ctx.map();
+                match session.current()? {
+                    Some(map) => print!(
+                        "{}",
+                        MapReport {
+                            behind: session.behind(&map),
+                            map: &map,
+                        }
+                    ),
+                    None => {
+                        println!("No map for this branch yet. Run `farol map derive` to start one.")
+                    }
+                }
+                Ok(())
+            }
+            MapAction::Check(args) => {
+                let ctx = args.scope.open()?;
+                let session = ctx.map();
+                let report = session.check(&session.require_current()?)?;
+                print!("{}", CheckSummary(&report));
+                if report.passed() {
+                    Ok(())
+                } else {
+                    std::process::exit(1)
+                }
+            }
+            MapAction::Reset(args) => {
+                let ctx = args.scope.open()?;
+                match ctx.map().reset()? {
+                    ResetOutcome::Deleted { fell_back_to } => {
+                        println!("Deleted the map version for this commit.");
+                        match fell_back_to {
+                            Some(sha) => println!(
+                                "The version from {} is current again.",
+                                &sha[..7.min(sha.len())]
+                            ),
+                            None => {
+                                println!("No earlier version remains — the branch is unmapped.")
+                            }
+                        }
+                    }
+                    ResetOutcome::NothingToDelete => {
+                        println!("There is no map version for this commit to delete.")
+                    }
+                }
+                Ok(())
+            }
+        }
+    }
 }
 
 #[derive(Subcommand)]
@@ -181,6 +328,71 @@ enum BlockAction {
     },
 }
 
+impl BlockAction {
+    fn run(self) -> Result<()> {
+        match self {
+            BlockAction::Add {
+                slug,
+                title,
+                context,
+                before,
+                after,
+                paths,
+                scope,
+            } => {
+                let ctx = scope.open()?;
+                for path in &paths {
+                    ctx.map().require_in_scope(path)?;
+                }
+                let position = position_from(before, after);
+                let count = paths.len();
+                ctx.edit(
+                    || format!("Added block '{slug}' with {count} file(s)."),
+                    |map| {
+                        map.add_block(&slug, &title, &context, position)?;
+                        for path in &paths {
+                            map.add_file(&slug, path, None, None)?;
+                        }
+                        Ok(())
+                    },
+                )
+            }
+            BlockAction::Update {
+                slug,
+                title,
+                context,
+                scope,
+            } => {
+                let ctx = scope.open()?;
+                ctx.edit(
+                    || format!("Updated block '{slug}'."),
+                    |map| map.update_block(&slug, title, context),
+                )
+            }
+            BlockAction::Remove { slug, scope } => {
+                let ctx = scope.open()?;
+                ctx.edit(
+                    || format!("Removed block '{slug}'."),
+                    |map| map.remove_block(&slug),
+                )
+            }
+            BlockAction::Move {
+                slug,
+                before,
+                after,
+                scope,
+            } => {
+                let ctx = scope.open()?;
+                let position = position_from(before, after);
+                ctx.edit(
+                    || format!("Moved block '{slug}'."),
+                    |map| map.move_block(&slug, position),
+                )
+            }
+        }
+    }
+}
+
 #[derive(Subcommand)]
 enum FileAction {
     Add {
@@ -208,6 +420,46 @@ enum FileAction {
         #[command(flatten)]
         scope: ScopeArgs,
     },
+}
+
+impl FileAction {
+    fn run(self) -> Result<()> {
+        match self {
+            FileAction::Add {
+                slug,
+                path,
+                note,
+                after,
+                scope,
+            } => {
+                let ctx = scope.open()?;
+                ctx.map().require_in_scope(&path)?;
+                ctx.edit(
+                    || format!("Added '{path}' to block '{slug}'."),
+                    |map| map.add_file(&slug, &path, note, after.as_deref()),
+                )
+            }
+            FileAction::Update {
+                slug,
+                path,
+                note,
+                scope,
+            } => {
+                let ctx = scope.open()?;
+                ctx.edit(
+                    || format!("Updated the note on '{path}'."),
+                    |map| map.update_file(&slug, &path, Some(note)),
+                )
+            }
+            FileAction::Remove { slug, path, scope } => {
+                let ctx = scope.open()?;
+                ctx.edit(
+                    || format!("Removed '{path}' from block '{slug}'."),
+                    |map| map.remove_file(&slug, &path),
+                )
+            }
+        }
+    }
 }
 
 #[derive(Subcommand)]
@@ -259,6 +511,89 @@ enum LineAction {
     },
 }
 
+impl LineAction {
+    fn run(self) -> Result<()> {
+        match self {
+            LineAction::Add {
+                slug,
+                path,
+                range,
+                note,
+                scope,
+            } => {
+                let ctx = scope.open()?;
+                let range = LineRange::parse(&range)?;
+                ctx.map().require_in_scope(&path)?;
+                ctx.map().require_range_in_file(&path, range)?;
+                ctx.edit(
+                    || format!("Added a note on {path}:{range}."),
+                    |map| map.add_line_note(&slug, &path, range, note),
+                )
+            }
+            LineAction::Update {
+                slug,
+                path,
+                range,
+                note,
+                scope,
+            } => {
+                let ctx = scope.open()?;
+                let range = LineRange::parse(&range)?;
+                ctx.edit(
+                    || format!("Updated the note on {path}:{range}."),
+                    |map| map.update_line_note(&slug, &path, range, note),
+                )
+            }
+            LineAction::Remove {
+                slug,
+                path,
+                range,
+                scope,
+            } => {
+                let ctx = scope.open()?;
+                let range = LineRange::parse(&range)?;
+                ctx.edit(
+                    || format!("Removed the note on {path}:{range}."),
+                    |map| map.remove_line_note(&slug, &path, range),
+                )
+            }
+            LineAction::Restore {
+                slug,
+                path,
+                old_range,
+                range,
+                scope,
+            } => {
+                let ctx = scope.open()?;
+                let old = LineRange::parse(&old_range)?;
+                let new = LineRange::parse(&range)?;
+                ctx.map().require_in_scope(&path)?;
+                ctx.map().require_range_in_file(&path, new)?;
+                ctx.edit(
+                    || format!("Restored the note at {path}:{new}."),
+                    |map| {
+                        let orphan = map.take_orphan(&slug, &path, old)?;
+                        map.add_line_note(&slug, &path, new, orphan.text)
+                    },
+                )
+            }
+            LineAction::Discard {
+                slug,
+                path,
+                old_range,
+                scope,
+            } => {
+                let ctx = scope.open()?;
+                let range = LineRange::parse(&old_range)?;
+                ctx.edit(
+                    || format!("Discarded the note that was at {path}:{range}."),
+                    |map| map.take_orphan(&slug, &path, range).map(|_| ()),
+                )
+            }
+        }
+    }
+}
+
 #[derive(Subcommand)]
 enum SkimAction {
     Add {
@@ -278,388 +613,29 @@ enum SkimAction {
     },
 }
 
-/// Everything a command needs, assembled once.
-struct Ctx {
-    source: GixSource,
-    map_repo: JsonMapRepository,
-    git_dir: std::path::PathBuf,
-    branch: String,
-}
-
-fn open(scope: &ScopeArgs, base: Option<String>, head: Option<String>) -> Result<Ctx> {
-    let cwd = std::env::current_dir()?;
-    let repo = discover(&cwd)?;
-    let branch = current_branch(&repo)?;
-    // The worktree's own git dir, asked of git rather than assembled by hand:
-    // inside a worktree `.git` is a file, and joining onto it would fail.
-    let git_dir = repo.git_dir().to_path_buf();
-    let mut request = scope.request(head);
-    if request.base.is_none() {
-        request.base = base;
-    }
-    let source = GixSource::open(repo, &request)?;
-    Ok(Ctx {
-        source,
-        map_repo: JsonMapRepository::new(Store::new(&git_dir, &branch)),
-        git_dir,
-        branch,
-    })
-}
-
-impl Ctx {
-    fn writer(&self) -> MapWriter<'_> {
-        MapWriter {
-            source: &self.source,
-            repo: &self.map_repo,
-        }
-    }
-
-    fn store(&self) -> Store {
-        Store::new(&self.git_dir, &self.branch)
-    }
-
-    /// The map that belongs to where we are now, or nothing at all.
-    fn current_map(&self) -> Result<Option<ReviewMap>> {
-        let scope = self.source.scope()?;
-        let target = if scope.dirty {
-            WORKING.to_string()
-        } else {
-            scope.head_sha.clone()
-        };
-        if let Some(map) = self.map_repo.load_at(&target)? {
-            return Ok(Some(map));
-        }
-        // Fall back to the newest ancestor that has one, which is what makes
-        // "the map is 2 commits behind" a state instead of an absence.
-        let mut best: Option<(u32, ReviewMap)> = None;
-        for sha in self.map_repo.stored_shas()? {
-            if sha == WORKING || !self.source.is_ancestor(&sha)? {
-                continue;
+impl SkimAction {
+    fn run(self) -> Result<()> {
+        match self {
+            SkimAction::Add {
+                path,
+                reason,
+                block,
+                scope,
+            } => {
+                let ctx = scope.open()?;
+                ctx.map().require_in_scope(&path)?;
+                ctx.edit(
+                    || format!("Marked '{path}' as skim."),
+                    |map| map.add_skim(&path, &reason, block),
+                )
             }
-            let distance = self.source.commits_ahead_of(&sha)?;
-            if best.as_ref().map(|(d, _)| distance < *d).unwrap_or(true)
-                && let Some(map) = self.map_repo.load_at(&sha)?
-            {
-                best = Some((distance, map));
+            SkimAction::Remove { path, scope } => {
+                let ctx = scope.open()?;
+                ctx.edit(
+                    || format!("'{path}' is no longer marked as skim."),
+                    |map| map.remove_skim(&path),
+                )
             }
-        }
-        Ok(best.map(|(_, m)| m))
-    }
-}
-
-pub fn run() -> Result<()> {
-    let cli = Cli::parse();
-    match cli.command {
-        Command::Serve(args) => serve(args),
-        Command::Scope(args) => {
-            let ctx = open(&args.scope, None, None)?;
-            print!("{}", render_scope(ctx.source.scope()?));
-            Ok(())
-        }
-        Command::Map { action } => map(action),
-        Command::Block { action } => block(action),
-        Command::File { action } => file(action),
-        Command::Line { action } => line(action),
-        Command::Skim { action } => skim(action),
-    }
-}
-
-fn serve(args: ServeArgs) -> Result<()> {
-    let scope = args.scope.with_base(args.base.clone());
-    let ctx = open(&scope, None, args.head.clone())?;
-
-    // Without a map there is nothing farol can show. Falling back to a plain
-    // diff viewer would make it a worse version of tools that already do that
-    // well, so it refuses in the terminal instead of opening a browser onto an
-    // apology.
-    let Some(map) = ctx.current_map()? else {
-        return Err(Error::NoMap {
-            branch: ctx.source.scope()?.branch.clone(),
-        });
-    };
-
-    let store = ctx.store();
-    crate::server::serve(crate::server::ServeConfig {
-        source: ctx.source,
-        progress: JsonProgressRepository::new(store),
-        map,
-        port: args.port,
-        open_browser: !args.no_open,
-        watch: !args.no_watch,
-        git_dir: ctx.git_dir,
-    })
-}
-
-fn map(action: MapAction) -> Result<()> {
-    match action {
-        MapAction::Derive(args) => {
-            let ctx = open(&args.scope, None, None)?;
-            let derived = derive(&ctx.source, &ctx.map_repo)?;
-            let behind = ctx
-                .source
-                .commits_ahead_of(&derived.map.generated_at)
-                .unwrap_or(0);
-            if derived.created {
-                println!("Created the map version for this commit.");
-            } else {
-                println!("A map version for this commit already exists — continuing from it.");
-            }
-            print!("{}", render_map(&derived.map, behind));
-            print!("{}", render_orphans(&derived.map.orphans));
-            Ok(())
-        }
-        MapAction::Show(args) => {
-            let ctx = open(&args.scope, None, None)?;
-            let Some(map) = ctx.current_map()? else {
-                println!("No map for this branch yet. Run `farol map derive` to start one.");
-                return Ok(());
-            };
-            let behind = ctx.source.commits_ahead_of(&map.generated_at).unwrap_or(0);
-            print!("{}", render_map(&map, behind));
-            Ok(())
-        }
-        MapAction::Check(args) => {
-            let ctx = open(&args.scope, None, None)?;
-            let Some(map) = ctx.current_map()? else {
-                return Err(Error::NoMap {
-                    branch: ctx.source.scope()?.branch.clone(),
-                });
-            };
-            let report = check(&map, &ctx.source)?;
-            print!("{}", render_check(&report));
-            if report.passed() {
-                Ok(())
-            } else {
-                std::process::exit(1);
-            }
-        }
-        MapAction::Reset(args) => {
-            let ctx = open(&args.scope, None, None)?;
-            let scope = ctx.source.scope()?;
-            let target = if scope.dirty {
-                WORKING.to_string()
-            } else {
-                scope.head_sha.clone()
-            };
-            match ctx.map_repo.load_at(&target)? {
-                Some(_) => {
-                    ctx.map_repo.delete(&target)?;
-                    println!("Deleted the map version for this commit.");
-                    match ctx.current_map()? {
-                        Some(prev) => println!(
-                            "The version from {} is current again.",
-                            &prev.generated_at[..7.min(prev.generated_at.len())]
-                        ),
-                        None => println!("No earlier version remains — the branch is unmapped."),
-                    }
-                }
-                None => println!("There is no map version for this commit to delete."),
-            }
-            Ok(())
-        }
-    }
-}
-
-fn block(action: BlockAction) -> Result<()> {
-    match action {
-        BlockAction::Add {
-            slug,
-            title,
-            context,
-            before,
-            after,
-            paths,
-            scope,
-        } => {
-            let ctx = open(&scope, None, None)?;
-            for p in &paths {
-                require_in_scope(&ctx.source, p)?;
-            }
-            let position = position_from(before, after);
-            ctx.writer().edit(|map, _| {
-                map.add_block(&slug, &title, &context, position)?;
-                for p in &paths {
-                    map.add_file(&slug, p, None, None)?;
-                }
-                Ok(())
-            })?;
-            println!("Added block '{slug}' with {} file(s).", paths.len());
-            Ok(())
-        }
-        BlockAction::Update {
-            slug,
-            title,
-            context,
-            scope,
-        } => {
-            let ctx = open(&scope, None, None)?;
-            ctx.writer()
-                .edit(|map, _| map.update_block(&slug, title, context))?;
-            println!("Updated block '{slug}'.");
-            Ok(())
-        }
-        BlockAction::Remove { slug, scope } => {
-            let ctx = open(&scope, None, None)?;
-            let map = ctx.writer().edit(|map, _| map.remove_block(&slug))?;
-            println!("Removed block '{slug}'.");
-            print!("{}", render_orphans(&map.orphans));
-            Ok(())
-        }
-        BlockAction::Move {
-            slug,
-            before,
-            after,
-            scope,
-        } => {
-            let ctx = open(&scope, None, None)?;
-            let position = position_from(before, after);
-            ctx.writer()
-                .edit(|map, _| map.move_block(&slug, position))?;
-            println!("Moved block '{slug}'.");
-            Ok(())
-        }
-    }
-}
-
-fn file(action: FileAction) -> Result<()> {
-    match action {
-        FileAction::Add {
-            slug,
-            path,
-            note,
-            after,
-            scope,
-        } => {
-            let ctx = open(&scope, None, None)?;
-            require_in_scope(&ctx.source, &path)?;
-            ctx.writer()
-                .edit(|map, _| map.add_file(&slug, &path, note, after.as_deref()))?;
-            println!("Added '{path}' to block '{slug}'.");
-            Ok(())
-        }
-        FileAction::Update {
-            slug,
-            path,
-            note,
-            scope,
-        } => {
-            let ctx = open(&scope, None, None)?;
-            ctx.writer()
-                .edit(|map, _| map.update_file(&slug, &path, Some(note)))?;
-            println!("Updated the note on '{path}'.");
-            Ok(())
-        }
-        FileAction::Remove { slug, path, scope } => {
-            let ctx = open(&scope, None, None)?;
-            ctx.writer().edit(|map, _| map.remove_file(&slug, &path))?;
-            println!("Removed '{path}' from block '{slug}'.");
-            Ok(())
-        }
-    }
-}
-
-fn line(action: LineAction) -> Result<()> {
-    match action {
-        LineAction::Add {
-            slug,
-            path,
-            range,
-            note,
-            scope,
-        } => {
-            let ctx = open(&scope, None, None)?;
-            let (from, to) = parse_range(&range)?;
-            require_in_scope(&ctx.source, &path)?;
-            require_range_in_file(&ctx.source, &path, from, to)?;
-            ctx.writer()
-                .edit(|map, _| map.add_line_note(&slug, &path, from, to, note))?;
-            println!("Added a note on {path}:{from}-{to}.");
-            Ok(())
-        }
-        LineAction::Update {
-            slug,
-            path,
-            range,
-            note,
-            scope,
-        } => {
-            let ctx = open(&scope, None, None)?;
-            let (from, to) = parse_range(&range)?;
-            ctx.writer()
-                .edit(|map, _| map.update_line_note(&slug, &path, from, to, note))?;
-            println!("Updated the note on {path}:{from}-{to}.");
-            Ok(())
-        }
-        LineAction::Remove {
-            slug,
-            path,
-            range,
-            scope,
-        } => {
-            let ctx = open(&scope, None, None)?;
-            let (from, to) = parse_range(&range)?;
-            ctx.writer()
-                .edit(|map, _| map.remove_line_note(&slug, &path, from, to))?;
-            println!("Removed the note on {path}:{from}-{to}.");
-            Ok(())
-        }
-        LineAction::Restore {
-            slug,
-            path,
-            old_range,
-            range,
-            scope,
-        } => {
-            let ctx = open(&scope, None, None)?;
-            let (old_from, old_to) = parse_range(&old_range)?;
-            let (from, to) = parse_range(&range)?;
-            require_in_scope(&ctx.source, &path)?;
-            require_range_in_file(&ctx.source, &path, from, to)?;
-            ctx.writer().edit(|map, _| {
-                let orphan = map.take_orphan(&slug, &path, old_from, old_to)?;
-                map.add_line_note(&slug, &path, from, to, orphan.text)
-            })?;
-            println!("Restored the note at {path}:{from}-{to}.");
-            Ok(())
-        }
-        LineAction::Discard {
-            slug,
-            path,
-            old_range,
-            scope,
-        } => {
-            let ctx = open(&scope, None, None)?;
-            let (from, to) = parse_range(&old_range)?;
-            ctx.writer().edit(|map, _| {
-                map.take_orphan(&slug, &path, from, to)?;
-                Ok(())
-            })?;
-            println!("Discarded the note that was at {path}:{from}-{to}.");
-            Ok(())
-        }
-    }
-}
-
-fn skim(action: SkimAction) -> Result<()> {
-    match action {
-        SkimAction::Add {
-            path,
-            reason,
-            block,
-            scope,
-        } => {
-            let ctx = open(&scope, None, None)?;
-            require_in_scope(&ctx.source, &path)?;
-            ctx.writer()
-                .edit(|map, _| map.add_skim(&path, &reason, block))?;
-            println!("Marked '{path}' as skim.");
-            Ok(())
-        }
-        SkimAction::Remove { path, scope } => {
-            let ctx = open(&scope, None, None)?;
-            ctx.writer().edit(|map, _| map.remove_skim(&path))?;
-            println!("'{path}' is no longer marked as skim.");
-            Ok(())
         }
     }
 }

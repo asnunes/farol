@@ -1,6 +1,6 @@
 use crate::progress::domain::{PROGRESS_VERSION, Progress, ProgressRepository};
 use crate::shared::error::Result;
-use crate::shared::paths::{Store, write_atomic};
+use crate::shared::paths::Store;
 
 pub struct JsonProgressRepository {
     store: Store,
@@ -26,8 +26,6 @@ impl ProgressRepository for JsonProgressRepository {
     }
 
     fn save(&self, progress: &Progress) -> Result<()> {
-        self.store.ensure()?;
-        let body = serde_json::to_vec_pretty(progress)?;
-        write_atomic(&self.store.state_file(), &body)
+        self.store.write_json(&self.store.state_file(), progress)
     }
 }
