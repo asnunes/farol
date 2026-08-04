@@ -186,6 +186,19 @@ impl ReviewMap {
             })
     }
 
+    /// Skim entries attached to a block. Both the renderer and the screen need
+    /// this split, and having each decide it separately is how the two drift.
+    pub fn skim_for(&self, slug: &str) -> impl Iterator<Item = &SkimEntry> {
+        self.skim
+            .iter()
+            .filter(move |s| s.block.as_deref() == Some(slug))
+    }
+
+    /// Skim entries belonging to no block — a lockfile has no story to sit in.
+    pub fn loose_skim(&self) -> impl Iterator<Item = &SkimEntry> {
+        self.skim.iter().filter(|s| s.block.is_none())
+    }
+
     /// Every path the map accounts for, in any role.
     pub fn covered_paths(&self) -> Vec<String> {
         let mut out: Vec<String> = self
@@ -329,15 +342,7 @@ impl ReviewMap {
         after: Option<&str>,
     ) -> Result<()> {
         let path = path.into();
-        let existing = self.slugs();
-        let block = self
-            .blocks
-            .iter_mut()
-            .find(|b| b.slug == slug)
-            .ok_or_else(|| Error::UnknownBlock {
-                slug: slug.to_string(),
-                existing,
-            })?;
+        let block = self.block_mut(slug)?;
 
         if block.file(&path).is_some() {
             return Err(Error::DuplicatePath {
@@ -364,15 +369,7 @@ impl ReviewMap {
     }
 
     pub fn update_file(&mut self, slug: &str, path: &str, note: Option<String>) -> Result<()> {
-        let existing = self.slugs();
-        let block = self
-            .blocks
-            .iter_mut()
-            .find(|b| b.slug == slug)
-            .ok_or_else(|| Error::UnknownBlock {
-                slug: slug.to_string(),
-                existing,
-            })?;
+        let block = self.block_mut(slug)?;
         let paths = block.paths();
         let file = block.file_mut(path).ok_or_else(|| Error::PathNotInBlock {
             slug: slug.to_string(),
@@ -384,15 +381,7 @@ impl ReviewMap {
     }
 
     pub fn remove_file(&mut self, slug: &str, path: &str) -> Result<()> {
-        let existing = self.slugs();
-        let block = self
-            .blocks
-            .iter_mut()
-            .find(|b| b.slug == slug)
-            .ok_or_else(|| Error::UnknownBlock {
-                slug: slug.to_string(),
-                existing,
-            })?;
+        let block = self.block_mut(slug)?;
         let paths = block.paths();
         let idx = block
             .files
@@ -462,15 +451,7 @@ impl ReviewMap {
     }
 
     fn block_file_mut(&mut self, slug: &str, path: &str) -> Result<&mut BlockFile> {
-        let existing = self.slugs();
-        let block = self
-            .blocks
-            .iter_mut()
-            .find(|b| b.slug == slug)
-            .ok_or_else(|| Error::UnknownBlock {
-                slug: slug.to_string(),
-                existing,
-            })?;
+        let block = self.block_mut(slug)?;
         let paths = block.paths();
         block.file_mut(path).ok_or_else(|| Error::PathNotInBlock {
             slug: slug.to_string(),
@@ -699,6 +680,22 @@ mod tests {
             .add_skim("go.sum", "generated", Some("ghost".into()))
             .unwrap_err();
         assert!(matches!(err, Error::UnknownBlock { .. }));
+    }
+
+    #[test]
+    fn skim_splits_into_attached_and_loose() {
+        // Both the renderer and the screen need this split; it lives here so
+        // they cannot disagree about it.
+        let mut m = map_with(&["one"]);
+        m.add_skim("a_test.rs", "fixture only", Some("one".into()))
+            .unwrap();
+        m.add_skim("go.sum", "generated", None).unwrap();
+
+        let attached: Vec<_> = m.skim_for("one").map(|s| s.path.as_str()).collect();
+        let loose: Vec<_> = m.loose_skim().map(|s| s.path.as_str()).collect();
+        assert_eq!(attached, vec!["a_test.rs"]);
+        assert_eq!(loose, vec!["go.sum"]);
+        assert_eq!(m.skim_for("ghost").count(), 0);
     }
 
     #[test]

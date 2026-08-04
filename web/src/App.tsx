@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   api,
   blockOf,
@@ -188,8 +188,8 @@ export default function App() {
                   <span aria-hidden="true">✓</span>
                 </button>
                 <div className="path">
-                  <span className="dir">{dirOf(file.path)}</span>
-                  {baseOf(file.path)}
+                  <span className="dir">{splitPath(file.path).dir}</span>
+                  {splitPath(file.path).name}
                 </div>
                 {file.tags.length > 1 && (
                   <div className="tags">
@@ -355,7 +355,7 @@ function FileRow({
         onClick={() => onPick(file.path)}
       >
         <span className="chk">{file.viewed ? "✓" : ""}</span>
-        <span className="nm">{baseOf(file.path)}</span>
+        <span className="nm">{splitPath(file.path).name}</span>
         {file.skim && <span className="fast">skim</span>}
         {!file.skim && file.lineNotes.length > 0 && (
           <span className="dot" title={`${file.lineNotes.length} note(s)`}>
@@ -408,12 +408,11 @@ function Diff({ diff, file }: { diff: FileDiff; file: FileView }) {
   );
 }
 
-function dirOf(path: string) {
+/** Split once: the directory keeps its trailing slash so the two halves
+ * concatenate back to the original path. */
+function splitPath(path: string): { dir: string; name: string } {
   const i = path.lastIndexOf("/");
-  return i === -1 ? "" : path.slice(0, i + 1);
-}
-
-function baseOf(path: string) {
-  const i = path.lastIndexOf("/");
-  return i === -1 ? path : path.slice(i + 1);
+  return i === -1
+    ? { dir: "", name: path }
+    : { dir: path.slice(0, i + 1), name: path.slice(i + 1) };
 }

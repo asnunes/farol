@@ -101,11 +101,7 @@ impl Display for MapReport<'_> {
                     }
                 }
             }
-            let attached: Vec<_> = map
-                .skim
-                .iter()
-                .filter(|s| s.block.as_deref() == Some(block.slug.as_str()))
-                .collect();
+            let attached: Vec<_> = map.skim_for(&block.slug).collect();
             if !attached.is_empty() {
                 writeln!(f, "  skim:")?;
                 for entry in attached {
@@ -114,7 +110,7 @@ impl Display for MapReport<'_> {
             }
         }
 
-        let loose: Vec<_> = map.skim.iter().filter(|s| s.block.is_none()).collect();
+        let loose: Vec<_> = map.loose_skim().collect();
         if !loose.is_empty() {
             writeln!(f, "\nunassigned skim:")?;
             for entry in loose {

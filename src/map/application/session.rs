@@ -181,10 +181,7 @@ impl<'a> MapSession<'a> {
         if scope.contains(path) {
             return Ok(());
         }
-        Err(Error::PathOutOfScope {
-            path: path.to_string(),
-            similar: scope.similar_paths(path),
-        })
+        Err(scope.reject(path))
     }
 
     pub fn require_range_in_file(&self, path: &str, range: LineRange) -> Result<()> {

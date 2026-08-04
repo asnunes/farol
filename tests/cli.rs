@@ -103,6 +103,18 @@ impl Repo {
         String::from_utf8_lossy(&out.stderr).into_owned()
     }
 
+    /// Start the map for the current commit.
+    fn derive(&self) -> String {
+        self.ok(&["map", "derive"])
+    }
+
+    /// The block most tests need: one block holding the given files.
+    fn core_block(&self, paths: &[&str]) {
+        let mut args = vec!["block", "add", "core", "--title", "t", "--context", "c"];
+        args.extend_from_slice(paths);
+        self.ok(&args);
+    }
+
     /// A branch off main with one file changed, ready to review.
     fn feature(&self) -> &Self {
         self.git(&["checkout", "-q", "-b", "feature/x"]);
@@ -251,7 +263,7 @@ fn a_full_cycle_ends_with_check_passing_and_show_reflecting_it() {
     let repo = Repo::new();
     repo.feature();
 
-    repo.ok(&["map", "derive"]);
+    repo.derive();
     repo.ok(&[
         "block",
         "add",
@@ -302,7 +314,7 @@ fn check_fails_while_a_file_belongs_to_nobody() {
     repo.write("src/forgotten.rs", "nobody claimed me\n");
     repo.commit("second file");
 
-    repo.ok(&["map", "derive"]);
+    repo.derive();
     repo.ok(&[
         "block",
         "add",
@@ -330,7 +342,7 @@ fn deriving_twice_on_the_same_commit_returns_the_same_version() {
     let repo = Repo::new();
     repo.feature();
 
-    repo.ok(&["map", "derive"]);
+    repo.derive();
     repo.ok(&[
         "block",
         "add",
@@ -342,7 +354,7 @@ fn deriving_twice_on_the_same_commit_returns_the_same_version() {
         "src/a.rs",
     ]);
 
-    let second = repo.ok(&["map", "derive"]);
+    let second = repo.derive();
     assert!(second.contains("already exists"), "{second}");
 
     // The work from the first run is still there — a run that died halfway just
@@ -355,7 +367,7 @@ fn reset_drops_the_newest_version_and_the_previous_one_takes_over() {
     let repo = Repo::new();
     repo.feature();
 
-    repo.ok(&["map", "derive"]);
+    repo.derive();
     repo.ok(&[
         "block",
         "add",
@@ -369,7 +381,7 @@ fn reset_drops_the_newest_version_and_the_previous_one_takes_over() {
 
     repo.write("src/b.rs", "second file\n");
     repo.commit("more work");
-    repo.ok(&["map", "derive"]);
+    repo.derive();
     repo.ok(&[
         "block",
         "add",
@@ -394,7 +406,7 @@ fn reset_drops_the_newest_version_and_the_previous_one_takes_over() {
 fn a_new_commit_inherits_the_previous_map() {
     let repo = Repo::new();
     repo.feature();
-    repo.ok(&["map", "derive"]);
+    repo.derive();
     repo.ok(&[
         "block",
         "add",
@@ -409,7 +421,7 @@ fn a_new_commit_inherits_the_previous_map() {
     repo.write("src/a.rs", &numbered(80));
     repo.commit("extend a");
 
-    let derived = repo.ok(&["map", "derive"]);
+    let derived = repo.derive();
     assert!(derived.contains("Created"), "{derived}");
     assert!(
         derived.contains("Original title"),
@@ -423,7 +435,7 @@ fn a_new_commit_inherits_the_previous_map() {
 fn a_note_survives_a_change_far_above_it_by_moving() {
     let repo = Repo::new();
     repo.feature();
-    repo.ok(&["map", "derive"]);
+    repo.derive();
     repo.ok(&[
         "block",
         "add",
@@ -450,7 +462,7 @@ fn a_note_survives_a_change_far_above_it_by_moving() {
     repo.write("src/a.rs", &lines.concat());
     repo.commit("prepend a header");
 
-    repo.ok(&["map", "derive"]);
+    repo.derive();
     let show = repo.ok(&["map", "show"]);
     assert!(
         show.contains("lines 45-50: still true"),
@@ -462,7 +474,7 @@ fn a_note_survives_a_change_far_above_it_by_moving() {
 fn a_note_whose_code_was_rewritten_is_deactivated_with_its_prose_intact() {
     let repo = Repo::new();
     repo.feature();
-    repo.ok(&["map", "derive"]);
+    repo.derive();
     repo.ok(&[
         "block",
         "add",
@@ -490,7 +502,7 @@ fn a_note_whose_code_was_rewritten_is_deactivated_with_its_prose_intact() {
     repo.write("src/a.rs", &lines.concat());
     repo.commit("rewrite the middle");
 
-    let derived = repo.ok(&["map", "derive"]);
+    let derived = repo.derive();
     assert!(derived.contains("deactivated"), "{derived}");
     assert!(derived.contains("hunk-overlap"), "{derived}");
     assert!(
@@ -518,7 +530,7 @@ fn a_note_whose_code_was_rewritten_is_deactivated_with_its_prose_intact() {
 fn restoring_a_deactivated_note_brings_the_original_text_back() {
     let repo = Repo::new();
     repo.feature();
-    repo.ok(&["map", "derive"]);
+    repo.derive();
     repo.ok(&[
         "block",
         "add",
@@ -545,7 +557,7 @@ fn restoring_a_deactivated_note_brings_the_original_text_back() {
     repo.write("src/a.rs", &lines.concat());
     repo.commit("rewrite");
 
-    repo.ok(&["map", "derive"]);
+    repo.derive();
     repo.ok(&[
         "line", "restore", "core", "src/a.rs", "40-45", "--range", "38-41",
     ]);
@@ -560,8 +572,8 @@ fn restoring_a_deactivated_note_brings_the_original_text_back() {
 fn a_path_outside_the_review_is_rejected_with_a_suggestion() {
     let repo = Repo::new();
     repo.feature();
-    repo.ok(&["map", "derive"]);
-    repo.ok(&["block", "add", "core", "--title", "t", "--context", "c"]);
+    repo.derive();
+    repo.core_block(&[]);
 
     let err = repo.fails(&["file", "add", "core", "src/aa.rs"]);
     assert!(err.contains("is not part of this review"), "{err}");
@@ -576,7 +588,7 @@ fn a_path_outside_the_review_is_rejected_with_a_suggestion() {
 fn a_range_past_the_end_of_the_file_is_rejected() {
     let repo = Repo::new();
     repo.feature();
-    repo.ok(&["map", "derive"]);
+    repo.derive();
     repo.ok(&[
         "block",
         "add",
@@ -597,8 +609,8 @@ fn a_range_past_the_end_of_the_file_is_rejected() {
 fn an_unknown_block_lists_the_ones_that_exist() {
     let repo = Repo::new();
     repo.feature();
-    repo.ok(&["map", "derive"]);
-    repo.ok(&["block", "add", "core", "--title", "t", "--context", "c"]);
+    repo.derive();
+    repo.core_block(&[]);
 
     let err = repo.fails(&["file", "add", "ghost", "src/a.rs"]);
     assert!(err.contains("unknown block 'ghost'"), "{err}");
@@ -609,8 +621,8 @@ fn an_unknown_block_lists_the_ones_that_exist() {
 fn a_duplicate_block_is_rejected_rather_than_silently_merged() {
     let repo = Repo::new();
     repo.feature();
-    repo.ok(&["map", "derive"]);
-    repo.ok(&["block", "add", "core", "--title", "t", "--context", "c"]);
+    repo.derive();
+    repo.core_block(&[]);
 
     let err = repo.fails(&["block", "add", "core", "--title", "t2", "--context", "c2"]);
     assert!(err.contains("already exists"), "{err}");
@@ -620,7 +632,7 @@ fn a_duplicate_block_is_rejected_rather_than_silently_merged() {
 fn malformed_ranges_are_rejected_with_the_expected_shape() {
     let repo = Repo::new();
     repo.feature();
-    repo.ok(&["map", "derive"]);
+    repo.derive();
     repo.ok(&[
         "block",
         "add",
@@ -647,7 +659,7 @@ fn a_new_block_can_be_placed_ahead_of_an_existing_one() {
     repo.write("src/b.rs", "second\n");
     repo.commit("b");
 
-    repo.ok(&["map", "derive"]);
+    repo.derive();
     repo.ok(&[
         "block",
         "add",
@@ -703,7 +715,7 @@ fn serve_refuses_to_start_without_a_map() {
 fn a_truncated_map_file_is_discarded_instead_of_crashing() {
     let repo = Repo::new();
     repo.feature();
-    repo.ok(&["map", "derive"]);
+    repo.derive();
     repo.ok(&[
         "block",
         "add",

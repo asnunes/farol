@@ -103,10 +103,7 @@ impl DiffSource for GixSource {
             .files
             .iter()
             .find(|f| f.path == path)
-            .ok_or_else(|| Error::PathOutOfScope {
-                path: path.to_string(),
-                similar: self.scope.similar_paths(path),
-            })?;
+            .ok_or_else(|| self.scope.reject(path))?;
 
         let old_key = change.old_path.clone().unwrap_or_else(|| path.to_string());
         let old = self
@@ -165,10 +162,7 @@ impl DiffSource for GixSource {
         let content = self
             .head_blobs
             .get(path)
-            .ok_or_else(|| Error::PathOutOfScope {
-                path: path.to_string(),
-                similar: self.scope.similar_paths(path),
-            })?;
+            .ok_or_else(|| self.scope.reject(path))?;
         Ok(String::from_utf8_lossy(content).lines().count() as u32)
     }
 

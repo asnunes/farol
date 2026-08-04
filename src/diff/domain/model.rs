@@ -109,6 +109,15 @@ impl Scope {
         self.files.iter().map(|f| f.path.as_str()).collect()
     }
 
+    /// Reject a path that is not under review, carrying the near misses with
+    /// it. Built here so every caller rejects the same way.
+    pub fn reject(&self, path: &str) -> crate::shared::error::Error {
+        crate::shared::error::Error::PathOutOfScope {
+            path: path.to_string(),
+            similar: self.similar_paths(path),
+        }
+    }
+
     /// Paths that look like `candidate`, for "did you mean" on a rejected path.
     /// An LLM writing a map hallucinates paths more than anything else, so the
     /// suggestion is what turns a rejection into a self-correction.

@@ -33,10 +33,10 @@ impl Cli {
 #[derive(Args, Clone, Debug, Default)]
 pub struct ScopeFlags {
     /// Diff the two refs directly instead of from their merge base.
-    #[arg(long)]
+    #[arg(long, global = true)]
     direct: bool,
     /// Include uncommitted changes from the working tree.
-    #[arg(long)]
+    #[arg(long, global = true)]
     dirty: bool,
 }
 
@@ -53,7 +53,7 @@ impl ScopeFlags {
 #[derive(Args, Clone, Debug, Default)]
 pub struct ScopeArgs {
     /// Compare against this ref instead of main (falling back to master).
-    #[arg(long)]
+    #[arg(long, global = true)]
     base: Option<String>,
     #[command(flatten)]
     flags: ScopeFlags,
@@ -102,26 +102,36 @@ enum Command {
     Scope(ScopeOnlyArgs),
     /// Create, inspect and verify the map.
     Map {
+        #[command(flatten)]
+        scope: ScopeArgs,
         #[command(subcommand)]
         action: MapAction,
     },
     /// Blocks: the units the reviewer reads in.
     Block {
+        #[command(flatten)]
+        scope: ScopeArgs,
         #[command(subcommand)]
         action: BlockAction,
     },
     /// Files inside a block.
     File {
+        #[command(flatten)]
+        scope: ScopeArgs,
         #[command(subcommand)]
         action: FileAction,
     },
     /// Notes pinned to a range of lines.
     Line {
+        #[command(flatten)]
+        scope: ScopeArgs,
         #[command(subcommand)]
         action: LineAction,
     },
     /// Files the reviewer may read diagonally.
     Skim {
+        #[command(flatten)]
+        scope: ScopeArgs,
         #[command(subcommand)]
         action: SkimAction,
     },
@@ -136,11 +146,13 @@ impl Command {
                 print!("{}", ScopeReport(ctx.source().scope()?));
                 Ok(())
             }
-            Command::Map { action } => action.run(),
-            Command::Block { action } => action.run(),
-            Command::File { action } => action.run(),
-            Command::Line { action } => action.run(),
-            Command::Skim { action } => action.run(),
+            // The window is resolved once per group and handed down, instead
+            // of every action declaring and reopening it.
+            Command::Map { scope, action } => action.run(&scope.open()?),
+            Command::Block { scope, action } => action.run(&scope.open()?),
+            Command::File { scope, action } => action.run(&scope.open()?),
+            Command::Line { scope, action } => action.run(&scope.open()?),
+            Command::Skim { scope, action } => action.run(&scope.open()?),
         }
     }
 }
@@ -197,20 +209,19 @@ pub struct ScopeOnlyArgs {
 #[derive(Subcommand)]
 enum MapAction {
     /// Produce the map version for the current commit. Safe to call twice.
-    Derive(ScopeOnlyArgs),
+    Derive,
     /// Print the map.
-    Show(ScopeOnlyArgs),
+    Show,
     /// Verify coverage and pending decisions. Non-zero exit when it fails.
-    Check(ScopeOnlyArgs),
+    Check,
     /// Delete the newest version and fall back to the one before it.
-    Reset(ScopeOnlyArgs),
+    Reset,
 }
 
 impl MapAction {
-    fn run(self) -> Result<()> {
+    fn run(self, ctx: &Ctx) -> Result<()> {
         match self {
-            MapAction::Derive(args) => {
-                let ctx = args.scope.open()?;
+            MapAction::Derive => {
                 let session = ctx.map();
                 let derived = session.derive()?;
                 println!(
@@ -231,8 +242,7 @@ impl MapAction {
                 print!("{}", OrphanReport(&derived.map.orphans));
                 Ok(())
             }
-            MapAction::Show(args) => {
-                let ctx = args.scope.open()?;
+            MapAction::Show => {
                 let session = ctx.map();
                 match session.current()? {
                     Some(map) => print!(
@@ -248,8 +258,7 @@ impl MapAction {
                 }
                 Ok(())
             }
-            MapAction::Check(args) => {
-                let ctx = args.scope.open()?;
+            MapAction::Check => {
                 let session = ctx.map();
                 let report = session.check(&session.require_current()?)?;
                 print!("{}", CheckSummary(&report));
@@ -259,8 +268,7 @@ impl MapAction {
                     std::process::exit(1)
                 }
             }
-            MapAction::Reset(args) => {
-                let ctx = args.scope.open()?;
+            MapAction::Reset => {
                 match ctx.map().reset()? {
                     ResetOutcome::Deleted { fell_back_to } => {
                         println!("Deleted the map version for this commit.");
@@ -300,8 +308,6 @@ enum BlockAction {
         after: Option<String>,
         /// Files with no note of their own can come along here.
         paths: Vec<String>,
-        #[command(flatten)]
-        scope: ScopeArgs,
     },
     Update {
         slug: String,
@@ -309,13 +315,9 @@ enum BlockAction {
         title: Option<String>,
         #[arg(long)]
         context: Option<String>,
-        #[command(flatten)]
-        scope: ScopeArgs,
     },
     Remove {
         slug: String,
-        #[command(flatten)]
-        scope: ScopeArgs,
     },
     Move {
         slug: String,
@@ -323,13 +325,11 @@ enum BlockAction {
         before: Option<String>,
         #[arg(long)]
         after: Option<String>,
-        #[command(flatten)]
-        scope: ScopeArgs,
     },
 }
 
 impl BlockAction {
-    fn run(self) -> Result<()> {
+    fn run(self, ctx: &Ctx) -> Result<()> {
         match self {
             BlockAction::Add {
                 slug,
@@ -338,9 +338,7 @@ impl BlockAction {
                 before,
                 after,
                 paths,
-                scope,
             } => {
-                let ctx = scope.open()?;
                 for path in &paths {
                     ctx.map().require_in_scope(path)?;
                 }
@@ -361,28 +359,19 @@ impl BlockAction {
                 slug,
                 title,
                 context,
-                scope,
-            } => {
-                let ctx = scope.open()?;
-                ctx.edit(
-                    || format!("Updated block '{slug}'."),
-                    |map| map.update_block(&slug, title, context),
-                )
-            }
-            BlockAction::Remove { slug, scope } => {
-                let ctx = scope.open()?;
-                ctx.edit(
-                    || format!("Removed block '{slug}'."),
-                    |map| map.remove_block(&slug),
-                )
-            }
+            } => ctx.edit(
+                || format!("Updated block '{slug}'."),
+                |map| map.update_block(&slug, title, context),
+            ),
+            BlockAction::Remove { slug } => ctx.edit(
+                || format!("Removed block '{slug}'."),
+                |map| map.remove_block(&slug),
+            ),
             BlockAction::Move {
                 slug,
                 before,
                 after,
-                scope,
             } => {
-                let ctx = scope.open()?;
                 let position = position_from(before, after);
                 ctx.edit(
                     || format!("Moved block '{slug}'."),
@@ -403,61 +392,42 @@ enum FileAction {
         /// Place behind this file within the block.
         #[arg(long)]
         after: Option<String>,
-        #[command(flatten)]
-        scope: ScopeArgs,
     },
     Update {
         slug: String,
         path: String,
         #[arg(long)]
         note: String,
-        #[command(flatten)]
-        scope: ScopeArgs,
     },
     Remove {
         slug: String,
         path: String,
-        #[command(flatten)]
-        scope: ScopeArgs,
     },
 }
 
 impl FileAction {
-    fn run(self) -> Result<()> {
+    fn run(self, ctx: &Ctx) -> Result<()> {
         match self {
             FileAction::Add {
                 slug,
                 path,
                 note,
                 after,
-                scope,
             } => {
-                let ctx = scope.open()?;
                 ctx.map().require_in_scope(&path)?;
                 ctx.edit(
                     || format!("Added '{path}' to block '{slug}'."),
                     |map| map.add_file(&slug, &path, note, after.as_deref()),
                 )
             }
-            FileAction::Update {
-                slug,
-                path,
-                note,
-                scope,
-            } => {
-                let ctx = scope.open()?;
-                ctx.edit(
-                    || format!("Updated the note on '{path}'."),
-                    |map| map.update_file(&slug, &path, Some(note)),
-                )
-            }
-            FileAction::Remove { slug, path, scope } => {
-                let ctx = scope.open()?;
-                ctx.edit(
-                    || format!("Removed '{path}' from block '{slug}'."),
-                    |map| map.remove_file(&slug, &path),
-                )
-            }
+            FileAction::Update { slug, path, note } => ctx.edit(
+                || format!("Updated the note on '{path}'."),
+                |map| map.update_file(&slug, &path, Some(note)),
+            ),
+            FileAction::Remove { slug, path } => ctx.edit(
+                || format!("Removed '{path}' from block '{slug}'."),
+                |map| map.remove_file(&slug, &path),
+            ),
         }
     }
 }
@@ -471,8 +441,6 @@ enum LineAction {
         range: String,
         #[arg(long)]
         note: String,
-        #[command(flatten)]
-        scope: ScopeArgs,
     },
     Update {
         slug: String,
@@ -480,15 +448,11 @@ enum LineAction {
         range: String,
         #[arg(long)]
         note: String,
-        #[command(flatten)]
-        scope: ScopeArgs,
     },
     Remove {
         slug: String,
         path: String,
         range: String,
-        #[command(flatten)]
-        scope: ScopeArgs,
     },
     /// Bring a deactivated note back at its new location.
     Restore {
@@ -498,30 +462,24 @@ enum LineAction {
         old_range: String,
         #[arg(long)]
         range: String,
-        #[command(flatten)]
-        scope: ScopeArgs,
     },
     /// Drop a deactivated note for good.
     Discard {
         slug: String,
         path: String,
         old_range: String,
-        #[command(flatten)]
-        scope: ScopeArgs,
     },
 }
 
 impl LineAction {
-    fn run(self) -> Result<()> {
+    fn run(self, ctx: &Ctx) -> Result<()> {
         match self {
             LineAction::Add {
                 slug,
                 path,
                 range,
                 note,
-                scope,
             } => {
-                let ctx = scope.open()?;
                 let range = LineRange::parse(&range)?;
                 ctx.map().require_in_scope(&path)?;
                 ctx.map().require_range_in_file(&path, range)?;
@@ -535,22 +493,14 @@ impl LineAction {
                 path,
                 range,
                 note,
-                scope,
             } => {
-                let ctx = scope.open()?;
                 let range = LineRange::parse(&range)?;
                 ctx.edit(
                     || format!("Updated the note on {path}:{range}."),
                     |map| map.update_line_note(&slug, &path, range, note),
                 )
             }
-            LineAction::Remove {
-                slug,
-                path,
-                range,
-                scope,
-            } => {
-                let ctx = scope.open()?;
+            LineAction::Remove { slug, path, range } => {
                 let range = LineRange::parse(&range)?;
                 ctx.edit(
                     || format!("Removed the note on {path}:{range}."),
@@ -562,9 +512,7 @@ impl LineAction {
                 path,
                 old_range,
                 range,
-                scope,
             } => {
-                let ctx = scope.open()?;
                 let old = LineRange::parse(&old_range)?;
                 let new = LineRange::parse(&range)?;
                 ctx.map().require_in_scope(&path)?;
@@ -581,9 +529,7 @@ impl LineAction {
                 slug,
                 path,
                 old_range,
-                scope,
             } => {
-                let ctx = scope.open()?;
                 let range = LineRange::parse(&old_range)?;
                 ctx.edit(
                     || format!("Discarded the note that was at {path}:{range}."),
@@ -603,39 +549,30 @@ enum SkimAction {
         /// Attach it to the block it belongs to, when it belongs to one.
         #[arg(long)]
         block: Option<String>,
-        #[command(flatten)]
-        scope: ScopeArgs,
     },
     Remove {
         path: String,
-        #[command(flatten)]
-        scope: ScopeArgs,
     },
 }
 
 impl SkimAction {
-    fn run(self) -> Result<()> {
+    fn run(self, ctx: &Ctx) -> Result<()> {
         match self {
             SkimAction::Add {
                 path,
                 reason,
                 block,
-                scope,
             } => {
-                let ctx = scope.open()?;
                 ctx.map().require_in_scope(&path)?;
                 ctx.edit(
                     || format!("Marked '{path}' as skim."),
                     |map| map.add_skim(&path, &reason, block),
                 )
             }
-            SkimAction::Remove { path, scope } => {
-                let ctx = scope.open()?;
-                ctx.edit(
-                    || format!("'{path}' is no longer marked as skim."),
-                    |map| map.remove_skim(&path),
-                )
-            }
+            SkimAction::Remove { path } => ctx.edit(
+                || format!("'{path}' is no longer marked as skim."),
+                |map| map.remove_skim(&path),
+            ),
         }
     }
 }

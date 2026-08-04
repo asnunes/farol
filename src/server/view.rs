@@ -121,7 +121,7 @@ impl ReviewView {
         }
 
         let mut loose_skim = Vec::new();
-        for entry in map.skim.iter().filter(|s| s.block.is_none()) {
+        for entry in map.loose_skim() {
             if placed.contains(&entry.path) {
                 continue;
             }
