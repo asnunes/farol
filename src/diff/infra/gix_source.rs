@@ -494,3 +494,165 @@ pub fn hash(bytes: &[u8]) -> String {
         .map(|b| format!("{b:02x}"))
         .collect()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn tree(entries: &[(&str, &str)]) -> BTreeMap<String, Vec<u8>> {
+        entries
+            .iter()
+            .map(|(p, c)| (p.to_string(), c.as_bytes().to_vec()))
+            .collect()
+    }
+
+    fn find<'a>(changes: &'a [FileChange], path: &str) -> &'a FileChange {
+        changes
+            .iter()
+            .find(|c| c.path == path)
+            .unwrap_or_else(|| panic!("{path} missing from {:?}", changes))
+    }
+
+    #[test]
+    fn a_file_only_on_the_new_side_is_added() {
+        let changes = changed_files(&tree(&[]), &tree(&[("a.rs", "hello\n")]));
+        assert_eq!(find(&changes, "a.rs").status, FileStatus::Added);
+        assert_eq!(find(&changes, "a.rs").additions, 1);
+    }
+
+    #[test]
+    fn a_file_only_on_the_old_side_is_deleted() {
+        let changes = changed_files(&tree(&[("a.rs", "hello\n")]), &tree(&[]));
+        assert_eq!(find(&changes, "a.rs").status, FileStatus::Deleted);
+        assert_eq!(find(&changes, "a.rs").deletions, 1);
+    }
+
+    #[test]
+    fn an_unchanged_file_does_not_appear_at_all() {
+        let same = tree(&[("a.rs", "hello\n")]);
+        assert!(changed_files(&same, &same).is_empty());
+    }
+
+    #[test]
+    fn a_file_that_moved_with_identical_content_is_a_rename() {
+        // Reporting this as an add plus a delete would make the reviewer read
+        // the whole file twice for a change that is not there.
+        let changes = changed_files(
+            &tree(&[("old/a.rs", "hello\nworld\n")]),
+            &tree(&[("new/a.rs", "hello\nworld\n")]),
+        );
+
+        assert_eq!(
+            changes.len(),
+            1,
+            "a rename is one entry, not two: {changes:?}"
+        );
+        let renamed = find(&changes, "new/a.rs");
+        assert_eq!(renamed.status, FileStatus::Renamed);
+        assert_eq!(renamed.old_path.as_deref(), Some("old/a.rs"));
+        assert_eq!(
+            (renamed.additions, renamed.deletions),
+            (0, 0),
+            "nothing changed inside it"
+        );
+    }
+
+    #[test]
+    fn a_moved_file_whose_content_also_changed_is_not_treated_as_a_rename() {
+        // The content moved *and* changed, so the reviewer does have to read it.
+        let changes = changed_files(
+            &tree(&[("old/a.rs", "hello\n")]),
+            &tree(&[("new/a.rs", "hello\nplus a line\n")]),
+        );
+        assert_eq!(changes.len(), 2);
+        assert_eq!(find(&changes, "new/a.rs").status, FileStatus::Added);
+        assert_eq!(find(&changes, "old/a.rs").status, FileStatus::Deleted);
+    }
+
+    #[test]
+    fn changes_come_back_in_path_order() {
+        let changes = changed_files(
+            &tree(&[]),
+            &tree(&[("z.rs", "z\n"), ("a.rs", "a\n"), ("m.rs", "m\n")]),
+        );
+        let paths: Vec<&str> = changes.iter().map(|c| c.path.as_str()).collect();
+        assert_eq!(paths, vec!["a.rs", "m.rs", "z.rs"]);
+    }
+
+    #[test]
+    fn a_diff_carries_hunks_with_the_line_numbers_the_notes_will_use() {
+        let old = "one\ntwo\nthree\nfour\nfive\n";
+        let new = "one\ntwo\nCHANGED\nfour\nfive\n";
+        let diff = build_file_diff(
+            "a.rs",
+            None,
+            FileStatus::Modified,
+            old.as_bytes(),
+            new.as_bytes(),
+        );
+
+        assert_eq!((diff.additions, diff.deletions), (1, 1));
+        assert_eq!(diff.hunks.len(), 1);
+
+        let changed: Vec<_> = diff.hunks[0]
+            .lines
+            .iter()
+            .filter(|l| l.kind != LineKind::Context)
+            .collect();
+        assert_eq!(changed.len(), 2);
+        assert_eq!(changed[0].content, "three");
+        assert_eq!(changed[0].old_number, Some(3));
+        assert_eq!(changed[1].content, "CHANGED");
+        assert_eq!(changed[1].new_number, Some(3));
+    }
+
+    #[test]
+    fn distant_edits_land_in_separate_hunks() {
+        // Line notes shift per hunk, so this split is not cosmetic.
+        let old: String = (1..=40).map(|i| format!("line {i}\n")).collect();
+        let new = old
+            .replace("line 2\n", "CHANGED 2\n")
+            .replace("line 38\n", "CHANGED 38\n");
+        let diff = build_file_diff(
+            "a.rs",
+            None,
+            FileStatus::Modified,
+            old.as_bytes(),
+            new.as_bytes(),
+        );
+        assert_eq!(diff.hunks.len(), 2);
+    }
+
+    #[test]
+    fn the_content_hash_follows_the_new_side_only() {
+        // Viewed-state invalidation keys on this; if it moved with the old side
+        // a rebase would reopen files nobody touched.
+        let a = build_file_diff("a.rs", None, FileStatus::Modified, b"one\n", b"two\n");
+        let b = build_file_diff("a.rs", None, FileStatus::Modified, b"other\n", b"two\n");
+        assert_eq!(a.new_content_hash, b.new_content_hash);
+
+        let c = build_file_diff("a.rs", None, FileStatus::Modified, b"one\n", b"three\n");
+        assert_ne!(a.new_content_hash, c.new_content_hash);
+    }
+
+    #[test]
+    fn a_near_miss_path_is_offered_back_best_match_first() {
+        let scope = Scope {
+            branch: "b".into(),
+            base_ref: "main".into(),
+            head_ref: "b".into(),
+            base_sha: "x".into(),
+            head_sha: "y".into(),
+            merge_base: true,
+            dirty: false,
+            files: ["services/db.go", "io/db_test.go", "unrelated.rs"]
+                .iter()
+                .map(|p| counted(p, None, FileStatus::Modified, b"", b""))
+                .collect(),
+        };
+
+        let hits = scope.similar_paths("service/db.go");
+        assert_eq!(hits.first().map(String::as_str), Some("services/db.go"));
+        assert!(scope.similar_paths("nothing_like_it.py").is_empty());
+    }
+}

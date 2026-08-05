@@ -218,6 +218,26 @@ fn dirty_is_refused_when_head_points_somewhere_you_are_not_standing() {
     assert!(err.contains("feature/x"), "{err}");
 }
 
+#[test]
+fn a_renamed_file_is_reported_once_rather_than_as_an_add_and_a_delete() {
+    let repo = Repo::new();
+    repo.feature();
+    // A file that exists on the base: renaming one the branch created would
+    // just be an add at the final path, since the base never had it.
+    std::fs::create_dir_all(repo.path().join("docs")).unwrap();
+    repo.git(&["mv", "README.md", "docs/README.md"]);
+    repo.commit("move it");
+
+    let out = repo.ok(&["scope"]);
+    assert!(out.contains("renamed"), "{out}");
+    assert!(out.contains("docs/README.md (was README.md)"), "{out}");
+    assert!(
+        !out.contains("deleted"),
+        "reporting a move as add plus delete makes the reviewer read the whole \
+         file twice for a change that is not there:\n{out}"
+    );
+}
+
 // ---- worktrees ----------------------------------------------------------
 
 #[test]
