@@ -1,5 +1,8 @@
-//! The shared machinery every map use case needs: producing the version for the
-//! current commit, loading it, editing it, saving it.
+//! The version lifecycle: producing the version for the current commit,
+//! finding the one that applies, editing it, saving it.
+//!
+//! Reconciling an inherited map with the code lives next door in
+//! [`MapReconciler`](super::MapReconciler); it changes for its own reasons.
 //!
 //! This is a **service** — a dependency of the use cases, never called by a
 //! transport. The CLI and the HTTP handlers talk to use cases; use cases talk
@@ -12,22 +15,19 @@
 
 use std::sync::Arc;
 
-use crate::diff::application::{CommitHistory, FileDiffs, ReviewScope};
-use crate::diff::domain::FileDiff;
-use crate::map::domain::{
-    LineRange, MapRepository, Orphan, OrphanReason, ReviewMap, ShiftOutcome, WORKING,
-};
+use super::reconciler::MapReconciler;
+use crate::diff::application::{CommitHistory, ReviewScope};
+use crate::map::domain::{MapRepository, ReviewMap, WORKING};
 use crate::shared::error::{Error, Result};
 
 /// Owns what it needs instead of borrowing it, so a caller can hold one in a
 /// struct and hand it around rather than rebuilding it at every use.
 #[derive(Clone)]
 pub struct MapService {
-    /// Deriving genuinely needs all three: the scope to prune files that left
-    /// the review, the diffs to re-anchor notes, the history to find a parent.
     scope: ReviewScope,
-    diffs: FileDiffs,
     history: CommitHistory,
+    /// What to do to an inherited map when the code underneath it moved.
+    reconciler: MapReconciler,
     repo: Arc<dyn MapRepository>,
 }
 
@@ -45,30 +45,17 @@ pub enum ResetOutcome {
     NothingToDelete,
 }
 
-#[derive(Debug, Default)]
-pub struct CheckReport {
-    pub uncovered: Vec<String>,
-    pub pending_orphans: usize,
-    pub commits_behind: u32,
-}
-
-impl CheckReport {
-    pub fn passed(&self) -> bool {
-        self.uncovered.is_empty() && self.pending_orphans == 0
-    }
-}
-
 impl MapService {
     pub fn new(
         scope: ReviewScope,
-        diffs: FileDiffs,
         history: CommitHistory,
+        reconciler: MapReconciler,
         repo: Arc<dyn MapRepository>,
     ) -> Self {
         Self {
             scope,
-            diffs,
             history,
+            reconciler,
             repo,
         }
     }
@@ -117,13 +104,13 @@ impl MapService {
                 // starts clean. Carrying them forever would pile up a graveyard
                 // nobody revisits.
                 m.orphans.clear();
-                self.reanchor(&mut m, &parent_sha, &target)?;
+                self.reconciler.reanchor(&mut m, &parent_sha, &target)?;
                 m
             }
             None => ReviewMap::new(&scope.branch, &scope.base_ref, &target),
         };
 
-        self.prune_gone_files(&mut map)?;
+        self.reconciler.prune_gone_files(&mut map)?;
         self.repo.save(&map)?;
 
         // A working map that has been absorbed must not keep being picked as
@@ -183,25 +170,6 @@ impl MapService {
         })
     }
 
-    /// The map's self-test. It exists so "every file shows up somewhere" does
-    /// not depend on the model remembering the rule: a file nobody assigned is
-    /// not merely undocumented, it is invisible, because the sidebar is built
-    /// from the map.
-    pub fn check(&self, map: &ReviewMap) -> Result<CheckReport> {
-        let scope = self.scope.get()?;
-        let covered = map.covered_paths();
-        Ok(CheckReport {
-            uncovered: scope
-                .files
-                .iter()
-                .map(|f| f.path.clone())
-                .filter(|p| !covered.contains(p))
-                .collect(),
-            pending_orphans: map.orphans.len(),
-            commits_behind: self.behind(map),
-        })
-    }
-
     // ---- derivation internals -----------------------------------------
 
     /// The map to inherit from: uncommitted work first, then the newest stored
@@ -231,96 +199,6 @@ impl MapService {
             None => Ok(None),
         }
     }
-
-    /// Move every line note onto the new commit, deactivating the ones whose
-    /// code was rewritten.
-    fn reanchor(&self, map: &mut ReviewMap, from: &str, to: &str) -> Result<()> {
-        let mut orphans = Vec::new();
-
-        for block in &mut map.blocks {
-            for file in &mut block.files {
-                if file.line_notes.is_empty() {
-                    continue;
-                }
-                let Some(diff) = self.diffs.between(from, to, &file.path)? else {
-                    continue; // file untouched: every note is still exactly right
-                };
-
-                let mut kept = Vec::new();
-                for note in std::mem::take(&mut file.line_notes) {
-                    match note.range.shift(&diff.hunks) {
-                        ShiftOutcome::Unchanged => kept.push(note),
-                        ShiftOutcome::Shifted(range) => kept.push(crate::map::domain::LineNote {
-                            range,
-                            text: note.text,
-                        }),
-                        ShiftOutcome::Overlapped => orphans.push(Orphan {
-                            block: block.slug.clone(),
-                            path: file.path.clone(),
-                            old_range: note.range,
-                            snapshot: Self::snapshot_of(&diff, note.range),
-                            reason: OrphanReason::HunkOverlap,
-                            text: note.text,
-                        }),
-                    }
-                }
-                file.line_notes = kept;
-            }
-        }
-
-        map.orphans.extend(orphans);
-        Ok(())
-    }
-
-    /// The code the note used to cover. This — not the old line numbers — is
-    /// what identifies the note afterwards: after a refactor, `82-116` may point
-    /// at a completely different function, and restoring there would place a
-    /// confident note on unrelated code.
-    fn snapshot_of(diff: &FileDiff, range: LineRange) -> String {
-        let lines: Vec<&str> = diff
-            .hunks
-            .iter()
-            .flat_map(|h| h.lines.iter())
-            .filter(|l| matches!(l.old_number, Some(n) if n >= range.from && n <= range.to))
-            .map(|l| l.content.as_str())
-            .collect();
-
-        let joined = lines.join("\n");
-        if joined.chars().count() > 600 {
-            joined.chars().take(600).collect::<String>() + "\n…"
-        } else {
-            joined
-        }
-    }
-
-    /// Files that left the review window cannot stay in the map. Their notes
-    /// are kept as orphans so the prose can be moved rather than silently lost.
-    fn prune_gone_files(&self, map: &mut ReviewMap) -> Result<()> {
-        let scope = self.scope.get()?;
-        let mut orphans = Vec::new();
-
-        for block in &mut map.blocks {
-            let slug = block.slug.clone();
-            block.files.retain(|file| {
-                if scope.contains(&file.path) {
-                    return true;
-                }
-                orphans.extend(file.line_notes.iter().map(|note| Orphan {
-                    block: slug.clone(),
-                    path: file.path.clone(),
-                    old_range: note.range,
-                    snapshot: String::new(),
-                    reason: OrphanReason::FileRemoved,
-                    text: note.text.clone(),
-                }));
-                false
-            });
-        }
-
-        map.skim.retain(|s| scope.contains(&s.path));
-        map.orphans.extend(orphans);
-        Ok(())
-    }
 }
 
 #[cfg(test)]
@@ -329,7 +207,7 @@ mod tests {
     use crate::diff::application::ReviewScope;
     use crate::map::application::{AddBlock, GetScope, position_from};
     use crate::map::domain::Slug;
-    use crate::map::domain::{LineRange, Position};
+    use crate::map::domain::{LineRange, OrphanReason, Position};
     use crate::testing::slug;
     use crate::testing::{FakeDiffSource, InMemoryMapRepository, hunk, hunk_with_lines, service};
     use std::sync::Arc;
@@ -502,23 +380,6 @@ mod tests {
     }
 
     #[test]
-    fn check_fails_on_a_file_nobody_assigned() {
-        let source = FakeDiffSource::with_paths(&["a.rs", "forgotten.rs"]).on_commit("head");
-        let repo = Arc::new(InMemoryMapRepository::new());
-        let session = service(source, repo.clone());
-        session
-            .edit(|map| {
-                map.add_block(&slug("core"), "t", "c", Position::End)?;
-                map.add_file(&slug("core"), "a.rs", None, None)
-            })
-            .unwrap();
-
-        let report = session.check(&session.require_current().unwrap()).unwrap();
-        assert_eq!(report.uncovered, vec!["forgotten.rs"]);
-        assert!(!report.passed());
-    }
-
-    #[test]
     fn before_wins_over_after_when_both_are_given() {
         assert_eq!(
             position_from(Some(slug("x")), Some(slug("y"))),
@@ -529,24 +390,5 @@ mod tests {
     #[test]
     fn no_flags_means_append() {
         assert_eq!(position_from(None, None), Position::End);
-    }
-
-    #[test]
-    fn a_report_only_passes_when_nothing_is_left_open() {
-        assert!(CheckReport::default().passed());
-        assert!(
-            !CheckReport {
-                uncovered: vec!["a.rs".into()],
-                ..Default::default()
-            }
-            .passed()
-        );
-        assert!(
-            !CheckReport {
-                pending_orphans: 1,
-                ..Default::default()
-            }
-            .passed()
-        );
     }
 }

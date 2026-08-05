@@ -270,11 +270,13 @@ pub fn service(
     repo: Arc<InMemoryMapRepository>,
 ) -> crate::map::application::MapService {
     use crate::diff::application::{CommitHistory, FileDiffs, ReviewScope};
+    use crate::map::application::MapReconciler;
     let source = Arc::new(source);
+    let scope = ReviewScope::new(source.clone());
     crate::map::application::MapService::new(
-        ReviewScope::new(source.clone()),
-        FileDiffs::new(source.clone()),
-        CommitHistory::new(source),
+        scope.clone(),
+        CommitHistory::new(source.clone()),
+        MapReconciler::new(scope, FileDiffs::new(source)),
         repo,
     )
 }

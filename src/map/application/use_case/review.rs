@@ -2,7 +2,7 @@
 
 use crate::diff::application::{FileDiffs, ReviewScope};
 use crate::diff::domain::{ReviewPath, Scope};
-use crate::map::application::{CheckReport, Derived, MapService, ResetOutcome};
+use crate::map::application::{Derived, MapService, ResetOutcome};
 use crate::map::domain::ReviewMap;
 use crate::progress::application::ProgressStore;
 use crate::progress::domain::Progress;
@@ -56,19 +56,51 @@ impl ShowMap {
     }
 }
 
+/// What the self-test found.
+#[derive(Debug, Default)]
+pub struct CheckReport {
+    pub uncovered: Vec<String>,
+    pub pending_orphans: usize,
+    pub commits_behind: u32,
+}
+
+impl CheckReport {
+    pub fn passed(&self) -> bool {
+        self.uncovered.is_empty() && self.pending_orphans == 0
+    }
+}
+
 /// Verify the map covers the review and leaves nothing undecided.
+///
+/// It exists so "every file shows up somewhere" does not depend on the model
+/// remembering the rule: a file nobody assigned is not merely undocumented, it
+/// is invisible, because the sidebar is built from the map.
 #[derive(Clone)]
 pub struct CheckMap {
     maps: MapService,
+    scope: ReviewScope,
 }
 
 impl CheckMap {
-    pub fn new(maps: MapService) -> Self {
-        Self { maps }
+    pub fn new(maps: MapService, scope: ReviewScope) -> Self {
+        Self { maps, scope }
     }
 
     pub fn execute(&self) -> Result<CheckReport> {
-        self.maps.check(&self.maps.require_current()?)
+        let map = self.maps.require_current()?;
+        let covered = map.covered_paths();
+        Ok(CheckReport {
+            uncovered: self
+                .scope
+                .get()?
+                .files
+                .iter()
+                .map(|f| f.path.clone())
+                .filter(|p| !covered.contains(p))
+                .collect(),
+            pending_orphans: map.orphans.len(),
+            commits_behind: self.maps.behind(&map),
+        })
     }
 }
 
@@ -157,5 +189,51 @@ impl GetFileDiff {
 
     pub fn execute(&self, path: &str) -> Result<crate::diff::domain::FileDiff> {
         self.diffs.of(path)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::map::domain::Position;
+    use crate::testing::{FakeDiffSource, InMemoryMapRepository, service, slug};
+    use std::sync::Arc;
+
+    #[test]
+    fn check_fails_on_a_file_nobody_assigned() {
+        let source = FakeDiffSource::with_paths(&["a.rs", "forgotten.rs"]).on_commit("head");
+        let scope = ReviewScope::new(Arc::new(FakeDiffSource::with_paths(&[
+            "a.rs",
+            "forgotten.rs",
+        ])));
+        let maps = service(source, Arc::new(InMemoryMapRepository::new()));
+        maps.edit(|map| {
+            map.add_block(&slug("core"), "t", "c", Position::End)?;
+            map.add_file(&slug("core"), "a.rs", None, None)
+        })
+        .unwrap();
+
+        let report = CheckMap::new(maps, scope).execute().unwrap();
+        assert_eq!(report.uncovered, vec!["forgotten.rs"]);
+        assert!(!report.passed());
+    }
+
+    #[test]
+    fn a_report_only_passes_when_nothing_is_left_open() {
+        assert!(CheckReport::default().passed());
+        assert!(
+            !CheckReport {
+                uncovered: vec!["a.rs".into()],
+                ..Default::default()
+            }
+            .passed()
+        );
+        assert!(
+            !CheckReport {
+                pending_orphans: 1,
+                ..Default::default()
+            }
+            .passed()
+        );
     }
 }

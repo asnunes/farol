@@ -211,6 +211,19 @@ blob cache across them — but nothing else has to.
 The sharpest case was `ProgressStore`: it records that a file was read, which
 needs a content hash. It used to take a service that could also walk history.
 
+The same test applied to the map side. `MapService` was doing three things:
+
+- the **version lifecycle** — derive, find the current one, edit, reset. That
+  stayed.
+- **reconciling an inherited map with the code** — moving line notes, dropping
+  files that left the review. That is `MapReconciler`: it changes when the
+  shifting rules change, which has nothing to do with how versions are stored.
+- **verification** — which was business logic sitting in a service while the
+  `CheckMap` use case merely forwarded to it. It lives in the use case now.
+
+When a use case does nothing but forward to a service, the logic is usually in
+the wrong place.
+
 ### Ports stay synchronous
 
 For local file IO, async in Rust is mostly theatre: `tokio::fs` is a threadpool

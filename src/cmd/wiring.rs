@@ -11,8 +11,9 @@ use crate::diff::application::{CommitHistory, FileDiffs, ReviewScope};
 use crate::diff::infra::{GixSource, ScopeRequest};
 use crate::map::application::{
     AddBlock, AddFile, AddLineNote, AddSkim, CheckMap, DeriveMap, DiscardNote, GetFileDiff,
-    GetReview, GetScope, MapService, MoveBlock, RemoveBlock, RemoveFile, RemoveLineNote,
-    RemoveSkim, ResetMap, RestoreNote, ShowMap, UpdateBlock, UpdateFile, UpdateLineNote,
+    GetReview, GetScope, MapReconciler, MapService, MoveBlock, RemoveBlock, RemoveFile,
+    RemoveLineNote, RemoveSkim, ResetMap, RestoreNote, ShowMap, UpdateBlock, UpdateFile,
+    UpdateLineNote,
 };
 use crate::map::infra::JsonMapRepository;
 use crate::progress::application::{MarkViewed, ProgressStore, UnmarkViewed};
@@ -79,7 +80,8 @@ impl Ctx {
         let diffs = FileDiffs::new(source.clone());
         let history = CommitHistory::new(source);
 
-        let map = MapService::new(scope.clone(), diffs.clone(), history, maps);
+        let reconciler = MapReconciler::new(scope.clone(), diffs.clone());
+        let map = MapService::new(scope.clone(), history, reconciler, maps);
         let progress = ProgressStore::new(progress_repo, diffs.clone());
 
         Ok(Self {
@@ -103,7 +105,7 @@ impl Ctx {
 
             derive_map: DeriveMap::new(map.clone()),
             show_map: ShowMap::new(map.clone()),
-            check_map: CheckMap::new(map.clone()),
+            check_map: CheckMap::new(map.clone(), scope.clone()),
             reset_map: ResetMap::new(map.clone()),
             scope: GetScope::new(scope),
 

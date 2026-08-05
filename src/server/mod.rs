@@ -252,15 +252,16 @@ mod tests {
     /// touches disk.
     fn app() -> (Router, ProgressStore, broadcast::Sender<String>) {
         use crate::diff::application::{CommitHistory, FileDiffs, ReviewScope};
-        use crate::map::application::{GetFileDiff, GetReview, MapService};
+        use crate::map::application::{GetFileDiff, GetReview, MapReconciler, MapService};
         use crate::progress::application::{MarkViewed, UnmarkViewed};
 
         let source = Arc::new(FakeDiffSource::with_paths(&["a.rs", "b.rs", "go.sum"]));
         let diffs = FileDiffs::new(source.clone());
+        let scope = ReviewScope::new(source.clone());
         let maps = MapService::new(
-            ReviewScope::new(source.clone()),
-            diffs.clone(),
+            scope.clone(),
             CommitHistory::new(source),
+            MapReconciler::new(scope, diffs.clone()),
             Arc::new(crate::testing::InMemoryMapRepository::new()),
         );
         let progress = ProgressStore::new(
