@@ -8,6 +8,11 @@ use crate::map::application::position_from;
 use crate::map::domain::Slug;
 use crate::shared::error::Result;
 
+/// `--before` and `--after` name a block, so they are slugs like any other.
+fn parse_opt(raw: Option<String>) -> Result<Option<Slug>> {
+    raw.map(|s| Slug::parse(&s)).transpose()
+}
+
 #[derive(Subcommand)]
 pub(super) enum BlockAction {
     Add {
@@ -58,16 +63,12 @@ impl BlockAction {
                 // Raw strings become proven values here, at the edge. Past this
                 // point the use case cannot be handed anything unchecked.
                 let slug = Slug::parse(&slug)?;
+                let position = position_from(parse_opt(before)?, parse_opt(after)?);
                 let files = paths::all(ctx.source(), &raw)?;
                 ctx.report(
                     format!("Added block '{slug}' with {} file(s).", files.len()),
-                    ctx.map().add_block(
-                        &slug,
-                        &title,
-                        &context,
-                        position_from(before, after),
-                        &files,
-                    ),
+                    ctx.map()
+                        .add_block(&slug, &title, &context, position, &files),
                 )
             }
             BlockAction::Update {
@@ -94,9 +95,10 @@ impl BlockAction {
                 after,
             } => {
                 let slug = Slug::parse(&slug)?;
+                let position = position_from(parse_opt(before)?, parse_opt(after)?);
                 ctx.report(
                     format!("Moved block '{slug}'."),
-                    ctx.map().move_block(&slug, position_from(before, after)),
+                    ctx.map().move_block(&slug, position),
                 )
             }
         }

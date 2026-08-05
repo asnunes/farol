@@ -96,7 +96,7 @@ impl ReviewView {
             for entry in map
                 .skim
                 .iter()
-                .filter(|s| s.block.as_deref() == Some(block.slug.as_str()))
+                .filter(|s| s.block.as_ref() == Some(&block.slug))
             {
                 if placed.contains(&entry.path) {
                     continue;
@@ -113,7 +113,7 @@ impl ReviewView {
             }
 
             blocks.push(BlockView {
-                slug: block.slug.clone(),
+                slug: block.slug.to_string(),
                 title: block.title.clone(),
                 context: block.context.clone(),
                 files,
@@ -184,13 +184,13 @@ impl FileView {
             if let Some(bf) = block.file(path) {
                 if let Some(text) = &bf.note {
                     notes.push(TaggedNote {
-                        block: block.slug.clone(),
+                        block: block.slug.to_string(),
                         text: text.clone(),
                     });
                 }
                 for n in &bf.line_notes {
                     line_notes.push(TaggedLineNote {
-                        block: block.slug.clone(),
+                        block: block.slug.to_string(),
                         from: n.range.from,
                         to: n.range.to,
                         text: n.text.clone(),
@@ -215,7 +215,11 @@ impl FileView {
             viewed,
             notes,
             line_notes,
-            tags: map.blocks_of(path).iter().map(|b| b.slug.clone()).collect(),
+            tags: map
+                .blocks_of(path)
+                .iter()
+                .map(|b| b.slug.to_string())
+                .collect(),
             skim,
             skim_reason,
         }
@@ -226,17 +230,17 @@ impl FileView {
 mod tests {
     use super::*;
     use crate::map::domain::{LineRange, Position};
-    use crate::testing::FakeDiffSource;
+    use crate::testing::{FakeDiffSource, slug};
 
     fn map_of(paths: &[(&str, &str)]) -> ReviewMap {
         let mut m = ReviewMap::new("feature/x", "main", "head");
-        for (slug, _) in paths {
-            if m.block(slug).is_none() {
-                m.add_block(*slug, "t", "c", Position::End).unwrap();
+        for (name, _) in paths {
+            if m.block(&slug(name)).is_none() {
+                m.add_block(&slug(name), "t", "c", Position::End).unwrap();
             }
         }
-        for (slug, path) in paths {
-            m.add_file(slug, *path, None, None).unwrap();
+        for (name, path) in paths {
+            m.add_file(&slug(name), *path, None, None).unwrap();
         }
         m
     }
@@ -256,12 +260,20 @@ mod tests {
     #[test]
     fn notes_from_every_block_travel_with_the_single_rendering() {
         let mut map = map_of(&[("first", "shared.rs"), ("second", "shared.rs")]);
-        map.update_file("first", "shared.rs", Some("why it starts here".into()))
-            .unwrap();
-        map.update_file("second", "shared.rs", Some("why it matters again".into()))
-            .unwrap();
+        map.update_file(
+            &slug("first"),
+            "shared.rs",
+            Some("why it starts here".into()),
+        )
+        .unwrap();
+        map.update_file(
+            &slug("second"),
+            "shared.rs",
+            Some("why it matters again".into()),
+        )
+        .unwrap();
         map.add_line_note(
-            "second",
+            &slug("second"),
             "shared.rs",
             LineRange::new(10, 12).unwrap(),
             "late note",
@@ -281,7 +293,7 @@ mod tests {
     #[test]
     fn skim_with_a_block_sits_inside_it_and_loose_skim_stays_at_the_bottom() {
         let mut map = map_of(&[("one", "a.rs")]);
-        map.add_skim("a_test.rs", "fixture only", Some("one".into()))
+        map.add_skim("a_test.rs", "fixture only", Some(slug("one")))
             .unwrap();
         map.add_skim("go.sum", "generated", None).unwrap();
 

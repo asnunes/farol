@@ -40,9 +40,12 @@ impl FileAction {
             } => {
                 let slug = Slug::parse(&slug)?;
                 let path = ctx.source().review_path(&path)?;
+                // `--after` names a file already in the block, which is under
+                // review by definition.
+                let after = after.map(|a| ctx.source().review_path(&a)).transpose()?;
                 ctx.report(
                     format!("Added '{path}' to block '{slug}'."),
-                    ctx.map().add_file(&slug, &path, note, after.as_deref()),
+                    ctx.map().add_file(&slug, &path, note, after.as_ref()),
                 )
             }
             FileAction::Update { slug, path, note } => {

@@ -638,6 +638,56 @@ fn an_unknown_block_lists_the_ones_that_exist() {
 }
 
 #[test]
+fn a_malformed_block_name_is_refused_wherever_one_is_named() {
+    let repo = Repo::new();
+    repo.feature();
+    repo.derive();
+    repo.core_block(&["src/a.rs"]);
+
+    // Not just where a block is created — anywhere a block is *referred to*,
+    // since those arguments are the same kind of thing.
+    for args in [
+        vec![
+            "block",
+            "add",
+            "Recover Link",
+            "--title",
+            "t",
+            "--context",
+            "c",
+        ],
+        vec![
+            "block",
+            "add",
+            "other",
+            "--title",
+            "t",
+            "--context",
+            "c",
+            "--before",
+            "Not A Slug",
+        ],
+        vec!["block", "move", "core", "--after", "Not A Slug"],
+        vec![
+            "skim",
+            "add",
+            "src/a.rs",
+            "--reason",
+            "r",
+            "--block",
+            "Not A Slug",
+        ],
+    ] {
+        let err = repo.fails(&args);
+        assert!(
+            err.contains("invalid block name"),
+            "for {args:?} the error should name the real problem, not surface as \
+             an unknown block later:\n{err}"
+        );
+    }
+}
+
+#[test]
 fn a_duplicate_block_is_rejected_rather_than_silently_merged() {
     let repo = Repo::new();
     repo.feature();

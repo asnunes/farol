@@ -3,6 +3,7 @@
 use clap::Subcommand;
 
 use super::{Ctx, Reporting};
+use crate::map::domain::Slug;
 use crate::shared::error::Result;
 
 #[derive(Subcommand)]
@@ -29,6 +30,7 @@ impl SkimAction {
                 block,
             } => {
                 let path = ctx.source().review_path(&path)?;
+                let block = block.map(|b| Slug::parse(&b)).transpose()?;
                 ctx.report(
                     format!("Marked '{path}' as skim."),
                     ctx.map().add_skim(&path, &reason, block),

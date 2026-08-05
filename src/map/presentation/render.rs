@@ -244,27 +244,33 @@ fn indent_rest(text: &str, spaces: usize) -> String {
 mod tests {
     use super::*;
     use crate::map::domain::{LineRange, Position, ReviewMap};
+    use crate::testing::slug;
 
     fn sample() -> ReviewMap {
         let mut m = ReviewMap::new("fix/bull-signing-handoff", "main", "a3f1e9c1234567");
         m.add_block(
-            "recover-link",
+            &slug("recover-link"),
             "Recover the Bull link before signing",
             "The first version created generic handoff abstractions.",
             Position::End,
         )
         .unwrap();
-        m.add_file("recover-link", "services/bull_acceptance.go", None, None)
-            .unwrap();
+        m.add_file(
+            &slug("recover-link"),
+            "services/bull_acceptance.go",
+            None,
+            None,
+        )
+        .unwrap();
         m.add_line_note(
-            "recover-link",
+            &slug("recover-link"),
             "services/bull_acceptance.go",
             LineRange::new(82, 116).unwrap(),
             "Recovery only happens on a fresh transition.",
         )
         .unwrap();
         m.add_file(
-            "recover-link",
+            &slug("recover-link"),
             "services/controller.go",
             Some("The deletions are not an additional change.".into()),
             None,
@@ -307,7 +313,7 @@ mod tests {
         m.add_skim(
             "controller_test.go",
             "only feeds the existing test",
-            Some("recover-link".into()),
+            Some(slug("recover-link")),
         )
         .unwrap();
         let out = render(&m, 0);
@@ -328,7 +334,7 @@ mod tests {
     fn orphans_print_both_commands_and_the_snapshot() {
         use crate::map::domain::{Orphan, OrphanReason};
         let orphans = vec![Orphan {
-            block: "recover-link".into(),
+            block: slug("recover-link"),
             path: "a.go".into(),
             old_range: LineRange::new(82, 116).unwrap(),
             snapshot: "if offer.Status == StatusSigning {".into(),

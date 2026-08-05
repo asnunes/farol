@@ -10,7 +10,7 @@ use std::sync::Mutex;
 use crate::diff::domain::{
     DiffSource, FileChange, FileDiff, FileStatus, Hunk, Line, LineKind, Scope,
 };
-use crate::map::domain::{MapRepository, ReviewMap};
+use crate::map::domain::{MapRepository, ReviewMap, Slug};
 use crate::progress::domain::{Progress, ProgressRepository};
 use crate::shared::error::Result;
 
@@ -250,4 +250,10 @@ pub fn hunk_with_lines(old_start: u32, contents: &[&str]) -> Hunk {
             })
             .collect(),
     }
+}
+
+/// A slug from a literal. Tests state the shape they mean; a malformed one is a
+/// bug in the test, not a case under test.
+pub fn slug(s: &str) -> Slug {
+    Slug::parse(s).expect("test slugs must be well formed")
 }

@@ -189,9 +189,9 @@ impl<'a> MapSession<'a> {
         paths: &[ReviewPath],
     ) -> Result<ReviewMap> {
         self.edit(|map| {
-            map.add_block(slug.as_str(), title, context, position)?;
+            map.add_block(slug, title, context, position)?;
             for path in paths {
-                map.add_file(slug.as_str(), path.as_str(), None, None)?;
+                map.add_file(slug, path.as_str(), None, None)?;
             }
             Ok(())
         })
@@ -203,15 +203,15 @@ impl<'a> MapSession<'a> {
         title: Option<String>,
         context: Option<String>,
     ) -> Result<ReviewMap> {
-        self.edit(|map| map.update_block(slug.as_str(), title, context))
+        self.edit(|map| map.update_block(slug, title, context))
     }
 
     pub fn remove_block(&self, slug: &Slug) -> Result<ReviewMap> {
-        self.edit(|map| map.remove_block(slug.as_str()))
+        self.edit(|map| map.remove_block(slug))
     }
 
     pub fn move_block(&self, slug: &Slug, position: Position) -> Result<ReviewMap> {
-        self.edit(|map| map.move_block(slug.as_str(), position))
+        self.edit(|map| map.move_block(slug, position))
     }
 
     pub fn add_file(
@@ -219,17 +219,18 @@ impl<'a> MapSession<'a> {
         slug: &Slug,
         path: &ReviewPath,
         note: Option<String>,
-        after: Option<&str>,
+        after: Option<&ReviewPath>,
     ) -> Result<ReviewMap> {
-        self.edit(|map| map.add_file(slug.as_str(), path.as_str(), note, after))
+        let after = after.map(ReviewPath::as_str);
+        self.edit(|map| map.add_file(slug, path.as_str(), note, after))
     }
 
     pub fn update_file(&self, slug: &Slug, path: &ReviewPath, note: String) -> Result<ReviewMap> {
-        self.edit(|map| map.update_file(slug.as_str(), path.as_str(), Some(note)))
+        self.edit(|map| map.update_file(slug, path.as_str(), Some(note)))
     }
 
     pub fn remove_file(&self, slug: &Slug, path: &ReviewPath) -> Result<ReviewMap> {
-        self.edit(|map| map.remove_file(slug.as_str(), path.as_str()))
+        self.edit(|map| map.remove_file(slug, path.as_str()))
     }
 
     pub fn add_line_note(
@@ -240,7 +241,7 @@ impl<'a> MapSession<'a> {
         note: String,
     ) -> Result<ReviewMap> {
         range.require_within(path)?;
-        self.edit(|map| map.add_line_note(slug.as_str(), path.as_str(), range, note))
+        self.edit(|map| map.add_line_note(slug, path.as_str(), range, note))
     }
 
     pub fn update_line_note(
@@ -250,7 +251,7 @@ impl<'a> MapSession<'a> {
         range: LineRange,
         note: String,
     ) -> Result<ReviewMap> {
-        self.edit(|map| map.update_line_note(slug.as_str(), path.as_str(), range, note))
+        self.edit(|map| map.update_line_note(slug, path.as_str(), range, note))
     }
 
     pub fn remove_line_note(
@@ -259,7 +260,7 @@ impl<'a> MapSession<'a> {
         path: &ReviewPath,
         range: LineRange,
     ) -> Result<ReviewMap> {
-        self.edit(|map| map.remove_line_note(slug.as_str(), path.as_str(), range))
+        self.edit(|map| map.remove_line_note(slug, path.as_str(), range))
     }
 
     /// Bring a deactivated note back at the place its code moved to. Only the
@@ -274,8 +275,8 @@ impl<'a> MapSession<'a> {
     ) -> Result<ReviewMap> {
         new.require_within(path)?;
         self.edit(|map| {
-            let orphan = map.take_orphan(slug.as_str(), path.as_str(), old)?;
-            map.add_line_note(slug.as_str(), path.as_str(), new, orphan.text)
+            let orphan = map.take_orphan(slug, path.as_str(), old)?;
+            map.add_line_note(slug, path.as_str(), new, orphan.text)
         })
     }
 
@@ -285,17 +286,14 @@ impl<'a> MapSession<'a> {
         path: &ReviewPath,
         old: LineRange,
     ) -> Result<ReviewMap> {
-        self.edit(|map| {
-            map.take_orphan(slug.as_str(), path.as_str(), old)
-                .map(|_| ())
-        })
+        self.edit(|map| map.take_orphan(slug, path.as_str(), old).map(|_| ()))
     }
 
     pub fn add_skim(
         &self,
         path: &ReviewPath,
         reason: &str,
-        block: Option<String>,
+        block: Option<Slug>,
     ) -> Result<ReviewMap> {
         self.edit(|map| map.add_skim(path.as_str(), reason, block))
     }
@@ -426,7 +424,7 @@ impl<'a> MapSession<'a> {
 }
 
 /// Where a newly added block or file goes, from the two CLI flags.
-pub fn position_from(before: Option<String>, after: Option<String>) -> Position {
+pub fn position_from(before: Option<Slug>, after: Option<Slug>) -> Position {
     match (before, after) {
         (Some(b), _) => Position::Before(b),
         (None, Some(a)) => Position::After(a),
@@ -437,18 +435,17 @@ pub fn position_from(before: Option<String>, after: Option<String>) -> Position 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::map::domain::{LineRange, Position, Slug};
+    use crate::map::domain::{LineRange, Position};
+    use crate::testing::slug;
     use crate::testing::{FakeDiffSource, InMemoryMapRepository, hunk, hunk_with_lines};
-
-    fn slug(s: &str) -> Slug {
-        Slug::parse(s).unwrap()
-    }
 
     fn mapped(sha: &str, range: LineRange, text: &str) -> ReviewMap {
         let mut map = ReviewMap::new("feature/x", "main", sha);
-        map.add_block("core", "Core", "why", Position::End).unwrap();
-        map.add_file("core", "a.rs", None, None).unwrap();
-        map.add_line_note("core", "a.rs", range, text).unwrap();
+        map.add_block(&slug("core"), "Core", "why", Position::End)
+            .unwrap();
+        map.add_file(&slug("core"), "a.rs", None, None).unwrap();
+        map.add_line_note(&slug("core"), "a.rs", range, text)
+            .unwrap();
         map
     }
 
@@ -478,7 +475,12 @@ mod tests {
         repo.seed(mapped("old", LineRange::new(40, 45).unwrap(), "still true"));
 
         let map = MapSession::new(&source, &repo).derive().unwrap().map;
-        let notes = &map.block("core").unwrap().file("a.rs").unwrap().line_notes;
+        let notes = &map
+            .block(&slug("core"))
+            .unwrap()
+            .file("a.rs")
+            .unwrap()
+            .line_notes;
         assert_eq!(notes[0].range, LineRange::new(45, 50).unwrap());
         assert!(map.orphans.is_empty());
     }
@@ -505,7 +507,7 @@ mod tests {
 
         let map = MapSession::new(&source, &repo).derive().unwrap().map;
         assert!(
-            map.block("core")
+            map.block(&slug("core"))
                 .unwrap()
                 .file("a.rs")
                 .unwrap()
@@ -530,7 +532,7 @@ mod tests {
         let repo = InMemoryMapRepository::new();
         let mut stale = mapped("new", LineRange::new(1, 2).unwrap(), "x");
         stale.orphans.push(crate::map::domain::Orphan {
-            block: "core".into(),
+            block: slug("core"),
             path: "a.rs".into(),
             old_range: LineRange::new(9, 9).unwrap(),
             snapshot: String::new(),
@@ -557,7 +559,7 @@ mod tests {
         repo.seed(mapped("old", LineRange::new(3, 4).unwrap(), "worth moving"));
 
         let map = MapSession::new(&source, &repo).derive().unwrap().map;
-        assert!(map.block("core").unwrap().files.is_empty());
+        assert!(map.block(&slug("core")).unwrap().files.is_empty());
         assert_eq!(map.orphans[0].reason, OrphanReason::FileRemoved);
         assert_eq!(map.orphans[0].text, "worth moving");
     }
@@ -591,7 +593,7 @@ mod tests {
             .unwrap();
 
         let files: Vec<_> = map
-            .block("core")
+            .block(&slug("core"))
             .unwrap()
             .files
             .iter()
@@ -607,8 +609,8 @@ mod tests {
         let session = MapSession::new(&source, &repo);
         session
             .edit(|map| {
-                map.add_block("core", "t", "c", Position::End)?;
-                map.add_file("core", "a.rs", None, None)
+                map.add_block(&slug("core"), "t", "c", Position::End)?;
+                map.add_file(&slug("core"), "a.rs", None, None)
             })
             .unwrap();
 
@@ -620,8 +622,8 @@ mod tests {
     #[test]
     fn before_wins_over_after_when_both_are_given() {
         assert_eq!(
-            position_from(Some("x".into()), Some("y".into())),
-            Position::Before("x".into())
+            position_from(Some(slug("x")), Some(slug("y"))),
+            Position::Before(slug("x"))
         );
     }
 

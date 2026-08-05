@@ -237,7 +237,7 @@ fn now() -> String {
 mod tests {
     use super::*;
     use crate::map::domain::{LineRange, Position};
-    use crate::testing::{FakeDiffSource, InMemoryProgressRepository};
+    use crate::testing::{FakeDiffSource, InMemoryProgressRepository, slug};
     use axum::body::Body;
     use axum::http::{Request, StatusCode};
     use serde_json::Value;
@@ -245,13 +245,18 @@ mod tests {
 
     fn mapped() -> ReviewMap {
         let mut map = ReviewMap::new("feature/x", "main", "head");
-        map.add_block("core", "The change", "why it exists", Position::End)
+        map.add_block(&slug("core"), "The change", "why it exists", Position::End)
             .unwrap();
-        map.add_file("core", "a.rs", Some("worth knowing".into()), None)
+        map.add_file(&slug("core"), "a.rs", Some("worth knowing".into()), None)
             .unwrap();
-        map.add_line_note("core", "a.rs", LineRange::new(4, 8).unwrap(), "local point")
-            .unwrap();
-        map.add_file("core", "b.rs", None, None).unwrap();
+        map.add_line_note(
+            &slug("core"),
+            "a.rs",
+            LineRange::new(4, 8).unwrap(),
+            "local point",
+        )
+        .unwrap();
+        map.add_file(&slug("core"), "b.rs", None, None).unwrap();
         map.add_skim("go.sum", "generated", None).unwrap();
         map
     }

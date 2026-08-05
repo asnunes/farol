@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::range::LineRange;
+use super::slug::Slug;
 
 pub use crate::shared::WORKING;
 use crate::shared::error::{Error, Result};
@@ -67,7 +68,7 @@ impl BlockFile {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Block {
-    pub slug: String,
+    pub slug: Slug,
     pub title: String,
     pub context: String,
     #[serde(default)]
@@ -97,7 +98,7 @@ pub struct SkimEntry {
     pub path: String,
     pub reason: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub block: Option<String>,
+    pub block: Option<Slug>,
 }
 
 /// A line note whose anchor stopped being trustworthy. The prose is kept — it
@@ -105,7 +106,7 @@ pub struct SkimEntry {
 /// actually identifies it. The old range is only a hint about where to look.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Orphan {
-    pub block: String,
+    pub block: Slug,
     pub path: String,
     #[serde(flatten)]
     pub old_range: LineRange,
@@ -118,8 +119,10 @@ pub struct Orphan {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Position {
     End,
-    Before(String),
-    After(String),
+    /// Ahead of the named block.
+    Before(Slug),
+    /// Behind the named block.
+    After(Slug),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -164,22 +167,22 @@ impl ReviewMap {
     }
 
     pub fn slugs(&self) -> Vec<String> {
-        self.blocks.iter().map(|b| b.slug.clone()).collect()
+        self.blocks.iter().map(|b| b.slug.to_string()).collect()
     }
 
-    pub fn block(&self, slug: &str) -> Option<&Block> {
-        self.blocks.iter().find(|b| b.slug == slug)
+    pub fn block(&self, slug: &Slug) -> Option<&Block> {
+        self.blocks.iter().find(|b| &b.slug == slug)
     }
 
-    pub fn index_of(&self, slug: &str) -> Option<usize> {
-        self.blocks.iter().position(|b| b.slug == slug)
+    pub fn index_of(&self, slug: &Slug) -> Option<usize> {
+        self.blocks.iter().position(|b| &b.slug == slug)
     }
 
-    fn block_mut(&mut self, slug: &str) -> Result<&mut Block> {
+    fn block_mut(&mut self, slug: &Slug) -> Result<&mut Block> {
         let existing = self.slugs();
         self.blocks
             .iter_mut()
-            .find(|b| b.slug == slug)
+            .find(|b| &b.slug == slug)
             .ok_or_else(|| Error::UnknownBlock {
                 slug: slug.to_string(),
                 existing,
@@ -188,10 +191,10 @@ impl ReviewMap {
 
     /// Skim entries attached to a block. Both the renderer and the screen need
     /// this split, and having each decide it separately is how the two drift.
-    pub fn skim_for(&self, slug: &str) -> impl Iterator<Item = &SkimEntry> {
+    pub fn skim_for(&self, slug: &Slug) -> impl Iterator<Item = &SkimEntry> {
         self.skim
             .iter()
-            .filter(move |s| s.block.as_deref() == Some(slug))
+            .filter(move |s| s.block.as_ref() == Some(slug))
     }
 
     /// Skim entries belonging to no block — a lockfile has no story to sit in.
@@ -231,20 +234,21 @@ impl ReviewMap {
 
     pub fn add_block(
         &mut self,
-        slug: impl Into<String>,
+        slug: &Slug,
         title: impl Into<String>,
         context: impl Into<String>,
         position: Position,
     ) -> Result<()> {
-        let slug = slug.into();
-        if self.index_of(&slug).is_some() {
-            return Err(Error::DuplicateBlock { slug });
+        if self.index_of(slug).is_some() {
+            return Err(Error::DuplicateBlock {
+                slug: slug.to_string(),
+            });
         }
         let at = self.resolve_position(&position)?;
         self.blocks.insert(
             at,
             Block {
-                slug,
+                slug: slug.clone(),
                 title: title.into(),
                 context: context.into(),
                 files: Vec::new(),
@@ -255,7 +259,7 @@ impl ReviewMap {
 
     pub fn update_block(
         &mut self,
-        slug: &str,
+        slug: &Slug,
         title: Option<String>,
         context: Option<String>,
     ) -> Result<()> {
@@ -271,7 +275,7 @@ impl ReviewMap {
 
     /// Removing a block orphans its line notes rather than dropping them: the
     /// prose may still be worth moving somewhere else.
-    pub fn remove_block(&mut self, slug: &str) -> Result<()> {
+    pub fn remove_block(&mut self, slug: &Slug) -> Result<()> {
         let idx = self.index_of(slug).ok_or_else(|| Error::UnknownBlock {
             slug: slug.to_string(),
             existing: self.slugs(),
@@ -290,14 +294,14 @@ impl ReviewMap {
             }
         }
         for entry in &mut self.skim {
-            if entry.block.as_deref() == Some(slug) {
+            if entry.block.as_ref() == Some(slug) {
                 entry.block = None;
             }
         }
         Ok(())
     }
 
-    pub fn move_block(&mut self, slug: &str, position: Position) -> Result<()> {
+    pub fn move_block(&mut self, slug: &Slug, position: Position) -> Result<()> {
         let idx = self.index_of(slug).ok_or_else(|| Error::UnknownBlock {
             slug: slug.to_string(),
             existing: self.slugs(),
@@ -318,14 +322,14 @@ impl ReviewMap {
         match position {
             Position::End => Ok(self.blocks.len()),
             Position::Before(target) => self.index_of(target).ok_or_else(|| Error::UnknownBlock {
-                slug: target.clone(),
+                slug: target.to_string(),
                 existing: self.slugs(),
             }),
             Position::After(target) => {
                 self.index_of(target)
                     .map(|i| i + 1)
                     .ok_or_else(|| Error::UnknownBlock {
-                        slug: target.clone(),
+                        slug: target.to_string(),
                         existing: self.slugs(),
                     })
             }
@@ -336,7 +340,7 @@ impl ReviewMap {
 
     pub fn add_file(
         &mut self,
-        slug: &str,
+        slug: &Slug,
         path: impl Into<String>,
         note: Option<String>,
         after: Option<&str>,
@@ -368,7 +372,7 @@ impl ReviewMap {
         Ok(())
     }
 
-    pub fn update_file(&mut self, slug: &str, path: &str, note: Option<String>) -> Result<()> {
+    pub fn update_file(&mut self, slug: &Slug, path: &str, note: Option<String>) -> Result<()> {
         let block = self.block_mut(slug)?;
         let paths = block.paths();
         let file = block.file_mut(path).ok_or_else(|| Error::PathNotInBlock {
@@ -380,7 +384,7 @@ impl ReviewMap {
         Ok(())
     }
 
-    pub fn remove_file(&mut self, slug: &str, path: &str) -> Result<()> {
+    pub fn remove_file(&mut self, slug: &Slug, path: &str) -> Result<()> {
         let block = self.block_mut(slug)?;
         let paths = block.paths();
         let idx = block
@@ -400,7 +404,7 @@ impl ReviewMap {
 
     pub fn add_line_note(
         &mut self,
-        slug: &str,
+        slug: &Slug,
         path: &str,
         range: LineRange,
         text: impl Into<String>,
@@ -417,7 +421,7 @@ impl ReviewMap {
 
     pub fn update_line_note(
         &mut self,
-        slug: &str,
+        slug: &Slug,
         path: &str,
         range: LineRange,
         text: impl Into<String>,
@@ -436,7 +440,7 @@ impl ReviewMap {
         Ok(())
     }
 
-    pub fn remove_line_note(&mut self, slug: &str, path: &str, range: LineRange) -> Result<()> {
+    pub fn remove_line_note(&mut self, slug: &Slug, path: &str, range: LineRange) -> Result<()> {
         let file = self.block_file_mut(slug, path)?;
         let before = file.line_notes.len();
         file.line_notes.retain(|n| n.range != range);
@@ -450,7 +454,7 @@ impl ReviewMap {
         Ok(())
     }
 
-    fn block_file_mut(&mut self, slug: &str, path: &str) -> Result<&mut BlockFile> {
+    fn block_file_mut(&mut self, slug: &Slug, path: &str) -> Result<&mut BlockFile> {
         let block = self.block_mut(slug)?;
         let paths = block.paths();
         block.file_mut(path).ok_or_else(|| Error::PathNotInBlock {
@@ -462,11 +466,11 @@ impl ReviewMap {
 
     // ---- orphans ------------------------------------------------------
 
-    pub fn take_orphan(&mut self, slug: &str, path: &str, range: LineRange) -> Result<Orphan> {
+    pub fn take_orphan(&mut self, slug: &Slug, path: &str, range: LineRange) -> Result<Orphan> {
         let idx = self
             .orphans
             .iter()
-            .position(|o| o.block == slug && o.path == path && o.old_range == range)
+            .position(|o| &o.block == slug && o.path == path && o.old_range == range)
             .ok_or_else(|| Error::NoSuchOrphan {
                 slug: slug.to_string(),
                 path: path.to_string(),
@@ -481,14 +485,14 @@ impl ReviewMap {
         &mut self,
         path: impl Into<String>,
         reason: impl Into<String>,
-        block: Option<String>,
+        block: Option<Slug>,
     ) -> Result<()> {
         let path = path.into();
         if let Some(slug) = &block
             && self.index_of(slug).is_none()
         {
             return Err(Error::UnknownBlock {
-                slug: slug.clone(),
+                slug: slug.to_string(),
                 existing: self.slugs(),
             });
         }
@@ -514,11 +518,12 @@ impl ReviewMap {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::testing::slug;
 
     fn map_with(slugs: &[&str]) -> ReviewMap {
         let mut m = ReviewMap::new("feature/x", "main", "abc123");
         for s in slugs {
-            m.add_block(*s, "t", "c", Position::End).unwrap();
+            m.add_block(&slug(s), "t", "c", Position::End).unwrap();
         }
         m
     }
@@ -532,14 +537,16 @@ mod tests {
     #[test]
     fn duplicate_slug_is_rejected() {
         let mut m = map_with(&["one"]);
-        let err = m.add_block("one", "t", "c", Position::End).unwrap_err();
+        let err = m
+            .add_block(&slug("one"), "t", "c", Position::End)
+            .unwrap_err();
         assert!(matches!(err, Error::DuplicateBlock { .. }));
     }
 
     #[test]
     fn add_before_lands_ahead_of_the_target() {
         let mut m = map_with(&["one", "two"]);
-        m.add_block("mid", "t", "c", Position::Before("two".into()))
+        m.add_block(&slug("mid"), "t", "c", Position::Before(slug("two")))
             .unwrap();
         assert_eq!(m.slugs(), vec!["one", "mid", "two"]);
     }
@@ -547,7 +554,7 @@ mod tests {
     #[test]
     fn add_after_lands_behind_the_target() {
         let mut m = map_with(&["one", "two"]);
-        m.add_block("mid", "t", "c", Position::After("one".into()))
+        m.add_block(&slug("mid"), "t", "c", Position::After(slug("one")))
             .unwrap();
         assert_eq!(m.slugs(), vec!["one", "mid", "two"]);
     }
@@ -555,7 +562,7 @@ mod tests {
     #[test]
     fn add_before_the_first_block_reaches_the_top() {
         let mut m = map_with(&["one", "two"]);
-        m.add_block("zero", "t", "c", Position::Before("one".into()))
+        m.add_block(&slug("zero"), "t", "c", Position::Before(slug("one")))
             .unwrap();
         assert_eq!(m.slugs(), vec!["zero", "one", "two"]);
     }
@@ -564,7 +571,7 @@ mod tests {
     fn positioning_against_an_unknown_slug_fails_and_lists_the_real_ones() {
         let mut m = map_with(&["one", "two"]);
         let err = m
-            .add_block("x", "t", "c", Position::After("nope".into()))
+            .add_block(&slug("x"), "t", "c", Position::After(slug("nope")))
             .unwrap_err();
         match err {
             Error::UnknownBlock { existing, .. } => assert_eq!(existing, vec!["one", "two"]),
@@ -576,10 +583,10 @@ mod tests {
     #[test]
     fn moving_a_block_to_the_front_and_to_the_back() {
         let mut m = map_with(&["one", "two", "three"]);
-        m.move_block("three", Position::Before("one".into()))
+        m.move_block(&slug("three"), Position::Before(slug("one")))
             .unwrap();
         assert_eq!(m.slugs(), vec!["three", "one", "two"]);
-        m.move_block("three", Position::End).unwrap();
+        m.move_block(&slug("three"), Position::End).unwrap();
         assert_eq!(m.slugs(), vec!["one", "two", "three"]);
     }
 
@@ -587,7 +594,7 @@ mod tests {
     fn failed_move_leaves_the_block_where_it_was() {
         let mut m = map_with(&["one", "two"]);
         let err = m
-            .move_block("one", Position::After("ghost".into()))
+            .move_block(&slug("one"), Position::After(slug("ghost")))
             .unwrap_err();
         assert!(matches!(err, Error::UnknownBlock { .. }));
         assert_eq!(m.slugs(), vec!["one", "two"]);
@@ -596,11 +603,12 @@ mod tests {
     #[test]
     fn files_keep_insertion_order_and_honour_after() {
         let mut m = map_with(&["one"]);
-        m.add_file("one", "a.rs", None, None).unwrap();
-        m.add_file("one", "c.rs", None, None).unwrap();
-        m.add_file("one", "b.rs", None, Some("a.rs")).unwrap();
+        m.add_file(&slug("one"), "a.rs", None, None).unwrap();
+        m.add_file(&slug("one"), "c.rs", None, None).unwrap();
+        m.add_file(&slug("one"), "b.rs", None, Some("a.rs"))
+            .unwrap();
         let paths: Vec<_> = m
-            .block("one")
+            .block(&slug("one"))
             .unwrap()
             .files
             .iter()
@@ -612,21 +620,25 @@ mod tests {
     #[test]
     fn the_same_file_twice_in_one_block_is_rejected() {
         let mut m = map_with(&["one"]);
-        m.add_file("one", "a.rs", None, None).unwrap();
-        let err = m.add_file("one", "a.rs", None, None).unwrap_err();
+        m.add_file(&slug("one"), "a.rs", None, None).unwrap();
+        let err = m.add_file(&slug("one"), "a.rs", None, None).unwrap_err();
         assert!(matches!(err, Error::DuplicatePath { .. }));
     }
 
     #[test]
     fn a_file_in_two_blocks_reads_in_the_earlier_one() {
         let mut m = map_with(&["first", "second"]);
-        m.add_file("second", "shared.rs", None, None).unwrap();
-        m.add_file("first", "shared.rs", None, None).unwrap();
-        assert_eq!(m.first_block_of("shared.rs").unwrap().slug, "first");
-        let tags: Vec<_> = m
+        m.add_file(&slug("second"), "shared.rs", None, None)
+            .unwrap();
+        m.add_file(&slug("first"), "shared.rs", None, None).unwrap();
+        assert_eq!(
+            m.first_block_of("shared.rs").unwrap().slug.as_str(),
+            "first"
+        );
+        let tags: Vec<String> = m
             .blocks_of("shared.rs")
             .iter()
-            .map(|b| b.slug.clone())
+            .map(|b| b.slug.to_string())
             .collect();
         assert_eq!(tags, vec!["first", "second"]);
     }
@@ -634,14 +646,34 @@ mod tests {
     #[test]
     fn line_notes_stay_sorted_and_re_adding_replaces() {
         let mut m = map_with(&["one"]);
-        m.add_file("one", "a.rs", None, None).unwrap();
-        m.add_line_note("one", "a.rs", LineRange::new(40, 50).unwrap(), "second")
-            .unwrap();
-        m.add_line_note("one", "a.rs", LineRange::new(10, 20).unwrap(), "first")
-            .unwrap();
-        m.add_line_note("one", "a.rs", LineRange::new(40, 50).unwrap(), "replaced")
-            .unwrap();
-        let notes = &m.block("one").unwrap().file("a.rs").unwrap().line_notes;
+        m.add_file(&slug("one"), "a.rs", None, None).unwrap();
+        m.add_line_note(
+            &slug("one"),
+            "a.rs",
+            LineRange::new(40, 50).unwrap(),
+            "second",
+        )
+        .unwrap();
+        m.add_line_note(
+            &slug("one"),
+            "a.rs",
+            LineRange::new(10, 20).unwrap(),
+            "first",
+        )
+        .unwrap();
+        m.add_line_note(
+            &slug("one"),
+            "a.rs",
+            LineRange::new(40, 50).unwrap(),
+            "replaced",
+        )
+        .unwrap();
+        let notes = &m
+            .block(&slug("one"))
+            .unwrap()
+            .file("a.rs")
+            .unwrap()
+            .line_notes;
         assert_eq!(notes.len(), 2);
         assert_eq!(notes[0].text, "first");
         assert_eq!(notes[1].text, "replaced");
@@ -650,15 +682,15 @@ mod tests {
     #[test]
     fn removing_a_block_keeps_its_line_notes_as_orphans() {
         let mut m = map_with(&["one"]);
-        m.add_file("one", "a.rs", None, None).unwrap();
+        m.add_file(&slug("one"), "a.rs", None, None).unwrap();
         m.add_line_note(
-            "one",
+            &slug("one"),
             "a.rs",
             LineRange::new(10, 20).unwrap(),
             "worth keeping",
         )
         .unwrap();
-        m.remove_block("one").unwrap();
+        m.remove_block(&slug("one")).unwrap();
         assert_eq!(m.orphans.len(), 1);
         assert_eq!(m.orphans[0].reason, OrphanReason::BlockRemoved);
         assert_eq!(m.orphans[0].text, "worth keeping");
@@ -667,9 +699,9 @@ mod tests {
     #[test]
     fn removing_a_block_detaches_skim_entries_that_pointed_at_it() {
         let mut m = map_with(&["one"]);
-        m.add_skim("go.sum", "generated", Some("one".into()))
+        m.add_skim("go.sum", "generated", Some(slug("one")))
             .unwrap();
-        m.remove_block("one").unwrap();
+        m.remove_block(&slug("one")).unwrap();
         assert_eq!(m.skim[0].block, None);
     }
 
@@ -677,7 +709,7 @@ mod tests {
     fn skim_cannot_point_at_a_block_that_does_not_exist() {
         let mut m = map_with(&["one"]);
         let err = m
-            .add_skim("go.sum", "generated", Some("ghost".into()))
+            .add_skim("go.sum", "generated", Some(slug("ghost")))
             .unwrap_err();
         assert!(matches!(err, Error::UnknownBlock { .. }));
     }
@@ -687,23 +719,23 @@ mod tests {
         // Both the renderer and the screen need this split; it lives here so
         // they cannot disagree about it.
         let mut m = map_with(&["one"]);
-        m.add_skim("a_test.rs", "fixture only", Some("one".into()))
+        m.add_skim("a_test.rs", "fixture only", Some(slug("one")))
             .unwrap();
         m.add_skim("go.sum", "generated", None).unwrap();
 
-        let attached: Vec<_> = m.skim_for("one").map(|s| s.path.as_str()).collect();
+        let attached: Vec<_> = m.skim_for(&slug("one")).map(|s| s.path.as_str()).collect();
         let loose: Vec<_> = m.loose_skim().map(|s| s.path.as_str()).collect();
         assert_eq!(attached, vec!["a_test.rs"]);
         assert_eq!(loose, vec!["go.sum"]);
-        assert_eq!(m.skim_for("ghost").count(), 0);
+        assert_eq!(m.skim_for(&slug("ghost")).count(), 0);
     }
 
     #[test]
     fn covered_paths_span_blocks_and_skim_without_duplicates() {
         let mut m = map_with(&["one", "two"]);
-        m.add_file("one", "a.rs", None, None).unwrap();
-        m.add_file("two", "a.rs", None, None).unwrap();
-        m.add_file("two", "b.rs", None, None).unwrap();
+        m.add_file(&slug("one"), "a.rs", None, None).unwrap();
+        m.add_file(&slug("two"), "a.rs", None, None).unwrap();
+        m.add_file(&slug("two"), "b.rs", None, None).unwrap();
         m.add_skim("go.sum", "generated", None).unwrap();
         assert_eq!(m.covered_paths(), vec!["a.rs", "b.rs", "go.sum"]);
     }
