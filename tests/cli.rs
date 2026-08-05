@@ -188,20 +188,63 @@ fn detached_head_is_refused_because_there_is_no_branch_to_key_state_on() {
 }
 
 #[test]
-fn dirty_includes_uncommitted_work() {
+fn dirty_includes_work_that_is_staged_and_work_that_is_not() {
     let repo = Repo::new();
     repo.feature();
-    repo.write("src/b.rs", "brand new\n");
+
+    repo.write("src/staged.rs", "brand new\n");
+    repo.git(&["add", "src/staged.rs"]);
+    repo.write("src/a.rs", &numbered(70));
 
     let clean = repo.ok(&["scope"]);
-    assert!(!clean.contains("src/b.rs"), "{clean}");
+    assert!(!clean.contains("src/staged.rs"), "{clean}");
 
-    // Untracked files stay out; the point of --dirty is work in progress on
-    // files git already knows about.
-    repo.git(&["add", "src/b.rs"]);
-    repo.write("src/a.rs", &numbered(70));
     let dirty = repo.ok(&["scope", "--dirty"]);
-    assert!(dirty.contains("uncommitted"), "{dirty}");
+    assert!(
+        dirty.contains("src/staged.rs"),
+        "staged work counts:\n{dirty}"
+    );
+    assert!(
+        dirty.contains("src/a.rs"),
+        "so does an edit that was never staged:\n{dirty}"
+    );
+}
+
+#[test]
+fn dirty_leaves_untracked_files_out() {
+    // The point of --dirty is work in progress on files git already knows
+    // about; sweeping in scratch files would make the window unpredictable.
+    let repo = Repo::new();
+    repo.feature();
+    repo.write("notes.txt", "scratch\n");
+
+    let dirty = repo.ok(&["scope", "--dirty"]);
+    assert!(!dirty.contains("notes.txt"), "{dirty}");
+}
+
+#[test]
+fn dirty_drops_a_file_that_was_edited_and_then_put_back() {
+    // git reports it as touched — the mtime moved — but there is nothing to
+    // read, and listing it would send the reviewer to an empty diff.
+    let repo = Repo::new();
+    repo.feature();
+    let original = std::fs::read_to_string(repo.path().join("README.md")).unwrap();
+    repo.write("README.md", "changed my mind\n");
+    repo.write("README.md", &original);
+
+    let dirty = repo.ok(&["scope", "--dirty"]);
+    assert!(!dirty.contains("README.md"), "{dirty}");
+}
+
+#[test]
+fn dirty_reports_a_tracked_file_deleted_from_the_worktree() {
+    let repo = Repo::new();
+    repo.feature();
+    std::fs::remove_file(repo.path().join("README.md")).unwrap();
+
+    let dirty = repo.ok(&["scope", "--dirty"]);
+    assert!(dirty.contains("deleted"), "{dirty}");
+    assert!(dirty.contains("README.md"), "{dirty}");
 }
 
 #[test]
@@ -236,6 +279,85 @@ fn a_renamed_file_is_reported_once_rather_than_as_an_add_and_a_delete() {
         "reporting a move as add plus delete makes the reviewer read the whole \
          file twice for a change that is not there:\n{out}"
     );
+}
+
+#[test]
+fn a_file_only_on_the_new_side_is_added() {
+    let repo = Repo::new();
+    repo.feature();
+    let out = repo.ok(&["scope"]);
+    assert!(out.contains("added"), "{out}");
+    assert!(out.contains("src/a.rs"), "{out}");
+}
+
+#[test]
+fn a_deleted_file_is_reported_as_deleted() {
+    let repo = Repo::new();
+    repo.feature();
+    repo.git(&["rm", "-q", "README.md"]);
+    repo.commit("drop the readme");
+
+    let out = repo.ok(&["scope"]);
+    assert!(out.contains("deleted"), "{out}");
+    assert!(out.contains("README.md"), "{out}");
+}
+
+#[test]
+fn a_file_the_branch_left_alone_is_not_in_the_window() {
+    let repo = Repo::new();
+    repo.write("untouched.rs", "stays\n");
+    repo.commit("add a file the branch will not touch");
+    repo.feature();
+
+    let out = repo.ok(&["scope"]);
+    assert!(
+        !out.contains("untouched.rs"),
+        "the window is what changed, not what exists:\n{out}"
+    );
+}
+
+#[test]
+fn a_move_that_also_edited_the_file_is_still_one_file_to_read() {
+    // Byte-identical moves are the easy case. A move that also touched a line
+    // is the common one, and reporting it as an add plus a delete would put the
+    // whole file in front of the reviewer twice.
+    let repo = Repo::new();
+    repo.git(&["checkout", "-q", "-b", "feature/x"]);
+    repo.write("src/original.rs", &numbered(40));
+    repo.commit("add a file to move later");
+    repo.git(&["checkout", "-q", "main"]);
+    repo.git(&["merge", "-q", "feature/x"]);
+    repo.git(&["checkout", "-q", "feature/x"]);
+
+    repo.git(&["mv", "src/original.rs", "src/moved.rs"]);
+    let mut edited = numbered(40);
+    edited.push_str("one new line\n");
+    repo.write("src/moved.rs", &edited);
+    repo.commit("move and edit");
+
+    let out = repo.ok(&["scope"]);
+    assert!(
+        out.contains("src/moved.rs (was src/original.rs)"),
+        "git tracks this rename by similarity, not by byte equality:\n{out}"
+    );
+    assert!(!out.contains("deleted"), "{out}");
+}
+
+#[test]
+fn scope_is_listed_in_path_order() {
+    let repo = Repo::new();
+    repo.git(&["checkout", "-q", "-b", "feature/x"]);
+    for name in ["z.rs", "a.rs", "m.rs"] {
+        repo.write(name, "x\n");
+    }
+    repo.commit("three files");
+
+    let out = repo.ok(&["scope"]);
+    let order: Vec<usize> = ["a.rs", "m.rs", "z.rs"]
+        .iter()
+        .map(|p| out.find(p).unwrap_or_else(|| panic!("{p} missing:\n{out}")))
+        .collect();
+    assert!(order.windows(2).all(|w| w[0] < w[1]), "{out}");
 }
 
 // ---- worktrees ----------------------------------------------------------

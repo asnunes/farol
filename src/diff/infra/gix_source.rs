@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::path::Path;
 
 use crate::diff::domain::{
     CommitHistorySource, FileChange, FileDiff, FileDiffSource, FileStatus, Hunk, Line, LineKind,
@@ -80,14 +81,17 @@ impl GixSource {
             merge_base(&repo, base_tip, head_id)?
         };
 
-        let base_blobs = read_tree(&repo, base_id)?;
-        let mut head_blobs = read_tree(&repo, head_id)?;
-
+        // Only the files in the review window are ever materialised. Asking git
+        // for the difference between two trees skips identical subtrees whole,
+        // so a branch touching ten files does not pay for the other nine
+        // thousand — which, in a repo with a vendor directory, is hundreds of
+        // megabytes held for as long as the server runs.
+        let mut window = tree_changes(&repo, base_id, head_id)?;
         if req.dirty {
-            overlay_worktree(&repo, &mut head_blobs)?;
+            overlay_worktree(&repo, &mut window)?;
         }
 
-        let files = changed_files(&base_blobs, &head_blobs);
+        let window = materialise(&repo, base_id, window)?;
 
         let scope = Scope {
             branch: current,
@@ -97,14 +101,14 @@ impl GixSource {
             head_sha: head_id.to_hex().to_string(),
             merge_base: !req.direct,
             dirty: req.dirty,
-            files,
+            files: window.files,
         };
 
         Ok(Self {
             repo: repo.into_sync(),
             scope,
-            base_blobs,
-            head_blobs,
+            base_blobs: window.base_blobs,
+            head_blobs: window.head_blobs,
         })
     }
 
@@ -275,137 +279,238 @@ fn merge_base(repo: &gix::Repository, a: gix::ObjectId, b: gix::ObjectId) -> Res
         .map_err(|e| Error::msg(format!("cannot find merge base: {e}")))
 }
 
-/// Flatten a commit's tree into path -> blob.
-fn read_tree(repo: &gix::Repository, commit: gix::ObjectId) -> Result<BTreeMap<String, Blob>> {
-    let tree = repo
-        .find_object(commit)
-        .map_err(|e| Error::msg(format!("cannot read commit: {e}")))?
-        .peel_to_tree()
-        .map_err(|e| Error::msg(format!("cannot read tree: {e}")))?;
+/// One file in the review window, named by both sides before either is read.
+///
+/// Ids, not bytes: this is what comes back from a tree diff, and holding it
+/// this way means a file is only fetched from the object database once it is
+/// known to be part of the review.
+#[derive(Default)]
+struct Sides {
+    /// Where the file came from, when git recognised a rename.
+    old_path: Option<String>,
+    old_id: Option<gix::ObjectId>,
+    new_id: Option<gix::ObjectId>,
+    /// Set when the new side is uncommitted work, which has no id in the
+    /// object database until it is read off disk.
+    from_worktree: bool,
+}
 
-    let mut recorder = gix::traverse::tree::Recorder::default();
-    tree.traverse()
-        .breadthfirst(&mut recorder)
-        .map_err(|e| Error::msg(format!("cannot walk tree: {e}")))?;
+/// The window as git sees it: what turning the base tree into the head tree
+/// would take, renames included.
+fn tree_changes(
+    repo: &gix::Repository,
+    base: gix::ObjectId,
+    head: gix::ObjectId,
+) -> Result<BTreeMap<String, Sides>> {
+    let base_tree = peel_to_tree(repo, base)?;
+    let head_tree = peel_to_tree(repo, head)?;
 
-    let mut out = BTreeMap::new();
-    for entry in recorder.records {
-        if !entry.mode.is_blob() {
-            continue;
+    // Rewrite tracking is asked for explicitly rather than left to the repo's
+    // configuration: whether a move is reported as a move should not depend on
+    // whose machine farol is running on.
+    let options = gix::diff::Options::default().with_rewrites(Some(gix::diff::Rewrites::default()));
+
+    let changes = repo
+        .diff_tree_to_tree(&base_tree, &head_tree, options)
+        .map_err(|e| Error::msg(format!("cannot diff trees: {e}")))?;
+
+    let mut out: BTreeMap<String, Sides> = BTreeMap::new();
+    for change in changes {
+        use gix::object::tree::diff::ChangeDetached as C;
+        match change {
+            C::Addition {
+                location,
+                entry_mode,
+                id,
+                ..
+            } if entry_mode.is_blob() => {
+                out.entry(location.to_string()).or_default().new_id = Some(id);
+            }
+            C::Deletion {
+                location,
+                entry_mode,
+                id,
+                ..
+            } if entry_mode.is_blob() => {
+                out.entry(location.to_string()).or_default().old_id = Some(id);
+            }
+            C::Modification {
+                location,
+                entry_mode,
+                previous_id,
+                id,
+                ..
+            } if entry_mode.is_blob() => {
+                let sides = out.entry(location.to_string()).or_default();
+                sides.old_id = Some(previous_id);
+                sides.new_id = Some(id);
+            }
+            C::Rewrite {
+                location,
+                source_location,
+                source_id,
+                id,
+                entry_mode,
+                ..
+            } if entry_mode.is_blob() => {
+                let sides = out.entry(location.to_string()).or_default();
+                sides.old_path = Some(source_location.to_string());
+                sides.old_id = Some(source_id);
+                sides.new_id = Some(id);
+            }
+            // Trees and submodules are not files anyone reviews line by line.
+            _ => {}
         }
-        let path = entry.filepath.to_string();
-        let data = repo
-            .find_object(entry.oid)
-            .map_err(|e| Error::msg(format!("cannot read blob for {path}: {e}")))?
-            .data
-            .clone();
-        out.insert(
-            path,
-            Blob {
-                data,
-                id: entry.oid,
-            },
-        );
     }
     Ok(out)
 }
 
-fn blob_at(repo: &gix::Repository, commit: gix::ObjectId, path: &str) -> Result<Option<Blob>> {
-    let tree = repo
-        .find_object(commit)
-        .map_err(|e| Error::msg(format!("cannot read commit: {e}")))?
-        .peel_to_tree()
-        .map_err(|e| Error::msg(format!("cannot read tree: {e}")))?;
-
-    match tree.lookup_entry_by_path(path) {
-        Ok(Some(entry)) => {
-            let id = entry.object_id();
-            let obj = repo
-                .find_object(id)
-                .map_err(|e| Error::msg(format!("cannot read blob: {e}")))?;
-            Ok(Some(Blob {
-                data: obj.data.clone(),
-                id,
-            }))
-        }
-        Ok(None) => Ok(None),
-        Err(e) => Err(Error::msg(format!("cannot look up {path}: {e}"))),
-    }
-}
-
-/// Replace committed contents with what is on disk, so uncommitted work shows
-/// up in the same review window.
-fn overlay_worktree(repo: &gix::Repository, head_blobs: &mut BTreeMap<String, Blob>) -> Result<()> {
-    let Some(workdir) = repo.workdir() else {
+/// Fold uncommitted work into the window.
+///
+/// The paths come from git's own status, which decides what changed from the
+/// index rather than by reading every tracked file — the difference between
+/// touching a handful of files and stat-ing the entire checkout.
+fn overlay_worktree(repo: &gix::Repository, window: &mut BTreeMap<String, Sides>) -> Result<()> {
+    if repo.workdir().is_none() {
         return Ok(());
-    };
+    }
 
-    let mut gone = Vec::new();
-    for (path, committed) in head_blobs.iter_mut() {
-        let full = workdir.join(path);
-        match std::fs::read(&full) {
-            Ok(disk) => {
-                if disk != committed.data {
-                    *committed = Blob::from_worktree(repo, disk)?;
+    let status = repo
+        .status(gix::progress::Discard)
+        .map_err(|e| Error::msg(format!("cannot read status: {e}")))?
+        .into_iter(None)
+        .map_err(|e| Error::msg(format!("cannot read status: {e}")))?;
+
+    for item in status {
+        let item = item.map_err(|e| Error::msg(format!("cannot read status: {e}")))?;
+        let path = match &item {
+            gix::status::Item::TreeIndex(change) => change.location().to_string(),
+            gix::status::Item::IndexWorktree(change) => match change {
+                gix::status::index_worktree::Item::Modification { rela_path, .. } => {
+                    rela_path.to_string()
                 }
-            }
-            Err(_) => gone.push(path.clone()),
-        }
-    }
-    for path in gone {
-        head_blobs.remove(&path);
-    }
+                gix::status::index_worktree::Item::Rewrite { dirwalk_entry, .. } => {
+                    dirwalk_entry.rela_path.to_string()
+                }
+                // Untracked files are not swept in: farol reviews a branch, and
+                // pulling in scratch files would make the scope unpredictable.
+                gix::status::index_worktree::Item::DirectoryContents { .. } => continue,
+            },
+        };
 
-    // Untracked files are not swept in: farol reviews a branch, and pulling in
-    // scratch files would make the scope unpredictable.
+        let sides = window.entry(path).or_default();
+        sides.from_worktree = true;
+        sides.new_id = None;
+    }
     Ok(())
 }
 
-fn changed_files(base: &BTreeMap<String, Blob>, head: &BTreeMap<String, Blob>) -> Vec<FileChange> {
-    let mut out = Vec::new();
-    let mut removed: Vec<&String> = Vec::new();
+/// The review window with both sides read in.
+struct Window {
+    files: Vec<FileChange>,
+    base_blobs: BTreeMap<String, Blob>,
+    head_blobs: BTreeMap<String, Blob>,
+}
 
-    for (path, new) in head {
-        match base.get(path) {
-            // Same blob id is the same content, by construction.
-            Some(old) if old.id == new.id => {}
-            Some(old) => out.push(counted(
-                path,
-                None,
-                FileStatus::Modified,
-                &old.data,
-                &new.data,
-            )),
-            None => out.push(counted(path, None, FileStatus::Added, &[], &new.data)),
+/// Read the bytes for the window, and only for the window.
+fn materialise(
+    repo: &gix::Repository,
+    base: gix::ObjectId,
+    window: BTreeMap<String, Sides>,
+) -> Result<Window> {
+    let workdir = repo.workdir().map(Path::to_path_buf);
+    let mut files = Vec::new();
+    let mut base_blobs = BTreeMap::new();
+    let mut head_blobs = BTreeMap::new();
+
+    for (path, sides) in window {
+        let old_key = sides.old_path.clone().unwrap_or_else(|| path.clone());
+
+        let old = match sides.old_id {
+            Some(id) => Some(read_blob(repo, id)?),
+            // A path git only knows about from the worktree still has a base
+            // side, and the tree is where to find it.
+            None if sides.from_worktree => blob_at(repo, base, &old_key)?,
+            None => None,
+        };
+
+        let new = match sides.new_id {
+            Some(id) => Some(read_blob(repo, id)?),
+            None if sides.from_worktree => match &workdir {
+                Some(dir) => std::fs::read(dir.join(&path))
+                    .ok()
+                    .map(|data| Blob::from_worktree(repo, data))
+                    .transpose()?,
+                None => None,
+            },
+            None => None,
+        };
+
+        // A file whose uncommitted edits happen to restore the base is not a
+        // change, whatever status said about it. A rename is exempt: moving a
+        // file without touching it leaves both sides the same blob on purpose,
+        // and that move is still something to report.
+        if sides.old_path.is_none() && old.as_ref().map(|b| b.id) == new.as_ref().map(|b| b.id) {
+            continue;
+        }
+
+        let status = match (&sides.old_path, &old, &new) {
+            (Some(_), _, _) => FileStatus::Renamed,
+            (None, None, Some(_)) => FileStatus::Added,
+            (None, Some(_), None) => FileStatus::Deleted,
+            _ => FileStatus::Modified,
+        };
+
+        let old_bytes = old.as_ref().map(|b| b.data.as_slice()).unwrap_or(&[]);
+        let new_bytes = new.as_ref().map(|b| b.data.as_slice()).unwrap_or(&[]);
+        files.push(counted(
+            &path,
+            sides.old_path.clone(),
+            status,
+            old_bytes,
+            new_bytes,
+        ));
+
+        if let Some(blob) = old {
+            base_blobs.insert(old_key, blob);
+        }
+        if let Some(blob) = new {
+            head_blobs.insert(path, blob);
         }
     }
-    for path in base.keys() {
-        if !head.contains_key(path) {
-            removed.push(path);
-        }
-    }
 
-    // A file that vanished from one path and appeared byte-identical at another
-    // is a rename, and saying so spares the reviewer reading it twice.
-    for path in removed {
-        let old = &base[path];
-        let renamed_to = out.iter().position(|c| {
-            c.status == FileStatus::Added
-                && head.get(&c.path).map(|n| n.id == old.id).unwrap_or(false)
-        });
-        match renamed_to {
-            Some(idx) => {
-                out[idx].status = FileStatus::Renamed;
-                out[idx].old_path = Some(path.clone());
-                out[idx].additions = 0;
-                out[idx].deletions = 0;
-            }
-            None => out.push(counted(path, None, FileStatus::Deleted, &old.data, &[])),
-        }
-    }
+    files.sort_by(|a, b| a.path.cmp(&b.path));
+    Ok(Window {
+        files,
+        base_blobs,
+        head_blobs,
+    })
+}
 
-    out.sort_by(|a, b| a.path.cmp(&b.path));
-    out
+fn peel_to_tree(repo: &gix::Repository, id: gix::ObjectId) -> Result<gix::Tree<'_>> {
+    repo.find_object(id)
+        .map_err(|e| Error::msg(format!("cannot read object: {e}")))?
+        .peel_to_tree()
+        .map_err(|e| Error::msg(format!("cannot read tree: {e}")))
+}
+
+fn read_blob(repo: &gix::Repository, id: gix::ObjectId) -> Result<Blob> {
+    let obj = repo
+        .find_object(id)
+        .map_err(|e| Error::msg(format!("cannot read blob: {e}")))?;
+    Ok(Blob {
+        data: obj.data.clone(),
+        id,
+    })
+}
+
+fn blob_at(repo: &gix::Repository, commit: gix::ObjectId, path: &str) -> Result<Option<Blob>> {
+    let tree = peel_to_tree(repo, commit)?;
+    match tree.lookup_entry_by_path(path) {
+        Ok(Some(entry)) => Ok(Some(read_blob(repo, entry.object_id())?)),
+        Ok(None) => Ok(None),
+        Err(e) => Err(Error::msg(format!("cannot look up {path}: {e}"))),
+    }
 }
 
 fn counted(
@@ -533,86 +638,6 @@ mod tests {
         let id =
             gix::objs::compute_hash(gix::hash::Kind::Sha1, gix::object::Kind::Blob, &data).unwrap();
         Blob { data, id }
-    }
-
-    fn tree(entries: &[(&str, &str)]) -> BTreeMap<String, Blob> {
-        entries
-            .iter()
-            .map(|(p, c)| (p.to_string(), blob(c)))
-            .collect()
-    }
-
-    fn find<'a>(changes: &'a [FileChange], path: &str) -> &'a FileChange {
-        changes
-            .iter()
-            .find(|c| c.path == path)
-            .unwrap_or_else(|| panic!("{path} missing from {:?}", changes))
-    }
-
-    #[test]
-    fn a_file_only_on_the_new_side_is_added() {
-        let changes = changed_files(&tree(&[]), &tree(&[("a.rs", "hello\n")]));
-        assert_eq!(find(&changes, "a.rs").status, FileStatus::Added);
-        assert_eq!(find(&changes, "a.rs").additions, 1);
-    }
-
-    #[test]
-    fn a_file_only_on_the_old_side_is_deleted() {
-        let changes = changed_files(&tree(&[("a.rs", "hello\n")]), &tree(&[]));
-        assert_eq!(find(&changes, "a.rs").status, FileStatus::Deleted);
-        assert_eq!(find(&changes, "a.rs").deletions, 1);
-    }
-
-    #[test]
-    fn an_unchanged_file_does_not_appear_at_all() {
-        let same = tree(&[("a.rs", "hello\n")]);
-        assert!(changed_files(&same, &same).is_empty());
-    }
-
-    #[test]
-    fn a_file_that_moved_with_identical_content_is_a_rename() {
-        // Reporting this as an add plus a delete would make the reviewer read
-        // the whole file twice for a change that is not there.
-        let changes = changed_files(
-            &tree(&[("old/a.rs", "hello\nworld\n")]),
-            &tree(&[("new/a.rs", "hello\nworld\n")]),
-        );
-
-        assert_eq!(
-            changes.len(),
-            1,
-            "a rename is one entry, not two: {changes:?}"
-        );
-        let renamed = find(&changes, "new/a.rs");
-        assert_eq!(renamed.status, FileStatus::Renamed);
-        assert_eq!(renamed.old_path.as_deref(), Some("old/a.rs"));
-        assert_eq!(
-            (renamed.additions, renamed.deletions),
-            (0, 0),
-            "nothing changed inside it"
-        );
-    }
-
-    #[test]
-    fn a_moved_file_whose_content_also_changed_is_not_treated_as_a_rename() {
-        // The content moved *and* changed, so the reviewer does have to read it.
-        let changes = changed_files(
-            &tree(&[("old/a.rs", "hello\n")]),
-            &tree(&[("new/a.rs", "hello\nplus a line\n")]),
-        );
-        assert_eq!(changes.len(), 2);
-        assert_eq!(find(&changes, "new/a.rs").status, FileStatus::Added);
-        assert_eq!(find(&changes, "old/a.rs").status, FileStatus::Deleted);
-    }
-
-    #[test]
-    fn changes_come_back_in_path_order() {
-        let changes = changed_files(
-            &tree(&[]),
-            &tree(&[("z.rs", "z\n"), ("a.rs", "a\n"), ("m.rs", "m\n")]),
-        );
-        let paths: Vec<&str> = changes.iter().map(|c| c.path.as_str()).collect();
-        assert_eq!(paths, vec!["a.rs", "m.rs", "z.rs"]);
     }
 
     #[test]
