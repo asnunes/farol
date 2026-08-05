@@ -33,11 +33,10 @@ impl ServeArgs {
         // diff viewer would make it a worse version of tools that already do
         // that well, so it refuses in the terminal instead of opening a browser
         // onto an apology.
-        let map = ctx.map().require_current()?;
+        let map = ctx.show_map.require()?;
 
         crate::server::Server::new(crate::server::ServeConfig {
-            reviews: ctx.map().clone(),
-            progress: ctx.progress().clone(),
+            use_cases: ctx.server().clone(),
             map,
             port: self.port,
             open_browser: !self.no_open,

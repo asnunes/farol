@@ -23,8 +23,7 @@ impl MapAction {
     pub(super) fn run(self, ctx: &Ctx) -> Result<()> {
         match self {
             MapAction::Derive => {
-                let session = ctx.map();
-                let derived = session.derive()?;
+                let derived = ctx.derive_map.execute()?;
                 println!(
                     "{}",
                     if derived.created {
@@ -36,7 +35,7 @@ impl MapAction {
                 print!(
                     "{}",
                     MapReport {
-                        behind: session.behind(&derived.map),
+                        behind: ctx.derive_map.behind(&derived.map),
                         map: &derived.map,
                     }
                 );
@@ -44,12 +43,11 @@ impl MapAction {
                 Ok(())
             }
             MapAction::Show => {
-                let session = ctx.map();
-                match session.current()? {
+                match ctx.show_map.execute()? {
                     Some(map) => print!(
                         "{}",
                         MapReport {
-                            behind: session.behind(&map),
+                            behind: ctx.show_map.behind(&map),
                             map: &map,
                         }
                     ),
@@ -60,8 +58,7 @@ impl MapAction {
                 Ok(())
             }
             MapAction::Check => {
-                let session = ctx.map();
-                let report = session.check(&session.require_current()?)?;
+                let report = ctx.check_map.execute()?;
                 print!("{}", CheckSummary(&report));
                 if report.passed() {
                     Ok(())
@@ -70,7 +67,7 @@ impl MapAction {
                 }
             }
             MapAction::Reset => {
-                match ctx.map().reset()? {
+                match ctx.reset_map.execute()? {
                     ResetOutcome::Deleted { fell_back_to } => {
                         println!("Deleted the map version for this commit.");
                         match fell_back_to {

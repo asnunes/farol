@@ -258,13 +258,13 @@ pub fn slug(s: &str) -> Slug {
     Slug::parse(s).expect("test slugs must be well formed")
 }
 
-/// A map session over fakes, which is how the use cases are exercised without a
-/// repository on disk.
-pub fn session(
+/// The map service over fakes — the dependency the use cases are built from,
+/// which is how they are exercised without a repository on disk.
+pub fn service(
     source: FakeDiffSource,
     repo: Arc<InMemoryMapRepository>,
-) -> crate::map::application::MapSession {
-    crate::map::application::MapSession::new(
+) -> crate::map::application::MapService {
+    crate::map::application::MapService::new(
         crate::diff::application::DiffService::new(Arc::new(source)),
         repo,
     )

@@ -1,5 +1,9 @@
-//! Everything you can do to a map, hung off the two things it always needs:
-//! where the code is and where the map is stored.
+//! The shared machinery every map use case needs: producing the version for the
+//! current commit, loading it, editing it, saving it.
+//!
+//! This is a **service** — a dependency of the use cases, never called by a
+//! transport. The CLI and the HTTP handlers talk to use cases; use cases talk
+//! to this.
 //!
 //! Deriving rather than regenerating exists for one reason: whoever is reading
 //! may be halfway through. Rebuilding from scratch reshuffles block boundaries
@@ -9,17 +13,16 @@
 use std::sync::Arc;
 
 use crate::diff::application::DiffService;
-use crate::diff::domain::{FileDiff, ReviewPath};
+use crate::diff::domain::FileDiff;
 use crate::map::domain::{
-    LineRange, MapRepository, Orphan, OrphanReason, Position, ReviewMap, ShiftOutcome, Slug,
-    WORKING,
+    LineRange, MapRepository, Orphan, OrphanReason, ReviewMap, ShiftOutcome, WORKING,
 };
 use crate::shared::error::{Error, Result};
 
 /// Owns what it needs instead of borrowing it, so a caller can hold one in a
 /// struct and hand it around rather than rebuilding it at every use.
 #[derive(Clone)]
-pub struct MapSession {
+pub struct MapService {
     diff: DiffService,
     repo: Arc<dyn MapRepository>,
 }
@@ -51,26 +54,13 @@ impl CheckReport {
     }
 }
 
-impl MapSession {
+impl MapService {
     pub fn new(diff: DiffService, repo: Arc<dyn MapRepository>) -> Self {
         Self { diff, repo }
     }
 
-    /// Proven paths come from here so entry points never touch the diff port.
-    pub fn review_path(&self, raw: &str) -> Result<ReviewPath> {
-        self.diff.review_path(raw)
-    }
-
-    pub fn review_paths(&self, raw: &[String]) -> Result<Vec<ReviewPath>> {
-        self.diff.review_paths(raw)
-    }
-
     pub fn scope(&self) -> Result<&crate::diff::domain::Scope> {
         self.diff.scope()
-    }
-
-    pub fn file_diff(&self, path: &str) -> Result<FileDiff> {
-        self.diff.file_diff(path)
     }
 
     /// How far `HEAD` has moved past the commit a map was built against.
@@ -198,134 +188,6 @@ impl MapSession {
         })
     }
 
-    // ---- use cases ----------------------------------------------------
-    //
-    // Each one validates what it needs before touching the map, so a caller
-    // cannot skip a check by forgetting to make it. The entry points parse
-    // arguments and print; they do not decide what is allowed.
-
-    pub fn add_block(
-        &self,
-        slug: &Slug,
-        title: &str,
-        context: &str,
-        position: Position,
-        paths: &[ReviewPath],
-    ) -> Result<ReviewMap> {
-        self.edit(|map| {
-            map.add_block(slug, title, context, position)?;
-            for path in paths {
-                map.add_file(slug, path.as_str(), None, None)?;
-            }
-            Ok(())
-        })
-    }
-
-    pub fn update_block(
-        &self,
-        slug: &Slug,
-        title: Option<String>,
-        context: Option<String>,
-    ) -> Result<ReviewMap> {
-        self.edit(|map| map.update_block(slug, title, context))
-    }
-
-    pub fn remove_block(&self, slug: &Slug) -> Result<ReviewMap> {
-        self.edit(|map| map.remove_block(slug))
-    }
-
-    pub fn move_block(&self, slug: &Slug, position: Position) -> Result<ReviewMap> {
-        self.edit(|map| map.move_block(slug, position))
-    }
-
-    pub fn add_file(
-        &self,
-        slug: &Slug,
-        path: &ReviewPath,
-        note: Option<String>,
-        after: Option<&ReviewPath>,
-    ) -> Result<ReviewMap> {
-        let after = after.map(ReviewPath::as_str);
-        self.edit(|map| map.add_file(slug, path.as_str(), note, after))
-    }
-
-    pub fn update_file(&self, slug: &Slug, path: &ReviewPath, note: String) -> Result<ReviewMap> {
-        self.edit(|map| map.update_file(slug, path.as_str(), Some(note)))
-    }
-
-    pub fn remove_file(&self, slug: &Slug, path: &ReviewPath) -> Result<ReviewMap> {
-        self.edit(|map| map.remove_file(slug, path.as_str()))
-    }
-
-    pub fn add_line_note(
-        &self,
-        slug: &Slug,
-        path: &ReviewPath,
-        range: LineRange,
-        note: String,
-    ) -> Result<ReviewMap> {
-        range.require_within(path)?;
-        self.edit(|map| map.add_line_note(slug, path.as_str(), range, note))
-    }
-
-    pub fn update_line_note(
-        &self,
-        slug: &Slug,
-        path: &ReviewPath,
-        range: LineRange,
-        note: String,
-    ) -> Result<ReviewMap> {
-        self.edit(|map| map.update_line_note(slug, path.as_str(), range, note))
-    }
-
-    pub fn remove_line_note(
-        &self,
-        slug: &Slug,
-        path: &ReviewPath,
-        range: LineRange,
-    ) -> Result<ReviewMap> {
-        self.edit(|map| map.remove_line_note(slug, path.as_str(), range))
-    }
-
-    /// Bring a deactivated note back at the place its code moved to. Only the
-    /// new range needs checking; the old one is a key into the orphan list, not
-    /// a pointer into the file.
-    pub fn restore_note(
-        &self,
-        slug: &Slug,
-        path: &ReviewPath,
-        old: LineRange,
-        new: LineRange,
-    ) -> Result<ReviewMap> {
-        new.require_within(path)?;
-        self.edit(|map| {
-            let orphan = map.take_orphan(slug, path.as_str(), old)?;
-            map.add_line_note(slug, path.as_str(), new, orphan.text)
-        })
-    }
-
-    pub fn discard_note(
-        &self,
-        slug: &Slug,
-        path: &ReviewPath,
-        old: LineRange,
-    ) -> Result<ReviewMap> {
-        self.edit(|map| map.take_orphan(slug, path.as_str(), old).map(|_| ()))
-    }
-
-    pub fn add_skim(
-        &self,
-        path: &ReviewPath,
-        reason: &str,
-        block: Option<Slug>,
-    ) -> Result<ReviewMap> {
-        self.edit(|map| map.add_skim(path.as_str(), reason, block))
-    }
-
-    pub fn remove_skim(&self, path: &ReviewPath) -> Result<ReviewMap> {
-        self.edit(|map| map.remove_skim(path.as_str()))
-    }
-
     // ---- derivation internals -----------------------------------------
 
     /// The map to inherit from: uncommitted work first, then the newest stored
@@ -447,21 +309,15 @@ impl MapSession {
     }
 }
 
-/// Where a newly added block or file goes, from the two CLI flags.
-pub fn position_from(before: Option<Slug>, after: Option<Slug>) -> Position {
-    match (before, after) {
-        (Some(b), _) => Position::Before(b),
-        (None, Some(a)) => Position::After(a),
-        (None, None) => Position::End,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::diff::application::DiffService;
+    use crate::map::application::{AddBlock, GetScope, position_from};
+    use crate::map::domain::Slug;
     use crate::map::domain::{LineRange, Position};
     use crate::testing::slug;
-    use crate::testing::{FakeDiffSource, InMemoryMapRepository, hunk, hunk_with_lines, session};
+    use crate::testing::{FakeDiffSource, InMemoryMapRepository, hunk, hunk_with_lines, service};
     use std::sync::Arc;
 
     fn mapped(sha: &str, range: LineRange, text: &str) -> ReviewMap {
@@ -478,7 +334,7 @@ mod tests {
     fn deriving_twice_on_the_same_commit_returns_the_existing_version() {
         let source = FakeDiffSource::with_paths(&["a.rs"]).on_commit("head");
         let repo = Arc::new(InMemoryMapRepository::new());
-        let session = session(source, repo.clone());
+        let session = service(source, repo.clone());
 
         assert!(session.derive().unwrap().created);
         assert!(
@@ -499,7 +355,7 @@ mod tests {
         let repo = Arc::new(InMemoryMapRepository::new());
         repo.seed(mapped("old", LineRange::new(40, 45).unwrap(), "still true"));
 
-        let map = session(source, repo.clone()).derive().unwrap().map;
+        let map = service(source, repo.clone()).derive().unwrap().map;
         let notes = &map
             .block(&slug("core"))
             .unwrap()
@@ -530,7 +386,7 @@ mod tests {
             "expensive prose",
         ));
 
-        let map = session(source, repo.clone()).derive().unwrap().map;
+        let map = service(source, repo.clone()).derive().unwrap().map;
         assert!(
             map.block(&slug("core"))
                 .unwrap()
@@ -566,7 +422,7 @@ mod tests {
         });
         repo.seed(stale);
 
-        let map = session(source, repo.clone()).derive().unwrap().map;
+        let map = service(source, repo.clone()).derive().unwrap().map;
         assert!(
             map.orphans.is_empty(),
             "carrying them forever would pile up a graveyard nobody revisits"
@@ -583,7 +439,7 @@ mod tests {
         let repo = Arc::new(InMemoryMapRepository::new());
         repo.seed(mapped("old", LineRange::new(3, 4).unwrap(), "worth moving"));
 
-        let map = session(source, repo.clone()).derive().unwrap().map;
+        let map = service(source, repo.clone()).derive().unwrap().map;
         assert!(map.block(&slug("core")).unwrap().files.is_empty());
         assert_eq!(map.orphans[0].reason, OrphanReason::FileRemoved);
         assert_eq!(map.orphans[0].text, "worth moving");
@@ -594,10 +450,10 @@ mod tests {
         // The use cases no longer check this, because they cannot be reached
         // with an unchecked path: ReviewPath has no other constructor.
         let source = FakeDiffSource::with_paths(&["a.rs"]).on_commit("head");
-        let session = session(source, Arc::new(InMemoryMapRepository::new()));
-        let err = session.review_path("nowhere.rs").unwrap_err();
+        let scope = GetScope::new(DiffService::new(Arc::new(source)));
+        let err = scope.path("nowhere.rs").unwrap_err();
         assert!(matches!(err, Error::PathOutOfScope { .. }), "{err:?}");
-        assert!(session.review_path("a.rs").is_ok());
+        assert!(scope.path("a.rs").is_ok());
     }
 
     #[test]
@@ -611,13 +467,14 @@ mod tests {
     fn adding_a_block_with_files_is_one_step_for_the_caller() {
         let source = FakeDiffSource::with_paths(&["a.rs", "b.rs"]).on_commit("head");
         let repo = Arc::new(InMemoryMapRepository::new());
-        let session = session(source, repo.clone());
+        let session = service(source, repo.clone());
 
-        let files = session
-            .review_paths(&["a.rs".into(), "b.rs".into()])
-            .unwrap();
-        let map = session
-            .add_block(&slug("core"), "The change", "why", Position::End, &files)
+        let scope = GetScope::new(DiffService::new(Arc::new(FakeDiffSource::with_paths(&[
+            "a.rs", "b.rs",
+        ]))));
+        let files = scope.paths(&["a.rs".into(), "b.rs".into()]).unwrap();
+        let map = AddBlock::new(session.clone())
+            .execute(&slug("core"), "The change", "why", Position::End, &files)
             .unwrap();
 
         let files: Vec<_> = map
@@ -634,7 +491,7 @@ mod tests {
     fn check_fails_on_a_file_nobody_assigned() {
         let source = FakeDiffSource::with_paths(&["a.rs", "forgotten.rs"]).on_commit("head");
         let repo = Arc::new(InMemoryMapRepository::new());
-        let session = session(source, repo.clone());
+        let session = service(source, repo.clone());
         session
             .edit(|map| {
                 map.add_block(&slug("core"), "t", "c", Position::End)?;

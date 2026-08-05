@@ -15,7 +15,7 @@ use map::MapAction;
 use serve::ServeArgs;
 use skim::SkimAction;
 
-pub use wiring::Ctx;
+pub use wiring::{Ctx, ServerUseCases};
 
 use crate::diff::infra::ScopeRequest;
 use crate::map::domain::ReviewMap;
@@ -152,7 +152,7 @@ impl Command {
             Command::Serve(args) => args.run(),
             Command::Scope(args) => {
                 let ctx = args.scope.open()?;
-                print!("{}", ScopeReport(ctx.map().scope()?));
+                print!("{}", ScopeReport(&ctx.scope.execute()?));
                 Ok(())
             }
             // The window is resolved once per group and handed down, instead

@@ -8,10 +8,9 @@
 use serde::Serialize;
 
 use crate::diff::domain::FileStatus;
-use crate::map::application::MapSession;
+use crate::map::application::ReviewSnapshot;
 use crate::map::domain::ReviewMap;
 use crate::progress::domain::Progress;
-use crate::shared::error::Result;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -74,9 +73,13 @@ pub struct ReviewView {
 }
 
 impl ReviewView {
-    pub fn build(map: &ReviewMap, reviews: &MapSession, progress: &Progress) -> Result<Self> {
-        let scope = reviews.scope()?;
-        let commits_behind = reviews.commits_behind(&map.generated_at);
+    /// Shape a snapshot for the wire. The use case gathered the parts; this
+    /// only decides how the screen sees them.
+    pub fn build(snapshot: &ReviewSnapshot) -> Self {
+        let map = &snapshot.map;
+        let scope = &snapshot.scope;
+        let progress = &snapshot.progress;
+        let commits_behind = snapshot.commits_behind;
 
         let mut blocks = Vec::new();
         let mut placed: Vec<String> = Vec::new();
@@ -152,7 +155,7 @@ impl ReviewView {
             .filter(|f| f.viewed)
             .count();
 
-        Ok(ReviewView {
+        ReviewView {
             branch: map.branch.clone(),
             base: map.base.clone(),
             generated_at: map.generated_at.clone(),
@@ -162,7 +165,7 @@ impl ReviewView {
             unmapped,
             total_files,
             viewed_files,
-        })
+        }
     }
 }
 
@@ -230,9 +233,20 @@ impl FileView {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::diff::domain::DiffSource;
     use crate::map::domain::{LineRange, Position};
-    use crate::testing::{FakeDiffSource, InMemoryMapRepository, session, slug};
-    use std::sync::Arc;
+    use crate::testing::{FakeDiffSource, slug};
+
+    /// Assemble the snapshot the way the use case would, from a fake.
+    fn built(map: &ReviewMap, source: FakeDiffSource, progress: &Progress) -> ReviewView {
+        let scope = source.scope().unwrap().clone();
+        ReviewView::build(&ReviewSnapshot {
+            map: map.clone(),
+            scope,
+            progress: progress.clone(),
+            commits_behind: 0,
+        })
+    }
 
     fn map_of(paths: &[(&str, &str)]) -> ReviewMap {
         let mut m = ReviewMap::new("feature/x", "main", "head");
@@ -250,11 +264,8 @@ mod tests {
     #[test]
     fn a_file_in_two_blocks_is_rendered_once_in_the_earlier_one() {
         let map = map_of(&[("first", "shared.rs"), ("second", "shared.rs")]);
-        let reviews = session(
-            FakeDiffSource::with_paths(&["shared.rs"]),
-            Arc::new(InMemoryMapRepository::new()),
-        );
-        let view = ReviewView::build(&map, &reviews, &Progress::new()).unwrap();
+        let source = FakeDiffSource::with_paths(&["shared.rs"]);
+        let view = built(&map, source, &Progress::new());
 
         assert_eq!(view.blocks[0].files.len(), 1);
         assert_eq!(view.blocks[1].files.len(), 0);
@@ -285,11 +296,8 @@ mod tests {
         )
         .unwrap();
 
-        let reviews = session(
-            FakeDiffSource::with_paths(&["shared.rs"]),
-            Arc::new(InMemoryMapRepository::new()),
-        );
-        let view = ReviewView::build(&map, &reviews, &Progress::new()).unwrap();
+        let source = FakeDiffSource::with_paths(&["shared.rs"]);
+        let view = built(&map, source, &Progress::new());
 
         let file = &view.blocks[0].files[0];
         assert_eq!(file.notes.len(), 2);
@@ -305,11 +313,8 @@ mod tests {
             .unwrap();
         map.add_skim("go.sum", "generated", None).unwrap();
 
-        let reviews = session(
-            FakeDiffSource::with_paths(&["a.rs", "a_test.rs", "go.sum"]),
-            Arc::new(InMemoryMapRepository::new()),
-        );
-        let view = ReviewView::build(&map, &reviews, &Progress::new()).unwrap();
+        let source = FakeDiffSource::with_paths(&["a.rs", "a_test.rs", "go.sum"]);
+        let view = built(&map, source, &Progress::new());
 
         assert_eq!(view.blocks[0].files.len(), 2);
         assert!(view.blocks[0].files[1].skim);
@@ -320,25 +325,19 @@ mod tests {
     #[test]
     fn files_the_map_never_mentions_are_reported_not_hidden() {
         let map = map_of(&[("one", "a.rs")]);
-        let reviews = session(
-            FakeDiffSource::with_paths(&["a.rs", "arrived_later.rs"]),
-            Arc::new(InMemoryMapRepository::new()),
-        );
-        let view = ReviewView::build(&map, &reviews, &Progress::new()).unwrap();
+        let source = FakeDiffSource::with_paths(&["a.rs", "arrived_later.rs"]);
+        let view = built(&map, source, &Progress::new());
         assert_eq!(view.unmapped, vec!["arrived_later.rs"]);
     }
 
     #[test]
     fn viewed_count_reflects_progress() {
         let map = map_of(&[("one", "a.rs"), ("one", "b.rs")]);
-        let reviews = session(
-            FakeDiffSource::with_paths(&["a.rs", "b.rs"]),
-            Arc::new(InMemoryMapRepository::new()),
-        );
+        let source = FakeDiffSource::with_paths(&["a.rs", "b.rs"]);
         let mut progress = Progress::new();
         progress.mark("a.rs", "hash", "now");
 
-        let view = ReviewView::build(&map, &reviews, &progress).unwrap();
+        let view = built(&map, source, &progress);
         assert_eq!(view.total_files, 2);
         assert_eq!(view.viewed_files, 1);
     }

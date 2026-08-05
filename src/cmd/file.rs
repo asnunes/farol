@@ -39,29 +39,29 @@ impl FileAction {
                 after,
             } => {
                 let slug = Slug::parse(&slug)?;
-                let path = ctx.map().review_path(&path)?;
+                let path = ctx.scope.path(&path)?;
                 // `--after` names a file already in the block, which is under
                 // review by definition.
-                let after = after.map(|a| ctx.map().review_path(&a)).transpose()?;
+                let after = after.map(|a| ctx.scope.path(&a)).transpose()?;
                 ctx.report(
                     format!("Added '{path}' to block '{slug}'."),
-                    ctx.map().add_file(&slug, &path, note, after.as_ref()),
+                    ctx.add_file.execute(&slug, &path, note, after.as_ref()),
                 )
             }
             FileAction::Update { slug, path, note } => {
                 let slug = Slug::parse(&slug)?;
-                let path = ctx.map().review_path(&path)?;
+                let path = ctx.scope.path(&path)?;
                 ctx.report(
                     format!("Updated the note on '{path}'."),
-                    ctx.map().update_file(&slug, &path, note),
+                    ctx.update_file.execute(&slug, &path, note),
                 )
             }
             FileAction::Remove { slug, path } => {
                 let slug = Slug::parse(&slug)?;
-                let path = ctx.map().review_path(&path)?;
+                let path = ctx.scope.path(&path)?;
                 ctx.report(
                     format!("Removed '{path}' from block '{slug}'."),
-                    ctx.map().remove_file(&slug, &path),
+                    ctx.remove_file.execute(&slug, &path),
                 )
             }
         }

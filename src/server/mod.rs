@@ -13,14 +13,12 @@ use axum::{Json, Router};
 use serde::Deserialize;
 use tokio::sync::broadcast;
 
-use crate::map::application::MapSession;
+use crate::cmd::ServerUseCases;
 use crate::map::domain::ReviewMap;
-use crate::progress::application::ProgressService;
 use crate::shared::error::{Error, Result};
 
 pub struct ServeConfig {
-    pub reviews: MapSession,
-    pub progress: ProgressService,
+    pub use_cases: ServerUseCases,
     pub map: ReviewMap,
     pub port: u16,
     pub open_browser: bool,
@@ -29,22 +27,18 @@ pub struct ServeConfig {
 }
 
 struct AppState {
-    reviews: MapSession,
-    progress: ProgressService,
+    /// Transport holds use cases and nothing else: the routes translate HTTP
+    /// into a call and back, and own no business logic of their own.
+    use_cases: ServerUseCases,
     map: Mutex<ReviewMap>,
     changes: broadcast::Sender<String>,
 }
 
 impl AppState {
-    fn new(
-        reviews: MapSession,
-        progress: ProgressService,
-        map: ReviewMap,
-    ) -> (Arc<Self>, broadcast::Sender<String>) {
+    fn new(use_cases: ServerUseCases, map: ReviewMap) -> (Arc<Self>, broadcast::Sender<String>) {
         let (changes, _) = broadcast::channel(16);
         let state = Arc::new(Self {
-            reviews,
-            progress,
+            use_cases,
             map: Mutex::new(map),
             changes: changes.clone(),
         });
@@ -82,7 +76,7 @@ impl Server {
 }
 
 async fn serve(config: ServeConfig) -> Result<()> {
-    let (state, changes) = AppState::new(config.reviews, config.progress, config.map);
+    let (state, changes) = AppState::new(config.use_cases, config.map);
 
     if config.watch {
         spawn_watcher(config.git_dir, changes);
@@ -110,13 +104,9 @@ async fn serve(config: ServeConfig) -> Result<()> {
 }
 
 async fn review(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    let progress = match state.progress.load() {
-        Ok(p) => p,
-        Err(e) => return fail(e),
-    };
     let map = state.map.lock().unwrap().clone();
-    match view::ReviewView::build(&map, &state.reviews, &progress) {
-        Ok(v) => Json(v).into_response(),
+    match state.use_cases.review.execute(&map) {
+        Ok(snapshot) => Json(view::ReviewView::build(&snapshot)).into_response(),
         Err(e) => fail(e),
     }
 }
@@ -127,7 +117,7 @@ struct PathQuery {
 }
 
 async fn file(State(state): State<Arc<AppState>>, Query(q): Query<PathQuery>) -> impl IntoResponse {
-    match state.reviews.file_diff(&q.path) {
+    match state.use_cases.file_diff.execute(&q.path) {
         Ok(diff) => Json(diff).into_response(),
         Err(e) => fail(e),
     }
@@ -144,9 +134,9 @@ async fn viewed(
     Json(body): Json<ViewedBody>,
 ) -> impl IntoResponse {
     let result = if body.viewed {
-        state.progress.mark(&body.path, &now())
+        state.use_cases.mark_viewed.execute(&body.path, &now())
     } else {
-        state.progress.unmark(&body.path)
+        state.use_cases.unmark_viewed.execute(&body.path)
     };
     match result {
         Ok(_) => StatusCode::NO_CONTENT.into_response(),
@@ -233,6 +223,7 @@ fn now() -> String {
 mod tests {
     use super::*;
     use crate::map::domain::{LineRange, Position};
+    use crate::progress::application::ProgressStore;
     use crate::testing::{FakeDiffSource, InMemoryProgressRepository, slug};
     use axum::body::Body;
     use axum::http::{Request, StatusCode};
@@ -259,17 +250,30 @@ mod tests {
 
     /// Wire the routes over fakes. Nothing listens on a port and nothing
     /// touches disk.
-    fn app() -> (Router, ProgressService, broadcast::Sender<String>) {
-        let diff =
-            crate::diff::application::DiffService::new(Arc::new(FakeDiffSource::with_paths(&[
-                "a.rs", "b.rs", "go.sum",
-            ])));
-        let reviews = MapSession::new(
+    fn app() -> (Router, ProgressStore, broadcast::Sender<String>) {
+        use crate::diff::application::DiffService;
+        use crate::map::application::{GetFileDiff, GetReview, MapService};
+        use crate::progress::application::{MarkViewed, UnmarkViewed};
+
+        let diff = DiffService::new(Arc::new(FakeDiffSource::with_paths(&[
+            "a.rs", "b.rs", "go.sum",
+        ])));
+        let maps = MapService::new(
             diff.clone(),
             Arc::new(crate::testing::InMemoryMapRepository::new()),
         );
-        let progress = ProgressService::new(Arc::new(InMemoryProgressRepository::default()), diff);
-        let (state, changes) = AppState::new(reviews, progress.clone(), mapped());
+        let progress = ProgressStore::new(
+            Arc::new(InMemoryProgressRepository::default()),
+            diff.clone(),
+        );
+
+        let use_cases = ServerUseCases {
+            review: GetReview::new(maps, progress.clone()),
+            file_diff: GetFileDiff::new(diff),
+            mark_viewed: MarkViewed::new(progress.clone()),
+            unmark_viewed: UnmarkViewed::new(progress.clone()),
+        };
+        let (state, changes) = AppState::new(use_cases, mapped());
         (router(state), progress, changes)
     }
 

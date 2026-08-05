@@ -29,18 +29,18 @@ impl SkimAction {
                 reason,
                 block,
             } => {
-                let path = ctx.map().review_path(&path)?;
+                let path = ctx.scope.path(&path)?;
                 let block = block.map(|b| Slug::parse(&b)).transpose()?;
                 ctx.report(
                     format!("Marked '{path}' as skim."),
-                    ctx.map().add_skim(&path, &reason, block),
+                    ctx.add_skim.execute(&path, &reason, block),
                 )
             }
             SkimAction::Remove { path } => {
-                let path = ctx.map().review_path(&path)?;
+                let path = ctx.scope.path(&path)?;
                 ctx.report(
                     format!("'{path}' is no longer marked as skim."),
-                    ctx.map().remove_skim(&path),
+                    ctx.remove_skim.execute(&path),
                 )
             }
         }

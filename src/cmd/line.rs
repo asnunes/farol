@@ -55,11 +55,11 @@ impl LineAction {
                 note,
             } => {
                 let slug = Slug::parse(&slug)?;
-                let path = ctx.map().review_path(&path)?;
+                let path = ctx.scope.path(&path)?;
                 let range = LineRange::parse(&range)?;
                 ctx.report(
                     format!("Added a note on {path}:{range}."),
-                    ctx.map().add_line_note(&slug, &path, range, note),
+                    ctx.add_line_note.execute(&slug, &path, range, note),
                 )
             }
             LineAction::Update {
@@ -69,20 +69,20 @@ impl LineAction {
                 note,
             } => {
                 let slug = Slug::parse(&slug)?;
-                let path = ctx.map().review_path(&path)?;
+                let path = ctx.scope.path(&path)?;
                 let range = LineRange::parse(&range)?;
                 ctx.report(
                     format!("Updated the note on {path}:{range}."),
-                    ctx.map().update_line_note(&slug, &path, range, note),
+                    ctx.update_line_note.execute(&slug, &path, range, note),
                 )
             }
             LineAction::Remove { slug, path, range } => {
                 let slug = Slug::parse(&slug)?;
-                let path = ctx.map().review_path(&path)?;
+                let path = ctx.scope.path(&path)?;
                 let range = LineRange::parse(&range)?;
                 ctx.report(
                     format!("Removed the note on {path}:{range}."),
-                    ctx.map().remove_line_note(&slug, &path, range),
+                    ctx.remove_line_note.execute(&slug, &path, range),
                 )
             }
             LineAction::Restore {
@@ -92,12 +92,12 @@ impl LineAction {
                 range,
             } => {
                 let slug = Slug::parse(&slug)?;
-                let path = ctx.map().review_path(&path)?;
+                let path = ctx.scope.path(&path)?;
                 let old = LineRange::parse(&old_range)?;
                 let new = LineRange::parse(&range)?;
                 ctx.report(
                     format!("Restored the note at {path}:{new}."),
-                    ctx.map().restore_note(&slug, &path, old, new),
+                    ctx.restore_note.execute(&slug, &path, old, new),
                 )
             }
             LineAction::Discard {
@@ -106,11 +106,11 @@ impl LineAction {
                 old_range,
             } => {
                 let slug = Slug::parse(&slug)?;
-                let path = ctx.map().review_path(&path)?;
+                let path = ctx.scope.path(&path)?;
                 let old = LineRange::parse(&old_range)?;
                 ctx.report(
                     format!("Discarded the note that was at {path}:{old}."),
-                    ctx.map().discard_note(&slug, &path, old),
+                    ctx.discard_note.execute(&slug, &path, old),
                 )
             }
         }

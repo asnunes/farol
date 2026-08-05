@@ -63,11 +63,11 @@ impl BlockAction {
                 // point the use case cannot be handed anything unchecked.
                 let slug = Slug::parse(&slug)?;
                 let position = position_from(parse_opt(before)?, parse_opt(after)?);
-                let files = ctx.map().review_paths(&raw)?;
+                let files = ctx.scope.paths(&raw)?;
                 ctx.report(
                     format!("Added block '{slug}' with {} file(s).", files.len()),
-                    ctx.map()
-                        .add_block(&slug, &title, &context, position, &files),
+                    ctx.add_block
+                        .execute(&slug, &title, &context, position, &files),
                 )
             }
             BlockAction::Update {
@@ -78,14 +78,14 @@ impl BlockAction {
                 let slug = Slug::parse(&slug)?;
                 ctx.report(
                     format!("Updated block '{slug}'."),
-                    ctx.map().update_block(&slug, title, context),
+                    ctx.update_block.execute(&slug, title, context),
                 )
             }
             BlockAction::Remove { slug } => {
                 let slug = Slug::parse(&slug)?;
                 ctx.report(
                     format!("Removed block '{slug}'."),
-                    ctx.map().remove_block(&slug),
+                    ctx.remove_block.execute(&slug),
                 )
             }
             BlockAction::Move {
@@ -97,7 +97,7 @@ impl BlockAction {
                 let position = position_from(parse_opt(before)?, parse_opt(after)?);
                 ctx.report(
                     format!("Moved block '{slug}'."),
-                    ctx.map().move_block(&slug, position),
+                    ctx.move_block.execute(&slug, position),
                 )
             }
         }

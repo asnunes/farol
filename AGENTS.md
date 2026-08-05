@@ -141,27 +141,39 @@ implementation is named.** `Ctx::from_workspace` chooses `GixSource`,
 find yourself writing `SomeConcrete::new()` anywhere else, the dependency wants
 to be a parameter instead.
 
-### Services own their ports; entry points see only services
+### Use case and service are different things
 
-A service holds `Arc<dyn Port>` rather than borrowing it. That is what lets it
-be stored in a struct and handed around, instead of being rebuilt at every call
-— and it is what stops the ports from leaking upward.
+**A use case is the first point of contact with business logic.** A CLI command
+invokes one; an HTTP handler invokes one. It is a struct named after the
+operation, holding its dependencies, with a single `execute`. `AddBlock`,
+`RestoreNote`, `MarkViewed`, `GetReview`.
 
-An entry point sees `MapSession` and `ProgressService`. It does not name
-`DiffSource`, `MapRepository` or `ProgressRepository`, and it has no reason to:
-it asks for what it can *do*, not for the plumbing.
+**A service is a dependency of a use case**, alongside repositories. `MapService`
+owns the derive-and-edit machinery every map write needs; `DiffService` fronts
+git; `ProgressStore` fronts the read state. **A transport never calls a
+service.**
 
 ```rust
-// yes — cmd asks the service
-let path = ctx.map().review_path(&raw)?;
+// yes — the command invokes a use case
+ctx.add_block.execute(&slug, &title, &context, position, &files)
 
-// no — cmd reaching through to a port
-let path = ctx.source().review_path(&raw)?;
+// no — the command reaching into a service, which puts business logic
+// in the transport and splits it between CLI and HTTP
+ctx.map().add_block(&slug, &title, &context, position, &files)
 ```
 
-`Ctx` holds the services for one invocation. When it held ports instead, every
-command could reach anything, and `cmd` had to know the shape of the plumbing
-to get at a use case.
+The reason is not naming. If both `cmd` and `server` call services, each has to
+assemble the operation itself, and the two assemblies drift — the same feature
+ends up behaving differently depending on how you reached it. With a use case,
+both transports call the same thing and can only differ in how they parse input
+and print output, which is all a transport is for.
+
+**`src/server/` and `src/cmd/` hold no business logic.** They translate: parse
+arguments or a request into proven values, invoke a use case, shape the result
+for a terminal or for the wire.
+
+Services own `Arc<dyn Port>` rather than borrowing, which is what lets a use
+case hold one in a struct instead of rebuilding it at every call.
 
 ### Ports stay synchronous
 
