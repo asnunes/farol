@@ -263,6 +263,13 @@ writer primitives, not a component layer.
 earliest block that holds it, carrying the notes and tags from every block it
 belongs to. The frontend renders; it does not decide.
 
+**Only the review window is read.** The window comes from a tree diff, so
+identical subtrees are never opened; a branch touching ten files does not pay
+for the rest of the checkout. Reading a whole tree into memory once cost 1 GB
+resident on a repo with a vendor directory. Renames come from the same diff,
+tracked by similarity — a moved-and-edited file is one file to read, not an add
+plus a delete.
+
 **Identity comes from git.** A file is identified by its blob id, read off the
 tree entry — not by a hash farol computes. Ancestry is `merge-base`, distance is
 `target..HEAD`. Every one of these was hand-rolled first, and the hand-rolled
