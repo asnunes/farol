@@ -110,15 +110,36 @@ it crosses into the server's state.
 
 ### Ports stay synchronous
 
-Reading five kilobytes of JSON is microseconds. Making the ports `async` would
-drag `async_trait` through every signature for nothing. Async handlers call
-synchronous ports directly.
+For local file IO, async in Rust is mostly theatre: `tokio::fs` is a threadpool
+wrapper, so you would pay the syntax and get no concurrency. Meanwhile every
+domain and application test would need a runtime.
+
+The known cost is real: a synchronous port blocks a tokio worker, and
+`DiffSource` is genuinely expensive — it reads both trees and diffs in process.
+If that ever hurts, the fix is `tokio::task::spawn_blocking` **at the call
+site**, which is local and does not touch the trait. That is what keeps this
+decision reversible.
+
+The one thing that would overturn it is a port that is genuinely remote — a map
+stored on a server rather than on disk. That is the deferred "the map travels"
+idea, and it would likely arrive as a new port anyway.
 
 ### Reports implement `Display`
 
 Anything printed borrows what it prints and implements `Display`, so callers
 hand it to `print!` and nothing builds a `String` it does not need:
 `ScopeReport`, `MapReport`, `OrphanReport`, `CheckSummary`.
+
+The alternative considered was a component or macro layer in the spirit of ink,
+which would make layout declarative instead of hand-rolled `writeln!`. It lost
+on a fact specific to farol: **`map show` and `scope` exist for the skill to
+read.** Their consumer is a model, which does not care about alignment, so a
+layout engine would be investment in the wrong place. If human-facing output
+ever appears — a map worth pasting into a pull request — that calculation
+changes.
+
+If the `write!` noise becomes the problem, the cheap middle is two or three
+writer primitives, not a component layer.
 
 ### The view model is assembled on the server
 
@@ -128,15 +149,26 @@ belongs to. The frontend renders; it does not decide.
 
 ## Tests
 
-**Unit tests live beside the code**, in a `#[cfg(test)] mod tests` at the bottom
-of the file. **Integration tests live in `tests/cli.rs`** and drive the real
-binary against real repositories.
+Three layers, and each covers something the others cannot.
 
-The split is about what only a real repository can prove: how git dirs resolve
+**Unit tests live beside the code**, in a `#[cfg(test)] mod tests` at the bottom
+of the file. Ordering, re-anchoring, view assembly and progress invalidation are
+faster and clearer over fakes than over commits.
+
+**Route tests live in `src/server/mod.rs`** and drive the real `Router` through
+`tower::ServiceExt::oneshot`, over in-memory repositories. Nothing listens on a
+port. They cover what a unit test cannot: that the wiring, the status codes and
+the JSON shape the browser depends on are what they claim.
+
+**Integration tests live in `tests/cli.rs`** and drive the real binary against
+real repositories. They cover what only git can prove: how git dirs resolve
 inside a worktree, what a merge base returns once the base branch has moved,
-whether a command actually exits non-zero. Everything else — ordering,
-re-anchoring, view assembly, progress invalidation — is faster and clearer over
-fakes.
+whether a command actually exits non-zero.
+
+A fake must honour its port's contract. `FakeDiffSource` refuses a path outside
+the review because `GixSource` does; a fake that were more permissive would let
+tests pass over behaviour that does not exist. That exact bug was caught by the
+route tests on their first run.
 
 **Fakes live in `src/testing.rs`**, one place that knows how to stand in for git
 and for storage. Extend `FakeDiffSource` rather than writing a new stand-in.

@@ -99,6 +99,11 @@ impl DiffSource for FakeDiffSource {
     }
 
     fn file_diff(&self, path: &str) -> Result<FileDiff> {
+        // The real source refuses a path outside the window; a fake that did
+        // not would let tests pass over behaviour that does not exist.
+        if !self.scope.contains(path) {
+            return Err(self.scope.reject(path));
+        }
         Ok(FileDiff {
             path: path.to_string(),
             old_path: None,
@@ -119,6 +124,9 @@ impl DiffSource for FakeDiffSource {
     }
 
     fn file_line_count(&self, path: &str) -> Result<u32> {
+        if !self.scope.contains(path) {
+            return Err(self.scope.reject(path));
+        }
         self.line_counts
             .iter()
             .find(|(p, _)| p == path)
