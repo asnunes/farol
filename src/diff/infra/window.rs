@@ -6,10 +6,9 @@
 //! repo with a vendor directory, was a gigabyte held for as long as the server
 //! ran.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
-use super::git::{Blob, Git};
-use super::text_diff;
+use super::git::{Blob, Diffed, Git, Side};
 use crate::diff::domain::{FileChange, FileStatus};
 use crate::shared::error::Result;
 
@@ -18,6 +17,9 @@ pub(super) struct Window {
     pub files: Vec<FileChange>,
     pub base_blobs: BTreeMap<String, Blob>,
     pub head_blobs: BTreeMap<String, Blob>,
+    /// Paths whose new side is uncommitted work, so it has no object to point
+    /// at and has to be read from disk again when the diff is asked for.
+    pub from_worktree: BTreeSet<String>,
 }
 
 impl Window {
@@ -102,6 +104,7 @@ impl Window {
         let mut files = Vec::new();
         let mut base_blobs = BTreeMap::new();
         let mut head_blobs = BTreeMap::new();
+        let mut from_worktree = BTreeSet::new();
 
         for (path, sides) in named {
             let old_key = sides.old_path.clone().unwrap_or_else(|| path.clone());
@@ -136,9 +139,17 @@ impl Window {
                 _ => FileStatus::Modified,
             };
 
-            let old_bytes = old.as_ref().map(|b| b.data.as_slice()).unwrap_or(&[]);
-            let new_bytes = new.as_ref().map(|b| b.data.as_slice()).unwrap_or(&[]);
-            let (additions, deletions) = text_diff::count_changes(old_bytes, new_bytes);
+            // The churn in the file header is git's count, which means a
+            // binary file reports nothing rather than a made-up number of
+            // lines.
+            let (additions, deletions) = match git.diff(
+                &path,
+                old.as_ref().map(Side::Object).unwrap_or(Side::Absent),
+                Self::new_side(new.as_ref(), sides.from_worktree),
+            )? {
+                Diffed::Untouchable => (0, 0),
+                Diffed::Text(h) => (h.additions, h.deletions),
+            };
 
             files.push(FileChange {
                 path: path.clone(),
@@ -152,6 +163,9 @@ impl Window {
                 base_blobs.insert(old_key, blob);
             }
             if let Some(blob) = new {
+                if sides.from_worktree {
+                    from_worktree.insert(path.clone());
+                }
                 head_blobs.insert(path, blob);
             }
         }
@@ -161,7 +175,16 @@ impl Window {
             files,
             base_blobs,
             head_blobs,
+            from_worktree,
         })
+    }
+
+    fn new_side(blob: Option<&Blob>, from_worktree: bool) -> Side<'_> {
+        match (blob, from_worktree) {
+            (None, _) => Side::Absent,
+            (Some(_), true) => Side::Worktree,
+            (Some(blob), false) => Side::Object(blob),
+        }
     }
 }
 

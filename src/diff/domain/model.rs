@@ -78,6 +78,10 @@ pub struct FileDiff {
     pub old_path: Option<String>,
     pub status: FileStatus,
     pub hunks: Vec<Hunk>,
+    /// git refuses to diff this file — binary content, or `-diff` in
+    /// `.gitattributes`. There are no hunks, and the screen says so instead of
+    /// rendering decoded bytes as if they were code.
+    pub binary: bool,
     pub additions: u32,
     pub deletions: u32,
     /// Hash of the file contents *after* the change. Viewed-state invalidation

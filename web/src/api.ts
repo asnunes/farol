@@ -57,6 +57,8 @@ export type FileDiff = {
   path: string;
   status: string;
   hunks: Hunk[];
+  /** git will not diff this file: binary content, or `-diff` in .gitattributes. */
+  binary: boolean;
   additions: number;
   deletions: number;
 };

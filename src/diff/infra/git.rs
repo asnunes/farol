@@ -25,6 +25,35 @@ impl Blob {
     }
 }
 
+/// Where one side of a diff comes from.
+pub(super) enum Side<'a> {
+    /// The file does not exist on this side — an addition or a deletion.
+    Absent,
+    Object(&'a Blob),
+    /// Uncommitted work, which has no object to point at yet.
+    Worktree,
+}
+
+impl Side<'_> {
+    /// A null id means "no object": with a worktree root set for this side git
+    /// reads the file from disk, and without one the side simply is not there.
+    /// The empty blob would be wrong — it is an object, and a fresh repository
+    /// has never stored it.
+    fn id(&self, hash: gix::hash::Kind) -> gix::ObjectId {
+        match self {
+            Side::Absent | Side::Worktree => gix::ObjectId::null(hash),
+            Side::Object(blob) => blob.id,
+        }
+    }
+}
+
+/// What came back from asking git to diff a file.
+pub(super) enum Diffed {
+    /// git will not diff it: binary content, or `-diff` in `.gitattributes`.
+    Untouchable,
+    Text(super::text_diff::Hunks),
+}
+
 pub(super) struct Git {
     repo: gix::Repository,
 }
@@ -143,6 +172,65 @@ impl Git {
     }
 
     // ---- differences ----------------------------------------------------
+
+    /// The diff of one file, as git would compute it.
+    ///
+    /// The verdict of *whether* to diff is git's: a file whose content is
+    /// binary, or marked `-diff` in `.gitattributes`, comes back as
+    /// [`Diffed::Untouchable`] rather than being decoded into nonsense. So is
+    /// the choice of algorithm, which follows `diff.algorithm` — the reviewer
+    /// should see the hunks the author saw.
+    pub fn diff(&self, path: &str, old: Side<'_>, new: Side<'_>) -> Result<Diffed> {
+        use gix::diff::blob::ResourceKind;
+        use gix::diff::blob::pipeline::{Mode, WorktreeRoots};
+        use gix::diff::blob::platform::prepare_diff::Operation;
+
+        let roots = WorktreeRoots {
+            old_root: matches!(old, Side::Worktree).then(|| self.workdir_owned()),
+            new_root: matches!(new, Side::Worktree).then(|| self.workdir_owned()),
+        };
+        let mut platform = self
+            .repo
+            .diff_resource_cache(Mode::ToGit, roots)
+            .map_err(|e| Error::msg(format!("cannot prepare diff: {e}")))?;
+
+        for (side, kind) in [
+            (old, ResourceKind::OldOrSource),
+            (new, ResourceKind::NewOrDestination),
+        ] {
+            platform
+                .set_resource(
+                    side.id(self.repo.object_hash()),
+                    gix::object::tree::EntryKind::Blob,
+                    path.into(),
+                    kind,
+                    &self.repo.objects,
+                )
+                .map_err(|e| Error::msg(format!("cannot read {path} for diff: {e}")))?;
+        }
+
+        let outcome = platform
+            .prepare_diff()
+            .map_err(|e| Error::msg(format!("cannot diff {path}: {e}")))?;
+
+        let algorithm = match outcome.operation {
+            Operation::InternalDiff { algorithm } => algorithm,
+            // An external diff driver produces text for a human to read, not
+            // hunks to render, and a binary file has no lines at all.
+            Operation::ExternalCommand { .. } | Operation::SourceOrDestinationIsBinary => {
+                return Ok(Diffed::Untouchable);
+            }
+        };
+
+        Ok(Diffed::Text(super::text_diff::hunks(
+            algorithm,
+            &outcome.interned_input(),
+        )))
+    }
+
+    fn workdir_owned(&self) -> std::path::PathBuf {
+        self.workdir().unwrap_or(Path::new(".")).to_path_buf()
+    }
 
     /// What turning `base` into `head` would take, renames included.
     pub fn tree_changes(

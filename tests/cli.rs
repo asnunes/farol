@@ -1005,6 +1005,45 @@ fn the_map_of_a_commit_that_is_no_longer_reachable_is_not_adopted() {
     );
 }
 
+#[test]
+fn a_binary_file_is_not_decoded_into_lines_that_do_not_exist() {
+    // from_utf8_lossy on a PNG produces mojibake, and the screen would render
+    // it as if it were code. git refuses to diff binary content; so do we.
+    let repo = Repo::new();
+    repo.git(&["checkout", "-q", "-b", "feature/x"]);
+    std::fs::write(
+        repo.path().join("logo.png"),
+        (0u8..=255).cycle().take(4000).collect::<Vec<u8>>(),
+    )
+    .unwrap();
+    repo.commit("add a binary");
+
+    let out = repo.ok(&["scope"]);
+    assert!(out.contains("logo.png"), "{out}");
+    assert!(
+        out.contains("+0") && out.contains("-0"),
+        "a binary file has no lines to count:\n{out}"
+    );
+}
+
+#[test]
+fn a_file_marked_not_diffable_is_left_alone() {
+    // `-diff` in .gitattributes is how a repository says "do not read this line
+    // by line" — generated code, vendored bundles, lockfiles.
+    let repo = Repo::new();
+    repo.git(&["checkout", "-q", "-b", "feature/x"]);
+    repo.write(".gitattributes", "generated.txt -diff\n");
+    repo.write("generated.txt", &numbered(50));
+    repo.commit("add generated output");
+
+    let out = repo.ok(&["scope"]);
+    assert!(out.contains("generated.txt"), "{out}");
+    assert!(
+        !out.contains("+50"),
+        "the repository asked for this not to be diffed:\n{out}"
+    );
+}
+
 // ---- output --------------------------------------------------------------
 
 #[test]

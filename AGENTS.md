@@ -276,6 +276,13 @@ resident on a repo with a vendor directory. Renames come from the same diff,
 tracked by similarity — a moved-and-edited file is one file to read, not an add
 plus a delete.
 
+**git decides what to diff, not just how.** A file whose content is binary, or
+marked `-diff` in `.gitattributes`, comes back untouchable and the screen says
+so — decoding it would put mojibake in front of the reviewer as if it were code.
+The algorithm follows `diff.algorithm`, so the hunks the reviewer reads are the
+hunks the author saw. Hunk boundaries are pinned to `git diff` by a test that
+shells out to it.
+
 **Identity comes from git.** A file is identified by its blob id, read off the
 tree entry — not by a hash farol computes. Ancestry is `merge-base`, distance is
 `target..HEAD`. Every one of these was hand-rolled first, and the hand-rolled

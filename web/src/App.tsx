@@ -368,6 +368,12 @@ function FileRow({
 }
 
 function Diff({ diff, file }: { diff: FileDiff; file: FileView }) {
+  if (diff.binary) {
+    // Nothing to read line by line, so say that rather than show an empty pane
+    // the reviewer would take for a loading failure.
+    return <div className="diff nodiff">Binary file — not shown</div>;
+  }
+
   return (
     <div className="diff">
       {diff.hunks.map((hunk, hi) => (

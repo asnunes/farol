@@ -431,6 +431,14 @@ body {
   line-height: 1.65;
   padding-bottom: 6rem;
 }
+/* A file git will not diff. Chrome, not code: it is farol speaking, not the
+   repository. */
+.nodiff {
+  font-family: var(--sans);
+  font-size: 0.875rem;
+  color: var(--muted);
+  padding: 1.5rem 1rem;
+}
 .hunk {
   padding: 0.3rem 1.75rem;
   background: var(--sunken);

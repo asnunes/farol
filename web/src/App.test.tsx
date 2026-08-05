@@ -42,7 +42,14 @@ function review(over: Partial<ReviewView> = {}): ReviewView {
   };
 }
 
-const emptyDiff = { path: "", status: "modified", hunks: [], additions: 0, deletions: 0 };
+const emptyDiff = {
+  path: "",
+  status: "modified",
+  hunks: [],
+  binary: false,
+  additions: 0,
+  deletions: 0,
+};
 
 /** The path in the file header — the file actually being read. A bare text
  * query would also match the sidebar entry, which is a different claim. */
@@ -267,5 +274,30 @@ describe("a map behind the branch", () => {
     render(<App />);
     await waitFor(() => expect(screen.getByText(/2 commits behind/)).toBeTruthy());
     expect(screen.getByText("src/arrived_later.rs")).toBeTruthy();
+  });
+});
+
+describe("a file with nothing to read", () => {
+  it("says so instead of leaving the pane empty", async () => {
+    // An empty diff area reads as a loading failure. A binary file has no
+    // lines, and the reviewer needs to be told that rather than left guessing.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.startsWith("/api/review")) {
+          return new Response(JSON.stringify(review()), {
+            headers: { "content-type": "application/json" },
+          });
+        }
+        return new Response(JSON.stringify({ ...emptyDiff, path: "src/a.rs", binary: true }), {
+          headers: { "content-type": "application/json" },
+        });
+      }),
+    );
+
+    render(<App />);
+
+    expect(await screen.findByText(/Binary file/)).toBeTruthy();
   });
 });

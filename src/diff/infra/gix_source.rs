@@ -4,10 +4,9 @@
 //! [`Git`]'s job and building the window is [`Window`]'s; what is left here is
 //! the shape of the ports.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
-use super::git::{Blob, Git};
-use super::text_diff;
+use super::git::{Blob, Diffed, Git, Side};
 use super::window::Window;
 use crate::diff::domain::{
     CommitHistorySource, FileDiff, FileDiffSource, FileStatus, ReviewScopeSource, Scope,
@@ -31,6 +30,9 @@ pub struct GixSource {
     /// path -> blob on each side, for the review window only.
     base_blobs: BTreeMap<String, Blob>,
     head_blobs: BTreeMap<String, Blob>,
+    /// Paths whose new side is uncommitted work: there is no object to hand
+    /// git, so the diff has to point it at the working tree instead.
+    from_worktree: BTreeSet<String>,
 }
 
 impl GixSource {
@@ -83,6 +85,7 @@ impl GixSource {
             scope,
             base_blobs: window.base_blobs,
             head_blobs: window.head_blobs,
+            from_worktree: window.from_worktree,
         })
     }
 
@@ -120,13 +123,18 @@ impl FileDiffSource for GixSource {
         let old = self.base_blobs.get(&old_key);
         let new = self.head_blobs.get(path);
 
-        Ok(text_diff::build_file_diff(
+        let diffed = self.git().diff(
+            path,
+            old.map(Side::Object).unwrap_or(Side::Absent),
+            self.new_side(path, new),
+        )?;
+
+        Ok(Self::assemble(
             path,
             change.old_path.clone(),
             change.status,
-            old.map(|b| b.data.as_slice()).unwrap_or(&[]),
-            new.map(|b| b.data.as_slice()).unwrap_or(&[]),
             new.map(Blob::hash).unwrap_or_default(),
+            diffed,
         ))
     }
 
@@ -155,14 +163,56 @@ impl FileDiffSource for GixSource {
             return Ok(None);
         }
 
-        Ok(Some(text_diff::build_file_diff(
+        let diffed = git.diff(
+            path,
+            old.as_ref().map(Side::Object).unwrap_or(Side::Absent),
+            if to == crate::shared::WORKING {
+                Side::Worktree
+            } else {
+                new.as_ref().map(Side::Object).unwrap_or(Side::Absent)
+            },
+        )?;
+
+        Ok(Some(Self::assemble(
             path,
             None,
             FileStatus::Modified,
-            old.as_ref().map(|b| b.data.as_slice()).unwrap_or(&[]),
-            new.as_ref().map(|b| b.data.as_slice()).unwrap_or(&[]),
             new.as_ref().map(Blob::hash).unwrap_or_default(),
+            diffed,
         )))
+    }
+}
+
+impl GixSource {
+    fn new_side<'a>(&self, path: &str, blob: Option<&'a Blob>) -> Side<'a> {
+        match blob {
+            None => Side::Absent,
+            Some(_) if self.from_worktree.contains(path) => Side::Worktree,
+            Some(blob) => Side::Object(blob),
+        }
+    }
+
+    fn assemble(
+        path: &str,
+        old_path: Option<String>,
+        status: FileStatus,
+        new_content_hash: String,
+        diffed: Diffed,
+    ) -> FileDiff {
+        let (binary, hunks, additions, deletions) = match diffed {
+            Diffed::Untouchable => (true, Vec::new(), 0, 0),
+            Diffed::Text(h) => (false, h.hunks, h.additions, h.deletions),
+        };
+        FileDiff {
+            path: path.to_string(),
+            old_path,
+            status,
+            hunks,
+            binary,
+            additions,
+            deletions,
+            new_content_hash,
+        }
     }
 }
 
