@@ -145,3 +145,52 @@ impl Scope {
         hits.into_iter().take(5).map(|(_, p)| p).collect()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn scope_over(paths: &[&str]) -> Scope {
+        Scope {
+            branch: "b".into(),
+            base_ref: "main".into(),
+            head_ref: "b".into(),
+            base_sha: "x".into(),
+            head_sha: "y".into(),
+            merge_base: true,
+            dirty: false,
+            files: paths
+                .iter()
+                .map(|p| FileChange {
+                    path: p.to_string(),
+                    old_path: None,
+                    status: FileStatus::Modified,
+                    additions: 0,
+                    deletions: 0,
+                })
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn a_near_miss_path_is_offered_back_best_match_first() {
+        // The reader of this suggestion is the session writing the map, and a
+        // hallucinated path is the mistake it makes most; the suggestion is
+        // what turns a rejection into a self-correction.
+        let scope = scope_over(&["services/db.go", "io/db_test.go", "unrelated.rs"]);
+
+        let hits = scope.similar_paths("service/db.go");
+        assert_eq!(
+            hits.first().map(String::as_str),
+            Some("services/db.go"),
+            "same file name, wrong directory, is the closest kind of miss"
+        );
+    }
+
+    #[test]
+    fn a_path_that_looks_like_nothing_under_review_gets_no_suggestion() {
+        // Better silence than sending the author off to another wrong path.
+        let scope = scope_over(&["services/db.go"]);
+        assert!(scope.similar_paths("nothing_like_it.py").is_empty());
+    }
+}

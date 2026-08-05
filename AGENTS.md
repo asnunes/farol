@@ -263,6 +263,12 @@ writer primitives, not a component layer.
 earliest block that holds it, carrying the notes and tags from every block it
 belongs to. The frontend renders; it does not decide.
 
+**A dependency is held, not passed.** `Git` owns the repository and answers
+questions about it; nothing takes a `&gix::Repository` parameter. The one
+exception is a constructor helper, which runs before the value it belongs to
+exists. The same rule that keeps services out of command signatures keeps
+handles out of function signatures.
+
 **Only the review window is read.** The window comes from a tree diff, so
 identical subtrees are never opened; a branch touching ten files does not pay
 for the rest of the checkout. Reading a whole tree into memory once cost 1 GB
