@@ -1004,3 +1004,40 @@ fn the_map_of_a_commit_that_is_no_longer_reachable_is_not_adopted() {
         "the map from the still-reachable commit is the one that applies:\n{out}"
     );
 }
+
+// ---- output --------------------------------------------------------------
+
+#[test]
+fn quitting_a_pager_early_does_not_end_in_a_backtrace() {
+    // Rust starts life with SIGPIPE ignored, which turns the reader going away
+    // into a write error and then a panic. `farol map show | head` is ordinary
+    // use, and it should end, not crash. The context is oversized on purpose:
+    // below the pipe buffer the write succeeds and there is nothing to catch.
+    let repo = Repo::new();
+    repo.feature();
+    repo.derive();
+    let long = "explaining at length. ".repeat(5_000);
+    repo.ok(&[
+        "block",
+        "add",
+        "core",
+        "--title",
+        "t",
+        "--context",
+        &long,
+        "src/a.rs",
+    ]);
+
+    let out = Command::new("sh")
+        .arg("-c")
+        .arg(format!("{BIN} map show | head -1"))
+        .current_dir(repo.path())
+        .output()
+        .expect("the pipeline should run");
+
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        !stderr.contains("panicked"),
+        "a closed pipe should not be a crash:\n{stderr}"
+    );
+}

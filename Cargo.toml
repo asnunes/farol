@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+# Only for restoring the default SIGPIPE disposition; see main.rs.
+libc = "0.2"
 anyhow = "1.0.104"
 async-stream = "0.3.6"
 axum = "0.8.9"

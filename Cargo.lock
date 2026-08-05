@@ -476,6 +476,7 @@ dependencies = [
  "axum",
  "clap",
  "gix",
+ "libc",
  "notify",
  "rust-embed",
  "serde",
