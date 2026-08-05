@@ -58,9 +58,10 @@ impl FileDiffs {
     }
 
     /// What viewed-state invalidation keys on: the file as it stands after the
-    /// change, never the diff text.
+    /// change, never the diff text. It is git's blob id, so identical content
+    /// is identical everywhere — including across a rebase that only moved it.
     pub fn content_hash(&self, path: &str) -> Result<String> {
-        Ok(self.of(path)?.new_content_hash)
+        self.source.content_hash(path)
     }
 }
 

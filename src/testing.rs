@@ -132,6 +132,14 @@ impl FileDiffSource for FakeDiffSource {
         })
     }
 
+    fn content_hash(&self, path: &str) -> Result<String> {
+        // The real source refuses a path outside the window; so does this.
+        if !self.scope.contains(path) {
+            return Err(self.scope.reject(path));
+        }
+        Ok(format!("hash-of-{path}"))
+    }
+
     fn file_diff_between(&self, from: &str, to: &str, path: &str) -> Result<Option<FileDiff>> {
         Ok(self
             .between

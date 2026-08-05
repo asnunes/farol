@@ -1,7 +1,5 @@
 use std::collections::BTreeMap;
 
-use sha2::{Digest, Sha256};
-
 use crate::diff::domain::{
     CommitHistorySource, FileChange, FileDiff, FileDiffSource, FileStatus, Hunk, Line, LineKind,
     ReviewScopeSource, Scope,
@@ -22,9 +20,33 @@ pub struct GixSource {
     /// caches and cannot cross threads, but axum handlers need `Sync`.
     repo: gix::ThreadSafeRepository,
     scope: Scope,
-    /// path -> blob content on each side, for the review window.
-    base_blobs: BTreeMap<String, Vec<u8>>,
-    head_blobs: BTreeMap<String, Vec<u8>>,
+    /// path -> blob on each side, for the review window.
+    base_blobs: BTreeMap<String, Blob>,
+    head_blobs: BTreeMap<String, Blob>,
+}
+
+/// A file's bytes together with git's own name for them.
+///
+/// The id is the blob's object id — read straight off the tree entry, not
+/// computed. It is what viewed-state keys on, and what tells two versions of a
+/// file apart without comparing them byte by byte.
+struct Blob {
+    data: Vec<u8>,
+    id: gix::ObjectId,
+}
+
+impl Blob {
+    /// For content that is not in the object database — a file as it sits in
+    /// the working tree. The id is the one git would give it on commit.
+    fn from_worktree(repo: &gix::Repository, data: Vec<u8>) -> Result<Self> {
+        let id = gix::objs::compute_hash(repo.object_hash(), gix::object::Kind::Blob, &data)
+            .map_err(|e| Error::msg(format!("cannot hash working tree file: {e}")))?;
+        Ok(Self { data, id })
+    }
+
+    fn hash(&self) -> String {
+        self.id.to_hex().to_string()
+    }
 }
 
 impl GixSource {
@@ -99,11 +121,11 @@ impl ReviewScopeSource for GixSource {
     }
 
     fn file_line_count(&self, path: &str) -> Result<u32> {
-        let content = self
+        let blob = self
             .head_blobs
             .get(path)
             .ok_or_else(|| self.scope.reject(path))?;
-        Ok(String::from_utf8_lossy(content).lines().count() as u32)
+        Ok(String::from_utf8_lossy(&blob.data).lines().count() as u32)
     }
 }
 
@@ -117,20 +139,24 @@ impl FileDiffSource for GixSource {
             .ok_or_else(|| self.scope.reject(path))?;
 
         let old_key = change.old_path.clone().unwrap_or_else(|| path.to_string());
-        let old = self
-            .base_blobs
-            .get(&old_key)
-            .map(Vec::as_slice)
-            .unwrap_or(&[]);
-        let new = self.head_blobs.get(path).map(Vec::as_slice).unwrap_or(&[]);
+        let old = self.base_blobs.get(&old_key);
+        let new = self.head_blobs.get(path);
 
         Ok(build_file_diff(
             path,
             change.old_path.clone(),
             change.status,
-            old,
-            new,
+            old.map(|b| b.data.as_slice()).unwrap_or(&[]),
+            new.map(|b| b.data.as_slice()).unwrap_or(&[]),
+            new.map(Blob::hash).unwrap_or_default(),
         ))
+    }
+
+    fn content_hash(&self, path: &str) -> Result<String> {
+        self.head_blobs
+            .get(path)
+            .map(Blob::hash)
+            .ok_or_else(|| self.scope.reject(path))
     }
 
     fn file_diff_between(&self, from: &str, to: &str, path: &str) -> Result<Option<FileDiff>> {
@@ -145,6 +171,8 @@ impl FileDiffSource for GixSource {
                     .join(path),
             )
             .ok()
+            .map(|data| Blob::from_worktree(&repo, data))
+            .transpose()?
         } else {
             let to_id = resolve(&repo, to)?;
             blob_at(&repo, to_id, path)?
@@ -153,17 +181,18 @@ impl FileDiffSource for GixSource {
         match (old, new) {
             (None, None) => Ok(None),
             (a, b) => {
-                let a = a.unwrap_or_default();
-                let b = b.unwrap_or_default();
-                if a == b {
+                // Identical content is the same blob, so git's id settles it
+                // without comparing the bytes.
+                if a.as_ref().map(|b| b.id) == b.as_ref().map(|b| b.id) {
                     return Ok(None);
                 }
                 Ok(Some(build_file_diff(
                     path,
                     None,
                     FileStatus::Modified,
-                    &a,
-                    &b,
+                    a.as_ref().map(|b| b.data.as_slice()).unwrap_or(&[]),
+                    b.as_ref().map(|b| b.data.as_slice()).unwrap_or(&[]),
+                    b.as_ref().map(Blob::hash).unwrap_or_default(),
                 )))
             }
         }
@@ -182,23 +211,20 @@ impl CommitHistorySource for GixSource {
         let repo = self.repo();
         let target = resolve(&repo, sha)?;
         let head = resolve(&repo, &self.scope.head_sha)?;
-        if target == head {
-            return Ok(0);
-        }
+
+        // `target..head`, which is what `git rev-list --count` counts: hiding
+        // the target stops the walk at it instead of reading all of history and
+        // needing an arbitrary cap to protect against never finding it.
         let walk = repo
             .rev_walk([head])
+            .with_hidden([target])
             .all()
             .map_err(|e| Error::msg(format!("cannot walk history: {e}")))?;
+
         let mut n = 0u32;
         for info in walk {
-            let info = info.map_err(|e| Error::msg(format!("cannot walk history: {e}")))?;
-            if info.id == target {
-                return Ok(n);
-            }
+            info.map_err(|e| Error::msg(format!("cannot walk history: {e}")))?;
             n += 1;
-            if n > 10_000 {
-                break;
-            }
         }
         Ok(n)
     }
@@ -212,20 +238,15 @@ impl CommitHistorySource for GixSource {
             return Ok(false);
         };
         let head = resolve(&repo, &self.scope.head_sha)?;
-        if target == head {
-            return Ok(true);
-        }
-        let walk = repo
-            .rev_walk([head])
-            .all()
-            .map_err(|e| Error::msg(format!("cannot walk history: {e}")))?;
-        for info in walk {
-            let info = info.map_err(|e| Error::msg(format!("cannot walk history: {e}")))?;
-            if info.id == target {
-                return Ok(true);
-            }
-        }
-        Ok(false)
+
+        // `git merge-base --is-ancestor`: the merge base of an ancestor with
+        // its descendant is the ancestor itself. Walking to look for it read
+        // the whole history to answer "no"; this stops at the base. Unrelated
+        // histories have no base at all, which is also a no.
+        Ok(repo
+            .merge_base(target, head)
+            .map(|base| base.detach() == target)
+            .unwrap_or(false))
     }
 }
 
@@ -254,8 +275,8 @@ fn merge_base(repo: &gix::Repository, a: gix::ObjectId, b: gix::ObjectId) -> Res
         .map_err(|e| Error::msg(format!("cannot find merge base: {e}")))
 }
 
-/// Flatten a commit's tree into path -> content.
-fn read_tree(repo: &gix::Repository, commit: gix::ObjectId) -> Result<BTreeMap<String, Vec<u8>>> {
+/// Flatten a commit's tree into path -> blob.
+fn read_tree(repo: &gix::Repository, commit: gix::ObjectId) -> Result<BTreeMap<String, Blob>> {
     let tree = repo
         .find_object(commit)
         .map_err(|e| Error::msg(format!("cannot read commit: {e}")))?
@@ -278,12 +299,18 @@ fn read_tree(repo: &gix::Repository, commit: gix::ObjectId) -> Result<BTreeMap<S
             .map_err(|e| Error::msg(format!("cannot read blob for {path}: {e}")))?
             .data
             .clone();
-        out.insert(path, data);
+        out.insert(
+            path,
+            Blob {
+                data,
+                id: entry.oid,
+            },
+        );
     }
     Ok(out)
 }
 
-fn blob_at(repo: &gix::Repository, commit: gix::ObjectId, path: &str) -> Result<Option<Vec<u8>>> {
+fn blob_at(repo: &gix::Repository, commit: gix::ObjectId, path: &str) -> Result<Option<Blob>> {
     let tree = repo
         .find_object(commit)
         .map_err(|e| Error::msg(format!("cannot read commit: {e}")))?
@@ -292,10 +319,14 @@ fn blob_at(repo: &gix::Repository, commit: gix::ObjectId, path: &str) -> Result<
 
     match tree.lookup_entry_by_path(path) {
         Ok(Some(entry)) => {
+            let id = entry.object_id();
             let obj = repo
-                .find_object(entry.object_id())
+                .find_object(id)
                 .map_err(|e| Error::msg(format!("cannot read blob: {e}")))?;
-            Ok(Some(obj.data.clone()))
+            Ok(Some(Blob {
+                data: obj.data.clone(),
+                id,
+            }))
         }
         Ok(None) => Ok(None),
         Err(e) => Err(Error::msg(format!("cannot look up {path}: {e}"))),
@@ -304,10 +335,7 @@ fn blob_at(repo: &gix::Repository, commit: gix::ObjectId, path: &str) -> Result<
 
 /// Replace committed contents with what is on disk, so uncommitted work shows
 /// up in the same review window.
-fn overlay_worktree(
-    repo: &gix::Repository,
-    head_blobs: &mut BTreeMap<String, Vec<u8>>,
-) -> Result<()> {
+fn overlay_worktree(repo: &gix::Repository, head_blobs: &mut BTreeMap<String, Blob>) -> Result<()> {
     let Some(workdir) = repo.workdir() else {
         return Ok(());
     };
@@ -317,8 +345,8 @@ fn overlay_worktree(
         let full = workdir.join(path);
         match std::fs::read(&full) {
             Ok(disk) => {
-                if &disk != committed {
-                    *committed = disk;
+                if disk != committed.data {
+                    *committed = Blob::from_worktree(repo, disk)?;
                 }
             }
             Err(_) => gone.push(path.clone()),
@@ -333,18 +361,22 @@ fn overlay_worktree(
     Ok(())
 }
 
-fn changed_files(
-    base: &BTreeMap<String, Vec<u8>>,
-    head: &BTreeMap<String, Vec<u8>>,
-) -> Vec<FileChange> {
+fn changed_files(base: &BTreeMap<String, Blob>, head: &BTreeMap<String, Blob>) -> Vec<FileChange> {
     let mut out = Vec::new();
     let mut removed: Vec<&String> = Vec::new();
 
     for (path, new) in head {
         match base.get(path) {
-            Some(old) if old == new => {}
-            Some(old) => out.push(counted(path, None, FileStatus::Modified, old, new)),
-            None => out.push(counted(path, None, FileStatus::Added, &[], new)),
+            // Same blob id is the same content, by construction.
+            Some(old) if old.id == new.id => {}
+            Some(old) => out.push(counted(
+                path,
+                None,
+                FileStatus::Modified,
+                &old.data,
+                &new.data,
+            )),
+            None => out.push(counted(path, None, FileStatus::Added, &[], &new.data)),
         }
     }
     for path in base.keys() {
@@ -358,7 +390,8 @@ fn changed_files(
     for path in removed {
         let old = &base[path];
         let renamed_to = out.iter().position(|c| {
-            c.status == FileStatus::Added && head.get(&c.path).map(|n| n == old).unwrap_or(false)
+            c.status == FileStatus::Added
+                && head.get(&c.path).map(|n| n.id == old.id).unwrap_or(false)
         });
         match renamed_to {
             Some(idx) => {
@@ -367,7 +400,7 @@ fn changed_files(
                 out[idx].additions = 0;
                 out[idx].deletions = 0;
             }
-            None => out.push(counted(path, None, FileStatus::Deleted, old, &[])),
+            None => out.push(counted(path, None, FileStatus::Deleted, &old.data, &[])),
         }
     }
 
@@ -418,6 +451,7 @@ pub fn build_file_diff(
     status: FileStatus,
     old: &[u8],
     new: &[u8],
+    new_content_hash: String,
 ) -> FileDiff {
     let old_text = String::from_utf8_lossy(old).into_owned();
     let new_text = String::from_utf8_lossy(new).into_owned();
@@ -486,28 +520,25 @@ pub fn build_file_diff(
         hunks,
         additions,
         deletions,
-        new_content_hash: hash(new),
+        new_content_hash,
     }
-}
-
-pub fn hash(bytes: &[u8]) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(bytes);
-    hasher
-        .finalize()
-        .iter()
-        .map(|b| format!("{b:02x}"))
-        .collect()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn tree(entries: &[(&str, &str)]) -> BTreeMap<String, Vec<u8>> {
+    fn blob(content: &str) -> Blob {
+        let data = content.as_bytes().to_vec();
+        let id =
+            gix::objs::compute_hash(gix::hash::Kind::Sha1, gix::object::Kind::Blob, &data).unwrap();
+        Blob { data, id }
+    }
+
+    fn tree(entries: &[(&str, &str)]) -> BTreeMap<String, Blob> {
         entries
             .iter()
-            .map(|(p, c)| (p.to_string(), c.as_bytes().to_vec()))
+            .map(|(p, c)| (p.to_string(), blob(c)))
             .collect()
     }
 
@@ -594,6 +625,7 @@ mod tests {
             FileStatus::Modified,
             old.as_bytes(),
             new.as_bytes(),
+            String::new(),
         );
 
         assert_eq!((diff.additions, diff.deletions), (1, 1));
@@ -624,20 +656,27 @@ mod tests {
             FileStatus::Modified,
             old.as_bytes(),
             new.as_bytes(),
+            String::new(),
         );
         assert_eq!(diff.hunks.len(), 2);
     }
 
     #[test]
-    fn the_content_hash_follows_the_new_side_only() {
-        // Viewed-state invalidation keys on this; if it moved with the old side
-        // a rebase would reopen files nobody touched.
-        let a = build_file_diff("a.rs", None, FileStatus::Modified, b"one\n", b"two\n");
-        let b = build_file_diff("a.rs", None, FileStatus::Modified, b"other\n", b"two\n");
-        assert_eq!(a.new_content_hash, b.new_content_hash);
+    fn a_blob_id_is_the_one_git_itself_would_give() {
+        // Viewed state is keyed on this, and `git hash-object` is the contract.
+        // The value below is what git prints for a file containing "hello\n".
+        assert_eq!(
+            blob("hello\n").hash(),
+            "ce013625030ba8dba906f756967f9e9ca394464a"
+        );
+    }
 
-        let c = build_file_diff("a.rs", None, FileStatus::Modified, b"one\n", b"three\n");
-        assert_ne!(a.new_content_hash, c.new_content_hash);
+    #[test]
+    fn identical_content_at_two_paths_has_one_id() {
+        // What lets a rename be spotted, and what keeps a file marked as read
+        // after it moves.
+        assert_eq!(blob("same\n").id, blob("same\n").id);
+        assert_ne!(blob("same\n").id, blob("other\n").id);
     }
 
     #[test]

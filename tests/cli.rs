@@ -817,3 +817,68 @@ fn a_truncated_map_file_is_discarded_instead_of_crashing() {
     let err = String::from_utf8_lossy(&out.stderr);
     assert!(err.contains("unreadable map"), "{err}");
 }
+
+// ---- history ------------------------------------------------------------
+
+#[test]
+fn a_map_reports_how_far_head_has_moved_past_it() {
+    let repo = Repo::new();
+    repo.feature();
+    repo.derive();
+
+    repo.write("src/a.rs", &numbered(61));
+    repo.commit("one more");
+    repo.write("src/a.rs", &numbered(62));
+    repo.commit("and another");
+
+    let out = repo.ok(&["map", "show"]);
+    assert!(
+        out.contains("2 commits behind"),
+        "map show should say how stale it is:\n{out}"
+    );
+}
+
+#[test]
+fn a_merge_does_not_inflate_the_distance() {
+    // Distance is `target..HEAD`, not "how many commits until I stumble on it":
+    // work merged in from a side branch is not distance travelled since the map.
+    let repo = Repo::new();
+    repo.feature();
+    repo.derive();
+
+    repo.git(&["checkout", "-q", "-b", "side"]);
+    for i in 1..=5 {
+        repo.write("src/side.rs", &numbered(i));
+        repo.commit("side work");
+    }
+    repo.git(&["checkout", "-q", "feature/x"]);
+    repo.git(&["merge", "-q", "--no-ff", "-m", "merge side", "side"]);
+
+    let out = repo.ok(&["map", "show"]);
+    assert!(
+        out.contains("6 commits behind"),
+        "five side commits plus the merge, counted once each:\n{out}"
+    );
+}
+
+#[test]
+fn the_map_of_a_commit_that_is_no_longer_reachable_is_not_adopted() {
+    // After a reset that throws the commit away, its map must not be picked up
+    // as the current one — it describes code that is no longer on this branch.
+    let repo = Repo::new();
+    repo.feature();
+    repo.derive();
+    repo.core_block(&["src/a.rs"]);
+
+    repo.write("src/a.rs", &numbered(70));
+    repo.commit("rewrite");
+    repo.git(&["reset", "-q", "--hard", "HEAD~1"]);
+    repo.write("src/a.rs", &numbered(80));
+    repo.commit("different direction");
+
+    let out = repo.ok(&["map", "show"]);
+    assert!(
+        out.contains("core"),
+        "the map from the still-reachable commit is the one that applies:\n{out}"
+    );
+}

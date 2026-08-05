@@ -34,6 +34,13 @@ pub trait FileDiffSource: Send + Sync {
     /// Full diff of one file across the review window.
     fn file_diff(&self, path: &str) -> Result<FileDiff>;
 
+    /// Git's own name for the file as it stands after the change: the blob id.
+    ///
+    /// Separate from `file_diff` because recording that a file was read must
+    /// not pay for diffing it — and because the id is read off the tree entry,
+    /// while the diff has to be computed.
+    fn content_hash(&self, path: &str) -> Result<String>;
+
     /// Diff of one file between two arbitrary commits. Derivation uses this to
     /// learn how lines moved between the previous map's commit and now.
     /// `Ok(None)` means the file is identical between the two.

@@ -263,6 +263,12 @@ writer primitives, not a component layer.
 earliest block that holds it, carrying the notes and tags from every block it
 belongs to. The frontend renders; it does not decide.
 
+**Identity comes from git.** A file is identified by its blob id, read off the
+tree entry — not by a hash farol computes. Ancestry is `merge-base`, distance is
+`target..HEAD`. Every one of these was hand-rolled first, and the hand-rolled
+distance was wrong after a merge. Before writing a comparison, a hash or a walk,
+check whether git already answers it.
+
 ## Tests
 
 Three layers, and each covers something the others cannot.
