@@ -12,7 +12,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::diff::domain::Hunk;
+use crate::diff::domain::{Hunk, ReviewPath};
 use crate::shared::error::{Error, Result};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -53,14 +53,15 @@ impl LineRange {
     }
 
     /// Reject a span that points past the end of the file, where it would
-    /// render nowhere.
-    pub fn require_within(&self, path: &str, total: u32) -> Result<()> {
-        if self.to > total {
+    /// render nowhere. Takes a proven path because that is what carries the
+    /// file's length — no reaching back for the diff source.
+    pub fn require_within(&self, path: &ReviewPath) -> Result<()> {
+        if self.to > path.lines() {
             return Err(Error::RangeOutOfFile {
                 path: path.to_string(),
                 from: self.from,
                 to: self.to,
-                total,
+                total: path.lines(),
             });
         }
         Ok(())
@@ -156,8 +157,17 @@ mod tests {
 
     #[test]
     fn a_range_past_the_end_of_the_file_is_refused() {
-        assert!(range().require_within("a.rs", 200).is_ok());
-        assert!(range().require_within("a.rs", 90).is_err());
+        use crate::diff::domain::ReviewPath;
+        assert!(
+            range()
+                .require_within(&ReviewPath::proven("a.rs", 200))
+                .is_ok()
+        );
+        assert!(
+            range()
+                .require_within(&ReviewPath::proven("a.rs", 90))
+                .is_err()
+        );
     }
 
     #[test]

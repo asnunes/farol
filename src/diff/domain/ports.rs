@@ -1,4 +1,5 @@
 use super::model::{FileDiff, Scope};
+use super::path::ReviewPath;
 use crate::shared::error::Result;
 
 /// Everything the app knows about git lives behind this.
@@ -21,6 +22,17 @@ pub trait DiffSource: Send + Sync {
     /// Line count of the file as it stands after the change. Range validation
     /// needs it to reject a note pointing past the end of the file.
     fn file_line_count(&self, path: &str) -> Result<u32>;
+
+    /// Turn a raw path into one proven to be under review. This is the only
+    /// constructor of [`ReviewPath`], so anything downstream that takes one is
+    /// guaranteed the check happened.
+    fn review_path(&self, raw: &str) -> Result<ReviewPath> {
+        let scope = self.scope()?;
+        if !scope.contains(raw) {
+            return Err(scope.reject(raw));
+        }
+        Ok(ReviewPath::proven(raw, self.file_line_count(raw)?))
+    }
 
     /// Commit the working tree is on right now.
     fn head_sha(&self) -> Result<String>;

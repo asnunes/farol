@@ -12,7 +12,7 @@ use crate::diff::domain::{
 };
 use crate::map::domain::{MapRepository, ReviewMap};
 use crate::progress::domain::{Progress, ProgressRepository};
-use crate::shared::error::{Error, Result};
+use crate::shared::error::Result;
 
 /// A diff source you assemble by hand.
 pub struct FakeDiffSource {
@@ -127,11 +127,14 @@ impl DiffSource for FakeDiffSource {
         if !self.scope.contains(path) {
             return Err(self.scope.reject(path));
         }
-        self.line_counts
+        // Generous by default so a test only declares a size when the size is
+        // the thing under test.
+        Ok(self
+            .line_counts
             .iter()
             .find(|(p, _)| p == path)
             .map(|(_, n)| *n)
-            .ok_or_else(|| Error::msg(format!("no line count declared for {path}")))
+            .unwrap_or(10_000))
     }
 
     fn head_sha(&self) -> Result<String> {

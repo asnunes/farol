@@ -3,6 +3,7 @@
 use clap::Subcommand;
 
 use super::{Ctx, Reporting};
+use crate::map::domain::Slug;
 use crate::shared::error::Result;
 
 #[derive(Subcommand)]
@@ -36,18 +37,30 @@ impl FileAction {
                 path,
                 note,
                 after,
-            } => ctx.report(
-                format!("Added '{path}' to block '{slug}'."),
-                ctx.map().add_file(&slug, &path, note, after.as_deref()),
-            ),
-            FileAction::Update { slug, path, note } => ctx.report(
-                format!("Updated the note on '{path}'."),
-                ctx.map().update_file(&slug, &path, note),
-            ),
-            FileAction::Remove { slug, path } => ctx.report(
-                format!("Removed '{path}' from block '{slug}'."),
-                ctx.map().remove_file(&slug, &path),
-            ),
+            } => {
+                let slug = Slug::parse(&slug)?;
+                let path = ctx.source().review_path(&path)?;
+                ctx.report(
+                    format!("Added '{path}' to block '{slug}'."),
+                    ctx.map().add_file(&slug, &path, note, after.as_deref()),
+                )
+            }
+            FileAction::Update { slug, path, note } => {
+                let slug = Slug::parse(&slug)?;
+                let path = ctx.source().review_path(&path)?;
+                ctx.report(
+                    format!("Updated the note on '{path}'."),
+                    ctx.map().update_file(&slug, &path, note),
+                )
+            }
+            FileAction::Remove { slug, path } => {
+                let slug = Slug::parse(&slug)?;
+                let path = ctx.source().review_path(&path)?;
+                ctx.report(
+                    format!("Removed '{path}' from block '{slug}'."),
+                    ctx.map().remove_file(&slug, &path),
+                )
+            }
         }
     }
 }

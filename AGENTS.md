@@ -75,12 +75,26 @@ Free functions are for genuinely typeless helpers, and they should be rare
 enough to notice. `position_from(before, after)` is one: it turns two CLI flags
 into a `Position` and belongs to neither.
 
-### Values own their own rules
+### Parse at the edge; do not validate in the middle
 
 A concept with invariants gets a type, and that type enforces them at
-construction. `LineRange` cannot be built backwards or from zero, parses its own
-CLI form, knows how to check itself against a file's length, and knows how it
-moves when the file changes. Nothing outside it manipulates a bare `(u32, u32)`.
+construction. Raw strings are turned into proven values **once, in `cmd`**,
+where raw input arrives. Everything below takes the proven type.
+
+| type | proves | built by |
+|---|---|---|
+| `Slug` | a block name that is kebab-case and non-empty | `Slug::parse` |
+| `ReviewPath` | a path under review, carrying the file's length | `DiffSource::review_path` — the only constructor |
+| `LineRange` | a span that is non-empty and starts at 1 or later | `LineRange::parse` / `new` |
+
+This is stronger than validating inside the use case. A check inside can be
+skipped by a caller that forgets; **a type cannot be skipped, because the wrong
+call does not compile.** `session.add_file(&Slug, &ReviewPath, ..)` cannot be
+handed a hallucinated path, and its two arguments cannot be transposed the way
+two `&str` invite.
+
+`ReviewPath` carries the line count because it is known at the same moment, so
+`range.require_within(&path)` needs no access to the diff source.
 
 ### Use cases live in `application`, not in the entry point
 

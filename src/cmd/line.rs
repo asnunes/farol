@@ -3,7 +3,7 @@
 use clap::Subcommand;
 
 use super::{Ctx, Reporting};
-use crate::map::domain::LineRange;
+use crate::map::domain::{LineRange, Slug};
 use crate::shared::error::Result;
 
 #[derive(Subcommand)]
@@ -54,6 +54,8 @@ impl LineAction {
                 range,
                 note,
             } => {
+                let slug = Slug::parse(&slug)?;
+                let path = ctx.source().review_path(&path)?;
                 let range = LineRange::parse(&range)?;
                 ctx.report(
                     format!("Added a note on {path}:{range}."),
@@ -66,6 +68,8 @@ impl LineAction {
                 range,
                 note,
             } => {
+                let slug = Slug::parse(&slug)?;
+                let path = ctx.source().review_path(&path)?;
                 let range = LineRange::parse(&range)?;
                 ctx.report(
                     format!("Updated the note on {path}:{range}."),
@@ -73,6 +77,8 @@ impl LineAction {
                 )
             }
             LineAction::Remove { slug, path, range } => {
+                let slug = Slug::parse(&slug)?;
+                let path = ctx.source().review_path(&path)?;
                 let range = LineRange::parse(&range)?;
                 ctx.report(
                     format!("Removed the note on {path}:{range}."),
@@ -85,6 +91,8 @@ impl LineAction {
                 old_range,
                 range,
             } => {
+                let slug = Slug::parse(&slug)?;
+                let path = ctx.source().review_path(&path)?;
                 let old = LineRange::parse(&old_range)?;
                 let new = LineRange::parse(&range)?;
                 ctx.report(
@@ -97,6 +105,8 @@ impl LineAction {
                 path,
                 old_range,
             } => {
+                let slug = Slug::parse(&slug)?;
+                let path = ctx.source().review_path(&path)?;
                 let old = LineRange::parse(&old_range)?;
                 ctx.report(
                     format!("Discarded the note that was at {path}:{old}."),

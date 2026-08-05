@@ -27,14 +27,20 @@ impl SkimAction {
                 path,
                 reason,
                 block,
-            } => ctx.report(
-                format!("Marked '{path}' as skim."),
-                ctx.map().add_skim(&path, &reason, block),
-            ),
-            SkimAction::Remove { path } => ctx.report(
-                format!("'{path}' is no longer marked as skim."),
-                ctx.map().remove_skim(&path),
-            ),
+            } => {
+                let path = ctx.source().review_path(&path)?;
+                ctx.report(
+                    format!("Marked '{path}' as skim."),
+                    ctx.map().add_skim(&path, &reason, block),
+                )
+            }
+            SkimAction::Remove { path } => {
+                let path = ctx.source().review_path(&path)?;
+                ctx.report(
+                    format!("'{path}' is no longer marked as skim."),
+                    ctx.map().remove_skim(&path),
+                )
+            }
         }
     }
 }

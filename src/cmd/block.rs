@@ -3,7 +3,9 @@
 use clap::Subcommand;
 
 use super::{Ctx, Reporting};
+use crate::diff::domain as paths;
 use crate::map::application::position_from;
+use crate::map::domain::Slug;
 use crate::shared::error::Result;
 
 #[derive(Subcommand)]
@@ -51,37 +53,52 @@ impl BlockAction {
                 context,
                 before,
                 after,
-                paths,
-            } => ctx.report(
-                format!("Added block '{slug}' with {} file(s).", paths.len()),
-                ctx.map().add_block(
-                    &slug,
-                    &title,
-                    &context,
-                    position_from(before, after),
-                    &paths,
-                ),
-            ),
+                paths: raw,
+            } => {
+                // Raw strings become proven values here, at the edge. Past this
+                // point the use case cannot be handed anything unchecked.
+                let slug = Slug::parse(&slug)?;
+                let files = paths::all(ctx.source(), &raw)?;
+                ctx.report(
+                    format!("Added block '{slug}' with {} file(s).", files.len()),
+                    ctx.map().add_block(
+                        &slug,
+                        &title,
+                        &context,
+                        position_from(before, after),
+                        &files,
+                    ),
+                )
+            }
             BlockAction::Update {
                 slug,
                 title,
                 context,
-            } => ctx.report(
-                format!("Updated block '{slug}'."),
-                ctx.map().update_block(&slug, title, context),
-            ),
-            BlockAction::Remove { slug } => ctx.report(
-                format!("Removed block '{slug}'."),
-                ctx.map().remove_block(&slug),
-            ),
+            } => {
+                let slug = Slug::parse(&slug)?;
+                ctx.report(
+                    format!("Updated block '{slug}'."),
+                    ctx.map().update_block(&slug, title, context),
+                )
+            }
+            BlockAction::Remove { slug } => {
+                let slug = Slug::parse(&slug)?;
+                ctx.report(
+                    format!("Removed block '{slug}'."),
+                    ctx.map().remove_block(&slug),
+                )
+            }
             BlockAction::Move {
                 slug,
                 before,
                 after,
-            } => ctx.report(
-                format!("Moved block '{slug}'."),
-                ctx.map().move_block(&slug, position_from(before, after)),
-            ),
+            } => {
+                let slug = Slug::parse(&slug)?;
+                ctx.report(
+                    format!("Moved block '{slug}'."),
+                    ctx.map().move_block(&slug, position_from(before, after)),
+                )
+            }
         }
     }
 }

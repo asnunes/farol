@@ -6,9 +6,10 @@
 //! and names, and they lose their place even though the new map is just as
 //! good. A typo commit must not cost that.
 
-use crate::diff::domain::{DiffSource, FileDiff};
+use crate::diff::domain::{DiffSource, FileDiff, ReviewPath};
 use crate::map::domain::{
-    LineRange, MapRepository, Orphan, OrphanReason, Position, ReviewMap, ShiftOutcome, WORKING,
+    LineRange, MapRepository, Orphan, OrphanReason, Position, ReviewMap, ShiftOutcome, Slug,
+    WORKING,
 };
 use crate::shared::error::{Error, Result};
 
@@ -173,21 +174,6 @@ impl<'a> MapSession<'a> {
         })
     }
 
-    /// Reject a path the reviewer will never be shown, and say what was
-    /// probably meant. Hallucinated paths are the most common way an agent gets
-    /// this wrong, and a suggestion turns a rejection into a self-correction.
-    pub fn require_in_scope(&self, path: &str) -> Result<()> {
-        let scope = self.source.scope()?;
-        if scope.contains(path) {
-            return Ok(());
-        }
-        Err(scope.reject(path))
-    }
-
-    pub fn require_range_in_file(&self, path: &str, range: LineRange) -> Result<()> {
-        range.require_within(path, self.source.file_line_count(path)?)
-    }
-
     // ---- use cases ----------------------------------------------------
     //
     // Each one validates what it needs before touching the map, so a caller
@@ -196,19 +182,16 @@ impl<'a> MapSession<'a> {
 
     pub fn add_block(
         &self,
-        slug: &str,
+        slug: &Slug,
         title: &str,
         context: &str,
         position: Position,
-        paths: &[String],
+        paths: &[ReviewPath],
     ) -> Result<ReviewMap> {
-        for path in paths {
-            self.require_in_scope(path)?;
-        }
         self.edit(|map| {
-            map.add_block(slug, title, context, position)?;
+            map.add_block(slug.as_str(), title, context, position)?;
             for path in paths {
-                map.add_file(slug, path, None, None)?;
+                map.add_file(slug.as_str(), path.as_str(), None, None)?;
             }
             Ok(())
         })
@@ -216,95 +199,109 @@ impl<'a> MapSession<'a> {
 
     pub fn update_block(
         &self,
-        slug: &str,
+        slug: &Slug,
         title: Option<String>,
         context: Option<String>,
     ) -> Result<ReviewMap> {
-        self.edit(|map| map.update_block(slug, title, context))
+        self.edit(|map| map.update_block(slug.as_str(), title, context))
     }
 
-    pub fn remove_block(&self, slug: &str) -> Result<ReviewMap> {
-        self.edit(|map| map.remove_block(slug))
+    pub fn remove_block(&self, slug: &Slug) -> Result<ReviewMap> {
+        self.edit(|map| map.remove_block(slug.as_str()))
     }
 
-    pub fn move_block(&self, slug: &str, position: Position) -> Result<ReviewMap> {
-        self.edit(|map| map.move_block(slug, position))
+    pub fn move_block(&self, slug: &Slug, position: Position) -> Result<ReviewMap> {
+        self.edit(|map| map.move_block(slug.as_str(), position))
     }
 
     pub fn add_file(
         &self,
-        slug: &str,
-        path: &str,
+        slug: &Slug,
+        path: &ReviewPath,
         note: Option<String>,
         after: Option<&str>,
     ) -> Result<ReviewMap> {
-        self.require_in_scope(path)?;
-        self.edit(|map| map.add_file(slug, path, note, after))
+        self.edit(|map| map.add_file(slug.as_str(), path.as_str(), note, after))
     }
 
-    pub fn update_file(&self, slug: &str, path: &str, note: String) -> Result<ReviewMap> {
-        self.edit(|map| map.update_file(slug, path, Some(note)))
+    pub fn update_file(&self, slug: &Slug, path: &ReviewPath, note: String) -> Result<ReviewMap> {
+        self.edit(|map| map.update_file(slug.as_str(), path.as_str(), Some(note)))
     }
 
-    pub fn remove_file(&self, slug: &str, path: &str) -> Result<ReviewMap> {
-        self.edit(|map| map.remove_file(slug, path))
+    pub fn remove_file(&self, slug: &Slug, path: &ReviewPath) -> Result<ReviewMap> {
+        self.edit(|map| map.remove_file(slug.as_str(), path.as_str()))
     }
 
     pub fn add_line_note(
         &self,
-        slug: &str,
-        path: &str,
+        slug: &Slug,
+        path: &ReviewPath,
         range: LineRange,
         note: String,
     ) -> Result<ReviewMap> {
-        self.require_in_scope(path)?;
-        self.require_range_in_file(path, range)?;
-        self.edit(|map| map.add_line_note(slug, path, range, note))
+        range.require_within(path)?;
+        self.edit(|map| map.add_line_note(slug.as_str(), path.as_str(), range, note))
     }
 
     pub fn update_line_note(
         &self,
-        slug: &str,
-        path: &str,
+        slug: &Slug,
+        path: &ReviewPath,
         range: LineRange,
         note: String,
     ) -> Result<ReviewMap> {
-        self.edit(|map| map.update_line_note(slug, path, range, note))
+        self.edit(|map| map.update_line_note(slug.as_str(), path.as_str(), range, note))
     }
 
-    pub fn remove_line_note(&self, slug: &str, path: &str, range: LineRange) -> Result<ReviewMap> {
-        self.edit(|map| map.remove_line_note(slug, path, range))
+    pub fn remove_line_note(
+        &self,
+        slug: &Slug,
+        path: &ReviewPath,
+        range: LineRange,
+    ) -> Result<ReviewMap> {
+        self.edit(|map| map.remove_line_note(slug.as_str(), path.as_str(), range))
     }
 
-    /// Bring a deactivated note back at the place its code moved to. The new
-    /// range is checked against the file, because a restore pointing past the
-    /// end would render nowhere.
+    /// Bring a deactivated note back at the place its code moved to. Only the
+    /// new range needs checking; the old one is a key into the orphan list, not
+    /// a pointer into the file.
     pub fn restore_note(
         &self,
-        slug: &str,
-        path: &str,
+        slug: &Slug,
+        path: &ReviewPath,
         old: LineRange,
         new: LineRange,
     ) -> Result<ReviewMap> {
-        self.require_in_scope(path)?;
-        self.require_range_in_file(path, new)?;
+        new.require_within(path)?;
         self.edit(|map| {
-            let orphan = map.take_orphan(slug, path, old)?;
-            map.add_line_note(slug, path, new, orphan.text)
+            let orphan = map.take_orphan(slug.as_str(), path.as_str(), old)?;
+            map.add_line_note(slug.as_str(), path.as_str(), new, orphan.text)
         })
     }
 
-    pub fn discard_note(&self, slug: &str, path: &str, old: LineRange) -> Result<ReviewMap> {
-        self.edit(|map| map.take_orphan(slug, path, old).map(|_| ()))
+    pub fn discard_note(
+        &self,
+        slug: &Slug,
+        path: &ReviewPath,
+        old: LineRange,
+    ) -> Result<ReviewMap> {
+        self.edit(|map| {
+            map.take_orphan(slug.as_str(), path.as_str(), old)
+                .map(|_| ())
+        })
     }
 
-    pub fn add_skim(&self, path: &str, reason: &str, block: Option<String>) -> Result<ReviewMap> {
-        self.require_in_scope(path)?;
-        self.edit(|map| map.add_skim(path, reason, block))
+    pub fn add_skim(
+        &self,
+        path: &ReviewPath,
+        reason: &str,
+        block: Option<String>,
+    ) -> Result<ReviewMap> {
+        self.edit(|map| map.add_skim(path.as_str(), reason, block))
     }
 
-    pub fn remove_skim(&self, path: &str) -> Result<ReviewMap> {
-        self.edit(|map| map.remove_skim(path))
+    pub fn remove_skim(&self, path: &ReviewPath) -> Result<ReviewMap> {
+        self.edit(|map| map.remove_skim(path.as_str()))
     }
 
     // ---- derivation internals -----------------------------------------
@@ -440,8 +437,12 @@ pub fn position_from(before: Option<String>, after: Option<String>) -> Position 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::map::domain::{LineRange, Position};
+    use crate::map::domain::{LineRange, Position, Slug};
     use crate::testing::{FakeDiffSource, InMemoryMapRepository, hunk, hunk_with_lines};
+
+    fn slug(s: &str) -> Slug {
+        Slug::parse(s).unwrap()
+    }
 
     fn mapped(sha: &str, range: LineRange, text: &str) -> ReviewMap {
         let mut map = ReviewMap::new("feature/x", "main", sha);
@@ -562,35 +563,20 @@ mod tests {
     }
 
     #[test]
-    fn a_use_case_refuses_a_path_outside_the_review_on_its_own() {
-        // The point of moving this out of the CLI: a second caller cannot skip
-        // the check by forgetting to make it.
+    fn a_path_outside_the_review_cannot_even_be_built() {
+        // The use cases no longer check this, because they cannot be reached
+        // with an unchecked path: ReviewPath has no other constructor.
         let source = FakeDiffSource::with_paths(&["a.rs"]).on_commit("head");
-        let repo = InMemoryMapRepository::new();
-        let session = MapSession::new(&source, &repo);
-        session
-            .add_block("core", "t", "c", Position::End, &[])
-            .unwrap();
-
-        let err = session
-            .add_file("core", "nowhere.rs", None, None)
-            .unwrap_err();
+        let err = source.review_path("nowhere.rs").unwrap_err();
         assert!(matches!(err, Error::PathOutOfScope { .. }), "{err:?}");
+        assert!(source.review_path("a.rs").is_ok());
+    }
 
-        let err = session
-            .add_block(
-                "other",
-                "t",
-                "c",
-                Position::End,
-                &["nowhere.rs".to_string()],
-            )
-            .unwrap_err();
-        assert!(matches!(err, Error::PathOutOfScope { .. }), "{err:?}");
-        assert!(
-            session.require_current().unwrap().block("other").is_none(),
-            "a rejected use case must not leave half of itself behind"
-        );
+    #[test]
+    fn a_malformed_block_name_is_refused_at_the_edge() {
+        assert!(Slug::parse("recover link").is_err());
+        assert!(Slug::parse("src/a.rs").is_err());
+        assert_eq!(slug("recover-link").as_str(), "recover-link");
     }
 
     #[test]
@@ -599,14 +585,9 @@ mod tests {
         let repo = InMemoryMapRepository::new();
         let session = MapSession::new(&source, &repo);
 
+        let files = crate::diff::domain::all(&source, &["a.rs".into(), "b.rs".into()]).unwrap();
         let map = session
-            .add_block(
-                "core",
-                "The change",
-                "why",
-                Position::End,
-                &["a.rs".to_string(), "b.rs".to_string()],
-            )
+            .add_block(&slug("core"), "The change", "why", Position::End, &files)
             .unwrap();
 
         let files: Vec<_> = map

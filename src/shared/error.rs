@@ -36,6 +36,11 @@ pub enum Error {
         total: u32,
     },
 
+    #[error(
+        "invalid block name '{raw}' — expected lowercase words joined by dashes, for example recover-link"
+    )]
+    BadSlug { raw: String },
+
     #[error("invalid range '{raw}' — expected <from>-<to>, for example 82-116")]
     BadRange { raw: String },
 
