@@ -36,20 +36,17 @@ impl FileAction {
                 path,
                 note,
                 after,
-            } => {
-                ctx.map().require_in_scope(&path)?;
-                ctx.edit(
-                    || format!("Added '{path}' to block '{slug}'."),
-                    |map| map.add_file(&slug, &path, note, after.as_deref()),
-                )
-            }
-            FileAction::Update { slug, path, note } => ctx.edit(
-                || format!("Updated the note on '{path}'."),
-                |map| map.update_file(&slug, &path, Some(note)),
+            } => ctx.report(
+                format!("Added '{path}' to block '{slug}'."),
+                ctx.map().add_file(&slug, &path, note, after.as_deref()),
             ),
-            FileAction::Remove { slug, path } => ctx.edit(
-                || format!("Removed '{path}' from block '{slug}'."),
-                |map| map.remove_file(&slug, &path),
+            FileAction::Update { slug, path, note } => ctx.report(
+                format!("Updated the note on '{path}'."),
+                ctx.map().update_file(&slug, &path, note),
+            ),
+            FileAction::Remove { slug, path } => ctx.report(
+                format!("Removed '{path}' from block '{slug}'."),
+                ctx.map().remove_file(&slug, &path),
             ),
         }
     }

@@ -52,46 +52,36 @@ impl BlockAction {
                 before,
                 after,
                 paths,
-            } => {
-                for path in &paths {
-                    ctx.map().require_in_scope(path)?;
-                }
-                let position = position_from(before, after);
-                let count = paths.len();
-                ctx.edit(
-                    || format!("Added block '{slug}' with {count} file(s)."),
-                    |map| {
-                        map.add_block(&slug, &title, &context, position)?;
-                        for path in &paths {
-                            map.add_file(&slug, path, None, None)?;
-                        }
-                        Ok(())
-                    },
-                )
-            }
+            } => ctx.report(
+                format!("Added block '{slug}' with {} file(s).", paths.len()),
+                ctx.map().add_block(
+                    &slug,
+                    &title,
+                    &context,
+                    position_from(before, after),
+                    &paths,
+                ),
+            ),
             BlockAction::Update {
                 slug,
                 title,
                 context,
-            } => ctx.edit(
-                || format!("Updated block '{slug}'."),
-                |map| map.update_block(&slug, title, context),
+            } => ctx.report(
+                format!("Updated block '{slug}'."),
+                ctx.map().update_block(&slug, title, context),
             ),
-            BlockAction::Remove { slug } => ctx.edit(
-                || format!("Removed block '{slug}'."),
-                |map| map.remove_block(&slug),
+            BlockAction::Remove { slug } => ctx.report(
+                format!("Removed block '{slug}'."),
+                ctx.map().remove_block(&slug),
             ),
             BlockAction::Move {
                 slug,
                 before,
                 after,
-            } => {
-                let position = position_from(before, after);
-                ctx.edit(
-                    || format!("Moved block '{slug}'."),
-                    |map| map.move_block(&slug, position),
-                )
-            }
+            } => ctx.report(
+                format!("Moved block '{slug}'."),
+                ctx.map().move_block(&slug, position_from(before, after)),
+            ),
         }
     }
 }

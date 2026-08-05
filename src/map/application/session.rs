@@ -188,6 +188,125 @@ impl<'a> MapSession<'a> {
         range.require_within(path, self.source.file_line_count(path)?)
     }
 
+    // ---- use cases ----------------------------------------------------
+    //
+    // Each one validates what it needs before touching the map, so a caller
+    // cannot skip a check by forgetting to make it. The entry points parse
+    // arguments and print; they do not decide what is allowed.
+
+    pub fn add_block(
+        &self,
+        slug: &str,
+        title: &str,
+        context: &str,
+        position: Position,
+        paths: &[String],
+    ) -> Result<ReviewMap> {
+        for path in paths {
+            self.require_in_scope(path)?;
+        }
+        self.edit(|map| {
+            map.add_block(slug, title, context, position)?;
+            for path in paths {
+                map.add_file(slug, path, None, None)?;
+            }
+            Ok(())
+        })
+    }
+
+    pub fn update_block(
+        &self,
+        slug: &str,
+        title: Option<String>,
+        context: Option<String>,
+    ) -> Result<ReviewMap> {
+        self.edit(|map| map.update_block(slug, title, context))
+    }
+
+    pub fn remove_block(&self, slug: &str) -> Result<ReviewMap> {
+        self.edit(|map| map.remove_block(slug))
+    }
+
+    pub fn move_block(&self, slug: &str, position: Position) -> Result<ReviewMap> {
+        self.edit(|map| map.move_block(slug, position))
+    }
+
+    pub fn add_file(
+        &self,
+        slug: &str,
+        path: &str,
+        note: Option<String>,
+        after: Option<&str>,
+    ) -> Result<ReviewMap> {
+        self.require_in_scope(path)?;
+        self.edit(|map| map.add_file(slug, path, note, after))
+    }
+
+    pub fn update_file(&self, slug: &str, path: &str, note: String) -> Result<ReviewMap> {
+        self.edit(|map| map.update_file(slug, path, Some(note)))
+    }
+
+    pub fn remove_file(&self, slug: &str, path: &str) -> Result<ReviewMap> {
+        self.edit(|map| map.remove_file(slug, path))
+    }
+
+    pub fn add_line_note(
+        &self,
+        slug: &str,
+        path: &str,
+        range: LineRange,
+        note: String,
+    ) -> Result<ReviewMap> {
+        self.require_in_scope(path)?;
+        self.require_range_in_file(path, range)?;
+        self.edit(|map| map.add_line_note(slug, path, range, note))
+    }
+
+    pub fn update_line_note(
+        &self,
+        slug: &str,
+        path: &str,
+        range: LineRange,
+        note: String,
+    ) -> Result<ReviewMap> {
+        self.edit(|map| map.update_line_note(slug, path, range, note))
+    }
+
+    pub fn remove_line_note(&self, slug: &str, path: &str, range: LineRange) -> Result<ReviewMap> {
+        self.edit(|map| map.remove_line_note(slug, path, range))
+    }
+
+    /// Bring a deactivated note back at the place its code moved to. The new
+    /// range is checked against the file, because a restore pointing past the
+    /// end would render nowhere.
+    pub fn restore_note(
+        &self,
+        slug: &str,
+        path: &str,
+        old: LineRange,
+        new: LineRange,
+    ) -> Result<ReviewMap> {
+        self.require_in_scope(path)?;
+        self.require_range_in_file(path, new)?;
+        self.edit(|map| {
+            let orphan = map.take_orphan(slug, path, old)?;
+            map.add_line_note(slug, path, new, orphan.text)
+        })
+    }
+
+    pub fn discard_note(&self, slug: &str, path: &str, old: LineRange) -> Result<ReviewMap> {
+        self.edit(|map| map.take_orphan(slug, path, old).map(|_| ()))
+    }
+
+    pub fn add_skim(&self, path: &str, reason: &str, block: Option<String>) -> Result<ReviewMap> {
+        self.require_in_scope(path)?;
+        self.edit(|map| map.add_skim(path, reason, block))
+    }
+
+    pub fn remove_skim(&self, path: &str) -> Result<ReviewMap> {
+        self.edit(|map| map.remove_skim(path))
+    }
+
     // ---- derivation internals -----------------------------------------
 
     /// The map to inherit from: uncommitted work first, then the newest stored
@@ -440,6 +559,64 @@ mod tests {
         assert!(map.block("core").unwrap().files.is_empty());
         assert_eq!(map.orphans[0].reason, OrphanReason::FileRemoved);
         assert_eq!(map.orphans[0].text, "worth moving");
+    }
+
+    #[test]
+    fn a_use_case_refuses_a_path_outside_the_review_on_its_own() {
+        // The point of moving this out of the CLI: a second caller cannot skip
+        // the check by forgetting to make it.
+        let source = FakeDiffSource::with_paths(&["a.rs"]).on_commit("head");
+        let repo = InMemoryMapRepository::new();
+        let session = MapSession::new(&source, &repo);
+        session
+            .add_block("core", "t", "c", Position::End, &[])
+            .unwrap();
+
+        let err = session
+            .add_file("core", "nowhere.rs", None, None)
+            .unwrap_err();
+        assert!(matches!(err, Error::PathOutOfScope { .. }), "{err:?}");
+
+        let err = session
+            .add_block(
+                "other",
+                "t",
+                "c",
+                Position::End,
+                &["nowhere.rs".to_string()],
+            )
+            .unwrap_err();
+        assert!(matches!(err, Error::PathOutOfScope { .. }), "{err:?}");
+        assert!(
+            session.require_current().unwrap().block("other").is_none(),
+            "a rejected use case must not leave half of itself behind"
+        );
+    }
+
+    #[test]
+    fn adding_a_block_with_files_is_one_step_for_the_caller() {
+        let source = FakeDiffSource::with_paths(&["a.rs", "b.rs"]).on_commit("head");
+        let repo = InMemoryMapRepository::new();
+        let session = MapSession::new(&source, &repo);
+
+        let map = session
+            .add_block(
+                "core",
+                "The change",
+                "why",
+                Position::End,
+                &["a.rs".to_string(), "b.rs".to_string()],
+            )
+            .unwrap();
+
+        let files: Vec<_> = map
+            .block("core")
+            .unwrap()
+            .files
+            .iter()
+            .map(|f| f.path.as_str())
+            .collect();
+        assert_eq!(files, vec!["a.rs", "b.rs"]);
     }
 
     #[test]

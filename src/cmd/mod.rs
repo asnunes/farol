@@ -86,21 +86,18 @@ impl ScopeArgs {
     }
 }
 
-/// Reporting is the command layer's job, so it hangs off Ctx here rather than
-/// inside the wiring.
+/// Printing is the entry point's job: the use cases return the map they
+/// produced, and this turns it into what the terminal sees. Anything a use case
+/// deactivated is reported, because a note that vanished without a word is
+/// exactly the failure the orphan machinery exists to prevent.
 pub(super) trait Reporting {
-    fn edit<F>(&self, done: impl FnOnce() -> String, edit: F) -> Result<()>
-    where
-        F: FnOnce(&mut ReviewMap) -> Result<()>;
+    fn report(&self, done: String, outcome: Result<ReviewMap>) -> Result<()>;
 }
 
 impl Reporting for Ctx {
-    fn edit<F>(&self, done: impl FnOnce() -> String, edit: F) -> Result<()>
-    where
-        F: FnOnce(&mut ReviewMap) -> Result<()>,
-    {
-        let map = self.map().edit(edit)?;
-        println!("{}", done());
+    fn report(&self, done: String, outcome: Result<ReviewMap>) -> Result<()> {
+        let map = outcome?;
+        println!("{done}");
         print!("{}", OrphanReport(&map.orphans));
         Ok(())
     }

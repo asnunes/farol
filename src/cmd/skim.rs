@@ -27,16 +27,13 @@ impl SkimAction {
                 path,
                 reason,
                 block,
-            } => {
-                ctx.map().require_in_scope(&path)?;
-                ctx.edit(
-                    || format!("Marked '{path}' as skim."),
-                    |map| map.add_skim(&path, &reason, block),
-                )
-            }
-            SkimAction::Remove { path } => ctx.edit(
-                || format!("'{path}' is no longer marked as skim."),
-                |map| map.remove_skim(&path),
+            } => ctx.report(
+                format!("Marked '{path}' as skim."),
+                ctx.map().add_skim(&path, &reason, block),
+            ),
+            SkimAction::Remove { path } => ctx.report(
+                format!("'{path}' is no longer marked as skim."),
+                ctx.map().remove_skim(&path),
             ),
         }
     }

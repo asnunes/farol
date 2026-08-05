@@ -55,11 +55,9 @@ impl LineAction {
                 note,
             } => {
                 let range = LineRange::parse(&range)?;
-                ctx.map().require_in_scope(&path)?;
-                ctx.map().require_range_in_file(&path, range)?;
-                ctx.edit(
-                    || format!("Added a note on {path}:{range}."),
-                    |map| map.add_line_note(&slug, &path, range, note),
+                ctx.report(
+                    format!("Added a note on {path}:{range}."),
+                    ctx.map().add_line_note(&slug, &path, range, note),
                 )
             }
             LineAction::Update {
@@ -69,16 +67,16 @@ impl LineAction {
                 note,
             } => {
                 let range = LineRange::parse(&range)?;
-                ctx.edit(
-                    || format!("Updated the note on {path}:{range}."),
-                    |map| map.update_line_note(&slug, &path, range, note),
+                ctx.report(
+                    format!("Updated the note on {path}:{range}."),
+                    ctx.map().update_line_note(&slug, &path, range, note),
                 )
             }
             LineAction::Remove { slug, path, range } => {
                 let range = LineRange::parse(&range)?;
-                ctx.edit(
-                    || format!("Removed the note on {path}:{range}."),
-                    |map| map.remove_line_note(&slug, &path, range),
+                ctx.report(
+                    format!("Removed the note on {path}:{range}."),
+                    ctx.map().remove_line_note(&slug, &path, range),
                 )
             }
             LineAction::Restore {
@@ -89,14 +87,9 @@ impl LineAction {
             } => {
                 let old = LineRange::parse(&old_range)?;
                 let new = LineRange::parse(&range)?;
-                ctx.map().require_in_scope(&path)?;
-                ctx.map().require_range_in_file(&path, new)?;
-                ctx.edit(
-                    || format!("Restored the note at {path}:{new}."),
-                    |map| {
-                        let orphan = map.take_orphan(&slug, &path, old)?;
-                        map.add_line_note(&slug, &path, new, orphan.text)
-                    },
+                ctx.report(
+                    format!("Restored the note at {path}:{new}."),
+                    ctx.map().restore_note(&slug, &path, old, new),
                 )
             }
             LineAction::Discard {
@@ -104,10 +97,10 @@ impl LineAction {
                 path,
                 old_range,
             } => {
-                let range = LineRange::parse(&old_range)?;
-                ctx.edit(
-                    || format!("Discarded the note that was at {path}:{range}."),
-                    |map| map.take_orphan(&slug, &path, range).map(|_| ()),
+                let old = LineRange::parse(&old_range)?;
+                ctx.report(
+                    format!("Discarded the note that was at {path}:{old}."),
+                    ctx.map().discard_note(&slug, &path, old),
                 )
             }
         }

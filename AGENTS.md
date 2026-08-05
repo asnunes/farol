@@ -82,6 +82,28 @@ construction. `LineRange` cannot be built backwards or from zero, parses its own
 CLI form, knows how to check itself against a file's length, and knows how it
 moves when the file changes. Nothing outside it manipulates a bare `(u32, u32)`.
 
+### Use cases live in `application`, not in the entry point
+
+An entry point parses arguments and prints. It does not decide what is allowed,
+and it does not compose domain operations.
+
+```rust
+// yes — cmd/block.rs
+ctx.report(
+    format!("Added block '{slug}'."),
+    ctx.map().add_block(&slug, &title, &context, position, &paths),
+)
+
+// no — validation and composition in the entry point
+for path in &paths { ctx.map().require_in_scope(path)?; }
+ctx.edit(|map| { map.add_block(..)?; for p in &paths { map.add_file(..)?; } Ok(()) })
+```
+
+The reason is not tidiness. **Validation that lives in the caller is validation
+every future caller can skip** — an HTTP route added later would have to
+remember `require_in_scope` on its own. Inside the use case it cannot be
+forgotten.
+
 ### Dependencies are injected, always
 
 Nothing constructs what it uses. Collaborators arrive through the constructor,
