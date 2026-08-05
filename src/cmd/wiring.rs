@@ -7,7 +7,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use crate::diff::application::DiffService;
+use crate::diff::application::{CommitHistory, FileDiffs, ReviewScope};
 use crate::diff::infra::{GixSource, ScopeRequest};
 use crate::map::application::{
     AddBlock, AddFile, AddLineNote, AddSkim, CheckMap, DeriveMap, DiscardNote, GetFileDiff,
@@ -75,9 +75,12 @@ impl Ctx {
         let progress_repo = Arc::new(JsonProgressRepository::new(workspace.store()));
         let source = Arc::new(GixSource::open(workspace.into_repo(), &branch, &request)?);
 
-        let diff = DiffService::new(source);
-        let map = MapService::new(diff.clone(), maps);
-        let progress = ProgressStore::new(progress_repo, diff.clone());
+        let scope = ReviewScope::new(source.clone());
+        let diffs = FileDiffs::new(source.clone());
+        let history = CommitHistory::new(source);
+
+        let map = MapService::new(scope.clone(), diffs.clone(), history, maps);
+        let progress = ProgressStore::new(progress_repo, diffs.clone());
 
         Ok(Self {
             add_block: AddBlock::new(map.clone()),
@@ -102,11 +105,11 @@ impl Ctx {
             show_map: ShowMap::new(map.clone()),
             check_map: CheckMap::new(map.clone()),
             reset_map: ResetMap::new(map.clone()),
-            scope: GetScope::new(diff.clone()),
+            scope: GetScope::new(scope),
 
             server: ServerUseCases {
                 review: GetReview::new(map, progress.clone()),
-                file_diff: GetFileDiff::new(diff),
+                file_diff: GetFileDiff::new(diffs),
                 mark_viewed: MarkViewed::new(progress.clone()),
                 unmark_viewed: UnmarkViewed::new(progress),
             },

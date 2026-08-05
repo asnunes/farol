@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use crate::diff::application::DiffService;
+use crate::diff::application::FileDiffs;
 use crate::progress::domain::{Progress, ProgressRepository};
 use crate::shared::error::Result;
 
@@ -10,12 +10,14 @@ use crate::shared::error::Result;
 #[derive(Clone)]
 pub struct ProgressStore {
     repo: Arc<dyn ProgressRepository>,
-    diff: DiffService,
+    /// Only for the content hash a tick is pinned to — this store has no
+    /// business walking history or resolving scope.
+    diffs: FileDiffs,
 }
 
 impl ProgressStore {
-    pub fn new(repo: Arc<dyn ProgressRepository>, diff: DiffService) -> Self {
-        Self { repo, diff }
+    pub fn new(repo: Arc<dyn ProgressRepository>, diffs: FileDiffs) -> Self {
+        Self { repo, diffs }
     }
 
     pub fn load(&self) -> Result<Progress> {
@@ -27,7 +29,7 @@ impl ProgressStore {
     }
 
     fn content_hash(&self, path: &str) -> Result<String> {
-        Ok(self.diff.file_diff(path)?.new_content_hash)
+        self.diffs.content_hash(path)
     }
 }
 

@@ -12,7 +12,7 @@
 
 use std::sync::Arc;
 
-use crate::diff::application::DiffService;
+use crate::diff::application::{CommitHistory, FileDiffs, ReviewScope};
 use crate::diff::domain::FileDiff;
 use crate::map::domain::{
     LineRange, MapRepository, Orphan, OrphanReason, ReviewMap, ShiftOutcome, WORKING,
@@ -23,7 +23,11 @@ use crate::shared::error::{Error, Result};
 /// struct and hand it around rather than rebuilding it at every use.
 #[derive(Clone)]
 pub struct MapService {
-    diff: DiffService,
+    /// Deriving genuinely needs all three: the scope to prune files that left
+    /// the review, the diffs to re-anchor notes, the history to find a parent.
+    scope: ReviewScope,
+    diffs: FileDiffs,
+    history: CommitHistory,
     repo: Arc<dyn MapRepository>,
 }
 
@@ -55,22 +59,32 @@ impl CheckReport {
 }
 
 impl MapService {
-    pub fn new(diff: DiffService, repo: Arc<dyn MapRepository>) -> Self {
-        Self { diff, repo }
+    pub fn new(
+        scope: ReviewScope,
+        diffs: FileDiffs,
+        history: CommitHistory,
+        repo: Arc<dyn MapRepository>,
+    ) -> Self {
+        Self {
+            scope,
+            diffs,
+            history,
+            repo,
+        }
     }
 
     pub fn scope(&self) -> Result<&crate::diff::domain::Scope> {
-        self.diff.scope()
+        self.scope.get()
     }
 
     /// How far `HEAD` has moved past the commit a map was built against.
     pub fn commits_behind(&self, sha: &str) -> u32 {
-        self.diff.commits_ahead_of(sha)
+        self.history.commits_ahead_of(sha)
     }
 
     /// The version key for where we are: a commit, or the working-tree marker.
     pub fn target(&self) -> Result<String> {
-        let scope = self.diff.scope()?;
+        let scope = self.scope.get()?;
         Ok(if scope.dirty {
             WORKING.to_string()
         } else {
@@ -91,7 +105,7 @@ impl MapService {
             });
         }
 
-        let scope = self.diff.scope()?;
+        let scope = self.scope.get()?;
         let mut map = match self.find_parent(&target)? {
             Some((parent_sha, parent_map)) => {
                 let mut m = parent_map;
@@ -136,15 +150,15 @@ impl MapService {
     pub fn require_current(&self) -> Result<ReviewMap> {
         self.current()?.ok_or_else(|| Error::NoMap {
             branch: self
-                .diff
-                .scope()
+                .scope
+                .get()
                 .map(|s| s.branch.clone())
                 .unwrap_or_default(),
         })
     }
 
     pub fn behind(&self, map: &ReviewMap) -> u32 {
-        self.diff.commits_ahead_of(&map.generated_at)
+        self.history.commits_ahead_of(&map.generated_at)
     }
 
     /// Load the current version, apply `f`, store it back.
@@ -174,7 +188,7 @@ impl MapService {
     /// not merely undocumented, it is invisible, because the sidebar is built
     /// from the map.
     pub fn check(&self, map: &ReviewMap) -> Result<CheckReport> {
-        let scope = self.diff.scope()?;
+        let scope = self.scope.get()?;
         let covered = map.covered_paths();
         Ok(CheckReport {
             uncovered: scope
@@ -204,10 +218,10 @@ impl MapService {
     fn nearest_ancestor(&self, target: &str) -> Result<Option<(String, ReviewMap)>> {
         let mut best: Option<(u32, String)> = None;
         for sha in self.repo.stored_shas()? {
-            if sha == target || sha == WORKING || !self.diff.is_ancestor(&sha)? {
+            if sha == target || sha == WORKING || !self.history.is_ancestor(&sha)? {
                 continue;
             }
-            let distance = self.diff.commits_ahead_of(&sha);
+            let distance = self.history.commits_ahead_of(&sha);
             if best.as_ref().map(|(d, _)| distance < *d).unwrap_or(true) {
                 best = Some((distance, sha));
             }
@@ -228,7 +242,7 @@ impl MapService {
                 if file.line_notes.is_empty() {
                     continue;
                 }
-                let Some(diff) = self.diff.file_diff_between(from, to, &file.path)? else {
+                let Some(diff) = self.diffs.between(from, to, &file.path)? else {
                     continue; // file untouched: every note is still exactly right
                 };
 
@@ -282,7 +296,7 @@ impl MapService {
     /// Files that left the review window cannot stay in the map. Their notes
     /// are kept as orphans so the prose can be moved rather than silently lost.
     fn prune_gone_files(&self, map: &mut ReviewMap) -> Result<()> {
-        let scope = self.diff.scope()?;
+        let scope = self.scope.get()?;
         let mut orphans = Vec::new();
 
         for block in &mut map.blocks {
@@ -312,7 +326,7 @@ impl MapService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::diff::application::DiffService;
+    use crate::diff::application::ReviewScope;
     use crate::map::application::{AddBlock, GetScope, position_from};
     use crate::map::domain::Slug;
     use crate::map::domain::{LineRange, Position};
@@ -450,7 +464,7 @@ mod tests {
         // The use cases no longer check this, because they cannot be reached
         // with an unchecked path: ReviewPath has no other constructor.
         let source = FakeDiffSource::with_paths(&["a.rs"]).on_commit("head");
-        let scope = GetScope::new(DiffService::new(Arc::new(source)));
+        let scope = GetScope::new(ReviewScope::new(Arc::new(source)));
         let err = scope.path("nowhere.rs").unwrap_err();
         assert!(matches!(err, Error::PathOutOfScope { .. }), "{err:?}");
         assert!(scope.path("a.rs").is_ok());
@@ -469,7 +483,7 @@ mod tests {
         let repo = Arc::new(InMemoryMapRepository::new());
         let session = service(source, repo.clone());
 
-        let scope = GetScope::new(DiffService::new(Arc::new(FakeDiffSource::with_paths(&[
+        let scope = GetScope::new(ReviewScope::new(Arc::new(FakeDiffSource::with_paths(&[
             "a.rs", "b.rs",
         ]))));
         let files = scope.paths(&["a.rs".into(), "b.rs".into()]).unwrap();

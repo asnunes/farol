@@ -8,7 +8,8 @@
 use std::sync::{Arc, Mutex};
 
 use crate::diff::domain::{
-    DiffSource, FileChange, FileDiff, FileStatus, Hunk, Line, LineKind, Scope,
+    CommitHistorySource, FileChange, FileDiff, FileDiffSource, FileStatus, Hunk, Line, LineKind,
+    ReviewScopeSource, Scope,
 };
 use crate::map::domain::{MapRepository, ReviewMap, Slug};
 use crate::progress::domain::{Progress, ProgressRepository};
@@ -93,11 +94,27 @@ fn change(path: &str) -> FileChange {
     }
 }
 
-impl DiffSource for FakeDiffSource {
+impl ReviewScopeSource for FakeDiffSource {
     fn scope(&self) -> Result<&Scope> {
         Ok(&self.scope)
     }
 
+    fn file_line_count(&self, path: &str) -> Result<u32> {
+        if !self.scope.contains(path) {
+            return Err(self.scope.reject(path));
+        }
+        // Generous by default so a test only declares a size when the size is
+        // the thing under test.
+        Ok(self
+            .line_counts
+            .iter()
+            .find(|(p, _)| p == path)
+            .map(|(_, n)| *n)
+            .unwrap_or(10_000))
+    }
+}
+
+impl FileDiffSource for FakeDiffSource {
     fn file_diff(&self, path: &str) -> Result<FileDiff> {
         // The real source refuses a path outside the window; a fake that did
         // not would let tests pass over behaviour that does not exist.
@@ -122,21 +139,9 @@ impl DiffSource for FakeDiffSource {
             .find(|((f, t, p), _)| f == from && t == to && p == path)
             .map(|(_, diff)| diff.clone()))
     }
+}
 
-    fn file_line_count(&self, path: &str) -> Result<u32> {
-        if !self.scope.contains(path) {
-            return Err(self.scope.reject(path));
-        }
-        // Generous by default so a test only declares a size when the size is
-        // the thing under test.
-        Ok(self
-            .line_counts
-            .iter()
-            .find(|(p, _)| p == path)
-            .map(|(_, n)| *n)
-            .unwrap_or(10_000))
-    }
-
+impl CommitHistorySource for FakeDiffSource {
     fn head_sha(&self) -> Result<String> {
         Ok(self.scope.head_sha.clone())
     }
@@ -264,8 +269,12 @@ pub fn service(
     source: FakeDiffSource,
     repo: Arc<InMemoryMapRepository>,
 ) -> crate::map::application::MapService {
+    use crate::diff::application::{CommitHistory, FileDiffs, ReviewScope};
+    let source = Arc::new(source);
     crate::map::application::MapService::new(
-        crate::diff::application::DiffService::new(Arc::new(source)),
+        ReviewScope::new(source.clone()),
+        FileDiffs::new(source.clone()),
+        CommitHistory::new(source),
         repo,
     )
 }

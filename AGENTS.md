@@ -191,6 +191,26 @@ for a terminal or for the wire.
 Services own `Arc<dyn Port>` rather than borrowing, which is what lets a use
 case hold one in a struct instead of rebuilding it at every call.
 
+### One reason to change, per service and per port
+
+`DiffService` was one type answering three unrelated questions — what is under
+review, what the changes say, and where commits sit relative to one another.
+Three reasons to change is three services:
+
+| service | port | asked by |
+|---|---|---|
+| `ReviewScope` | `ReviewScopeSource` | `GetScope`, and pruning during derivation |
+| `FileDiffs` | `FileDiffSource` | `GetFileDiff`, `ProgressStore`, re-anchoring |
+| `CommitHistory` | `CommitHistorySource` | derivation, to find a parent |
+
+The port split matters as much as the service split. Leaving one fat trait would
+mean every fake still implements all seven methods, and a consumer still
+*could* reach past what it needs. `GixSource` implements all three — it shares a
+blob cache across them — but nothing else has to.
+
+The sharpest case was `ProgressStore`: it records that a file was read, which
+needs a content hash. It used to take a service that could also walk history.
+
 ### Ports stay synchronous
 
 For local file IO, async in Rust is mostly theatre: `tokio::fs` is a threadpool

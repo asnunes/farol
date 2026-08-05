@@ -1,6 +1,6 @@
 //! Reading the map, and the version lifecycle around it.
 
-use crate::diff::application::DiffService;
+use crate::diff::application::{FileDiffs, ReviewScope};
 use crate::diff::domain::{ReviewPath, Scope};
 use crate::map::application::{CheckReport, Derived, MapService, ResetOutcome};
 use crate::map::domain::ReviewMap;
@@ -91,26 +91,26 @@ impl ResetMap {
 /// The files under review, as farol resolved them.
 #[derive(Clone)]
 pub struct GetScope {
-    diff: DiffService,
+    scope: ReviewScope,
 }
 
 impl GetScope {
-    pub fn new(diff: DiffService) -> Self {
-        Self { diff }
+    pub fn new(scope: ReviewScope) -> Self {
+        Self { scope }
     }
 
     pub fn execute(&self) -> Result<Scope> {
-        self.diff.scope().cloned()
+        self.scope.get().cloned()
     }
 
     /// Turning a raw path into a proven one is part of reading the scope, so it
     /// lives with it rather than in every use case that needs a path.
     pub fn path(&self, raw: &str) -> Result<ReviewPath> {
-        self.diff.review_path(raw)
+        self.scope.path(raw)
     }
 
     pub fn paths(&self, raw: &[String]) -> Result<Vec<ReviewPath>> {
-        self.diff.review_paths(raw)
+        self.scope.paths(raw)
     }
 }
 
@@ -147,15 +147,15 @@ impl GetReview {
 /// One file's diff, for the pane on the right.
 #[derive(Clone)]
 pub struct GetFileDiff {
-    diff: DiffService,
+    diffs: FileDiffs,
 }
 
 impl GetFileDiff {
-    pub fn new(diff: DiffService) -> Self {
-        Self { diff }
+    pub fn new(diffs: FileDiffs) -> Self {
+        Self { diffs }
     }
 
     pub fn execute(&self, path: &str) -> Result<crate::diff::domain::FileDiff> {
-        self.diff.file_diff(path)
+        self.diffs.of(path)
     }
 }

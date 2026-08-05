@@ -1,44 +1,78 @@
+//! Three services over three ports.
+//!
+//! They were one, and it had three reasons to change: what is under review,
+//! what the changes say, and where commits sit relative to each other. Keeping
+//! them apart also stops a consumer from depending on more than it uses —
+//! recording that a file was read needs a content hash, not the ability to walk
+//! history.
+
 use std::sync::Arc;
 
-use crate::diff::domain::{DiffSource, FileDiff, ReviewPath, Scope};
+use crate::diff::domain::{
+    CommitHistorySource, FileDiff, FileDiffSource, ReviewPath, ReviewScopeSource, Scope,
+};
 use crate::shared::error::Result;
 
-/// Everything the rest of the program needs to ask about the code under review.
-///
-/// It owns the port rather than borrowing it, which is what lets the services
-/// above it be stored in a struct instead of rebuilt on every call. It also
-/// means no caller outside `application` and `infra` ever names `DiffSource`:
-/// the entry points see a service, not a port.
+/// What is under review, and turning raw paths into proven ones.
 #[derive(Clone)]
-pub struct DiffService {
-    source: Arc<dyn DiffSource>,
+pub struct ReviewScope {
+    source: Arc<dyn ReviewScopeSource>,
 }
 
-impl DiffService {
-    pub fn new(source: Arc<dyn DiffSource>) -> Self {
+impl ReviewScope {
+    pub fn new(source: Arc<dyn ReviewScopeSource>) -> Self {
         Self { source }
     }
 
-    pub fn scope(&self) -> Result<&Scope> {
+    pub fn get(&self) -> Result<&Scope> {
         self.source.scope()
     }
 
-    /// Turn a raw path into one proven to be under review.
-    pub fn review_path(&self, raw: &str) -> Result<ReviewPath> {
+    pub fn path(&self, raw: &str) -> Result<ReviewPath> {
         self.source.review_path(raw)
     }
 
     /// Resolve several at once, failing on the first that is not under review.
-    pub fn review_paths(&self, raw: &[String]) -> Result<Vec<ReviewPath>> {
-        raw.iter().map(|p| self.review_path(p)).collect()
+    pub fn paths(&self, raw: &[String]) -> Result<Vec<ReviewPath>> {
+        raw.iter().map(|p| self.path(p)).collect()
+    }
+}
+
+/// The changes themselves.
+#[derive(Clone)]
+pub struct FileDiffs {
+    source: Arc<dyn FileDiffSource>,
+}
+
+impl FileDiffs {
+    pub fn new(source: Arc<dyn FileDiffSource>) -> Self {
+        Self { source }
     }
 
-    pub fn file_diff(&self, path: &str) -> Result<FileDiff> {
+    pub fn of(&self, path: &str) -> Result<FileDiff> {
         self.source.file_diff(path)
     }
 
-    pub fn file_diff_between(&self, from: &str, to: &str, path: &str) -> Result<Option<FileDiff>> {
+    pub fn between(&self, from: &str, to: &str, path: &str) -> Result<Option<FileDiff>> {
         self.source.file_diff_between(from, to, path)
+    }
+
+    /// What viewed-state invalidation keys on: the file as it stands after the
+    /// change, never the diff text.
+    pub fn content_hash(&self, path: &str) -> Result<String> {
+        Ok(self.of(path)?.new_content_hash)
+    }
+}
+
+/// Where commits sit relative to one another.
+#[derive(Clone)]
+pub struct CommitHistory {
+    source: Arc<dyn CommitHistorySource>,
+}
+
+impl CommitHistory {
+    pub fn new(source: Arc<dyn CommitHistorySource>) -> Self {
+        Self { source }
     }
 
     /// How far `HEAD` has moved past `sha`. Distance is informational, so a

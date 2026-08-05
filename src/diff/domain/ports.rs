@@ -1,23 +1,17 @@
+//! Three ports rather than one, because asking git something has three
+//! different shapes and each caller wants only one of them.
+//!
+//! One implementation answers all three — `GixSource` shares a blob cache
+//! across them — but a consumer depends on the slice it uses. Deriving a map
+//! needs history; showing a file does not, and its signature says so.
+
 use super::model::{FileDiff, Scope};
 use super::path::ReviewPath;
 use crate::shared::error::Result;
 
-/// Everything the app knows about git lives behind this.
-///
-/// It is the one port where the inversion earns its keep: a fake lets the map
-/// and progress rules be tested against hand-built diffs, instead of building a
-/// real repository for every case.
-pub trait DiffSource: Send + Sync {
-    /// The review window and the files inside it.
+/// What is under review, and whether a path is part of it.
+pub trait ReviewScopeSource: Send + Sync {
     fn scope(&self) -> Result<&Scope>;
-
-    /// Full diff of one file across the review window.
-    fn file_diff(&self, path: &str) -> Result<FileDiff>;
-
-    /// Diff of one file between two arbitrary commits. Derivation uses this to
-    /// learn how lines moved between the previous map's commit and now.
-    /// `Ok(None)` means the file is identical between the two.
-    fn file_diff_between(&self, from: &str, to: &str, path: &str) -> Result<Option<FileDiff>>;
 
     /// Line count of the file as it stands after the change. Range validation
     /// needs it to reject a note pointing past the end of the file.
@@ -33,7 +27,22 @@ pub trait DiffSource: Send + Sync {
         }
         Ok(ReviewPath::proven(raw, self.file_line_count(raw)?))
     }
+}
 
+/// The changes themselves.
+pub trait FileDiffSource: Send + Sync {
+    /// Full diff of one file across the review window.
+    fn file_diff(&self, path: &str) -> Result<FileDiff>;
+
+    /// Diff of one file between two arbitrary commits. Derivation uses this to
+    /// learn how lines moved between the previous map's commit and now.
+    /// `Ok(None)` means the file is identical between the two.
+    fn file_diff_between(&self, from: &str, to: &str, path: &str) -> Result<Option<FileDiff>>;
+}
+
+/// Where commits sit relative to one another — what versioning a map needs and
+/// nothing else does.
+pub trait CommitHistorySource: Send + Sync {
     /// Commit the working tree is on right now.
     fn head_sha(&self) -> Result<String>;
 

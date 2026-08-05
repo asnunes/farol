@@ -233,7 +233,7 @@ impl FileView {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::diff::domain::DiffSource;
+    use crate::diff::domain::ReviewScopeSource;
     use crate::map::domain::{LineRange, Position};
     use crate::testing::{FakeDiffSource, slug};
 

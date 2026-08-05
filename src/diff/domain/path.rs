@@ -1,5 +1,3 @@
-use crate::shared::error::Result;
-
 /// A path proven to be part of the review, carrying how long the file is.
 ///
 /// The only way to build one is to ask a [`DiffSource`](super::DiffSource), so a
@@ -45,9 +43,4 @@ impl AsRef<str> for ReviewPath {
     fn as_ref(&self) -> &str {
         &self.path
     }
-}
-
-/// Resolve several at once, failing on the first that is not under review.
-pub fn all(source: &dyn super::DiffSource, raw: &[String]) -> Result<Vec<ReviewPath>> {
-    raw.iter().map(|p| source.review_path(p)).collect()
 }

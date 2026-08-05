@@ -3,7 +3,8 @@ use std::collections::BTreeMap;
 use sha2::{Digest, Sha256};
 
 use crate::diff::domain::{
-    DiffSource, FileChange, FileDiff, FileStatus, Hunk, Line, LineKind, Scope,
+    CommitHistorySource, FileChange, FileDiff, FileDiffSource, FileStatus, Hunk, Line, LineKind,
+    ReviewScopeSource, Scope,
 };
 use crate::shared::error::{Error, Result};
 
@@ -92,11 +93,21 @@ impl GixSource {
     }
 }
 
-impl DiffSource for GixSource {
+impl ReviewScopeSource for GixSource {
     fn scope(&self) -> Result<&Scope> {
         Ok(&self.scope)
     }
 
+    fn file_line_count(&self, path: &str) -> Result<u32> {
+        let content = self
+            .head_blobs
+            .get(path)
+            .ok_or_else(|| self.scope.reject(path))?;
+        Ok(String::from_utf8_lossy(content).lines().count() as u32)
+    }
+}
+
+impl FileDiffSource for GixSource {
     fn file_diff(&self, path: &str) -> Result<FileDiff> {
         let change = self
             .scope
@@ -157,15 +168,9 @@ impl DiffSource for GixSource {
             }
         }
     }
+}
 
-    fn file_line_count(&self, path: &str) -> Result<u32> {
-        let content = self
-            .head_blobs
-            .get(path)
-            .ok_or_else(|| self.scope.reject(path))?;
-        Ok(String::from_utf8_lossy(content).lines().count() as u32)
-    }
-
+impl CommitHistorySource for GixSource {
     fn head_sha(&self) -> Result<String> {
         Ok(self.scope.head_sha.clone())
     }
