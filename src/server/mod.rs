@@ -13,14 +13,14 @@ use axum::{Json, Router};
 use serde::Deserialize;
 use tokio::sync::broadcast;
 
-use crate::diff::domain::DiffSource;
+use crate::map::application::MapSession;
 use crate::map::domain::ReviewMap;
-use crate::progress::domain::ProgressRepository;
+use crate::progress::application::ProgressService;
 use crate::shared::error::{Error, Result};
 
 pub struct ServeConfig {
-    pub source: Arc<dyn DiffSource>,
-    pub progress: Arc<dyn ProgressRepository>,
+    pub reviews: MapSession,
+    pub progress: ProgressService,
     pub map: ReviewMap,
     pub port: u16,
     pub open_browser: bool,
@@ -29,21 +29,21 @@ pub struct ServeConfig {
 }
 
 struct AppState {
-    source: Arc<dyn DiffSource>,
-    progress: Arc<dyn ProgressRepository>,
+    reviews: MapSession,
+    progress: ProgressService,
     map: Mutex<ReviewMap>,
     changes: broadcast::Sender<String>,
 }
 
 impl AppState {
     fn new(
-        source: Arc<dyn DiffSource>,
-        progress: Arc<dyn ProgressRepository>,
+        reviews: MapSession,
+        progress: ProgressService,
         map: ReviewMap,
     ) -> (Arc<Self>, broadcast::Sender<String>) {
         let (changes, _) = broadcast::channel(16);
         let state = Arc::new(Self {
-            source,
+            reviews,
             progress,
             map: Mutex::new(map),
             changes: changes.clone(),
@@ -82,7 +82,7 @@ impl Server {
 }
 
 async fn serve(config: ServeConfig) -> Result<()> {
-    let (state, changes) = AppState::new(config.source, config.progress, config.map);
+    let (state, changes) = AppState::new(config.reviews, config.progress, config.map);
 
     if config.watch {
         spawn_watcher(config.git_dir, changes);
@@ -115,7 +115,7 @@ async fn review(State(state): State<Arc<AppState>>) -> impl IntoResponse {
         Err(e) => return fail(e),
     };
     let map = state.map.lock().unwrap().clone();
-    match view::ReviewView::build(&map, state.source.as_ref(), &progress) {
+    match view::ReviewView::build(&map, &state.reviews, &progress) {
         Ok(v) => Json(v).into_response(),
         Err(e) => fail(e),
     }
@@ -127,7 +127,7 @@ struct PathQuery {
 }
 
 async fn file(State(state): State<Arc<AppState>>, Query(q): Query<PathQuery>) -> impl IntoResponse {
-    match state.source.file_diff(&q.path) {
+    match state.reviews.file_diff(&q.path) {
         Ok(diff) => Json(diff).into_response(),
         Err(e) => fail(e),
     }
@@ -143,14 +143,10 @@ async fn viewed(
     State(state): State<Arc<AppState>>,
     Json(body): Json<ViewedBody>,
 ) -> impl IntoResponse {
-    let service = crate::progress::application::ProgressService::new(
-        state.progress.as_ref(),
-        state.source.as_ref(),
-    );
     let result = if body.viewed {
-        service.mark(&body.path, &now())
+        state.progress.mark(&body.path, &now())
     } else {
-        service.unmark(&body.path)
+        state.progress.unmark(&body.path)
     };
     match result {
         Ok(_) => StatusCode::NO_CONTENT.into_response(),
@@ -263,15 +259,17 @@ mod tests {
 
     /// Wire the routes over fakes. Nothing listens on a port and nothing
     /// touches disk.
-    fn app() -> (
-        Router,
-        Arc<dyn ProgressRepository>,
-        broadcast::Sender<String>,
-    ) {
-        let source: Arc<dyn DiffSource> =
-            Arc::new(FakeDiffSource::with_paths(&["a.rs", "b.rs", "go.sum"]));
-        let progress: Arc<dyn ProgressRepository> = Arc::new(InMemoryProgressRepository::default());
-        let (state, changes) = AppState::new(source, Arc::clone(&progress), mapped());
+    fn app() -> (Router, ProgressService, broadcast::Sender<String>) {
+        let diff =
+            crate::diff::application::DiffService::new(Arc::new(FakeDiffSource::with_paths(&[
+                "a.rs", "b.rs", "go.sum",
+            ])));
+        let reviews = MapSession::new(
+            diff.clone(),
+            Arc::new(crate::testing::InMemoryMapRepository::new()),
+        );
+        let progress = ProgressService::new(Arc::new(InMemoryProgressRepository::default()), diff);
+        let (state, changes) = AppState::new(reviews, progress.clone(), mapped());
         (router(state), progress, changes)
     }
 

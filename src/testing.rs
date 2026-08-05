@@ -5,7 +5,7 @@
 //! are exercised against hand-built diffs, where a case that would take three
 //! commits to set up is four lines instead.
 
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use crate::diff::domain::{
     DiffSource, FileChange, FileDiff, FileStatus, Hunk, Line, LineKind, Scope,
@@ -256,4 +256,16 @@ pub fn hunk_with_lines(old_start: u32, contents: &[&str]) -> Hunk {
 /// bug in the test, not a case under test.
 pub fn slug(s: &str) -> Slug {
     Slug::parse(s).expect("test slugs must be well formed")
+}
+
+/// A map session over fakes, which is how the use cases are exercised without a
+/// repository on disk.
+pub fn session(
+    source: FakeDiffSource,
+    repo: Arc<InMemoryMapRepository>,
+) -> crate::map::application::MapSession {
+    crate::map::application::MapSession::new(
+        crate::diff::application::DiffService::new(Arc::new(source)),
+        repo,
+    )
 }

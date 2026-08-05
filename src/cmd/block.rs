@@ -3,7 +3,6 @@
 use clap::Subcommand;
 
 use super::{Ctx, Reporting};
-use crate::diff::domain as paths;
 use crate::map::application::position_from;
 use crate::map::domain::Slug;
 use crate::shared::error::Result;
@@ -64,7 +63,7 @@ impl BlockAction {
                 // point the use case cannot be handed anything unchecked.
                 let slug = Slug::parse(&slug)?;
                 let position = position_from(parse_opt(before)?, parse_opt(after)?);
-                let files = paths::all(ctx.source(), &raw)?;
+                let files = ctx.map().review_paths(&raw)?;
                 ctx.report(
                     format!("Added block '{slug}' with {} file(s).", files.len()),
                     ctx.map()

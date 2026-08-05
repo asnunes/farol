@@ -55,7 +55,7 @@ impl LineAction {
                 note,
             } => {
                 let slug = Slug::parse(&slug)?;
-                let path = ctx.source().review_path(&path)?;
+                let path = ctx.map().review_path(&path)?;
                 let range = LineRange::parse(&range)?;
                 ctx.report(
                     format!("Added a note on {path}:{range}."),
@@ -69,7 +69,7 @@ impl LineAction {
                 note,
             } => {
                 let slug = Slug::parse(&slug)?;
-                let path = ctx.source().review_path(&path)?;
+                let path = ctx.map().review_path(&path)?;
                 let range = LineRange::parse(&range)?;
                 ctx.report(
                     format!("Updated the note on {path}:{range}."),
@@ -78,7 +78,7 @@ impl LineAction {
             }
             LineAction::Remove { slug, path, range } => {
                 let slug = Slug::parse(&slug)?;
-                let path = ctx.source().review_path(&path)?;
+                let path = ctx.map().review_path(&path)?;
                 let range = LineRange::parse(&range)?;
                 ctx.report(
                     format!("Removed the note on {path}:{range}."),
@@ -92,7 +92,7 @@ impl LineAction {
                 range,
             } => {
                 let slug = Slug::parse(&slug)?;
-                let path = ctx.source().review_path(&path)?;
+                let path = ctx.map().review_path(&path)?;
                 let old = LineRange::parse(&old_range)?;
                 let new = LineRange::parse(&range)?;
                 ctx.report(
@@ -106,7 +106,7 @@ impl LineAction {
                 old_range,
             } => {
                 let slug = Slug::parse(&slug)?;
-                let path = ctx.source().review_path(&path)?;
+                let path = ctx.map().review_path(&path)?;
                 let old = LineRange::parse(&old_range)?;
                 ctx.report(
                     format!("Discarded the note that was at {path}:{old}."),

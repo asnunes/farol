@@ -152,7 +152,7 @@ impl Command {
             Command::Serve(args) => args.run(),
             Command::Scope(args) => {
                 let ctx = args.scope.open()?;
-                print!("{}", ScopeReport(ctx.source().scope()?));
+                print!("{}", ScopeReport(ctx.map().scope()?));
                 Ok(())
             }
             // The window is resolved once per group and handed down, instead

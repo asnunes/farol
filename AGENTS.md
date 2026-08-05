@@ -141,8 +141,27 @@ implementation is named.** `Ctx::from_workspace` chooses `GixSource`,
 find yourself writing `SomeConcrete::new()` anywhere else, the dependency wants
 to be a parameter instead.
 
-Borrow (`&dyn`) when the collaborator outlives the call; share (`Arc<dyn>`) when
-it crosses into the server's state.
+### Services own their ports; entry points see only services
+
+A service holds `Arc<dyn Port>` rather than borrowing it. That is what lets it
+be stored in a struct and handed around, instead of being rebuilt at every call
+— and it is what stops the ports from leaking upward.
+
+An entry point sees `MapSession` and `ProgressService`. It does not name
+`DiffSource`, `MapRepository` or `ProgressRepository`, and it has no reason to:
+it asks for what it can *do*, not for the plumbing.
+
+```rust
+// yes — cmd asks the service
+let path = ctx.map().review_path(&raw)?;
+
+// no — cmd reaching through to a port
+let path = ctx.source().review_path(&raw)?;
+```
+
+`Ctx` holds the services for one invocation. When it held ports instead, every
+command could reach anything, and `cmd` had to know the shape of the plumbing
+to get at a use case.
 
 ### Ports stay synchronous
 

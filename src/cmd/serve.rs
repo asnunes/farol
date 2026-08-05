@@ -36,8 +36,8 @@ impl ServeArgs {
         let map = ctx.map().require_current()?;
 
         crate::server::Server::new(crate::server::ServeConfig {
-            source: ctx.source_arc(),
-            progress: ctx.progress_arc(),
+            reviews: ctx.map().clone(),
+            progress: ctx.progress().clone(),
             map,
             port: self.port,
             open_browser: !self.no_open,

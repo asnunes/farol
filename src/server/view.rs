@@ -7,7 +7,8 @@
 
 use serde::Serialize;
 
-use crate::diff::domain::{DiffSource, FileStatus};
+use crate::diff::domain::FileStatus;
+use crate::map::application::MapSession;
 use crate::map::domain::ReviewMap;
 use crate::progress::domain::Progress;
 use crate::shared::error::Result;
@@ -73,9 +74,9 @@ pub struct ReviewView {
 }
 
 impl ReviewView {
-    pub fn build(map: &ReviewMap, source: &dyn DiffSource, progress: &Progress) -> Result<Self> {
-        let scope = source.scope()?;
-        let commits_behind = source.commits_ahead_of(&map.generated_at).unwrap_or(0);
+    pub fn build(map: &ReviewMap, reviews: &MapSession, progress: &Progress) -> Result<Self> {
+        let scope = reviews.scope()?;
+        let commits_behind = reviews.commits_behind(&map.generated_at);
 
         let mut blocks = Vec::new();
         let mut placed: Vec<String> = Vec::new();
@@ -230,7 +231,8 @@ impl FileView {
 mod tests {
     use super::*;
     use crate::map::domain::{LineRange, Position};
-    use crate::testing::{FakeDiffSource, slug};
+    use crate::testing::{FakeDiffSource, InMemoryMapRepository, session, slug};
+    use std::sync::Arc;
 
     fn map_of(paths: &[(&str, &str)]) -> ReviewMap {
         let mut m = ReviewMap::new("feature/x", "main", "head");
@@ -248,8 +250,11 @@ mod tests {
     #[test]
     fn a_file_in_two_blocks_is_rendered_once_in_the_earlier_one() {
         let map = map_of(&[("first", "shared.rs"), ("second", "shared.rs")]);
-        let source = FakeDiffSource::with_paths(&["shared.rs"]);
-        let view = ReviewView::build(&map, &source, &Progress::new()).unwrap();
+        let reviews = session(
+            FakeDiffSource::with_paths(&["shared.rs"]),
+            Arc::new(InMemoryMapRepository::new()),
+        );
+        let view = ReviewView::build(&map, &reviews, &Progress::new()).unwrap();
 
         assert_eq!(view.blocks[0].files.len(), 1);
         assert_eq!(view.blocks[1].files.len(), 0);
@@ -280,8 +285,11 @@ mod tests {
         )
         .unwrap();
 
-        let source = FakeDiffSource::with_paths(&["shared.rs"]);
-        let view = ReviewView::build(&map, &source, &Progress::new()).unwrap();
+        let reviews = session(
+            FakeDiffSource::with_paths(&["shared.rs"]),
+            Arc::new(InMemoryMapRepository::new()),
+        );
+        let view = ReviewView::build(&map, &reviews, &Progress::new()).unwrap();
 
         let file = &view.blocks[0].files[0];
         assert_eq!(file.notes.len(), 2);
@@ -297,8 +305,11 @@ mod tests {
             .unwrap();
         map.add_skim("go.sum", "generated", None).unwrap();
 
-        let source = FakeDiffSource::with_paths(&["a.rs", "a_test.rs", "go.sum"]);
-        let view = ReviewView::build(&map, &source, &Progress::new()).unwrap();
+        let reviews = session(
+            FakeDiffSource::with_paths(&["a.rs", "a_test.rs", "go.sum"]),
+            Arc::new(InMemoryMapRepository::new()),
+        );
+        let view = ReviewView::build(&map, &reviews, &Progress::new()).unwrap();
 
         assert_eq!(view.blocks[0].files.len(), 2);
         assert!(view.blocks[0].files[1].skim);
@@ -309,19 +320,25 @@ mod tests {
     #[test]
     fn files_the_map_never_mentions_are_reported_not_hidden() {
         let map = map_of(&[("one", "a.rs")]);
-        let source = FakeDiffSource::with_paths(&["a.rs", "arrived_later.rs"]);
-        let view = ReviewView::build(&map, &source, &Progress::new()).unwrap();
+        let reviews = session(
+            FakeDiffSource::with_paths(&["a.rs", "arrived_later.rs"]),
+            Arc::new(InMemoryMapRepository::new()),
+        );
+        let view = ReviewView::build(&map, &reviews, &Progress::new()).unwrap();
         assert_eq!(view.unmapped, vec!["arrived_later.rs"]);
     }
 
     #[test]
     fn viewed_count_reflects_progress() {
         let map = map_of(&[("one", "a.rs"), ("one", "b.rs")]);
-        let source = FakeDiffSource::with_paths(&["a.rs", "b.rs"]);
+        let reviews = session(
+            FakeDiffSource::with_paths(&["a.rs", "b.rs"]),
+            Arc::new(InMemoryMapRepository::new()),
+        );
         let mut progress = Progress::new();
         progress.mark("a.rs", "hash", "now");
 
-        let view = ReviewView::build(&map, &source, &progress).unwrap();
+        let view = ReviewView::build(&map, &reviews, &progress).unwrap();
         assert_eq!(view.total_files, 2);
         assert_eq!(view.viewed_files, 1);
     }

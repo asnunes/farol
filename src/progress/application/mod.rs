@@ -1,4 +1,6 @@
-use crate::diff::domain::DiffSource;
+use std::sync::Arc;
+
+use crate::diff::application::DiffService;
 use crate::progress::domain::{Progress, ProgressRepository};
 use crate::shared::error::Result;
 
@@ -7,14 +9,15 @@ use crate::shared::error::Result;
 /// Both collaborators arrive from outside: the service never picks them, which
 /// is what lets a test drive it with an in-memory repository and a hand-built
 /// diff.
-pub struct ProgressService<'a> {
-    repo: &'a dyn ProgressRepository,
-    source: &'a dyn DiffSource,
+#[derive(Clone)]
+pub struct ProgressService {
+    repo: Arc<dyn ProgressRepository>,
+    diff: DiffService,
 }
 
-impl<'a> ProgressService<'a> {
-    pub fn new(repo: &'a dyn ProgressRepository, source: &'a dyn DiffSource) -> Self {
-        Self { repo, source }
+impl ProgressService {
+    pub fn new(repo: Arc<dyn ProgressRepository>, diff: DiffService) -> Self {
+        Self { repo, diff }
     }
 
     pub fn load(&self) -> Result<Progress> {
@@ -23,7 +26,7 @@ impl<'a> ProgressService<'a> {
 
     /// Mark a file read, pinned to the content it has right now.
     pub fn mark(&self, path: &str, at: &str) -> Result<Progress> {
-        let diff = self.source.file_diff(path)?;
+        let diff = self.diff.file_diff(path)?;
         let mut progress = self.repo.load()?;
         progress.mark(path, diff.new_content_hash, at);
         self.repo.save(&progress)?;

@@ -29,7 +29,7 @@ impl SkimAction {
                 reason,
                 block,
             } => {
-                let path = ctx.source().review_path(&path)?;
+                let path = ctx.map().review_path(&path)?;
                 let block = block.map(|b| Slug::parse(&b)).transpose()?;
                 ctx.report(
                     format!("Marked '{path}' as skim."),
@@ -37,7 +37,7 @@ impl SkimAction {
                 )
             }
             SkimAction::Remove { path } => {
-                let path = ctx.source().review_path(&path)?;
+                let path = ctx.map().review_path(&path)?;
                 ctx.report(
                     format!("'{path}' is no longer marked as skim."),
                     ctx.map().remove_skim(&path),
