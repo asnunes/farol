@@ -286,6 +286,13 @@ the review because `GixSource` does; a fake that were more permissive would let
 tests pass over behaviour that does not exist. That exact bug was caught by the
 route tests on their first run.
 
+**A test belongs to the type whose behaviour it describes.** When code moves out
+into a type of its own, its tests move with it — otherwise the new type reads as
+untested and the old one appears to do more than it does. `MapReconciler` was
+extracted from `MapService` and its tests were left behind for a while; they now
+sit on the reconciler, and `MapService` keeps only the one that proves it invokes
+it. A test that reaches its subject through a caller is testing the caller.
+
 **Fakes live in `src/testing.rs`**, one place that knows how to stand in for git
 and for storage. Extend `FakeDiffSource` rather than writing a new stand-in.
 
