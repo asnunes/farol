@@ -204,12 +204,9 @@ impl MapService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::diff::application::ReviewScope;
-    use crate::map::application::{AddBlock, GetScope, position_from};
-    use crate::map::domain::Slug;
     use crate::map::domain::{LineRange, OrphanReason, Position};
     use crate::testing::slug;
-    use crate::testing::{FakeDiffSource, InMemoryMapRepository, hunk, hunk_with_lines, service};
+    use crate::testing::{FakeDiffSource, InMemoryMapRepository, hunk, service};
     use std::sync::Arc;
 
     fn mapped(sha: &str, range: LineRange, text: &str) -> ReviewMap {
@@ -236,8 +233,9 @@ mod tests {
     }
 
     #[test]
-    fn a_note_far_from_the_change_slides_instead_of_being_deactivated() {
-        // Five lines appear at the top; nothing the note described was touched.
+    fn deriving_runs_the_reconciler_over_the_inherited_map() {
+        // The service's own job here is to invoke it with the right pair of
+        // commits; what the reconciler then does is its own tests' business.
         let source = FakeDiffSource::with_paths(&["a.rs"])
             .on_commit("new")
             .with_ancestors(&["old"])
@@ -254,44 +252,11 @@ mod tests {
             .file("a.rs")
             .unwrap()
             .line_notes;
-        assert_eq!(notes[0].range, LineRange::new(45, 50).unwrap());
-        assert!(map.orphans.is_empty());
-    }
-
-    #[test]
-    fn a_note_whose_code_was_rewritten_is_deactivated_with_a_snapshot() {
-        let source = FakeDiffSource::with_paths(&["a.rs"])
-            .on_commit("new")
-            .with_ancestors(&["old"])
-            .at_distance("old", 1)
-            .changed_between(
-                "old",
-                "new",
-                "a.rs",
-                vec![hunk_with_lines(40, &["const timeout = 180;"])],
-            );
-
-        let repo = Arc::new(InMemoryMapRepository::new());
-        repo.seed(mapped(
-            "old",
-            LineRange::new(40, 40).unwrap(),
-            "expensive prose",
-        ));
-
-        let map = service(source, repo.clone()).derive().unwrap().map;
-        assert!(
-            map.block(&slug("core"))
-                .unwrap()
-                .file("a.rs")
-                .unwrap()
-                .line_notes
-                .is_empty()
-        );
-        assert_eq!(map.orphans.len(), 1);
-        assert_eq!(map.orphans[0].text, "expensive prose");
         assert_eq!(
-            map.orphans[0].snapshot, "const timeout = 180;",
-            "the snapshot is what identifies the note afterwards, not the old range"
+            notes[0].range,
+            LineRange::new(45, 50).unwrap(),
+            "the note should have been moved, which only happens if the \
+             reconciler ran"
         );
     }
 
@@ -319,76 +284,5 @@ mod tests {
             map.orphans.is_empty(),
             "carrying them forever would pile up a graveyard nobody revisits"
         );
-    }
-
-    #[test]
-    fn a_file_that_left_the_review_is_dropped_and_its_notes_kept() {
-        let source = FakeDiffSource::with_paths(&["b.rs"])
-            .on_commit("new")
-            .with_ancestors(&["old"])
-            .at_distance("old", 1);
-
-        let repo = Arc::new(InMemoryMapRepository::new());
-        repo.seed(mapped("old", LineRange::new(3, 4).unwrap(), "worth moving"));
-
-        let map = service(source, repo.clone()).derive().unwrap().map;
-        assert!(map.block(&slug("core")).unwrap().files.is_empty());
-        assert_eq!(map.orphans[0].reason, OrphanReason::FileRemoved);
-        assert_eq!(map.orphans[0].text, "worth moving");
-    }
-
-    #[test]
-    fn a_path_outside_the_review_cannot_even_be_built() {
-        // The use cases no longer check this, because they cannot be reached
-        // with an unchecked path: ReviewPath has no other constructor.
-        let source = FakeDiffSource::with_paths(&["a.rs"]).on_commit("head");
-        let scope = GetScope::new(ReviewScope::new(Arc::new(source)));
-        let err = scope.path("nowhere.rs").unwrap_err();
-        assert!(matches!(err, Error::PathOutOfScope { .. }), "{err:?}");
-        assert!(scope.path("a.rs").is_ok());
-    }
-
-    #[test]
-    fn a_malformed_block_name_is_refused_at_the_edge() {
-        assert!(Slug::parse("recover link").is_err());
-        assert!(Slug::parse("src/a.rs").is_err());
-        assert_eq!(slug("recover-link").as_str(), "recover-link");
-    }
-
-    #[test]
-    fn adding_a_block_with_files_is_one_step_for_the_caller() {
-        let source = FakeDiffSource::with_paths(&["a.rs", "b.rs"]).on_commit("head");
-        let repo = Arc::new(InMemoryMapRepository::new());
-        let session = service(source, repo.clone());
-
-        let scope = GetScope::new(ReviewScope::new(Arc::new(FakeDiffSource::with_paths(&[
-            "a.rs", "b.rs",
-        ]))));
-        let files = scope.paths(&["a.rs".into(), "b.rs".into()]).unwrap();
-        let map = AddBlock::new(session.clone())
-            .execute(&slug("core"), "The change", "why", Position::End, &files)
-            .unwrap();
-
-        let files: Vec<_> = map
-            .block(&slug("core"))
-            .unwrap()
-            .files
-            .iter()
-            .map(|f| f.path.as_str())
-            .collect();
-        assert_eq!(files, vec!["a.rs", "b.rs"]);
-    }
-
-    #[test]
-    fn before_wins_over_after_when_both_are_given() {
-        assert_eq!(
-            position_from(Some(slug("x")), Some(slug("y"))),
-            Position::Before(slug("x"))
-        );
-    }
-
-    #[test]
-    fn no_flags_means_append() {
-        assert_eq!(position_from(None, None), Position::End);
     }
 }

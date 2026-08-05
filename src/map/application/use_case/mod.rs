@@ -31,3 +31,22 @@ pub fn position_from(before: Option<Slug>, after: Option<Slug>) -> Position {
         (None, None) => Position::End,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::testing::slug;
+
+    #[test]
+    fn before_wins_over_after_when_both_are_given() {
+        assert_eq!(
+            position_from(Some(slug("x")), Some(slug("y"))),
+            Position::Before(slug("x"))
+        );
+    }
+
+    #[test]
+    fn no_flags_means_append() {
+        assert_eq!(position_from(None, None), Position::End);
+    }
+}

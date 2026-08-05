@@ -280,3 +280,53 @@ pub fn service(
         repo,
     )
 }
+
+/// The reconciler over fakes, for exercising note movement directly instead of
+/// through a derivation.
+pub fn reconciler(source: FakeDiffSource) -> crate::map::application::MapReconciler {
+    use crate::diff::application::{FileDiffs, ReviewScope};
+    let source = Arc::new(source);
+    crate::map::application::MapReconciler::new(
+        ReviewScope::new(source.clone()),
+        FileDiffs::new(source),
+    )
+}
+
+/// A map with one block, one file and one note on it.
+pub fn map_with_note(
+    sha: &str,
+    range: crate::map::domain::LineRange,
+    text: &str,
+) -> crate::map::domain::ReviewMap {
+    use crate::map::domain::{Position, ReviewMap};
+    let mut map = ReviewMap::new("feature/x", "main", sha);
+    map.add_block(&slug("core"), "Core", "why", Position::End)
+        .unwrap();
+    map.add_file(&slug("core"), "a.rs", None, None).unwrap();
+    map.add_line_note(&slug("core"), "a.rs", range, text)
+        .unwrap();
+    map
+}
+
+/// A map service and a scope over the same fake, for exercising a use case the
+/// way `wiring` assembles it.
+pub fn use_case_setup(
+    paths: &[&str],
+) -> (
+    crate::map::application::MapService,
+    crate::diff::application::ReviewScope,
+) {
+    // A declared size, so a range check has something definite to fail against.
+    let fake = || {
+        paths
+            .iter()
+            .fold(FakeDiffSource::with_paths(paths), |f, p| {
+                f.with_line_count(p, 100)
+            })
+    };
+    let scope = crate::diff::application::ReviewScope::new(Arc::new(fake()));
+    (
+        service(fake(), Arc::new(InMemoryMapRepository::new())),
+        scope,
+    )
+}

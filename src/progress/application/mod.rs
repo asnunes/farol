@@ -72,3 +72,78 @@ impl UnmarkViewed {
         Ok(progress)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::testing::{FakeDiffSource, InMemoryProgressRepository};
+
+    fn store(source: FakeDiffSource) -> (ProgressStore, Arc<InMemoryProgressRepository>) {
+        let repo = Arc::new(InMemoryProgressRepository::default());
+        (
+            ProgressStore::new(repo.clone(), FileDiffs::new(Arc::new(source))),
+            repo,
+        )
+    }
+
+    #[test]
+    fn marking_a_file_pins_it_to_the_content_it_had_when_it_was_read() {
+        let (store, repo) = store(FakeDiffSource::with_paths(&["a.rs"]));
+
+        let progress = MarkViewed::new(store).execute("a.rs", "abc123").unwrap();
+
+        assert!(progress.is_current("a.rs", "hash-of-a.rs"));
+        assert!(
+            repo.load().unwrap().is_current("a.rs", "hash-of-a.rs"),
+            "a tick the server never wrote down is a tick the reviewer loses"
+        );
+    }
+
+    #[test]
+    fn a_file_whose_content_changed_since_it_was_read_is_no_longer_viewed() {
+        // The pin is the whole mechanism: the author pushes a fix, and the file
+        // reopens by itself instead of staying struck through.
+        let (store, _) = store(FakeDiffSource::with_paths(&["a.rs"]));
+        let progress = MarkViewed::new(store).execute("a.rs", "abc123").unwrap();
+
+        assert!(!progress.is_current("a.rs", "hash-after-the-fix"));
+    }
+
+    #[test]
+    fn unmarking_takes_the_tick_off_and_leaves_the_others_alone() {
+        let (store, repo) = store(FakeDiffSource::with_paths(&["a.rs", "b.rs"]));
+        MarkViewed::new(store.clone())
+            .execute("a.rs", "abc")
+            .unwrap();
+        MarkViewed::new(store.clone())
+            .execute("b.rs", "abc")
+            .unwrap();
+
+        let progress = UnmarkViewed::new(store).execute("a.rs").unwrap();
+
+        assert!(!progress.is_current("a.rs", "hash-of-a.rs"));
+        assert!(progress.is_current("b.rs", "hash-of-b.rs"));
+        assert_eq!(repo.load().unwrap().viewed.len(), 1);
+    }
+
+    #[test]
+    fn marking_a_file_that_is_not_under_review_fails_before_anything_is_written() {
+        let (store, repo) = store(FakeDiffSource::with_paths(&["a.rs"]));
+
+        assert!(
+            MarkViewed::new(store)
+                .execute("elsewhere.rs", "abc")
+                .is_err()
+        );
+        assert!(repo.load().unwrap().viewed.is_empty());
+    }
+
+    #[test]
+    fn unmarking_a_file_that_was_never_read_is_not_an_error() {
+        // The browser can send this on a double click; refusing would turn a
+        // harmless race into an error banner.
+        let (store, _) = store(FakeDiffSource::with_paths(&["a.rs"]));
+
+        assert!(UnmarkViewed::new(store).execute("a.rs").is_ok());
+    }
+}

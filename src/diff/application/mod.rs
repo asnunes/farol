@@ -86,3 +86,108 @@ impl CommitHistory {
         self.source.is_ancestor(sha)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::shared::error::Error;
+    use crate::testing::FakeDiffSource;
+
+    fn scope_over(paths: &[&str]) -> ReviewScope {
+        ReviewScope::new(Arc::new(FakeDiffSource::with_paths(paths)))
+    }
+
+    #[test]
+    fn a_path_under_review_comes_back_carrying_how_long_the_file_is() {
+        let scope = ReviewScope::new(Arc::new(
+            FakeDiffSource::with_paths(&["a.rs"]).with_line_count("a.rs", 42),
+        ));
+
+        let path = scope.path("a.rs").unwrap();
+
+        assert_eq!(path.as_str(), "a.rs");
+        assert_eq!(
+            path.lines(),
+            42,
+            "the line count rides along so a range check never has to ask again"
+        );
+    }
+
+    #[test]
+    fn a_path_outside_the_review_cannot_be_turned_into_one() {
+        // This is the only constructor of ReviewPath, so refusing here is what
+        // makes every use case downstream unable to receive a bad path at all.
+        let err = scope_over(&["a.rs"]).path("elsewhere.rs").unwrap_err();
+
+        assert!(err.to_string().contains("elsewhere.rs"), "{err}");
+    }
+
+    #[test]
+    fn resolving_several_paths_fails_on_the_first_bad_one() {
+        // Half a block is worse than none: the caller is told before anything
+        // is written, and told about the path it actually got wrong.
+        let err = scope_over(&["a.rs", "b.rs"])
+            .paths(&["a.rs".into(), "nope.rs".into(), "b.rs".into()])
+            .unwrap_err();
+
+        assert!(err.to_string().contains("nope.rs"), "{err}");
+    }
+
+    #[test]
+    fn resolving_several_good_paths_keeps_the_order_they_were_given() {
+        let paths = scope_over(&["a.rs", "b.rs"])
+            .paths(&["b.rs".into(), "a.rs".into()])
+            .unwrap();
+
+        let names: Vec<&str> = paths.iter().map(|p| p.as_str()).collect();
+        assert_eq!(names, vec!["b.rs", "a.rs"]);
+    }
+
+    #[test]
+    fn the_content_hash_is_of_the_file_after_the_change() {
+        let diffs = FileDiffs::new(Arc::new(FakeDiffSource::with_paths(&["a.rs"])));
+
+        assert_eq!(diffs.content_hash("a.rs").unwrap(), "hash-of-a.rs");
+    }
+
+    #[test]
+    fn asking_for_a_hash_of_a_file_outside_the_review_fails() {
+        let diffs = FileDiffs::new(Arc::new(FakeDiffSource::with_paths(&["a.rs"])));
+
+        assert!(diffs.content_hash("elsewhere.rs").is_err());
+    }
+
+    /// A history that cannot be walked at all — a shallow clone, a grafted
+    /// commit. Only `commits_ahead_of` is exercised through it.
+    struct BrokenHistory;
+
+    impl CommitHistorySource for BrokenHistory {
+        fn head_sha(&self) -> Result<String> {
+            Err(Error::Message("no head".into()))
+        }
+        fn commits_ahead_of(&self, _sha: &str) -> Result<u32> {
+            Err(Error::Message("shallow clone".into()))
+        }
+        fn is_ancestor(&self, _sha: &str) -> Result<bool> {
+            Err(Error::Message("shallow clone".into()))
+        }
+    }
+
+    #[test]
+    fn a_history_that_cannot_be_walked_reads_as_not_behind() {
+        // Distance is decoration on `map show`. Failing the command over it
+        // would take the map away from someone whose repo is merely shallow.
+        let history = CommitHistory::new(Arc::new(BrokenHistory));
+
+        assert_eq!(history.commits_ahead_of("abc123"), 0);
+    }
+
+    #[test]
+    fn whether_a_commit_is_an_ancestor_is_not_swallowed() {
+        // Unlike distance, this one decides which map is current — guessing
+        // would hand the reviewer the wrong version.
+        let history = CommitHistory::new(Arc::new(BrokenHistory));
+
+        assert!(history.is_ancestor("abc123").is_err());
+    }
+}
