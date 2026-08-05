@@ -2,7 +2,7 @@
 
 use clap::Subcommand;
 
-use super::{Ctx, Reporting};
+use super::{Action, Ctx, Reporting};
 use crate::map::domain::{LineRange, Slug};
 use crate::shared::error::Result;
 
@@ -45,8 +45,8 @@ pub(super) enum LineAction {
     },
 }
 
-impl LineAction {
-    pub(super) fn run(self, ctx: &Ctx) -> Result<()> {
+impl Action for LineAction {
+    fn run(self, ctx: &Ctx) -> Result<()> {
         match self {
             LineAction::Add {
                 slug,

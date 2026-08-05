@@ -4,6 +4,7 @@ mod block;
 mod file;
 mod line;
 mod map;
+mod scope;
 mod serve;
 mod skim;
 mod wiring;
@@ -12,6 +13,7 @@ use block::BlockAction;
 use file::FileAction;
 use line::LineAction;
 use map::MapAction;
+use scope::ShowScope;
 use serve::ServeArgs;
 use skim::SkimAction;
 
@@ -19,7 +21,7 @@ pub use wiring::{Ctx, ServerUseCases};
 
 use crate::diff::infra::ScopeRequest;
 use crate::map::domain::ReviewMap;
-use crate::map::presentation::{OrphanReport, ScopeReport};
+use crate::map::presentation::OrphanReport;
 use crate::shared::error::Result;
 
 #[derive(Parser)]
@@ -86,6 +88,13 @@ impl ScopeArgs {
     }
 }
 
+/// What every command group is: something you can run once the review window
+/// has been resolved. Stated as a trait so the shape is enforced rather than
+/// merely repeated.
+pub(super) trait Action {
+    fn run(self, ctx: &Ctx) -> Result<()>;
+}
+
 /// Printing is the entry point's job: the use cases return the map they
 /// produced, and this turns it into what the terminal sees. Anything a use case
 /// deactivated is reported, because a note that vanished without a word is
@@ -149,14 +158,16 @@ enum Command {
 impl Command {
     fn run(self) -> Result<()> {
         match self {
+            // Serve is the one that does not fit: it takes its refs
+            // positionally and hands the use cases to a long-lived server.
             Command::Serve(args) => args.run(),
-            Command::Scope(args) => {
-                let ctx = args.scope.open()?;
-                print!("{}", ScopeReport(&ctx.scope.execute()?));
-                Ok(())
-            }
-            // The window is resolved once per group and handed down, instead
-            // of every action declaring and reopening it.
+
+            // The rest are uniform. The window is resolved once per group and
+            // handed down, instead of every action reopening it. The match
+            // stays a match on purpose: it is exhaustive, so a new group that
+            // forgets its arm does not compile — which is the registration
+            // mistake a dispatch table would need Open/Closed to guard against.
+            Command::Scope(args) => ShowScope.run(&args.scope.open()?),
             Command::Map { scope, action } => action.run(&scope.open()?),
             Command::Block { scope, action } => action.run(&scope.open()?),
             Command::File { scope, action } => action.run(&scope.open()?),

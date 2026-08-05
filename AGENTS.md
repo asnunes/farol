@@ -168,6 +168,22 @@ ends up behaving differently depending on how you reached it. With a use case,
 both transports call the same thing and can only differ in how they parse input
 and print output, which is all a transport is for.
 
+Every command group implements `Action`:
+
+```rust
+pub(super) trait Action {
+    fn run(self, ctx: &Ctx) -> Result<()>;
+}
+```
+
+The dispatch stays an ordinary `match`, deliberately. Open/Closed is worth
+reaching for when adding a case means *registering* it somewhere and forgetting
+is silent. A Rust `match` on an enum is exhaustive: a new group that forgets its
+arm does not compile, so the compiler is already the registry. Replacing five
+identical lines with a macro that generates the enum and the impl would have to
+carry clap's doc comments through — those are the `--help` text — and would be
+far harder to read than what it replaced.
+
 **`src/server/` and `src/cmd/` hold no business logic.** They translate: parse
 arguments or a request into proven values, invoke a use case, shape the result
 for a terminal or for the wire.

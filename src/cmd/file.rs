@@ -2,7 +2,7 @@
 
 use clap::Subcommand;
 
-use super::{Ctx, Reporting};
+use super::{Action, Ctx, Reporting};
 use crate::map::domain::Slug;
 use crate::shared::error::Result;
 
@@ -29,8 +29,8 @@ pub(super) enum FileAction {
     },
 }
 
-impl FileAction {
-    pub(super) fn run(self, ctx: &Ctx) -> Result<()> {
+impl Action for FileAction {
+    fn run(self, ctx: &Ctx) -> Result<()> {
         match self {
             FileAction::Add {
                 slug,

@@ -2,7 +2,7 @@
 
 use clap::Subcommand;
 
-use super::{Ctx, Reporting};
+use super::{Action, Ctx, Reporting};
 use crate::map::application::position_from;
 use crate::map::domain::Slug;
 use crate::shared::error::Result;
@@ -48,8 +48,8 @@ pub(super) enum BlockAction {
     },
 }
 
-impl BlockAction {
-    pub(super) fn run(self, ctx: &Ctx) -> Result<()> {
+impl Action for BlockAction {
+    fn run(self, ctx: &Ctx) -> Result<()> {
         match self {
             BlockAction::Add {
                 slug,

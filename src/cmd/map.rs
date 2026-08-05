@@ -2,7 +2,7 @@
 
 use clap::Subcommand;
 
-use super::Ctx;
+use super::{Action, Ctx};
 use crate::map::application::ResetOutcome;
 use crate::map::presentation::{CheckSummary, MapReport, OrphanReport};
 use crate::shared::error::Result;
@@ -19,8 +19,8 @@ pub(super) enum MapAction {
     Reset,
 }
 
-impl MapAction {
-    pub(super) fn run(self, ctx: &Ctx) -> Result<()> {
+impl Action for MapAction {
+    fn run(self, ctx: &Ctx) -> Result<()> {
         match self {
             MapAction::Derive => {
                 let derived = ctx.derive_map.execute()?;

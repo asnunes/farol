@@ -2,7 +2,7 @@
 
 use clap::Subcommand;
 
-use super::{Ctx, Reporting};
+use super::{Action, Ctx, Reporting};
 use crate::map::domain::Slug;
 use crate::shared::error::Result;
 
@@ -21,8 +21,8 @@ pub(super) enum SkimAction {
     },
 }
 
-impl SkimAction {
-    pub(super) fn run(self, ctx: &Ctx) -> Result<()> {
+impl Action for SkimAction {
+    fn run(self, ctx: &Ctx) -> Result<()> {
         match self {
             SkimAction::Add {
                 path,
