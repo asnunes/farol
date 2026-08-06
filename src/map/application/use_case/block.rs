@@ -189,3 +189,84 @@ mod tests {
         assert_eq!(map.orphans[0].text, "worth moving");
     }
 }
+
+#[cfg(test)]
+mod edit_tests {
+    use super::*;
+    use crate::testing::{slug, use_case_setup};
+
+    fn with_two_blocks() -> MapService {
+        let (maps, _) = use_case_setup(&["a.rs"]);
+        for name in ["first", "second"] {
+            AddBlock::new(maps.clone())
+                .execute(&slug(name), "t", "c", Position::End, &[])
+                .unwrap();
+        }
+        maps
+    }
+
+    #[test]
+    fn rewriting_a_block_replaces_only_what_was_given() {
+        let maps = with_two_blocks();
+
+        let map = UpdateBlock::new(maps)
+            .execute(&slug("first"), Some("A better title".into()), None)
+            .unwrap();
+
+        let block = map.block(&slug("first")).unwrap();
+        assert_eq!(block.title, "A better title");
+        assert_eq!(
+            block.context, "c",
+            "the prose was not what was being edited"
+        );
+    }
+
+    #[test]
+    fn a_block_can_be_moved_ahead_of_another() {
+        let maps = with_two_blocks();
+
+        let map = MoveBlock::new(maps)
+            .execute(&slug("second"), Position::Before(slug("first")))
+            .unwrap();
+
+        assert_eq!(map.slugs(), vec!["second", "first"]);
+    }
+
+    #[test]
+    fn a_block_can_be_moved_to_the_end() {
+        let maps = with_two_blocks();
+
+        let map = MoveBlock::new(maps)
+            .execute(&slug("first"), Position::End)
+            .unwrap();
+
+        assert_eq!(map.slugs(), vec!["second", "first"]);
+    }
+
+    #[test]
+    fn moving_a_block_relative_to_one_that_does_not_exist_is_refused() {
+        let maps = with_two_blocks();
+
+        assert!(
+            MoveBlock::new(maps.clone())
+                .execute(&slug("first"), Position::Before(slug("nope")))
+                .is_err()
+        );
+        assert_eq!(
+            maps.require_current().unwrap().slugs(),
+            vec!["first", "second"],
+            "a refused move must not have shuffled anything"
+        );
+    }
+
+    #[test]
+    fn editing_a_block_that_does_not_exist_lists_the_ones_that_do() {
+        let maps = with_two_blocks();
+
+        let err = UpdateBlock::new(maps)
+            .execute(&slug("nope"), Some("t".into()), None)
+            .unwrap_err();
+
+        assert!(err.to_string().contains("first"), "{err}");
+    }
+}

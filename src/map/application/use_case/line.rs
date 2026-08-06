@@ -271,3 +271,109 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod edit_tests {
+    use super::*;
+    use crate::map::application::AddBlock;
+    use crate::map::domain::Position;
+    use crate::testing::{slug, use_case_setup};
+
+    fn range(from: u32, to: u32) -> LineRange {
+        LineRange::new(from, to).unwrap()
+    }
+
+    fn with_a_note() -> (crate::map::application::MapService, ReviewPath) {
+        let (maps, scope) = use_case_setup(&["a.rs"]);
+        let path = scope.path("a.rs").unwrap();
+        AddBlock::new(maps.clone())
+            .execute(
+                &slug("core"),
+                "t",
+                "c",
+                Position::End,
+                std::slice::from_ref(&path),
+            )
+            .unwrap();
+        AddLineNote::new(maps.clone())
+            .execute(&slug("core"), &path, range(10, 12), "first thought".into())
+            .unwrap();
+        (maps, path)
+    }
+
+    fn notes(map: &ReviewMap) -> Vec<(LineRange, String)> {
+        map.block(&slug("core")).unwrap().files[0]
+            .line_notes
+            .iter()
+            .map(|n| (n.range, n.text.clone()))
+            .collect()
+    }
+
+    #[test]
+    fn rewriting_a_note_keeps_it_on_the_same_lines() {
+        let (maps, path) = with_a_note();
+
+        let map = UpdateLineNote::new(maps)
+            .execute(
+                &slug("core"),
+                &path,
+                range(10, 12),
+                "what I actually meant".into(),
+            )
+            .unwrap();
+
+        assert_eq!(
+            notes(&map),
+            vec![(range(10, 12), "what I actually meant".to_string())]
+        );
+    }
+
+    #[test]
+    fn rewriting_a_note_that_is_not_there_is_refused() {
+        // Silently creating one would put prose on lines nobody chose.
+        let (maps, path) = with_a_note();
+
+        assert!(
+            UpdateLineNote::new(maps)
+                .execute(&slug("core"), &path, range(30, 31), "stray".into())
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn removing_a_note_takes_it_away_for_good() {
+        // Unlike a note the code moved out from under, this one is being
+        // withdrawn on purpose: there is nothing to restore later.
+        let (maps, path) = with_a_note();
+
+        let map = RemoveLineNote::new(maps)
+            .execute(&slug("core"), &path, range(10, 12))
+            .unwrap();
+
+        assert!(notes(&map).is_empty());
+        assert!(map.orphans.is_empty());
+    }
+
+    #[test]
+    fn removing_a_note_that_is_not_there_is_refused() {
+        let (maps, path) = with_a_note();
+
+        assert!(
+            RemoveLineNote::new(maps)
+                .execute(&slug("core"), &path, range(30, 31))
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn a_note_is_identified_by_its_exact_span() {
+        // An overlapping range is a different note, not the same one.
+        let (maps, path) = with_a_note();
+
+        assert!(
+            RemoveLineNote::new(maps)
+                .execute(&slug("core"), &path, range(10, 11))
+                .is_err()
+        );
+    }
+}

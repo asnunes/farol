@@ -147,3 +147,98 @@ mod tests {
         assert!(err.to_string().contains("nope"), "{err}");
     }
 }
+
+#[cfg(test)]
+mod edit_tests {
+    use super::*;
+    use crate::map::application::{AddBlock, AddLineNote};
+    use crate::map::domain::{LineRange, Position};
+    use crate::testing::{slug, use_case_setup};
+
+    fn seeded() -> (
+        crate::map::application::MapService,
+        crate::diff::application::ReviewScope,
+    ) {
+        let (maps, scope) = use_case_setup(&["a.rs", "b.rs"]);
+        let paths = scope.paths(&["a.rs".into(), "b.rs".into()]).unwrap();
+        AddBlock::new(maps.clone())
+            .execute(&slug("core"), "t", "c", Position::End, &paths)
+            .unwrap();
+        (maps, scope)
+    }
+
+    #[test]
+    fn rewriting_a_file_note_replaces_the_prose() {
+        let (maps, scope) = seeded();
+        let a = scope.path("a.rs").unwrap();
+        UpdateFile::new(maps.clone())
+            .execute(&slug("core"), &a, "first thought".into())
+            .unwrap();
+
+        let map = UpdateFile::new(maps)
+            .execute(&slug("core"), &a, "what I actually meant".into())
+            .unwrap();
+
+        let file = map.block(&slug("core")).unwrap().file("a.rs").unwrap();
+        assert_eq!(file.note.as_deref(), Some("what I actually meant"));
+    }
+
+    #[test]
+    fn removing_a_file_leaves_the_others_in_order() {
+        let (maps, scope) = seeded();
+
+        let map = RemoveFile::new(maps)
+            .execute(&slug("core"), &scope.path("a.rs").unwrap())
+            .unwrap();
+
+        let paths: Vec<&str> = map
+            .block(&slug("core"))
+            .unwrap()
+            .files
+            .iter()
+            .map(|f| f.path.as_str())
+            .collect();
+        assert_eq!(paths, vec!["b.rs"]);
+    }
+
+    #[test]
+    fn removing_a_file_keeps_its_notes_as_orphans() {
+        // The prose cost something to write. Dropping it silently because the
+        // file moved to another block would be the expensive kind of loss.
+        let (maps, scope) = seeded();
+        let a = scope.path("a.rs").unwrap();
+        AddLineNote::new(maps.clone())
+            .execute(
+                &slug("core"),
+                &a,
+                LineRange::new(3, 4).unwrap(),
+                "worth moving".into(),
+            )
+            .unwrap();
+
+        let map = RemoveFile::new(maps).execute(&slug("core"), &a).unwrap();
+
+        assert_eq!(map.orphans.len(), 1);
+        assert_eq!(map.orphans[0].text, "worth moving");
+    }
+
+    #[test]
+    fn a_file_that_is_not_in_the_block_cannot_be_removed_from_it() {
+        let (maps, scope) = use_case_setup(&["a.rs", "b.rs"]);
+        AddBlock::new(maps.clone())
+            .execute(
+                &slug("core"),
+                "t",
+                "c",
+                Position::End,
+                std::slice::from_ref(&scope.path("a.rs").unwrap()),
+            )
+            .unwrap();
+
+        let err = RemoveFile::new(maps)
+            .execute(&slug("core"), &scope.path("b.rs").unwrap())
+            .unwrap_err();
+
+        assert!(err.to_string().contains("b.rs"), "{err}");
+    }
+}

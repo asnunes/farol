@@ -301,3 +301,97 @@ describe("a file with nothing to read", () => {
     expect(await screen.findByText(/Binary file/)).toBeTruthy();
   });
 });
+
+describe("the diff itself", () => {
+  /** A file whose diff has one changed line, with context around it. */
+  function withDiff(diff: object, over: Partial<FileView> = {}) {
+    const r = review();
+    r.blocks[0].files[0] = file("src/a.rs", over);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.startsWith("/api/review")) {
+          return new Response(JSON.stringify(r), {
+            headers: { "content-type": "application/json" },
+          });
+        }
+        return new Response(JSON.stringify({ ...emptyDiff, path: "src/a.rs", ...diff }), {
+          headers: { "content-type": "application/json" },
+        });
+      }),
+    );
+  }
+
+  const oneChange = {
+    hunks: [
+      {
+        old_start: 19,
+        old_lines: 3,
+        new_start: 19,
+        new_lines: 3,
+        lines: [
+          { kind: "context", old_number: 19, new_number: 19, content: "line 19" },
+          { kind: "removed", old_number: 20, new_number: null, content: "line 20" },
+          { kind: "added", old_number: null, new_number: 20, content: "CHANGED" },
+          { kind: "context", old_number: 21, new_number: 21, content: "line 21" },
+        ],
+      },
+    ],
+    additions: 1,
+    deletions: 1,
+  };
+
+  it("marks added and removed lines apart from context", async () => {
+    withDiff(oneChange);
+    render(<App />);
+
+    await waitFor(() => expect(document.querySelectorAll(".row").length).toBe(4));
+    expect(document.querySelectorAll(".row.add").length).toBe(1);
+    expect(document.querySelectorAll(".row.del").length).toBe(1);
+    expect(document.querySelectorAll(".row:not(.add):not(.del)").length).toBe(2);
+  });
+
+  it("numbers a removed line by the side it still exists on", async () => {
+    // An added line has no old number and a removed one has no new number;
+    // showing a blank gutter would lose the reader's place.
+    withDiff(oneChange);
+    render(<App />);
+
+    await waitFor(() => expect(document.querySelectorAll(".row").length).toBe(4));
+    const numbers = Array.from(document.querySelectorAll(".row .ln")).map((n) => n.textContent);
+    expect(numbers).toEqual(["19", "20", "20", "21"]);
+  });
+
+  it("shows the hunk header so the reader knows where they are in the file", async () => {
+    withDiff(oneChange);
+    render(<App />);
+
+    expect(await screen.findByText(/@@ -19,3 \+19,3 @@/)).toBeTruthy();
+  });
+
+  it("puts a line note against the line it was written about", async () => {
+    // The note belongs beside its code. Rendering it anywhere else is the same
+    // as not having written it.
+    withDiff(oneChange, {
+      lineNotes: [
+        { from: 20, to: 20, text: "this is the actual fix", block: "first" },
+      ],
+    });
+    render(<App />);
+
+    const note = await screen.findByText(/this is the actual fix/);
+    const row = note.closest("div")?.previousElementSibling;
+    expect(row?.textContent).toContain("CHANGED");
+  });
+
+  it("leaves a note off the lines it does not belong to", async () => {
+    withDiff(oneChange, {
+      lineNotes: [{ from: 99, to: 99, text: "about somewhere else", block: "first" }],
+    });
+    render(<App />);
+
+    await waitFor(() => expect(document.querySelectorAll(".row").length).toBe(4));
+    expect(document.querySelectorAll(".note").length).toBe(0);
+  });
+});

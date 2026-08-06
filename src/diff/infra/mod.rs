@@ -4,6 +4,8 @@
 //! decides what is under review, `text_diff` turns two versions of a file into
 //! hunks, and `gix_source` is the adapter that presents all three as ports.
 
+#[cfg(test)]
+mod fixture;
 mod git;
 mod gix_source;
 mod text_diff;

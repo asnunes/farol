@@ -243,3 +243,168 @@ impl CommitHistorySource for GixSource {
         Ok(git.is_ancestor(target, head))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::diff::domain::LineKind;
+    use crate::diff::infra::fixture::Fixture;
+
+    fn numbered(lines: usize) -> String {
+        (1..=lines).map(|i| format!("line {i}\n")).collect()
+    }
+
+    /// A branch that edits one line of a forty-line file.
+    fn edited() -> Fixture {
+        let f = Fixture::new();
+        f.write("src/a.rs", &numbered(40));
+        f.commit("add a");
+        f.on_branch("feature/x");
+        f.write("src/a.rs", &numbered(40).replace("line 20\n", "CHANGED\n"));
+        f.commit("edit a");
+        f
+    }
+
+    #[test]
+    fn the_diff_a_reviewer_reads_carries_the_line_numbers_the_notes_anchor_to() {
+        let f = edited();
+        let diff = f
+            .source("feature/x", ScopeRequest::default())
+            .file_diff("src/a.rs")
+            .unwrap();
+
+        assert!(!diff.binary);
+        assert_eq!((diff.additions, diff.deletions), (1, 1));
+        let added = diff.hunks[0]
+            .lines
+            .iter()
+            .find(|l| l.kind == LineKind::Added)
+            .expect("the edited line should be there");
+        assert_eq!(added.content, "CHANGED");
+        assert_eq!(added.new_number, Some(20));
+    }
+
+    #[test]
+    fn a_renamed_file_is_diffed_against_the_path_it_came_from() {
+        // The old side lives under the old name. Reading it under the new one
+        // would show the whole file as added, which is the reading the rename
+        // detection exists to prevent.
+        let f = Fixture::new();
+        f.write("old/a.rs", &numbered(40));
+        f.commit("add a");
+        f.on_branch("feature/x");
+        std::fs::create_dir_all(f.dir.path().join("new")).unwrap();
+        f.git(&["mv", "old/a.rs", "new/a.rs"]);
+        f.write("new/a.rs", &numbered(40).replace("line 20\n", "CHANGED\n"));
+        f.commit("move and edit");
+
+        let diff = f
+            .source("feature/x", ScopeRequest::default())
+            .file_diff("new/a.rs")
+            .unwrap();
+
+        assert_eq!(diff.old_path.as_deref(), Some("old/a.rs"));
+        assert_eq!(
+            (diff.additions, diff.deletions),
+            (1, 1),
+            "one line changed, not forty: {:?}",
+            diff.hunks.len()
+        );
+    }
+
+    #[test]
+    fn a_file_outside_the_window_is_refused_by_both_ways_in() {
+        let f = edited();
+        let source = f.source("feature/x", ScopeRequest::default());
+
+        assert!(source.file_diff("README.md").is_err());
+        assert!(source.content_hash("README.md").is_err());
+    }
+
+    #[test]
+    fn the_content_hash_is_the_blob_id_git_gives_the_new_side() {
+        // Viewed state is keyed on this. If it drifted from git, every file
+        // would reopen on a rebase that changed nothing.
+        let f = edited();
+        let expected = f.git(&["rev-parse", "HEAD:src/a.rs"]);
+
+        assert_eq!(
+            f.source("feature/x", ScopeRequest::default())
+                .content_hash("src/a.rs")
+                .unwrap(),
+            expected
+        );
+    }
+
+    #[test]
+    fn under_dirty_the_new_side_comes_off_disk() {
+        let f = edited();
+        f.write(
+            "src/a.rs",
+            &numbered(40).replace("line 20\n", "UNCOMMITTED\n"),
+        );
+
+        let diff = f
+            .source(
+                "feature/x",
+                ScopeRequest {
+                    dirty: true,
+                    ..Default::default()
+                },
+            )
+            .file_diff("src/a.rs")
+            .unwrap();
+
+        assert!(
+            diff.hunks[0]
+                .lines
+                .iter()
+                .any(|l| l.kind == LineKind::Added && l.content == "UNCOMMITTED"),
+            "the object database has no such blob yet"
+        );
+    }
+
+    #[test]
+    fn a_binary_file_arrives_with_no_hunks_and_says_why() {
+        let f = Fixture::new();
+        f.on_branch("feature/x");
+        std::fs::write(
+            f.dir.path().join("logo.png"),
+            (0u8..=255).cycle().take(4000).collect::<Vec<u8>>(),
+        )
+        .unwrap();
+        f.commit("add a binary");
+
+        let diff = f
+            .source("feature/x", ScopeRequest::default())
+            .file_diff("logo.png")
+            .unwrap();
+
+        assert!(diff.binary);
+        assert!(diff.hunks.is_empty());
+        assert_eq!((diff.additions, diff.deletions), (0, 0));
+    }
+
+    #[test]
+    fn a_deleted_file_is_all_deletions() {
+        let f = Fixture::new();
+        f.write("gone.rs", &numbered(5));
+        f.commit("add it");
+        f.on_branch("feature/x");
+        f.git(&["rm", "-q", "gone.rs"]);
+        f.commit("remove it");
+
+        let diff = f
+            .source("feature/x", ScopeRequest::default())
+            .file_diff("gone.rs")
+            .unwrap();
+
+        assert_eq!((diff.additions, diff.deletions), (0, 5));
+        assert!(
+            diff.hunks[0]
+                .lines
+                .iter()
+                .all(|l| l.kind == LineKind::Removed)
+        );
+    }
+}

@@ -940,6 +940,167 @@ fn a_truncated_map_file_is_discarded_instead_of_crashing() {
     assert!(err.contains("unreadable map"), "{err}");
 }
 
+// ---- taking things back out -------------------------------------------
+
+#[test]
+fn a_block_can_be_rewritten_and_reordered_after_the_fact() {
+    // Reading order is the point of the map, and the first arrangement is
+    // rarely the right one.
+    let repo = Repo::new();
+    repo.feature();
+    repo.derive();
+    repo.core_block(&["src/a.rs"]);
+    repo.ok(&[
+        "block",
+        "add",
+        "later",
+        "--title",
+        "Later",
+        "--context",
+        "c",
+    ]);
+
+    repo.ok(&["block", "update", "core", "--title", "The real point"]);
+    repo.ok(&["block", "move", "later", "--before", "core"]);
+
+    let out = repo.ok(&["map", "show"]);
+    assert!(out.contains("The real point"), "{out}");
+    assert!(
+        out.find("later").unwrap() < out.find("core").unwrap(),
+        "the move should have reordered them:\n{out}"
+    );
+}
+
+#[test]
+fn removing_a_block_keeps_the_prose_that_was_written_inside_it() {
+    let repo = Repo::new();
+    repo.feature();
+    repo.derive();
+    repo.core_block(&["src/a.rs"]);
+    repo.ok(&[
+        "line",
+        "add",
+        "core",
+        "src/a.rs",
+        "10-12",
+        "--note",
+        "worth moving",
+    ]);
+
+    repo.ok(&["block", "remove", "core"]);
+
+    let out = repo.ok(&["map", "derive"]);
+    assert!(
+        out.contains("worth moving"),
+        "a removed block should leave its notes to be replaced, not delete them:\n{out}"
+    );
+}
+
+#[test]
+fn removing_a_file_keeps_its_notes_the_same_way_removing_a_block_does() {
+    // Which command you typed should not decide whether your prose survives.
+    let repo = Repo::new();
+    repo.feature();
+    repo.derive();
+    repo.core_block(&["src/a.rs"]);
+    repo.ok(&[
+        "line",
+        "add",
+        "core",
+        "src/a.rs",
+        "10-12",
+        "--note",
+        "still true",
+    ]);
+
+    repo.ok(&["file", "remove", "core", "src/a.rs"]);
+
+    let out = repo.ok(&["map", "derive"]);
+    assert!(out.contains("still true"), "{out}");
+}
+
+#[test]
+fn notes_can_be_rewritten_and_withdrawn() {
+    let repo = Repo::new();
+    repo.feature();
+    repo.derive();
+    repo.core_block(&["src/a.rs"]);
+    repo.ok(&[
+        "file",
+        "update",
+        "core",
+        "src/a.rs",
+        "--note",
+        "first thought",
+    ]);
+    repo.ok(&[
+        "line",
+        "add",
+        "core",
+        "src/a.rs",
+        "10-12",
+        "--note",
+        "first thought",
+    ]);
+
+    repo.ok(&[
+        "file",
+        "update",
+        "core",
+        "src/a.rs",
+        "--note",
+        "what I meant",
+    ]);
+    repo.ok(&[
+        "line",
+        "update",
+        "core",
+        "src/a.rs",
+        "10-12",
+        "--note",
+        "what I meant",
+    ]);
+
+    let out = repo.ok(&["map", "show"]);
+    assert!(!out.contains("first thought"), "{out}");
+    assert_eq!(out.matches("what I meant").count(), 2, "{out}");
+
+    repo.ok(&["line", "remove", "core", "src/a.rs", "10-12"]);
+    let out = repo.ok(&["map", "show"]);
+    assert!(
+        !out.contains("lines 10-12"),
+        "the line note should be gone, while the file note stays:\n{out}"
+    );
+    assert!(out.contains("what I meant"), "{out}");
+}
+
+#[test]
+fn a_skim_entry_can_be_taken_back_out() {
+    let repo = Repo::new();
+    repo.feature();
+    repo.write("go.sum", "checksums\n");
+    repo.commit("regenerate");
+    repo.derive();
+    repo.ok(&["skim", "add", "go.sum", "--reason", "regenerated"]);
+    assert!(repo.ok(&["map", "show"]).contains("go.sum"));
+
+    repo.ok(&["skim", "remove", "go.sum"]);
+
+    assert!(!repo.ok(&["map", "show"]).contains("go.sum"));
+}
+
+#[test]
+fn removing_something_that_is_not_there_fails_instead_of_pretending() {
+    let repo = Repo::new();
+    repo.feature();
+    repo.derive();
+    repo.core_block(&["src/a.rs"]);
+
+    assert!(repo.fails(&["block", "remove", "nope"]).contains("core"));
+    repo.fails(&["file", "remove", "core", "README.md"]);
+    repo.fails(&["line", "remove", "core", "src/a.rs", "10-12"]);
+}
+
 // ---- history ------------------------------------------------------------
 
 #[test]

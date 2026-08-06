@@ -296,60 +296,7 @@ impl Git {
 mod tests {
     use super::*;
     use crate::diff::domain::LineKind;
-
-    /// A real repository, because every one of these answers comes from git and
-    /// a fake would only be asserting what we already believe.
-    struct Fixture {
-        dir: tempfile::TempDir,
-    }
-
-    impl Fixture {
-        /// `main` with one commit holding `README.md`.
-        fn new() -> Self {
-            let f = Fixture {
-                dir: tempfile::tempdir().unwrap(),
-            };
-            f.git(&["init", "-q", "--initial-branch", "main"]);
-            f.git(&["config", "user.email", "test@farol"]);
-            f.git(&["config", "user.name", "farol test"]);
-            f.write("README.md", "start\n");
-            f.commit("initial");
-            f
-        }
-
-        fn git(&self, args: &[&str]) -> String {
-            let out = std::process::Command::new("git")
-                .args(args)
-                .current_dir(self.dir.path())
-                .output()
-                .expect("git should run");
-            assert!(
-                out.status.success(),
-                "git {args:?} failed:\n{}",
-                String::from_utf8_lossy(&out.stderr)
-            );
-            String::from_utf8_lossy(&out.stdout).trim().to_string()
-        }
-
-        fn write(&self, rel: &str, contents: &str) {
-            let full = self.dir.path().join(rel);
-            std::fs::create_dir_all(full.parent().unwrap()).unwrap();
-            std::fs::write(full, contents).unwrap();
-        }
-
-        fn commit(&self, message: &str) {
-            self.git(&["add", "-A"]);
-            self.git(&["commit", "-q", "-m", message, "--no-gpg-sign"]);
-        }
-
-        fn open(&self) -> Git {
-            Git::new(gix::open(self.dir.path()).expect("the repository should open"))
-        }
-
-        fn sha(&self, rev: &str) -> gix::ObjectId {
-            self.open().resolve(rev).unwrap()
-        }
-    }
+    use crate::diff::infra::fixture::Fixture;
 
     // ---- revisions ------------------------------------------------------
 

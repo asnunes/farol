@@ -396,7 +396,23 @@ impl ReviewMap {
                 path: path.to_string(),
                 existing: paths,
             })?;
-        block.files.remove(idx);
+        let file = block.files.remove(idx);
+
+        // Same rule as removing the block, and as a file leaving the review
+        // window on its own: the prose outlives the arrangement it sat in.
+        // Dropping it here and keeping it there would make which command you
+        // typed decide whether your notes survive.
+        let block_slug = slug.clone();
+        for note in file.line_notes {
+            self.orphans.push(Orphan {
+                block: block_slug.clone(),
+                path: file.path.clone(),
+                old_range: note.range,
+                snapshot: String::new(),
+                reason: OrphanReason::FileRemoved,
+                text: note.text,
+            });
+        }
         Ok(())
     }
 

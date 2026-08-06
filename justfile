@@ -46,6 +46,10 @@ layers:
     echo "layers ok"
 
 # What has to pass before a commit.
+#
+# `tsc` is here and not in `npm test` because vitest does not typecheck: a test
+# can pass while naming a field that does not exist.
 check: layers test
     cargo clippy --all-targets -- -D warnings
     cargo fmt --check
+    cd web && npx tsc -b
