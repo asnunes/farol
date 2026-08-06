@@ -3,21 +3,34 @@
 
 default: check
 
+# Build the frontend, then the binary that embeds it.
 build:
     cd web && npm ci --silent || npm install --silent
     cd web && npm run build
     cargo build --release
 
+# Serve with the frontend proxied from Vite instead of embedded.
 dev:
     @echo "run 'cd web && npm run dev' in another terminal, then:"
     cargo run -- serve
 
+# Run every suite: Rust unit, Rust integration, and web.
 test:
     cargo test
     cd web && npm test
 
-# The one architectural rule worth enforcing mechanically: HTTP lives in
-# server/, and nothing else knows it exists.
+# `testing.rs` is excluded because measuring the fakes tells you nothing about
+# the code they stand in for.
+#
+# Show where the tests are not looking.
+coverage:
+    cargo llvm-cov --summary-only --ignore-filename-regex 'testing\.rs'
+    cd web && npx vitest run --coverage
+
+# Real references only — a comment explaining why something has to be Sync for
+# axum's sake is not a dependency on axum.
+#
+# Check that HTTP stays in server/ and nothing else imports axum.
 layers:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -32,6 +45,7 @@ layers:
     fi
     echo "layers ok"
 
+# What has to pass before a commit.
 check: layers test
     cargo clippy --all-targets -- -D warnings
     cargo fmt --check
