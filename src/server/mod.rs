@@ -251,17 +251,15 @@ mod tests {
     /// Wire the routes over fakes. Nothing listens on a port and nothing
     /// touches disk.
     fn app() -> (Router, ProgressStore, broadcast::Sender<String>) {
-        use crate::diff::application::{CommitHistory, FileDiffs, ReviewScope};
-        use crate::map::application::{GetFileDiff, GetReview, MapReconciler, MapService};
+        use crate::diff::application::{FileDiffs, ReviewScope};
+        use crate::map::application::{GetFileDiff, GetReview};
         use crate::progress::application::{MarkViewed, UnmarkViewed};
 
         let source = Arc::new(FakeDiffSource::with_paths(&["a.rs", "b.rs", "go.sum"]));
         let diffs = FileDiffs::new(source.clone());
         let scope = ReviewScope::new(source.clone());
-        let maps = MapService::new(
-            scope.clone(),
-            CommitHistory::new(source),
-            MapReconciler::new(scope, diffs.clone()),
+        let maps = crate::testing::services(
+            FakeDiffSource::with_paths(&["a.rs", "b.rs", "go.sum"]),
             Arc::new(crate::testing::InMemoryMapRepository::new()),
         );
         let progress = ProgressStore::new(
@@ -270,7 +268,7 @@ mod tests {
         );
 
         let use_cases = ServerUseCases {
-            review: GetReview::new(maps, progress.clone()),
+            review: GetReview::new(maps.versions, scope, progress.clone()),
             file_diff: GetFileDiff::new(diffs),
             mark_viewed: MarkViewed::new(progress.clone()),
             unmark_viewed: UnmarkViewed::new(progress.clone()),

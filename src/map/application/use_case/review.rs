@@ -2,7 +2,7 @@
 
 use crate::diff::application::{FileDiffs, ReviewScope};
 use crate::diff::domain::{ReviewPath, Scope};
-use crate::map::application::{Derived, MapService, ResetOutcome};
+use crate::map::application::{Derived, MapDerivation, MapEditor, MapVersions, ResetOutcome};
 use crate::map::domain::ReviewMap;
 use crate::progress::application::ProgressStore;
 use crate::progress::domain::Progress;
@@ -12,47 +12,53 @@ use crate::shared::error::Result;
 /// Safe to call twice — the second call finds what the first made.
 #[derive(Clone)]
 pub struct DeriveMap {
-    maps: MapService,
+    derivation: MapDerivation,
+    /// Deriving reports how stale the version it inherited from was, which is
+    /// a question about lineage rather than about deriving.
+    versions: MapVersions,
 }
 
 impl DeriveMap {
-    pub fn new(maps: MapService) -> Self {
-        Self { maps }
+    pub fn new(derivation: MapDerivation, versions: MapVersions) -> Self {
+        Self {
+            derivation,
+            versions,
+        }
     }
 
     pub fn execute(&self) -> Result<Derived> {
-        self.maps.derive()
+        self.derivation.derive()
     }
 
     /// How far `HEAD` has moved past the commit the map was built against.
     pub fn behind(&self, map: &ReviewMap) -> u32 {
-        self.maps.behind(map)
+        self.versions.behind(map)
     }
 }
 
 /// The map that belongs to where we are now, if there is one.
 #[derive(Clone)]
 pub struct ShowMap {
-    maps: MapService,
+    versions: MapVersions,
 }
 
 impl ShowMap {
-    pub fn new(maps: MapService) -> Self {
-        Self { maps }
+    pub fn new(versions: MapVersions) -> Self {
+        Self { versions }
     }
 
     pub fn execute(&self) -> Result<Option<ReviewMap>> {
-        self.maps.current()
+        self.versions.current()
     }
 
     /// The same, but saying so instead of returning nothing — what `serve` and
     /// `check` need, since neither has anything to do without a map.
     pub fn require(&self) -> Result<ReviewMap> {
-        self.maps.require_current()
+        self.versions.require_current()
     }
 
     pub fn behind(&self, map: &ReviewMap) -> u32 {
-        self.maps.behind(map)
+        self.versions.behind(map)
     }
 }
 
@@ -77,17 +83,17 @@ impl CheckReport {
 /// is invisible, because the sidebar is built from the map.
 #[derive(Clone)]
 pub struct CheckMap {
-    maps: MapService,
+    versions: MapVersions,
     scope: ReviewScope,
 }
 
 impl CheckMap {
-    pub fn new(maps: MapService, scope: ReviewScope) -> Self {
-        Self { maps, scope }
+    pub fn new(versions: MapVersions, scope: ReviewScope) -> Self {
+        Self { versions, scope }
     }
 
     pub fn execute(&self) -> Result<CheckReport> {
-        let map = self.maps.require_current()?;
+        let map = self.versions.require_current()?;
         let covered = map.covered_paths();
         Ok(CheckReport {
             uncovered: self
@@ -99,7 +105,7 @@ impl CheckMap {
                 .filter(|p| !covered.contains(p))
                 .collect(),
             pending_orphans: map.orphans.len(),
-            commits_behind: self.maps.behind(&map),
+            commits_behind: self.versions.behind(&map),
         })
     }
 }
@@ -107,16 +113,16 @@ impl CheckMap {
 /// Throw away the newest version so the one before it takes over.
 #[derive(Clone)]
 pub struct ResetMap {
-    maps: MapService,
+    editor: MapEditor,
 }
 
 impl ResetMap {
-    pub fn new(maps: MapService) -> Self {
-        Self { maps }
+    pub fn new(editor: MapEditor) -> Self {
+        Self { editor }
     }
 
     pub fn execute(&self) -> Result<ResetOutcome> {
-        self.maps.reset()
+        self.editor.reset()
     }
 }
 
@@ -150,7 +156,8 @@ impl GetScope {
 /// what has been read.
 #[derive(Clone)]
 pub struct GetReview {
-    maps: MapService,
+    versions: MapVersions,
+    scope: ReviewScope,
     progress: ProgressStore,
 }
 
@@ -162,16 +169,20 @@ pub struct ReviewSnapshot {
 }
 
 impl GetReview {
-    pub fn new(maps: MapService, progress: ProgressStore) -> Self {
-        Self { maps, progress }
+    pub fn new(versions: MapVersions, scope: ReviewScope, progress: ProgressStore) -> Self {
+        Self {
+            versions,
+            scope,
+            progress,
+        }
     }
 
     pub fn execute(&self, map: &ReviewMap) -> Result<ReviewSnapshot> {
         Ok(ReviewSnapshot {
             map: map.clone(),
-            scope: self.maps.scope()?.clone(),
+            scope: self.scope.get()?.clone(),
             progress: self.progress.load()?,
-            commits_behind: self.maps.behind(map),
+            commits_behind: self.versions.behind(map),
         })
     }
 }
@@ -196,7 +207,7 @@ impl GetFileDiff {
 mod tests {
     use super::*;
     use crate::map::domain::Position;
-    use crate::testing::{FakeDiffSource, InMemoryMapRepository, service, slug};
+    use crate::testing::{FakeDiffSource, InMemoryMapRepository, slug};
     use std::sync::Arc;
 
     #[test]
@@ -206,14 +217,15 @@ mod tests {
             "a.rs",
             "forgotten.rs",
         ])));
-        let maps = service(source, Arc::new(InMemoryMapRepository::new()));
-        maps.edit(|map| {
-            map.add_block(&slug("core"), "t", "c", Position::End)?;
-            map.add_file(&slug("core"), "a.rs", None, None)
-        })
-        .unwrap();
+        let maps = crate::testing::services(source, Arc::new(InMemoryMapRepository::new()));
+        maps.editor
+            .edit(|map| {
+                map.add_block(&slug("core"), "t", "c", Position::End)?;
+                map.add_file(&slug("core"), "a.rs", None, None)
+            })
+            .unwrap();
 
-        let report = CheckMap::new(maps, scope).execute().unwrap();
+        let report = CheckMap::new(maps.versions, scope).execute().unwrap();
         assert_eq!(report.uncovered, vec!["forgotten.rs"]);
         assert!(!report.passed());
     }

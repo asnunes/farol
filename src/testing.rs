@@ -64,6 +64,12 @@ impl FakeDiffSource {
         self
     }
 
+    /// As if `--dirty` were given, so the working-tree marker is the target.
+    pub fn dirty(mut self) -> Self {
+        self.scope.dirty = true;
+        self
+    }
+
     pub fn with_line_count(mut self, path: &str, lines: u32) -> Self {
         self.line_counts.push((path.into(), lines));
         self
@@ -273,22 +279,39 @@ pub fn slug(s: &str) -> Slug {
     Slug::parse(s).expect("test slugs must be well formed")
 }
 
-/// The map service over fakes — the dependency the use cases are built from,
-/// which is how they are exercised without a repository on disk.
-pub fn service(
-    source: FakeDiffSource,
-    repo: Arc<InMemoryMapRepository>,
-) -> crate::map::application::MapService {
+/// The map services over fakes, assembled the way the composition root does.
+///
+/// Returned together because a test that writes usually also reads back, and
+/// splitting the call would make every test build both by hand.
+pub struct MapServices {
+    pub versions: crate::map::application::MapVersions,
+    pub derivation: crate::map::application::MapDerivation,
+    pub editor: crate::map::application::MapEditor,
+}
+
+pub fn services(source: FakeDiffSource, repo: Arc<InMemoryMapRepository>) -> MapServices {
     use crate::diff::application::{CommitHistory, FileDiffs, ReviewScope};
-    use crate::map::application::MapReconciler;
+    use crate::map::application::{MapDerivation, MapEditor, MapReconciler, MapVersions};
+
     let source = Arc::new(source);
     let scope = ReviewScope::new(source.clone());
-    crate::map::application::MapService::new(
-        scope.clone(),
-        CommitHistory::new(source.clone()),
-        MapReconciler::new(scope, FileDiffs::new(source)),
-        repo,
-    )
+    let reconciler = MapReconciler::new(scope.clone(), FileDiffs::new(source.clone()));
+    let versions = MapVersions::new(scope.clone(), CommitHistory::new(source), repo.clone());
+    let derivation = MapDerivation::new(versions.clone(), scope, reconciler, repo.clone());
+
+    MapServices {
+        editor: MapEditor::new(derivation.clone(), versions.clone(), repo),
+        versions,
+        derivation,
+    }
+}
+
+/// The editor alone, for the many tests that only write.
+pub fn editor(
+    source: FakeDiffSource,
+    repo: Arc<InMemoryMapRepository>,
+) -> crate::map::application::MapEditor {
+    services(source, repo).editor
 }
 
 /// The reconciler over fakes, for exercising note movement directly instead of
@@ -320,12 +343,7 @@ pub fn map_with_note(
 
 /// A map service and a scope over the same fake, for exercising a use case the
 /// way `wiring` assembles it.
-pub fn use_case_setup(
-    paths: &[&str],
-) -> (
-    crate::map::application::MapService,
-    crate::diff::application::ReviewScope,
-) {
+pub fn use_case_setup(paths: &[&str]) -> (MapServices, crate::diff::application::ReviewScope) {
     // A declared size, so a range check has something definite to fail against.
     let fake = || {
         paths
@@ -336,7 +354,7 @@ pub fn use_case_setup(
     };
     let scope = crate::diff::application::ReviewScope::new(Arc::new(fake()));
     (
-        service(fake(), Arc::new(InMemoryMapRepository::new())),
+        services(fake(), Arc::new(InMemoryMapRepository::new())),
         scope,
     )
 }

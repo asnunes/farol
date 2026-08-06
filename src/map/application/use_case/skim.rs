@@ -1,5 +1,5 @@
 use crate::diff::domain::ReviewPath;
-use crate::map::application::MapService;
+use crate::map::application::MapEditor;
 use crate::map::domain::{ReviewMap, Slug};
 use crate::shared::error::Result;
 
@@ -7,11 +7,11 @@ use crate::shared::error::Result;
 /// caused it to change.
 #[derive(Clone)]
 pub struct AddSkim {
-    maps: MapService,
+    maps: MapEditor,
 }
 
 impl AddSkim {
-    pub fn new(maps: MapService) -> Self {
+    pub fn new(maps: MapEditor) -> Self {
         Self { maps }
     }
 
@@ -28,11 +28,11 @@ impl AddSkim {
 
 #[derive(Clone)]
 pub struct RemoveSkim {
-    maps: MapService,
+    maps: MapEditor,
 }
 
 impl RemoveSkim {
-    pub fn new(maps: MapService) -> Self {
+    pub fn new(maps: MapEditor) -> Self {
         Self { maps }
     }
 
@@ -50,7 +50,8 @@ mod tests {
 
     #[test]
     fn a_skim_entry_can_be_attached_to_the_block_that_caused_it() {
-        let (maps, scope) = use_case_setup(&["go.sum"]);
+        let (svc, scope) = use_case_setup(&["go.sum"]);
+        let maps = svc.editor.clone();
         AddBlock::new(maps.clone())
             .execute(&slug("core"), "t", "c", Position::End, &[])
             .unwrap();
@@ -68,7 +69,8 @@ mod tests {
 
     #[test]
     fn a_skim_entry_with_no_block_stands_on_its_own() {
-        let (maps, scope) = use_case_setup(&["go.sum"]);
+        let (svc, scope) = use_case_setup(&["go.sum"]);
+        let maps = svc.editor.clone();
 
         let map = AddSkim::new(maps)
             .execute(&scope.path("go.sum").unwrap(), "generated", None)
@@ -79,7 +81,8 @@ mod tests {
 
     #[test]
     fn a_skim_entry_cannot_name_a_block_that_does_not_exist() {
-        let (maps, scope) = use_case_setup(&["go.sum"]);
+        let (svc, scope) = use_case_setup(&["go.sum"]);
+        let maps = svc.editor.clone();
 
         assert!(
             AddSkim::new(maps)
@@ -94,7 +97,8 @@ mod tests {
 
     #[test]
     fn removing_takes_the_entry_back_out() {
-        let (maps, scope) = use_case_setup(&["go.sum"]);
+        let (svc, scope) = use_case_setup(&["go.sum"]);
+        let maps = svc.editor.clone();
         let path = scope.path("go.sum").unwrap();
         AddSkim::new(maps.clone())
             .execute(&path, "generated", None)

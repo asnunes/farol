@@ -1,5 +1,5 @@
 use crate::diff::domain::ReviewPath;
-use crate::map::application::MapService;
+use crate::map::application::MapEditor;
 use crate::map::domain::{LineRange, ReviewMap, Slug};
 use crate::shared::error::Result;
 
@@ -7,11 +7,11 @@ use crate::shared::error::Result;
 /// because a note past the end would render nowhere.
 #[derive(Clone)]
 pub struct AddLineNote {
-    maps: MapService,
+    maps: MapEditor,
 }
 
 impl AddLineNote {
-    pub fn new(maps: MapService) -> Self {
+    pub fn new(maps: MapEditor) -> Self {
         Self { maps }
     }
 
@@ -31,11 +31,11 @@ impl AddLineNote {
 /// Rewrite a note whose span did not move.
 #[derive(Clone)]
 pub struct UpdateLineNote {
-    maps: MapService,
+    maps: MapEditor,
 }
 
 impl UpdateLineNote {
-    pub fn new(maps: MapService) -> Self {
+    pub fn new(maps: MapEditor) -> Self {
         Self { maps }
     }
 
@@ -53,11 +53,11 @@ impl UpdateLineNote {
 
 #[derive(Clone)]
 pub struct RemoveLineNote {
-    maps: MapService,
+    maps: MapEditor,
 }
 
 impl RemoveLineNote {
-    pub fn new(maps: MapService) -> Self {
+    pub fn new(maps: MapEditor) -> Self {
         Self { maps }
     }
 
@@ -73,11 +73,11 @@ impl RemoveLineNote {
 /// orphan list, not a pointer into the code.
 #[derive(Clone)]
 pub struct RestoreNote {
-    maps: MapService,
+    maps: MapEditor,
 }
 
 impl RestoreNote {
-    pub fn new(maps: MapService) -> Self {
+    pub fn new(maps: MapEditor) -> Self {
         Self { maps }
     }
 
@@ -99,11 +99,11 @@ impl RestoreNote {
 /// Let a deactivated note go, when the code it described is gone for good.
 #[derive(Clone)]
 pub struct DiscardNote {
-    maps: MapService,
+    maps: MapEditor,
 }
 
 impl DiscardNote {
-    pub fn new(maps: MapService) -> Self {
+    pub fn new(maps: MapEditor) -> Self {
         Self { maps }
     }
 
@@ -124,8 +124,9 @@ mod tests {
     }
 
     /// A block with one file, on a fake where the file is 100 lines long.
-    fn with_block() -> (crate::map::application::MapService, ReviewPath) {
-        let (maps, scope) = use_case_setup(&["a.rs"]);
+    fn with_block() -> (crate::testing::MapServices, ReviewPath) {
+        let (svc, scope) = use_case_setup(&["a.rs"]);
+        let maps = svc.editor.clone();
         let path = scope.path("a.rs").unwrap();
         crate::map::application::AddBlock::new(maps.clone())
             .execute(
@@ -136,12 +137,12 @@ mod tests {
                 std::slice::from_ref(&path),
             )
             .unwrap();
-        (maps, path)
+        (svc, path)
     }
 
     /// The state a derivation leaves behind when a note's code was rewritten.
     fn orphaned(
-        maps: &crate::map::application::MapService,
+        maps: &crate::map::application::MapEditor,
         old: LineRange,
         text: &str,
     ) -> Result<()> {
@@ -161,7 +162,8 @@ mod tests {
 
     #[test]
     fn a_note_pointing_past_the_end_of_the_file_is_refused() {
-        let (maps, path) = with_block();
+        let (svc, path) = with_block();
+        let maps = svc.editor.clone();
 
         let err = AddLineNote::new(maps.clone())
             .execute(&slug("core"), &path, range(200, 210), "nowhere".into())
@@ -172,8 +174,8 @@ mod tests {
             "the error should say how long the file actually is: {err}"
         );
         assert!(
-            maps.require_current().unwrap().orphans.is_empty()
-                && maps.require_current().unwrap().blocks[0].files[0]
+            svc.versions.require_current().unwrap().orphans.is_empty()
+                && svc.versions.require_current().unwrap().blocks[0].files[0]
                     .line_notes
                     .is_empty(),
             "a refused note must not be half-written"
@@ -182,7 +184,8 @@ mod tests {
 
     #[test]
     fn a_note_ending_exactly_on_the_last_line_is_allowed() {
-        let (maps, path) = with_block();
+        let (svc, path) = with_block();
+        let maps = svc.editor.clone();
 
         AddLineNote::new(maps)
             .execute(&slug("core"), &path, range(90, 100), "the tail".into())
@@ -191,7 +194,8 @@ mod tests {
 
     #[test]
     fn restoring_moves_the_prose_to_the_new_span_and_clears_the_orphan() {
-        let (maps, path) = with_block();
+        let (svc, path) = with_block();
+        let maps = svc.editor.clone();
         orphaned(&maps, range(10, 12), "expensive prose").unwrap();
 
         let map = RestoreNote::new(maps)
@@ -210,7 +214,8 @@ mod tests {
 
     #[test]
     fn restoring_refuses_a_new_span_past_the_end_of_the_file() {
-        let (maps, path) = with_block();
+        let (svc, path) = with_block();
+        let maps = svc.editor.clone();
         orphaned(&maps, range(95, 99), "n").unwrap();
 
         assert!(
@@ -219,7 +224,7 @@ mod tests {
                 .is_err()
         );
         assert_eq!(
-            maps.require_current().unwrap().orphans.len(),
+            svc.versions.require_current().unwrap().orphans.len(),
             1,
             "and the orphan survives to be tried again"
         );
@@ -230,7 +235,8 @@ mod tests {
         // The old range is a key into the orphan list, not a pointer into the
         // code: the file has since shrunk past it, and that is not a reason to
         // refuse a restore to a span that does exist.
-        let (maps, path) = with_block();
+        let (svc, path) = with_block();
+        let maps = svc.editor.clone();
         orphaned(&maps, range(150, 160), "written when the file was longer").unwrap();
 
         let map = RestoreNote::new(maps)
@@ -245,7 +251,8 @@ mod tests {
 
     #[test]
     fn discarding_drops_the_orphan_without_writing_a_note() {
-        let (maps, path) = with_block();
+        let (svc, path) = with_block();
+        let maps = svc.editor.clone();
         orphaned(&maps, range(10, 12), "gone for good").unwrap();
 
         let map = DiscardNote::new(maps)
@@ -262,7 +269,8 @@ mod tests {
 
     #[test]
     fn an_orphan_that_was_never_recorded_cannot_be_restored() {
-        let (maps, path) = with_block();
+        let (svc, path) = with_block();
+        let maps = svc.editor.clone();
 
         assert!(
             RestoreNote::new(maps)
@@ -283,8 +291,9 @@ mod edit_tests {
         LineRange::new(from, to).unwrap()
     }
 
-    fn with_a_note() -> (crate::map::application::MapService, ReviewPath) {
-        let (maps, scope) = use_case_setup(&["a.rs"]);
+    fn with_a_note() -> (crate::map::application::MapEditor, ReviewPath) {
+        let (svc, scope) = use_case_setup(&["a.rs"]);
+        let maps = svc.editor.clone();
         let path = scope.path("a.rs").unwrap();
         AddBlock::new(maps.clone())
             .execute(

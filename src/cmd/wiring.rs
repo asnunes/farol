@@ -11,9 +11,9 @@ use crate::diff::application::{CommitHistory, FileDiffs, ReviewScope};
 use crate::diff::infra::{GixSource, ScopeRequest};
 use crate::map::application::{
     AddBlock, AddFile, AddLineNote, AddSkim, CheckMap, DeriveMap, DiscardNote, GetFileDiff,
-    GetReview, GetScope, MapReconciler, MapService, MoveBlock, RemoveBlock, RemoveFile,
-    RemoveLineNote, RemoveSkim, ResetMap, RestoreNote, ShowMap, UpdateBlock, UpdateFile,
-    UpdateLineNote,
+    GetReview, GetScope, MapDerivation, MapEditor, MapReconciler, MapVersions, MoveBlock,
+    RemoveBlock, RemoveFile, RemoveLineNote, RemoveSkim, ResetMap, RestoreNote, ShowMap,
+    UpdateBlock, UpdateFile, UpdateLineNote,
 };
 use crate::map::infra::JsonMapRepository;
 use crate::progress::application::{MarkViewed, ProgressStore, UnmarkViewed};
@@ -81,36 +81,39 @@ impl Ctx {
         let history = CommitHistory::new(source);
 
         let reconciler = MapReconciler::new(scope.clone(), diffs.clone());
-        let map = MapService::new(scope.clone(), history, reconciler, maps);
+        let versions = MapVersions::new(scope.clone(), history, maps.clone());
+        let derivation =
+            MapDerivation::new(versions.clone(), scope.clone(), reconciler, maps.clone());
+        let editor = MapEditor::new(derivation.clone(), versions.clone(), maps);
         let progress = ProgressStore::new(progress_repo, diffs.clone());
 
         Ok(Self {
-            add_block: AddBlock::new(map.clone()),
-            update_block: UpdateBlock::new(map.clone()),
-            remove_block: RemoveBlock::new(map.clone()),
-            move_block: MoveBlock::new(map.clone()),
+            add_block: AddBlock::new(editor.clone()),
+            update_block: UpdateBlock::new(editor.clone()),
+            remove_block: RemoveBlock::new(editor.clone()),
+            move_block: MoveBlock::new(editor.clone()),
 
-            add_file: AddFile::new(map.clone()),
-            update_file: UpdateFile::new(map.clone()),
-            remove_file: RemoveFile::new(map.clone()),
+            add_file: AddFile::new(editor.clone()),
+            update_file: UpdateFile::new(editor.clone()),
+            remove_file: RemoveFile::new(editor.clone()),
 
-            add_line_note: AddLineNote::new(map.clone()),
-            update_line_note: UpdateLineNote::new(map.clone()),
-            remove_line_note: RemoveLineNote::new(map.clone()),
-            restore_note: RestoreNote::new(map.clone()),
-            discard_note: DiscardNote::new(map.clone()),
+            add_line_note: AddLineNote::new(editor.clone()),
+            update_line_note: UpdateLineNote::new(editor.clone()),
+            remove_line_note: RemoveLineNote::new(editor.clone()),
+            restore_note: RestoreNote::new(editor.clone()),
+            discard_note: DiscardNote::new(editor.clone()),
 
-            add_skim: AddSkim::new(map.clone()),
-            remove_skim: RemoveSkim::new(map.clone()),
+            add_skim: AddSkim::new(editor.clone()),
+            remove_skim: RemoveSkim::new(editor.clone()),
 
-            derive_map: DeriveMap::new(map.clone()),
-            show_map: ShowMap::new(map.clone()),
-            check_map: CheckMap::new(map.clone(), scope.clone()),
-            reset_map: ResetMap::new(map.clone()),
-            scope: GetScope::new(scope),
+            derive_map: DeriveMap::new(derivation, versions.clone()),
+            show_map: ShowMap::new(versions.clone()),
+            check_map: CheckMap::new(versions.clone(), scope.clone()),
+            reset_map: ResetMap::new(editor),
+            scope: GetScope::new(scope.clone()),
 
             server: ServerUseCases {
-                review: GetReview::new(map, progress.clone()),
+                review: GetReview::new(versions, scope, progress.clone()),
                 file_diff: GetFileDiff::new(diffs),
                 mark_viewed: MarkViewed::new(progress.clone()),
                 unmark_viewed: UnmarkViewed::new(progress),

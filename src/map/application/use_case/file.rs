@@ -1,16 +1,16 @@
 use crate::diff::domain::ReviewPath;
-use crate::map::application::MapService;
+use crate::map::application::MapEditor;
 use crate::map::domain::{ReviewMap, Slug};
 use crate::shared::error::Result;
 
 /// Put a file into a block, at a chosen place in its reading order.
 #[derive(Clone)]
 pub struct AddFile {
-    maps: MapService,
+    maps: MapEditor,
 }
 
 impl AddFile {
-    pub fn new(maps: MapService) -> Self {
+    pub fn new(maps: MapEditor) -> Self {
         Self { maps }
     }
 
@@ -30,11 +30,11 @@ impl AddFile {
 /// Rewrite the note that explains what a file contributes to its block.
 #[derive(Clone)]
 pub struct UpdateFile {
-    maps: MapService,
+    maps: MapEditor,
 }
 
 impl UpdateFile {
-    pub fn new(maps: MapService) -> Self {
+    pub fn new(maps: MapEditor) -> Self {
         Self { maps }
     }
 
@@ -48,11 +48,11 @@ impl UpdateFile {
 /// turned out to belong elsewhere.
 #[derive(Clone)]
 pub struct RemoveFile {
-    maps: MapService,
+    maps: MapEditor,
 }
 
 impl RemoveFile {
-    pub fn new(maps: MapService) -> Self {
+    pub fn new(maps: MapEditor) -> Self {
         Self { maps }
     }
 
@@ -81,7 +81,8 @@ mod tests {
     fn a_file_lands_after_the_one_it_was_placed_behind() {
         // The reading order inside a block is the whole point of the block, so
         // placement is not a detail the caller can be made to redo by hand.
-        let (maps, scope) = use_case_setup(&["a.rs", "b.rs", "c.rs"]);
+        let (svc, scope) = use_case_setup(&["a.rs", "b.rs", "c.rs"]);
+        let maps = svc.editor.clone();
         let a = scope.path("a.rs").unwrap();
         let b = scope.path("b.rs").unwrap();
         AddBlock::new(maps.clone())
@@ -97,7 +98,8 @@ mod tests {
 
     #[test]
     fn a_file_with_no_placement_goes_to_the_end() {
-        let (maps, scope) = use_case_setup(&["a.rs", "b.rs"]);
+        let (svc, scope) = use_case_setup(&["a.rs", "b.rs"]);
+        let maps = svc.editor.clone();
         AddBlock::new(maps.clone())
             .execute(
                 &slug("core"),
@@ -117,7 +119,8 @@ mod tests {
 
     #[test]
     fn the_same_file_cannot_be_listed_twice_in_one_block() {
-        let (maps, scope) = use_case_setup(&["a.rs"]);
+        let (svc, scope) = use_case_setup(&["a.rs"]);
+        let maps = svc.editor.clone();
         let a = scope.path("a.rs").unwrap();
         AddBlock::new(maps.clone())
             .execute(
@@ -138,7 +141,8 @@ mod tests {
 
     #[test]
     fn a_file_cannot_be_added_to_a_block_that_does_not_exist() {
-        let (maps, scope) = use_case_setup(&["a.rs"]);
+        let (svc, scope) = use_case_setup(&["a.rs"]);
+        let maps = svc.editor.clone();
 
         let err = AddFile::new(maps)
             .execute(&slug("nope"), &scope.path("a.rs").unwrap(), None, None)
@@ -156,10 +160,11 @@ mod edit_tests {
     use crate::testing::{slug, use_case_setup};
 
     fn seeded() -> (
-        crate::map::application::MapService,
+        crate::map::application::MapEditor,
         crate::diff::application::ReviewScope,
     ) {
-        let (maps, scope) = use_case_setup(&["a.rs", "b.rs"]);
+        let (svc, scope) = use_case_setup(&["a.rs", "b.rs"]);
+        let maps = svc.editor.clone();
         let paths = scope.paths(&["a.rs".into(), "b.rs".into()]).unwrap();
         AddBlock::new(maps.clone())
             .execute(&slug("core"), "t", "c", Position::End, &paths)
@@ -224,7 +229,8 @@ mod edit_tests {
 
     #[test]
     fn a_file_that_is_not_in_the_block_cannot_be_removed_from_it() {
-        let (maps, scope) = use_case_setup(&["a.rs", "b.rs"]);
+        let (svc, scope) = use_case_setup(&["a.rs", "b.rs"]);
+        let maps = svc.editor.clone();
         AddBlock::new(maps.clone())
             .execute(
                 &slug("core"),

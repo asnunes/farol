@@ -1,16 +1,16 @@
 use crate::diff::domain::ReviewPath;
-use crate::map::application::MapService;
+use crate::map::application::MapEditor;
 use crate::map::domain::{Position, ReviewMap, Slug};
 use crate::shared::error::Result;
 
 /// Open a block and, optionally, seed it with files that need no note.
 #[derive(Clone)]
 pub struct AddBlock {
-    maps: MapService,
+    maps: MapEditor,
 }
 
 impl AddBlock {
-    pub fn new(maps: MapService) -> Self {
+    pub fn new(maps: MapEditor) -> Self {
         Self { maps }
     }
 
@@ -35,11 +35,11 @@ impl AddBlock {
 /// Rewrite a block's title or the text that explains why it exists.
 #[derive(Clone)]
 pub struct UpdateBlock {
-    maps: MapService,
+    maps: MapEditor,
 }
 
 impl UpdateBlock {
-    pub fn new(maps: MapService) -> Self {
+    pub fn new(maps: MapEditor) -> Self {
         Self { maps }
     }
 
@@ -57,11 +57,11 @@ impl UpdateBlock {
 /// be worth moving somewhere else.
 #[derive(Clone)]
 pub struct RemoveBlock {
-    maps: MapService,
+    maps: MapEditor,
 }
 
 impl RemoveBlock {
-    pub fn new(maps: MapService) -> Self {
+    pub fn new(maps: MapEditor) -> Self {
         Self { maps }
     }
 
@@ -73,11 +73,11 @@ impl RemoveBlock {
 /// Move a block in the reading order.
 #[derive(Clone)]
 pub struct MoveBlock {
-    maps: MapService,
+    maps: MapEditor,
 }
 
 impl MoveBlock {
-    pub fn new(maps: MapService) -> Self {
+    pub fn new(maps: MapEditor) -> Self {
         Self { maps }
     }
 
@@ -91,21 +91,16 @@ mod tests {
     use super::*;
     use crate::diff::application::ReviewScope;
     use crate::map::application::AddLineNote;
-    use crate::testing::{FakeDiffSource, InMemoryMapRepository, service, slug};
-    use std::sync::Arc;
+    use crate::testing::{MapServices, slug, use_case_setup};
 
-    fn setup(paths: &[&str]) -> (MapService, ReviewScope) {
-        let source = Arc::new(FakeDiffSource::with_paths(paths));
-        let maps = service(
-            FakeDiffSource::with_paths(paths),
-            Arc::new(InMemoryMapRepository::new()),
-        );
-        (maps, ReviewScope::new(source))
+    fn setup(paths: &[&str]) -> (MapServices, ReviewScope) {
+        use_case_setup(paths)
     }
 
     #[test]
     fn a_block_is_opened_with_its_files_in_the_order_they_were_given() {
-        let (maps, scope) = setup(&["a.rs", "b.rs"]);
+        let (svc, scope) = setup(&["a.rs", "b.rs"]);
+        let maps = svc.editor.clone();
         let files = scope.paths(&["b.rs".into(), "a.rs".into()]).unwrap();
 
         let map = AddBlock::new(maps)
@@ -130,7 +125,8 @@ mod tests {
     fn a_block_that_fails_partway_leaves_nothing_behind() {
         // The second file duplicates the first, so the whole thing must fail
         // rather than leave a half-populated block on screen.
-        let (maps, scope) = setup(&["a.rs"]);
+        let (svc, scope) = setup(&["a.rs"]);
+        let maps = svc.editor.clone();
         let same = scope.paths(&["a.rs".into(), "a.rs".into()]).unwrap();
 
         assert!(
@@ -139,7 +135,8 @@ mod tests {
                 .is_err()
         );
         assert!(
-            maps.require_current()
+            svc.versions
+                .require_current()
                 .unwrap()
                 .block(&slug("core"))
                 .is_none()
@@ -148,7 +145,8 @@ mod tests {
 
     #[test]
     fn a_new_block_can_be_placed_ahead_of_an_existing_one() {
-        let (maps, _) = setup(&["a.rs"]);
+        let (svc, _) = setup(&["a.rs"]);
+        let maps = svc.editor.clone();
         AddBlock::new(maps.clone())
             .execute(&slug("alert"), "The alert", "c", Position::End, &[])
             .unwrap();
@@ -168,7 +166,8 @@ mod tests {
 
     #[test]
     fn removing_a_block_keeps_its_notes_as_orphans_to_be_decided() {
-        let (maps, scope) = setup(&["a.rs"]);
+        let (svc, scope) = setup(&["a.rs"]);
+        let maps = svc.editor.clone();
         let files = scope.paths(&["a.rs".into()]).unwrap();
         AddBlock::new(maps.clone())
             .execute(&slug("core"), "t", "c", Position::End, &files)
@@ -193,21 +192,23 @@ mod tests {
 #[cfg(test)]
 mod edit_tests {
     use super::*;
-    use crate::testing::{slug, use_case_setup};
+    use crate::testing::{MapServices, slug, use_case_setup};
 
-    fn with_two_blocks() -> MapService {
-        let (maps, _) = use_case_setup(&["a.rs"]);
+    fn with_two_blocks() -> MapServices {
+        let (svc, _) = use_case_setup(&["a.rs"]);
+        let maps = svc.editor.clone();
         for name in ["first", "second"] {
             AddBlock::new(maps.clone())
                 .execute(&slug(name), "t", "c", Position::End, &[])
                 .unwrap();
         }
-        maps
+        svc
     }
 
     #[test]
     fn rewriting_a_block_replaces_only_what_was_given() {
-        let maps = with_two_blocks();
+        let svc = with_two_blocks();
+        let maps = svc.editor.clone();
 
         let map = UpdateBlock::new(maps)
             .execute(&slug("first"), Some("A better title".into()), None)
@@ -223,7 +224,8 @@ mod edit_tests {
 
     #[test]
     fn a_block_can_be_moved_ahead_of_another() {
-        let maps = with_two_blocks();
+        let svc = with_two_blocks();
+        let maps = svc.editor.clone();
 
         let map = MoveBlock::new(maps)
             .execute(&slug("second"), Position::Before(slug("first")))
@@ -234,7 +236,8 @@ mod edit_tests {
 
     #[test]
     fn a_block_can_be_moved_to_the_end() {
-        let maps = with_two_blocks();
+        let svc = with_two_blocks();
+        let maps = svc.editor.clone();
 
         let map = MoveBlock::new(maps)
             .execute(&slug("first"), Position::End)
@@ -245,7 +248,8 @@ mod edit_tests {
 
     #[test]
     fn moving_a_block_relative_to_one_that_does_not_exist_is_refused() {
-        let maps = with_two_blocks();
+        let svc = with_two_blocks();
+        let maps = svc.editor.clone();
 
         assert!(
             MoveBlock::new(maps.clone())
@@ -253,7 +257,7 @@ mod edit_tests {
                 .is_err()
         );
         assert_eq!(
-            maps.require_current().unwrap().slugs(),
+            svc.versions.require_current().unwrap().slugs(),
             vec!["first", "second"],
             "a refused move must not have shuffled anything"
         );
@@ -261,7 +265,8 @@ mod edit_tests {
 
     #[test]
     fn editing_a_block_that_does_not_exist_lists_the_ones_that_do() {
-        let maps = with_two_blocks();
+        let svc = with_two_blocks();
+        let maps = svc.editor.clone();
 
         let err = UpdateBlock::new(maps)
             .execute(&slug("nope"), Some("t".into()), None)
