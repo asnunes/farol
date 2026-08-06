@@ -40,7 +40,7 @@ pub(super) fn hunks(algorithm: Algorithm, input: &InternedInput<&[u8]>) -> Hunks
         // one hunk instead of two with a sliver of untouched code between them.
         let joins = open
             .as_ref()
-            .is_some_and(|o| before.start.saturating_sub(o.before_pos) <= 2 * CONTEXT);
+            .is_some_and(|o| before.start.saturating_sub(o.old.end) <= 2 * CONTEXT);
 
         if !joins {
             if let Some(o) = open.take() {
@@ -63,9 +63,6 @@ pub(super) fn hunks(algorithm: Algorithm, input: &InternedInput<&[u8]>) -> Hunks
             o.push(&input.interner, LineKind::Added, token);
             out.additions += 1;
         }
-
-        o.before_pos = before.end;
-        o.after_pos = after.end;
     }
 
     if let Some(o) = open.take() {
@@ -74,58 +71,71 @@ pub(super) fn hunks(algorithm: Algorithm, input: &InternedInput<&[u8]>) -> Hunks
     out
 }
 
-/// A hunk being built, and where each side has got to.
+/// How far a hunk has got along one side of the file.
+///
+/// Indices into the token list, zero-based; the line number a note anchors to
+/// is one more. `start` is where the hunk begins and `end` is the next line to
+/// read, so `end - start` is how much of that side the hunk covers.
+#[derive(Clone, Copy)]
+struct Side {
+    start: u32,
+    end: u32,
+}
+
+impl Side {
+    fn from(start: u32) -> Self {
+        Self { start, end: start }
+    }
+
+    /// Take the next line number and move on. One call per line emitted, which
+    /// is what keeps the number and the position from drifting apart.
+    fn take(&mut self) -> u32 {
+        self.end += 1;
+        self.end
+    }
+
+    fn first_line(&self) -> u32 {
+        self.start + 1
+    }
+
+    fn covered(&self) -> u32 {
+        self.end - self.start
+    }
+}
+
+/// A hunk being built.
 struct Open {
-    old_start: u32,
-    new_start: u32,
-    /// Next line to read on each side, as an index into the token list.
-    before_pos: u32,
-    after_pos: u32,
-    /// Line numbers handed out so far, which is what the notes anchor to.
-    old_next: u32,
-    new_next: u32,
+    old: Side,
+    new: Side,
     lines: Vec<Line>,
 }
 
 impl Open {
     fn starting_at(before: u32, after: u32) -> Self {
         Self {
-            old_start: before + 1,
-            new_start: after + 1,
-            before_pos: before,
-            after_pos: after,
-            old_next: before + 1,
-            new_next: after + 1,
+            old: Side::from(before),
+            new: Side::from(after),
             lines: Vec::new(),
         }
     }
 
     /// Unchanged lines between where we are and `until`, which both sides share.
     fn carry_context(&mut self, input: &InternedInput<&[u8]>, until: u32) {
-        for &token in &input.before[self.before_pos as usize..until as usize] {
+        for &token in &input.before[self.old.end as usize..until as usize] {
             self.push(&input.interner, LineKind::Context, token);
         }
-        let carried = until - self.before_pos;
-        self.before_pos = until;
-        self.after_pos += carried;
     }
 
     fn push(&mut self, interner: &Interner<&[u8]>, kind: LineKind, token: Token) {
-        let old_number = matches!(kind, LineKind::Context | LineKind::Removed).then(|| {
-            self.old_next += 1;
-            self.old_next - 1
-        });
-        let new_number = matches!(kind, LineKind::Context | LineKind::Added).then(|| {
-            self.new_next += 1;
-            self.new_next - 1
-        });
         self.lines.push(Line {
             kind,
-            old_number,
-            new_number,
-            // The line separator is never part of the line: whether it
-            // survived interning depends on the source, and a note anchored to
-            // a line should not.
+            old_number: matches!(kind, LineKind::Context | LineKind::Removed)
+                .then(|| self.old.take()),
+            new_number: matches!(kind, LineKind::Context | LineKind::Added)
+                .then(|| self.new.take()),
+            // The line separator is never part of the line: whether it survived
+            // interning depends on the source, and a note anchored to a line
+            // should not.
             content: String::from_utf8_lossy(interner[token])
                 .trim_end_matches('\n')
                 .to_string(),
@@ -134,14 +144,14 @@ impl Open {
 
     /// Close with trailing context, clamped to the end of the file.
     fn close(mut self, input: &InternedInput<&[u8]>) -> Hunk {
-        let end = (self.before_pos + CONTEXT).min(input.before.len() as u32);
+        let end = (self.old.end + CONTEXT).min(input.before.len() as u32);
         self.carry_context(input, end);
 
         Hunk {
-            old_lines: self.old_next - self.old_start,
-            new_lines: self.new_next - self.new_start,
-            old_start: self.old_start,
-            new_start: self.new_start,
+            old_start: self.old.first_line(),
+            old_lines: self.old.covered(),
+            new_start: self.new.first_line(),
+            new_lines: self.new.covered(),
             lines: self.lines,
         }
     }
