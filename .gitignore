@@ -7,3 +7,7 @@
 /web/dist/*
 !/web/dist/.gitkeep
 web/tsconfig.tsbuildinfo
+
+# Coverage reports are generated on demand and never read from the repo.
+/web/coverage
+/llvm-cov

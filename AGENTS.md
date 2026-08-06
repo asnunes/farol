@@ -350,6 +350,14 @@ assert_eq!(
 );
 ```
 
+## Committing
+
+Stage by path. `git add -A` has swept generated files into three commits in this
+repository already — a coverage report, a document that belonged in its own
+commit, a test suite that belonged in another. `git status` before every commit,
+and if something appears that you did not write, it does not belong in the
+commit even if it is harmless.
+
 ## Comments
 
 Write why, not what. The code already says what.

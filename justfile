@@ -25,7 +25,7 @@ test:
 # Show where the tests are not looking.
 coverage:
     cargo llvm-cov --summary-only --ignore-filename-regex 'testing\.rs'
-    cd web && npx vitest run --coverage
+    cd web && npx vitest run --coverage --coverage.reporter=text
 
 # Real references only — a comment explaining why something has to be Sync for
 # axum's sake is not a dependency on axum.
