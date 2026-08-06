@@ -289,6 +289,11 @@ tree entry — not by a hash farol computes. Ancestry is `merge-base`, distance 
 distance was wrong after a merge. Before writing a comparison, a hash or a walk,
 check whether git already answers it.
 
+**One use case per file, named after the operation.** `add_block.rs`, not
+`block.rs` holding four. Grouping by entity puts unrelated operations in one
+place and gives their tests somewhere to drift to; the file name should be the
+answer to "where does adding a block live".
+
 ## Tests
 
 Three layers, and each covers something the others cannot.

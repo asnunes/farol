@@ -4,21 +4,55 @@
 //! route invokes one and does nothing else with the domain. Services and
 //! repositories are its dependencies, never the transport's.
 //!
-//! Each one is a struct holding what it needs and a single `execute`. That the
-//! struct exists at all is the point — it names the operation, states its
-//! dependencies in its constructor, and can be built in a test with fakes.
+//! Each one is a struct holding what it needs and a single `execute`, in a file
+//! of its own. That the struct exists at all is the point — it names the
+//! operation, states its dependencies in its constructor, and can be built in a
+//! test with fakes. One per file so the name of the operation is the name of
+//! the thing you open, and so its tests have nowhere to drift to.
 
-mod block;
-mod file;
-mod line;
-mod review;
-mod skim;
+mod add_block;
+mod add_file;
+mod add_line_note;
+mod add_skim;
+mod check_map;
+mod derive_map;
+mod discard_note;
+mod get_file_diff;
+mod get_review;
+mod get_scope;
+mod move_block;
+mod remove_block;
+mod remove_file;
+mod remove_line_note;
+mod remove_skim;
+mod reset_map;
+mod restore_note;
+mod show_map;
+mod update_block;
+mod update_file;
+mod update_line_note;
 
-pub use block::*;
-pub use file::*;
-pub use line::*;
-pub use review::*;
-pub use skim::*;
+pub use add_block::*;
+pub use add_file::*;
+pub use add_line_note::*;
+pub use add_skim::*;
+pub use check_map::*;
+pub use derive_map::*;
+pub use discard_note::*;
+pub use get_file_diff::*;
+pub use get_review::*;
+pub use get_scope::*;
+pub use move_block::*;
+pub use remove_block::*;
+pub use remove_file::*;
+pub use remove_line_note::*;
+pub use remove_skim::*;
+pub use reset_map::*;
+pub use restore_note::*;
+pub use show_map::*;
+pub use update_block::*;
+pub use update_file::*;
+pub use update_line_note::*;
 
 use crate::map::domain::Position;
 use crate::map::domain::Slug;

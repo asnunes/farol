@@ -358,3 +358,74 @@ pub fn use_case_setup(paths: &[&str]) -> (MapServices, crate::diff::application:
         scope,
     )
 }
+
+/// A block called `core` holding the given paths, which is the arrangement
+/// almost every use-case test needs before it can do anything interesting.
+pub fn with_block(paths: &[&str]) -> (MapServices, crate::diff::application::ReviewScope) {
+    let (svc, scope) = use_case_setup(paths);
+    let resolved = scope
+        .paths(&paths.iter().map(|p| p.to_string()).collect::<Vec<_>>())
+        .expect("the fake serves every path it was given");
+    crate::map::application::AddBlock::new(svc.editor.clone())
+        .execute(
+            &slug("core"),
+            "t",
+            "c",
+            crate::map::domain::Position::End,
+            &resolved,
+        )
+        .expect("opening the first block cannot fail");
+    (svc, scope)
+}
+
+pub fn range(from: u32, to: u32) -> crate::map::domain::LineRange {
+    crate::map::domain::LineRange::new(from, to).expect("test ranges must be well formed")
+}
+
+/// Paths in `core`, in reading order.
+pub fn block_paths(map: &crate::map::domain::ReviewMap) -> Vec<String> {
+    map.block(&slug("core"))
+        .expect("the core block should be there")
+        .files
+        .iter()
+        .map(|f| f.path.clone())
+        .collect()
+}
+
+/// Line notes on `core`'s first file, in the order they will be read.
+pub fn line_notes(
+    map: &crate::map::domain::ReviewMap,
+) -> Vec<(crate::map::domain::LineRange, String)> {
+    map.block(&slug("core"))
+        .expect("the core block should be there")
+        .files
+        .first()
+        .map(|f| {
+            f.line_notes
+                .iter()
+                .map(|n| (n.range, n.text.clone()))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// The state a derivation leaves behind when a note's code was rewritten.
+pub fn orphaned(
+    editor: &crate::map::application::MapEditor,
+    old: crate::map::domain::LineRange,
+    text: &str,
+) {
+    editor
+        .edit(|map| {
+            map.orphans.push(crate::map::domain::Orphan {
+                block: slug("core"),
+                path: "a.rs".into(),
+                old_range: old,
+                snapshot: "the code it covered".into(),
+                reason: crate::map::domain::OrphanReason::HunkOverlap,
+                text: text.into(),
+            });
+            Ok(())
+        })
+        .expect("seeding an orphan cannot fail");
+}

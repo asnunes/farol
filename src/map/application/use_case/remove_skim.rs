@@ -1,0 +1,40 @@
+use crate::diff::domain::ReviewPath;
+use crate::map::application::MapEditor;
+use crate::map::domain::ReviewMap;
+use crate::shared::error::Result;
+
+/// Take a file back off the skim list, when it turns out to deserve reading.
+#[derive(Clone)]
+pub struct RemoveSkim {
+    maps: MapEditor,
+}
+
+impl RemoveSkim {
+    pub fn new(maps: MapEditor) -> Self {
+        Self { maps }
+    }
+
+    pub fn execute(&self, path: &ReviewPath) -> Result<ReviewMap> {
+        self.maps.edit(|map| map.remove_skim(path.as_str()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::map::application::AddSkim;
+    use crate::testing::use_case_setup;
+
+    #[test]
+    fn removing_takes_the_entry_back_out() {
+        let (svc, scope) = use_case_setup(&["go.sum"]);
+        let path = scope.path("go.sum").unwrap();
+        AddSkim::new(svc.editor.clone())
+            .execute(&path, "generated", None)
+            .unwrap();
+
+        let map = RemoveSkim::new(svc.editor).execute(&path).unwrap();
+
+        assert!(map.skim.is_empty());
+    }
+}
