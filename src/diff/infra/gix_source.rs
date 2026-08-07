@@ -6,7 +6,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use super::git::{Blob, Diffed, Git, Side};
+use super::blob::{Blob, Diffed, Side};
+use super::git::Git;
 use super::window::Window;
 use crate::diff::domain::{
     CommitHistorySource, FileDiff, FileDiffSource, FileStatus, ReviewScopeSource, Scope,

@@ -8,7 +8,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use super::git::{Blob, Diffed, Git, Side};
+use super::blob::{Blob, Diffed, Side};
+use super::git::Git;
 use crate::diff::domain::{FileChange, FileStatus};
 use crate::shared::error::Result;
 
