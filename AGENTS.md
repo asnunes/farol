@@ -289,6 +289,14 @@ tree entry — not by a hash farol computes. Ancestry is `merge-base`, distance 
 distance was wrong after a merge. Before writing a comparison, a hash or a walk,
 check whether git already answers it.
 
+**The aggregate owns its invariants.** `ReviewMap`'s collections are private:
+one block per slug, a file listed once, a note replaced rather than duplicated,
+prose kept when its file goes — every one of those rules lives in a method, and
+a caller holding the `Vec` could sidestep all of them. When a service needs to
+change the map in a way no method covers, the map grows the method: the caller
+decides (it holds the diff), the map applies it (it holds the rules). See
+`reanchor_notes` and `retain_covered`.
+
 **One use case per file, named after the operation.** `add_block.rs`, not
 `block.rs` holding four. Grouping by entity puts unrelated operations in one
 place and gives their tests somewhere to drift to; the file name should be the
