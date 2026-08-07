@@ -54,6 +54,35 @@ mod tests {
     }
 
     #[test]
+    fn a_new_block_can_be_placed_behind_an_existing_one() {
+        let (svc, _) = use_case_setup(&["a.rs"]);
+        let add = AddBlock::new(svc.editor);
+        for name in ["one", "three"] {
+            add.execute(&slug(name), "t", "c", Position::End, &[])
+                .unwrap();
+        }
+
+        let map = add
+            .execute(&slug("two"), "t", "c", Position::After(slug("one")), &[])
+            .unwrap();
+
+        assert_eq!(map.slugs(), vec!["one", "two", "three"]);
+    }
+
+    #[test]
+    fn a_block_with_no_files_is_allowed() {
+        // Files are added afterwards, one at a time with their notes; a block
+        // that cannot exist empty would force the caller to guess up front.
+        let (svc, _) = use_case_setup(&["a.rs"]);
+
+        let map = AddBlock::new(svc.editor)
+            .execute(&slug("core"), "t", "c", Position::End, &[])
+            .unwrap();
+
+        assert!(map.block(&slug("core")).unwrap().files.is_empty());
+    }
+
+    #[test]
     fn a_block_that_fails_partway_leaves_nothing_behind() {
         // The second file duplicates the first, so the whole thing must fail
         // rather than leave a half-populated block on screen.

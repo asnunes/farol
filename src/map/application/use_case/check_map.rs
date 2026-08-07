@@ -78,6 +78,85 @@ mod tests {
     }
 
     #[test]
+    fn a_map_that_covers_every_file_and_leaves_no_orphan_passes() {
+        let paths = ["a.rs", "b.rs"];
+        let svc = services(
+            FakeDiffSource::with_paths(&paths).on_commit("head"),
+            Arc::new(InMemoryMapRepository::new()),
+        );
+        let scope = ReviewScope::new(Arc::new(FakeDiffSource::with_paths(&paths)));
+        svc.editor
+            .edit(|map| {
+                map.add_block(&slug("core"), "t", "c", crate::map::domain::Position::End)?;
+                map.add_file(&slug("core"), "a.rs", None, None)?;
+                map.add_file(&slug("core"), "b.rs", None, None)
+            })
+            .unwrap();
+
+        let report = CheckMap::new(svc.versions, scope).execute().unwrap();
+
+        assert!(report.uncovered.is_empty());
+        assert_eq!(report.pending_orphans, 0);
+        assert!(report.passed());
+    }
+
+    #[test]
+    fn a_file_on_the_skim_list_counts_as_covered() {
+        // Saying "read this diagonally" is a decision about the file, not a
+        // failure to decide.
+        let paths = ["a.rs", "go.sum"];
+        let svc = services(
+            FakeDiffSource::with_paths(&paths).on_commit("head"),
+            Arc::new(InMemoryMapRepository::new()),
+        );
+        let scope = ReviewScope::new(Arc::new(FakeDiffSource::with_paths(&paths)));
+        svc.editor
+            .edit(|map| {
+                map.add_block(&slug("core"), "t", "c", crate::map::domain::Position::End)?;
+                map.add_file(&slug("core"), "a.rs", None, None)?;
+                map.add_skim("go.sum", "regenerated", None)
+            })
+            .unwrap();
+
+        assert!(
+            CheckMap::new(svc.versions, scope)
+                .execute()
+                .unwrap()
+                .passed()
+        );
+    }
+
+    #[test]
+    fn an_orphan_nobody_decided_about_holds_the_check_open() {
+        let svc = services(
+            FakeDiffSource::with_paths(&["a.rs"]).on_commit("head"),
+            Arc::new(InMemoryMapRepository::new()),
+        );
+        let scope = ReviewScope::new(Arc::new(FakeDiffSource::with_paths(&["a.rs"])));
+        svc.editor
+            .edit(|map| {
+                map.add_block(&slug("core"), "t", "c", crate::map::domain::Position::End)?;
+                map.add_file(&slug("core"), "a.rs", None, None)?;
+                map.orphans.push(crate::map::domain::Orphan {
+                    block: slug("core"),
+                    path: "a.rs".into(),
+                    old_range: crate::testing::range(1, 2),
+                    snapshot: String::new(),
+                    reason: crate::map::domain::OrphanReason::HunkOverlap,
+                    text: "undecided".into(),
+                });
+                Ok(())
+            })
+            .unwrap();
+
+        let report = CheckMap::new(svc.versions, scope).execute().unwrap();
+
+        assert!(report.uncovered.is_empty());
+        assert_eq!(report.pending_orphans, 1);
+        assert!(!report.passed());
+    }
+
+    #[test]
     fn a_report_only_passes_when_nothing_is_left_open() {
         assert!(CheckReport::default().passed());
         assert!(

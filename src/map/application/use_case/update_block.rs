@@ -45,6 +45,51 @@ mod tests {
     }
 
     #[test]
+    fn the_context_can_be_rewritten_without_touching_the_title() {
+        // The prose is the expensive part and the part most often revised.
+        let (svc, _) = with_block(&["a.rs"]);
+
+        let map = UpdateBlock::new(svc.editor)
+            .execute(
+                &slug("core"),
+                None,
+                Some("the approach we discarded, and why".into()),
+            )
+            .unwrap();
+
+        let block = map.block(&slug("core")).unwrap();
+        assert_eq!(block.title, "t");
+        assert_eq!(block.context, "the approach we discarded, and why");
+    }
+
+    #[test]
+    fn both_can_be_rewritten_in_one_call() {
+        let (svc, _) = with_block(&["a.rs"]);
+
+        let map = UpdateBlock::new(svc.editor)
+            .execute(&slug("core"), Some("New".into()), Some("Also new".into()))
+            .unwrap();
+
+        let block = map.block(&slug("core")).unwrap();
+        assert_eq!(
+            (block.title.as_str(), block.context.as_str()),
+            ("New", "Also new")
+        );
+    }
+
+    #[test]
+    fn giving_neither_leaves_the_block_as_it_was() {
+        let (svc, _) = with_block(&["a.rs"]);
+
+        let map = UpdateBlock::new(svc.editor)
+            .execute(&slug("core"), None, None)
+            .unwrap();
+
+        let block = map.block(&slug("core")).unwrap();
+        assert_eq!((block.title.as_str(), block.context.as_str()), ("t", "c"));
+    }
+
+    #[test]
     fn editing_a_block_that_does_not_exist_lists_the_ones_that_do() {
         let (svc, _) = with_block(&["a.rs"]);
 

@@ -60,6 +60,42 @@ mod tests {
     }
 
     #[test]
+    fn a_file_can_arrive_with_the_note_that_explains_it() {
+        // Adding and explaining in one step is what the skill does; making it
+        // two calls would leave a window where the file has no reason to be
+        // there.
+        let (svc, _) = with_block(&["a.rs"]);
+        let (_, wider) = use_case_setup(&["a.rs", "b.rs"]);
+
+        let map = AddFile::new(svc.editor)
+            .execute(
+                &slug("core"),
+                &wider.path("b.rs").unwrap(),
+                Some("the deletions here are not an additional change".into()),
+                None,
+            )
+            .unwrap();
+
+        let file = map.block(&slug("core")).unwrap().file("b.rs").unwrap();
+        assert_eq!(
+            file.note.as_deref(),
+            Some("the deletions here are not an additional change")
+        );
+    }
+
+    #[test]
+    fn a_file_added_without_a_note_simply_has_none() {
+        // Most files need no prose of their own; the block's context covers
+        // them, and an empty note would be noise in the header.
+        let (svc, _) = with_block(&["a.rs"]);
+
+        let map = svc.versions.require_current().unwrap();
+
+        let file = map.block(&slug("core")).unwrap().file("a.rs").unwrap();
+        assert_eq!(file.note, None);
+    }
+
+    #[test]
     fn the_same_file_cannot_be_listed_twice_in_one_block() {
         let (svc, scope) = with_block(&["a.rs"]);
 

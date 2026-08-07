@@ -56,6 +56,39 @@ mod tests {
     }
 
     #[test]
+    fn a_block_can_be_moved_to_sit_after_another() {
+        let svc = two_blocks();
+
+        let map = MoveBlock::new(svc.editor)
+            .execute(&slug("core"), Position::After(slug("second")))
+            .unwrap();
+
+        assert_eq!(map.slugs(), vec!["second", "core"]);
+    }
+
+    #[test]
+    fn moving_a_block_where_it_already_is_changes_nothing() {
+        let svc = two_blocks();
+
+        let map = MoveBlock::new(svc.editor)
+            .execute(&slug("second"), Position::After(slug("core")))
+            .unwrap();
+
+        assert_eq!(map.slugs(), vec!["core", "second"]);
+    }
+
+    #[test]
+    fn moving_a_block_that_does_not_exist_is_refused() {
+        let svc = two_blocks();
+
+        assert!(
+            MoveBlock::new(svc.editor)
+                .execute(&slug("ghost"), Position::End)
+                .is_err()
+        );
+    }
+
+    #[test]
     fn moving_a_block_relative_to_one_that_does_not_exist_is_refused() {
         let svc = two_blocks();
 
