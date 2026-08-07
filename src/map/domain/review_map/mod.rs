@@ -10,6 +10,8 @@ mod line_notes;
 mod orphans;
 mod skim;
 
+pub use orphans::NoteFate;
+
 use serde::{Deserialize, Serialize};
 
 use super::block::{Block, BlockFile, LineNote};
@@ -31,14 +33,18 @@ pub struct ReviewMap {
     pub generated_at: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent: Option<String>,
+    /// Private, all three: every rule the map enforces — one block per slug, a
+    /// file listed once, a note replaced rather than duplicated, prose kept when
+    /// its file goes — lives in the methods that change them. A caller holding
+    /// the `Vec` could sidestep every one.
     #[serde(default)]
-    pub blocks: Vec<Block>,
+    blocks: Vec<Block>,
     #[serde(default)]
-    pub skim: Vec<SkimEntry>,
+    skim: Vec<SkimEntry>,
     /// Deactivated notes waiting for a decision. Lives only in the version that
     /// produced it — the next derivation does not inherit it.
     #[serde(default)]
-    pub orphans: Vec<Orphan>,
+    orphans: Vec<Orphan>,
 }
 
 impl ReviewMap {
@@ -60,7 +66,17 @@ impl ReviewMap {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.blocks.is_empty() && self.skim.is_empty()
+        self.blocks.is_empty() && self.skim().is_empty()
+    }
+
+    /// The blocks in reading order. Read-only: changing them goes through the
+    /// methods that keep the order and the slugs consistent.
+    pub fn blocks(&self) -> &[Block] {
+        &self.blocks
+    }
+
+    pub fn skim(&self) -> &[SkimEntry] {
+        &self.skim
     }
 
     pub fn slugs(&self) -> Vec<String> {
@@ -96,7 +112,7 @@ impl ReviewMap {
 
     /// Skim entries belonging to no block — a lockfile has no story to sit in.
     pub fn loose_skim(&self) -> impl Iterator<Item = &SkimEntry> {
-        self.skim.iter().filter(|s| s.block.is_none())
+        self.skim().iter().filter(|s| s.block.is_none())
     }
 
     /// Every path the map accounts for, in any role.
@@ -106,7 +122,7 @@ impl ReviewMap {
             .iter()
             .flat_map(|b| b.files.iter().map(|f| f.path.clone()))
             .collect();
-        out.extend(self.skim.iter().map(|s| s.path.clone()));
+        out.extend(self.skim().iter().map(|s| s.path.clone()));
         out.sort();
         out.dedup();
         out

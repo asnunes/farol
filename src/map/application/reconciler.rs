@@ -6,7 +6,10 @@
 
 use crate::diff::application::{FileDiffs, ReviewScope};
 use crate::diff::domain::FileDiff;
-use crate::map::domain::{LineNote, LineRange, Orphan, OrphanReason, ReviewMap, ShiftOutcome};
+use std::collections::HashMap;
+use std::collections::hash_map::Entry;
+
+use crate::map::domain::{LineRange, NoteFate, OrphanReason, ReviewMap, ShiftOutcome};
 use crate::shared::error::Result;
 
 #[derive(Clone)]
@@ -22,70 +25,42 @@ impl MapReconciler {
 
     /// Move every line note onto the new commit, deactivating the ones whose
     /// code was rewritten.
+    ///
+    /// The judgement is here because only this side can see the diff; what
+    /// happens to the map as a result is the map's own business.
     pub fn reanchor(&self, map: &mut ReviewMap, from: &str, to: &str) -> Result<()> {
-        let mut orphans = Vec::new();
+        // One diff per file, not one per note: a file with twelve notes would
+        // otherwise be diffed twelve times.
+        let mut seen: HashMap<String, Option<FileDiff>> = HashMap::new();
 
-        for block in &mut map.blocks {
-            for file in &mut block.files {
-                if file.line_notes.is_empty() {
-                    continue;
-                }
-                let Some(diff) = self.diffs.between(from, to, &file.path)? else {
-                    continue; // file untouched: every note is still exactly right
-                };
+        map.reanchor_notes(|path, note| {
+            let diff = match seen.entry(path.to_string()) {
+                Entry::Occupied(e) => e.into_mut(),
+                Entry::Vacant(e) => e.insert(self.diffs.between(from, to, path)?),
+            };
 
-                let mut kept = Vec::new();
-                for note in std::mem::take(&mut file.line_notes) {
-                    match note.range.shift(&diff.hunks) {
-                        ShiftOutcome::Unchanged => kept.push(note),
-                        ShiftOutcome::Shifted(range) => kept.push(LineNote {
-                            range,
-                            text: note.text,
-                        }),
-                        ShiftOutcome::Overlapped => orphans.push(Orphan {
-                            block: block.slug.clone(),
-                            path: file.path.clone(),
-                            old_range: note.range,
-                            snapshot: Self::snapshot_of(&diff, note.range),
-                            reason: OrphanReason::HunkOverlap,
-                            text: note.text,
-                        }),
-                    }
-                }
-                file.line_notes = kept;
-            }
-        }
+            // The file is identical between the two commits, so every note on
+            // it is still exactly right.
+            let Some(diff) = diff else {
+                return Ok(NoteFate::Keep);
+            };
 
-        map.orphans.extend(orphans);
-        Ok(())
+            Ok(match note.range.shift(&diff.hunks) {
+                ShiftOutcome::Unchanged => NoteFate::Keep,
+                ShiftOutcome::Shifted(range) => NoteFate::MoveTo(range),
+                ShiftOutcome::Overlapped => NoteFate::Orphan {
+                    snapshot: Self::snapshot_of(diff, note.range),
+                    reason: OrphanReason::HunkOverlap,
+                },
+            })
+        })
     }
 
     /// Files that left the review window cannot stay in the map. Their notes
     /// are kept as orphans so the prose can be moved rather than silently lost.
     pub fn prune_gone_files(&self, map: &mut ReviewMap) -> Result<()> {
         let scope = self.scope.get()?;
-        let mut orphans = Vec::new();
-
-        for block in &mut map.blocks {
-            let slug = block.slug.clone();
-            block.files.retain(|file| {
-                if scope.contains(&file.path) {
-                    return true;
-                }
-                orphans.extend(file.line_notes.iter().map(|note| Orphan {
-                    block: slug.clone(),
-                    path: file.path.clone(),
-                    old_range: note.range,
-                    snapshot: String::new(),
-                    reason: OrphanReason::FileRemoved,
-                    text: note.text.clone(),
-                }));
-                false
-            });
-        }
-
-        map.skim.retain(|s| scope.contains(&s.path));
-        map.orphans.extend(orphans);
+        map.retain_covered(|path| scope.contains(path));
         Ok(())
     }
 
@@ -141,7 +116,7 @@ mod tests {
         reconciler(source).reanchor(&mut map, "old", "new").unwrap();
 
         assert_eq!(notes_of(&map), vec![range(40, 45)]);
-        assert!(map.orphans.is_empty());
+        assert!(map.orphans().is_empty());
     }
 
     #[test]
@@ -157,7 +132,7 @@ mod tests {
         reconciler(source).reanchor(&mut map, "old", "new").unwrap();
 
         assert_eq!(notes_of(&map), vec![range(45, 50)]);
-        assert!(map.orphans.is_empty());
+        assert!(map.orphans().is_empty());
     }
 
     #[test]
@@ -173,14 +148,15 @@ mod tests {
         reconciler(source).reanchor(&mut map, "old", "new").unwrap();
 
         assert!(notes_of(&map).is_empty());
-        assert_eq!(map.orphans.len(), 1);
-        assert_eq!(map.orphans[0].text, "expensive prose");
-        assert_eq!(map.orphans[0].reason, OrphanReason::HunkOverlap);
+        assert_eq!(map.orphans().len(), 1);
+        assert_eq!(map.orphans()[0].text, "expensive prose");
+        assert_eq!(map.orphans()[0].reason, OrphanReason::HunkOverlap);
         assert_eq!(
-            map.orphans[0].snapshot, "const timeout = 180;\nlet x = 1;",
+            map.orphans()[0].snapshot,
+            "const timeout = 180;\nlet x = 1;",
             "the snapshot is what identifies the note afterwards, not the old range"
         );
-        assert_eq!(map.orphans[0].old_range, range(40, 41));
+        assert_eq!(map.orphans()[0].old_range, range(40, 41));
     }
 
     #[test]
@@ -199,8 +175,8 @@ mod tests {
         reconciler(source).reanchor(&mut map, "old", "new").unwrap();
 
         assert_eq!(notes_of(&map), vec![range(80, 82)]);
-        assert_eq!(map.orphans.len(), 1);
-        assert_eq!(map.orphans[0].text, "inside the change");
+        assert_eq!(map.orphans().len(), 1);
+        assert_eq!(map.orphans()[0].text, "inside the change");
     }
 
     #[test]
@@ -217,7 +193,7 @@ mod tests {
 
         reconciler(source).reanchor(&mut map, "old", "new").unwrap();
 
-        let snapshot = &map.orphans[0].snapshot;
+        let snapshot = &map.orphans()[0].snapshot;
         assert!(
             snapshot.chars().count() <= 602,
             "got {} chars",
@@ -238,9 +214,9 @@ mod tests {
         reconciler(source).prune_gone_files(&mut map).unwrap();
 
         assert!(map.block(&slug("core")).unwrap().files.is_empty());
-        assert_eq!(map.orphans.len(), 1);
-        assert_eq!(map.orphans[0].reason, OrphanReason::FileRemoved);
-        assert_eq!(map.orphans[0].text, "worth moving");
+        assert_eq!(map.orphans().len(), 1);
+        assert_eq!(map.orphans()[0].reason, OrphanReason::FileRemoved);
+        assert_eq!(map.orphans()[0].text, "worth moving");
     }
 
     #[test]
@@ -252,7 +228,7 @@ mod tests {
 
         reconciler(source).prune_gone_files(&mut map).unwrap();
 
-        let paths: Vec<&str> = map.skim.iter().map(|s| s.path.as_str()).collect();
+        let paths: Vec<&str> = map.skim().iter().map(|s| s.path.as_str()).collect();
         assert_eq!(paths, vec!["a.rs"]);
     }
 
@@ -264,6 +240,6 @@ mod tests {
         reconciler(source).prune_gone_files(&mut map).unwrap();
 
         assert_eq!(notes_of(&map), vec![range(3, 4)]);
-        assert!(map.orphans.is_empty());
+        assert!(map.orphans().is_empty());
     }
 }

@@ -47,6 +47,6 @@ mod tests {
 
         let map = RemoveSkim::new(svc.editor).execute(&path).unwrap();
 
-        assert!(map.skim.is_empty());
+        assert!(map.skim().is_empty());
     }
 }

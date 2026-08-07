@@ -40,7 +40,7 @@ mod tests {
         let map = RemoveBlock::new(svc.editor).execute(&slug("core")).unwrap();
 
         assert!(map.block(&slug("core")).is_none());
-        assert_eq!(map.orphans.len(), 1);
-        assert_eq!(map.orphans[0].text, "worth moving");
+        assert_eq!(map.orphans().len(), 1);
+        assert_eq!(map.orphans()[0].text, "worth moving");
     }
 }

@@ -43,7 +43,7 @@ mod tests {
             )
             .unwrap();
 
-        assert_eq!(map.skim[0].block.as_ref().map(Slug::as_str), Some("core"));
+        assert_eq!(map.skim()[0].block.as_ref().map(Slug::as_str), Some("core"));
     }
 
     #[test]
@@ -54,7 +54,7 @@ mod tests {
             .execute(&scope.path("go.sum").unwrap(), "generated", None)
             .unwrap();
 
-        assert!(map.skim[0].block.is_none());
+        assert!(map.skim()[0].block.is_none());
     }
 
     #[test]

@@ -44,7 +44,7 @@ impl CheckMap {
                 .map(|f| f.path.clone())
                 .filter(|p| !covered.contains(p))
                 .collect(),
-            pending_orphans: map.orphans.len(),
+            pending_orphans: map.orphans().len(),
             commits_behind: self.versions.behind(&map),
         })
     }
@@ -137,14 +137,19 @@ mod tests {
             .edit(|map| {
                 map.add_block(&slug("core"), "t", "c", crate::map::domain::Position::End)?;
                 map.add_file(&slug("core"), "a.rs", None, None)?;
-                map.orphans.push(crate::map::domain::Orphan {
-                    block: slug("core"),
-                    path: "a.rs".into(),
-                    old_range: crate::testing::range(1, 2),
-                    snapshot: String::new(),
-                    reason: crate::map::domain::OrphanReason::HunkOverlap,
-                    text: "undecided".into(),
-                });
+                map.add_line_note(
+                    &slug("core"),
+                    "a.rs",
+                    crate::testing::range(1, 2),
+                    "undecided",
+                )?;
+                // Deactivated the way a derivation would leave it.
+                map.reanchor_notes(|_, _| {
+                    Ok(crate::map::domain::NoteFate::Orphan {
+                        snapshot: String::new(),
+                        reason: crate::map::domain::OrphanReason::HunkOverlap,
+                    })
+                })?;
                 Ok(())
             })
             .unwrap();

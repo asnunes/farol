@@ -107,7 +107,7 @@ impl Reporting for Ctx {
     fn report(&self, done: String, outcome: Result<ReviewMap>) -> Result<()> {
         let map = outcome?;
         println!("{done}");
-        print!("{}", OrphanReport(&map.orphans));
+        print!("{}", OrphanReport(map.orphans()));
         Ok(())
     }
 }

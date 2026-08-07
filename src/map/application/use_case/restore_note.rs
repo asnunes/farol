@@ -52,7 +52,7 @@ mod tests {
             vec![(range(40, 42), "expensive prose".to_string())],
             "the prose is the point of restoring"
         );
-        assert!(map.orphans.is_empty());
+        assert!(map.orphans().is_empty());
     }
 
     #[test]
@@ -67,7 +67,7 @@ mod tests {
                 .is_err()
         );
         assert_eq!(
-            svc.versions.require_current().unwrap().orphans.len(),
+            svc.versions.require_current().unwrap().orphans().len(),
             1,
             "and the orphan survives to be tried again"
         );

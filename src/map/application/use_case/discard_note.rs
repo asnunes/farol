@@ -34,7 +34,7 @@ mod tests {
             .execute(&slug("core"), &scope.path("a.rs").unwrap(), range(10, 12))
             .unwrap();
 
-        assert!(map.orphans.is_empty());
+        assert!(map.orphans().is_empty());
         assert!(line_notes(&map).is_empty());
     }
 

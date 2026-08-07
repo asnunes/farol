@@ -204,9 +204,9 @@ mod tests {
         )
         .unwrap();
         m.remove_block(&slug("one")).unwrap();
-        assert_eq!(m.orphans.len(), 1);
-        assert_eq!(m.orphans[0].reason, OrphanReason::BlockRemoved);
-        assert_eq!(m.orphans[0].text, "worth keeping");
+        assert_eq!(m.orphans().len(), 1);
+        assert_eq!(m.orphans()[0].reason, OrphanReason::BlockRemoved);
+        assert_eq!(m.orphans()[0].text, "worth keeping");
     }
 
     #[test]
@@ -215,6 +215,6 @@ mod tests {
         m.add_skim("go.sum", "generated", Some(slug("one")))
             .unwrap();
         m.remove_block(&slug("one")).unwrap();
-        assert_eq!(m.skim[0].block, None);
+        assert_eq!(m.skim()[0].block, None);
     }
 }

@@ -45,7 +45,7 @@ mod tests {
             .unwrap();
 
         assert!(line_notes(&map).is_empty());
-        assert!(map.orphans.is_empty());
+        assert!(map.orphans().is_empty());
     }
 
     #[test]

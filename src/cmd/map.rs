@@ -39,7 +39,7 @@ impl Action for MapAction {
                         map: &derived.map,
                     }
                 );
-                print!("{}", OrphanReport(&derived.map.orphans));
+                print!("{}", OrphanReport(derived.map.orphans()));
                 Ok(())
             }
             MapAction::Show => {

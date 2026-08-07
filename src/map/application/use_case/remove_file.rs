@@ -52,8 +52,8 @@ mod tests {
             .execute(&slug("core"), &a)
             .unwrap();
 
-        assert_eq!(map.orphans.len(), 1);
-        assert_eq!(map.orphans[0].text, "worth moving");
+        assert_eq!(map.orphans().len(), 1);
+        assert_eq!(map.orphans()[0].text, "worth moving");
     }
 
     #[test]

@@ -67,7 +67,7 @@ impl MapDerivation {
                 // Orphans belong to the version that produced them; the next one
                 // starts clean. Carrying them forever would pile up a graveyard
                 // nobody revisits.
-                m.orphans.clear();
+                m.clear_orphans();
                 self.reconciler.reanchor(&mut m, &parent_sha, &target)?;
                 m
             }
@@ -90,7 +90,7 @@ impl MapDerivation {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::map::domain::{LineRange, Orphan, OrphanReason, Position};
+    use crate::map::domain::{LineRange, NoteFate, OrphanReason, Position};
     use crate::testing::{FakeDiffSource, InMemoryMapRepository, hunk, services, slug};
     use std::sync::Arc;
 
@@ -168,19 +168,21 @@ mod tests {
 
         let repo = Arc::new(InMemoryMapRepository::new());
         let mut stale = mapped("new", LineRange::new(1, 2).unwrap(), "x");
-        stale.orphans.push(Orphan {
-            block: slug("core"),
-            path: "a.rs".into(),
-            old_range: LineRange::new(9, 9).unwrap(),
-            snapshot: String::new(),
-            reason: OrphanReason::HunkOverlap,
-            text: "nobody decided".into(),
-        });
+        // Deactivate it the way a derivation would, so the next one inherits a
+        // map with an undecided orphan on it.
+        stale
+            .reanchor_notes(|_, _| {
+                Ok(NoteFate::Orphan {
+                    snapshot: String::new(),
+                    reason: OrphanReason::HunkOverlap,
+                })
+            })
+            .unwrap();
         repo.seed(stale);
 
         let map = services(source, repo).derivation.derive().unwrap().map;
         assert!(
-            map.orphans.is_empty(),
+            map.orphans().is_empty(),
             "carrying them forever would pile up a graveyard nobody revisits"
         );
     }
@@ -195,7 +197,7 @@ mod tests {
             .unwrap()
             .map;
 
-        assert!(map.blocks.is_empty());
+        assert!(map.blocks().is_empty());
         assert_eq!(map.generated_at, "head");
         assert_eq!(map.parent, None);
     }

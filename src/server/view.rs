@@ -84,7 +84,7 @@ impl ReviewView {
         let mut blocks = Vec::new();
         let mut placed: Vec<String> = Vec::new();
 
-        for block in &map.blocks {
+        for block in map.blocks() {
             let mut files = Vec::new();
 
             for bf in &block.files {
@@ -97,11 +97,7 @@ impl ReviewView {
                 files.push(FileView::build(map, scope, progress, &bf.path, false, None));
             }
 
-            for entry in map
-                .skim
-                .iter()
-                .filter(|s| s.block.as_ref() == Some(&block.slug))
-            {
+            for entry in map.skim_for(&block.slug) {
                 if placed.contains(&entry.path) {
                     continue;
                 }

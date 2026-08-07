@@ -410,22 +410,30 @@ pub fn line_notes(
 }
 
 /// The state a derivation leaves behind when a note's code was rewritten.
+///
+/// Goes through the same path a real derivation takes — write the note, then
+/// let the map deactivate it — rather than reaching into the map, which is no
+/// longer possible and was never a fair setup.
 pub fn orphaned(
     editor: &crate::map::application::MapEditor,
     old: crate::map::domain::LineRange,
     text: &str,
 ) {
+    use crate::map::domain::{NoteFate, OrphanReason};
+
     editor
         .edit(|map| {
-            map.orphans.push(crate::map::domain::Orphan {
-                block: slug("core"),
-                path: "a.rs".into(),
-                old_range: old,
-                snapshot: "the code it covered".into(),
-                reason: crate::map::domain::OrphanReason::HunkOverlap,
-                text: text.into(),
-            });
-            Ok(())
+            map.add_line_note(&slug("core"), "a.rs", old, text)?;
+            map.reanchor_notes(|_, note| {
+                Ok(if note.range == old {
+                    NoteFate::Orphan {
+                        snapshot: "the code it covered".into(),
+                        reason: OrphanReason::HunkOverlap,
+                    }
+                } else {
+                    NoteFate::Keep
+                })
+            })
         })
         .expect("seeding an orphan cannot fail");
 }

@@ -79,7 +79,7 @@ impl Display for MapReport<'_> {
             return writeln!(f, "\nThe map is empty — nothing has been mapped yet.");
         }
 
-        for (i, block) in map.blocks.iter().enumerate() {
+        for (i, block) in map.blocks().iter().enumerate() {
             writeln!(f, "\nblock {}  {}  \"{}\"", i + 1, block.slug, block.title)?;
             if !block.context.trim().is_empty() {
                 writeln!(f, "  context: {}", indent_rest(&block.context, 4))?;
