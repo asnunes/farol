@@ -1,4 +1,4 @@
-use super::model::ReviewMap;
+use super::review_map::ReviewMap;
 use crate::shared::error::Result;
 
 /// Persistence for review maps, keyed by the commit each version was built
