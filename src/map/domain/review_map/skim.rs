@@ -53,7 +53,7 @@ mod tests {
     fn skim_cannot_point_at_a_block_that_does_not_exist() {
         let mut m = map_with(&["one"]);
         let err = m
-            .add_skim("go.sum", "generated", Some(slug("ghost")))
+            .add_skim("Cargo.lock", "generated", Some(slug("ghost")))
             .unwrap_err();
         assert!(matches!(err, Error::UnknownBlock { .. }));
     }
@@ -65,12 +65,12 @@ mod tests {
         let mut m = map_with(&["one"]);
         m.add_skim("a_test.rs", "fixture only", Some(slug("one")))
             .unwrap();
-        m.add_skim("go.sum", "generated", None).unwrap();
+        m.add_skim("Cargo.lock", "generated", None).unwrap();
 
         let attached: Vec<_> = m.skim_for(&slug("one")).map(|s| s.path.as_str()).collect();
         let loose: Vec<_> = m.loose_skim().map(|s| s.path.as_str()).collect();
         assert_eq!(attached, vec!["a_test.rs"]);
-        assert_eq!(loose, vec!["go.sum"]);
+        assert_eq!(loose, vec!["Cargo.lock"]);
         assert_eq!(m.skim_for(&slug("ghost")).count(), 0);
     }
 }

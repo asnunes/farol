@@ -158,7 +158,10 @@ mod tests {
 
     #[test]
     fn slashes_in_branch_names_become_dashes() {
-        assert_eq!(Store::sanitize("fix/bull-signing"), "fix-bull-signing");
+        assert_eq!(
+            Store::sanitize("fix/retry-on-timeout"),
+            "fix-retry-on-timeout"
+        );
         assert_eq!(Store::sanitize("feat/a/b"), "feat-a-b");
         assert_eq!(Store::sanitize("main"), "main");
     }

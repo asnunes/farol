@@ -307,15 +307,15 @@ mod tests {
         let mut map = map_of(&[("one", "a.rs")]);
         map.add_skim("a_test.rs", "fixture only", Some(slug("one")))
             .unwrap();
-        map.add_skim("go.sum", "generated", None).unwrap();
+        map.add_skim("Cargo.lock", "generated", None).unwrap();
 
-        let source = FakeDiffSource::with_paths(&["a.rs", "a_test.rs", "go.sum"]);
+        let source = FakeDiffSource::with_paths(&["a.rs", "a_test.rs", "Cargo.lock"]);
         let view = built(&map, source, &Progress::new());
 
         assert_eq!(view.blocks[0].files.len(), 2);
         assert!(view.blocks[0].files[1].skim);
         assert_eq!(view.loose_skim.len(), 1);
-        assert_eq!(view.loose_skim[0].path, "go.sum");
+        assert_eq!(view.loose_skim[0].path, "Cargo.lock");
     }
 
     #[test]

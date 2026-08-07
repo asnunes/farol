@@ -67,19 +67,21 @@ mod tests {
     fn orphans_print_both_commands_and_the_snapshot() {
         use crate::map::domain::{Orphan, OrphanReason};
         let orphans = vec![Orphan {
-            block: slug("recover-link"),
-            path: "a.go".into(),
+            block: slug("retry-window"),
+            path: "src/retry.rs".into(),
             old_range: LineRange::new(82, 116).unwrap(),
-            snapshot: "if offer.Status == StatusSigning {".into(),
+            snapshot: "if attempt.state == State::Pending {".into(),
             reason: OrphanReason::HunkOverlap,
-            text: "Recovery only happens on a fresh transition.".into(),
+            text: "The backoff resets only on a fresh attempt.".into(),
         }];
         let out = OrphanReport(&orphans).to_string();
         assert!(out.contains("1 line note deactivated"));
         assert!(out.contains("hunk-overlap"));
-        assert!(out.contains("if offer.Status == StatusSigning {"));
-        assert!(out.contains("farol line restore recover-link a.go 82-116 --range <new-range>"));
-        assert!(out.contains("farol line discard recover-link a.go 82-116"));
+        assert!(out.contains("if attempt.state == State::Pending {"));
+        assert!(
+            out.contains("farol line restore retry-window src/retry.rs 82-116 --range <new-range>")
+        );
+        assert!(out.contains("farol line discard retry-window src/retry.rs 82-116"));
     }
 
     #[test]

@@ -131,7 +131,7 @@ mod tests {
         )
         .unwrap();
         map.add_file(&slug("core"), "b.rs", None, None).unwrap();
-        map.add_skim("go.sum", "generated", None).unwrap();
+        map.add_skim("Cargo.lock", "generated", None).unwrap();
         map
     }
 
@@ -142,11 +142,11 @@ mod tests {
         use crate::map::application::{GetFileDiff, GetReview};
         use crate::progress::application::{MarkViewed, UnmarkViewed};
 
-        let source = Arc::new(FakeDiffSource::with_paths(&["a.rs", "b.rs", "go.sum"]));
+        let source = Arc::new(FakeDiffSource::with_paths(&["a.rs", "b.rs", "Cargo.lock"]));
         let diffs = FileDiffs::new(source.clone());
         let scope = ReviewScope::new(source.clone());
         let maps = crate::testing::services(
-            FakeDiffSource::with_paths(&["a.rs", "b.rs", "go.sum"]),
+            FakeDiffSource::with_paths(&["a.rs", "b.rs", "Cargo.lock"]),
             Arc::new(crate::testing::InMemoryMapRepository::new()),
         );
         let progress = ProgressStore::new(
@@ -212,7 +212,7 @@ mod tests {
         assert_eq!(files[0]["path"], "a.rs");
         assert_eq!(files[0]["notes"][0]["text"], "worth knowing");
         assert_eq!(files[0]["lineNotes"][0]["from"], 4);
-        assert_eq!(body["looseSkim"][0]["path"], "go.sum");
+        assert_eq!(body["looseSkim"][0]["path"], "Cargo.lock");
     }
 
     #[tokio::test]

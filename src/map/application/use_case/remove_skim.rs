@@ -28,19 +28,19 @@ mod tests {
     #[test]
     fn removing_one_that_is_not_marked_is_refused() {
         // Quietly doing nothing would let a typo look like it worked.
-        let (svc, scope) = use_case_setup(&["go.sum"]);
+        let (svc, scope) = use_case_setup(&["Cargo.lock"]);
 
         assert!(
             RemoveSkim::new(svc.editor)
-                .execute(&scope.path("go.sum").unwrap())
+                .execute(&scope.path("Cargo.lock").unwrap())
                 .is_err()
         );
     }
 
     #[test]
     fn removing_takes_the_entry_back_out() {
-        let (svc, scope) = use_case_setup(&["go.sum"]);
-        let path = scope.path("go.sum").unwrap();
+        let (svc, scope) = use_case_setup(&["Cargo.lock"]);
+        let path = scope.path("Cargo.lock").unwrap();
         AddSkim::new(svc.editor.clone())
             .execute(&path, "generated", None)
             .unwrap();

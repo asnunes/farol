@@ -181,12 +181,12 @@ mod tests {
         // The reader of this suggestion is the session writing the map, and a
         // hallucinated path is the mistake it makes most; the suggestion is
         // what turns a rejection into a self-correction.
-        let scope = scope_over(&["services/db.go", "io/db_test.go", "unrelated.rs"]);
+        let scope = scope_over(&["src/store/db.rs", "src/io/db_test.rs", "unrelated.py"]);
 
-        let hits = scope.similar_paths("service/db.go");
+        let hits = scope.similar_paths("src/stores/db.rs");
         assert_eq!(
             hits.first().map(String::as_str),
-            Some("services/db.go"),
+            Some("src/store/db.rs"),
             "same file name, wrong directory, is the closest kind of miss"
         );
     }
@@ -194,7 +194,7 @@ mod tests {
     #[test]
     fn a_path_that_looks_like_nothing_under_review_gets_no_suggestion() {
         // Better silence than sending the author off to another wrong path.
-        let scope = scope_over(&["services/db.go"]);
+        let scope = scope_over(&["src/store/db.rs"]);
         assert!(scope.similar_paths("nothing_like_it.py").is_empty());
     }
 }

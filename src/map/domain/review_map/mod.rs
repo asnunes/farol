@@ -182,9 +182,13 @@ mod tests {
         m.add_file(&slug("one"), "a.rs", None, None).unwrap();
         m.add_file(&slug("two"), "a.rs", None, None).unwrap();
         m.add_file(&slug("two"), "b.rs", None, None).unwrap();
-        m.add_skim("go.sum", "generated", None).unwrap();
+        m.add_skim("Cargo.lock", "generated", None).unwrap();
 
-        assert_eq!(m.covered_paths(), vec!["a.rs", "b.rs", "go.sum"]);
+        assert_eq!(
+            m.covered_paths(),
+            vec!["Cargo.lock", "a.rs", "b.rs"],
+            "sorted, so two callers cannot disagree about the order"
+        );
     }
 
     #[test]
@@ -201,7 +205,7 @@ mod tests {
     fn a_map_holding_only_skim_entries_is_not_empty() {
         // "Nothing to read closely" is still a decision the reviewer made.
         let mut m = ReviewMap::new("feature/x", "main", "abc123");
-        m.add_skim("go.sum", "generated", None).unwrap();
+        m.add_skim("Cargo.lock", "generated", None).unwrap();
 
         assert!(!m.is_empty());
     }

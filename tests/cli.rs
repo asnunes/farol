@@ -1078,15 +1078,15 @@ fn notes_can_be_rewritten_and_withdrawn() {
 fn a_skim_entry_can_be_taken_back_out() {
     let repo = Repo::new();
     repo.feature();
-    repo.write("go.sum", "checksums\n");
+    repo.write("Cargo.lock", "checksums\n");
     repo.commit("regenerate");
     repo.derive();
-    repo.ok(&["skim", "add", "go.sum", "--reason", "regenerated"]);
-    assert!(repo.ok(&["map", "show"]).contains("go.sum"));
+    repo.ok(&["skim", "add", "Cargo.lock", "--reason", "regenerated"]);
+    assert!(repo.ok(&["map", "show"]).contains("Cargo.lock"));
 
-    repo.ok(&["skim", "remove", "go.sum"]);
+    repo.ok(&["skim", "remove", "Cargo.lock"]);
 
-    assert!(!repo.ok(&["map", "show"]).contains("go.sum"));
+    assert!(!repo.ok(&["map", "show"]).contains("Cargo.lock"));
 }
 
 #[test]

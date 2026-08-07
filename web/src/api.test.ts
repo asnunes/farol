@@ -26,7 +26,7 @@ function review(): ReviewView {
       { slug: "one", title: "First", context: "", files: [file("a.rs", true), file("b.rs")] },
       { slug: "two", title: "Second", context: "", files: [file("c.rs")] },
     ],
-    looseSkim: [file("go.sum")],
+    looseSkim: [file("Cargo.lock")],
     unmapped: [],
     totalFiles: 4,
     viewedFiles: 1,
@@ -41,7 +41,7 @@ describe("reading order", () => {
       "a.rs",
       "b.rs",
       "c.rs",
-      "go.sum",
+      "Cargo.lock",
     ]);
   });
 
@@ -61,6 +61,6 @@ describe("block lookup", () => {
 
   it("returns nothing for a file that only appears in loose skim", () => {
     // It still renders, it just has no block band above it.
-    expect(blockOf(review(), "go.sum")).toBeNull();
+    expect(blockOf(review(), "Cargo.lock")).toBeNull();
   });
 });

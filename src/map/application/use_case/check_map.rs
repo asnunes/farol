@@ -104,7 +104,7 @@ mod tests {
     fn a_file_on_the_skim_list_counts_as_covered() {
         // Saying "read this diagonally" is a decision about the file, not a
         // failure to decide.
-        let paths = ["a.rs", "go.sum"];
+        let paths = ["a.rs", "Cargo.lock"];
         let svc = services(
             FakeDiffSource::with_paths(&paths).on_commit("head"),
             Arc::new(InMemoryMapRepository::new()),
@@ -114,7 +114,7 @@ mod tests {
             .edit(|map| {
                 map.add_block(&slug("core"), "t", "c", crate::map::domain::Position::End)?;
                 map.add_file(&slug("core"), "a.rs", None, None)?;
-                map.add_skim("go.sum", "regenerated", None)
+                map.add_skim("Cargo.lock", "regenerated", None)
             })
             .unwrap();
 

@@ -212,7 +212,7 @@ mod tests {
     #[test]
     fn removing_a_block_detaches_skim_entries_that_pointed_at_it() {
         let mut m = map_with(&["one"]);
-        m.add_skim("go.sum", "generated", Some(slug("one")))
+        m.add_skim("Cargo.lock", "generated", Some(slug("one")))
             .unwrap();
         m.remove_block(&slug("one")).unwrap();
         assert_eq!(m.skim()[0].block, None);
