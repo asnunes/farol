@@ -44,3 +44,31 @@ impl AsRef<str> for ReviewPath {
         &self.path
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_proven_path_reads_as_the_string_it_stands_for() {
+        // It is printed into error messages and command suggestions, where a
+        // wrapper's debug shape would be noise.
+        let path = ReviewPath::proven("src/a.rs", 40);
+
+        assert_eq!(path.to_string(), "src/a.rs");
+        assert_eq!(path.as_str(), "src/a.rs");
+        assert_eq!(<ReviewPath as AsRef<str>>::as_ref(&path), "src/a.rs");
+    }
+
+    #[test]
+    fn two_paths_are_the_same_when_they_name_the_same_file_at_the_same_length() {
+        assert_eq!(
+            ReviewPath::proven("a.rs", 10),
+            ReviewPath::proven("a.rs", 10)
+        );
+        assert_ne!(
+            ReviewPath::proven("a.rs", 10),
+            ReviewPath::proven("b.rs", 10)
+        );
+    }
+}

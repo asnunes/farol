@@ -408,4 +408,99 @@ mod tests {
                 .all(|l| l.kind == LineKind::Removed)
         );
     }
+
+    // ---- what deriving asks of it ---------------------------------------
+
+    #[test]
+    fn the_head_it_resolved_is_the_one_it_reports() {
+        let f = edited();
+        let expected = f.git(&["rev-parse", "HEAD"]);
+
+        let source = f.source("feature/x", ScopeRequest::default());
+
+        assert_eq!(source.head_sha().unwrap(), expected);
+    }
+
+    #[test]
+    fn a_file_identical_between_two_commits_has_no_diff_to_show() {
+        // Deriving asks this of every file with a note on it; answering with
+        // an empty diff would make every note look like it needed moving.
+        let f = edited();
+        let head = f.git(&["rev-parse", "HEAD"]);
+
+        let out = f
+            .source("feature/x", ScopeRequest::default())
+            .file_diff_between(&head, &head, "src/a.rs")
+            .unwrap();
+
+        assert!(out.is_none());
+    }
+
+    #[test]
+    fn a_file_that_changed_between_two_commits_comes_back_with_the_hunks() {
+        let f = edited();
+        let head = f.git(&["rev-parse", "HEAD"]);
+        let base = f.git(&["rev-parse", "HEAD~1"]);
+
+        let diff = f
+            .source("feature/x", ScopeRequest::default())
+            .file_diff_between(&base, &head, "src/a.rs")
+            .unwrap()
+            .expect("the file changed between them");
+
+        assert_eq!((diff.additions, diff.deletions), (1, 1));
+    }
+
+    #[test]
+    fn the_working_tree_can_be_the_far_side_of_a_comparison() {
+        // How a map written against uncommitted work is brought forward.
+        let f = edited();
+        let head = f.git(&["rev-parse", "HEAD"]);
+        f.write(
+            "src/a.rs",
+            &numbered(40).replace("line 20\n", "UNCOMMITTED\n"),
+        );
+
+        let diff = f
+            .source(
+                "feature/x",
+                ScopeRequest {
+                    dirty: true,
+                    ..Default::default()
+                },
+            )
+            .file_diff_between(&head, crate::shared::WORKING, "src/a.rs")
+            .unwrap()
+            .expect("the working tree differs from the commit");
+
+        assert!(
+            diff.hunks[0]
+                .lines
+                .iter()
+                .any(|l| l.content == "UNCOMMITTED")
+        );
+    }
+
+    #[test]
+    fn uncommitted_work_is_never_behind_and_never_an_ancestor() {
+        // It is not a commit, so the questions history answers do not apply.
+        let f = edited();
+        let source = f.source("feature/x", ScopeRequest::default());
+
+        assert_eq!(source.commits_ahead_of(crate::shared::WORKING).unwrap(), 0);
+        assert!(!source.is_ancestor(crate::shared::WORKING).unwrap());
+    }
+
+    #[test]
+    fn a_commit_that_cannot_be_resolved_is_not_an_ancestor_rather_than_an_error() {
+        // A map left behind by a branch that was rebased away names a commit
+        // this repository no longer has.
+        let f = edited();
+
+        assert!(
+            !f.source("feature/x", ScopeRequest::default())
+                .is_ancestor("0000000000000000000000000000000000000000")
+                .unwrap()
+        );
+    }
 }

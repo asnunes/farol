@@ -88,4 +88,53 @@ mod tests {
     fn no_orphans_prints_nothing_at_all() {
         assert_eq!(OrphanReport(&[]).to_string(), "");
     }
+
+    fn orphan(range: LineRange, text: &str) -> crate::map::domain::Orphan {
+        use crate::map::domain::{Orphan, OrphanReason};
+        Orphan {
+            block: slug("retry-window"),
+            path: "src/retry.rs".into(),
+            old_range: range,
+            snapshot: "if attempt.state == State::Pending {".into(),
+            reason: OrphanReason::HunkOverlap,
+            text: text.into(),
+        }
+    }
+
+    #[test]
+    fn one_note_is_not_reported_in_the_plural() {
+        let out = OrphanReport(&[orphan(LineRange::new(1, 2).unwrap(), "one")]).to_string();
+
+        assert!(out.contains("1 line note deactivated"), "{out}");
+        assert!(!out.contains("notes deactivated"), "{out}");
+    }
+
+    #[test]
+    fn several_notes_are() {
+        let out = OrphanReport(&[
+            orphan(LineRange::new(1, 2).unwrap(), "one"),
+            orphan(LineRange::new(9, 9).unwrap(), "two"),
+        ])
+        .to_string();
+
+        assert!(out.contains("2 line notes deactivated"), "{out}");
+    }
+
+    #[test]
+    fn the_reader_is_told_to_go_by_the_snapshot_not_the_old_numbers() {
+        // After a refactor the old range may point at a different function
+        // entirely, and restoring there would place a confident note on
+        // unrelated code.
+        let out = OrphanReport(&[orphan(LineRange::new(82, 116).unwrap(), "n")]).to_string();
+
+        assert!(out.contains("not the old line numbers"), "{out}");
+    }
+
+    #[test]
+    fn every_orphan_carries_the_reason_and_what_to_do_about_it() {
+        let out = OrphanReport(&[orphan(LineRange::new(1, 2).unwrap(), "n")]).to_string();
+
+        assert!(out.contains("hunk-overlap"), "{out}");
+        assert!(out.contains("re-read the new code"), "{out}");
+    }
 }

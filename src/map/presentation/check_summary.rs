@@ -72,4 +72,96 @@ mod tests {
                 .contains("Map is complete.")
         );
     }
+
+    #[test]
+    fn every_unassigned_file_is_named_and_the_cost_is_spelled_out() {
+        // The reader is the session that wrote the map. "3 files" without the
+        // names leaves it grepping.
+        let out = CheckSummary(&CheckReport {
+            uncovered: vec!["src/a.rs".into(), "src/b.rs".into()],
+            ..Default::default()
+        })
+        .to_string();
+
+        assert!(out.contains("2 file(s)"), "{out}");
+        assert!(
+            out.contains("src/a.rs") && out.contains("src/b.rs"),
+            "{out}"
+        );
+        assert!(
+            out.contains("never appears on screen"),
+            "the consequence is why this matters: {out}"
+        );
+    }
+
+    #[test]
+    fn undecided_orphans_are_counted_with_the_command_that_lists_them() {
+        let out = CheckSummary(&CheckReport {
+            pending_orphans: 3,
+            ..Default::default()
+        })
+        .to_string();
+
+        assert!(out.contains("3 deactivated"), "{out}");
+        assert!(out.contains("farol map derive"), "{out}");
+    }
+
+    #[test]
+    fn the_two_kinds_of_unfinished_business_are_kept_apart() {
+        let out = CheckSummary(&CheckReport {
+            uncovered: vec!["src/a.rs".into()],
+            pending_orphans: 1,
+            ..Default::default()
+        })
+        .to_string();
+
+        let files_at = out.find("1 file(s)").expect("uncovered section");
+        let orphans_at = out.find("1 deactivated").expect("orphan section");
+        assert!(files_at < orphans_at);
+        assert!(
+            out[files_at..orphans_at].contains("\n\n"),
+            "a blank line between them, or they read as one paragraph:\n{out}"
+        );
+    }
+
+    #[test]
+    fn a_complete_map_says_so_in_one_line() {
+        let out = CheckSummary(&CheckReport::default()).to_string();
+
+        assert!(out.contains("Map is complete."), "{out}");
+        assert!(!out.contains("behind HEAD"), "{out}");
+    }
+
+    #[test]
+    fn a_complete_map_that_is_behind_says_how_far_without_failing() {
+        // Staleness is something to know, not something that makes the map
+        // wrong.
+        let one = CheckSummary(&CheckReport {
+            commits_behind: 1,
+            ..Default::default()
+        })
+        .to_string();
+        assert!(one.contains("1 commit behind"), "{one}");
+        assert!(!one.contains("1 commits"), "not pluralised: {one}");
+
+        let many = CheckSummary(&CheckReport {
+            commits_behind: 4,
+            ..Default::default()
+        })
+        .to_string();
+        assert!(many.contains("4 commits behind"), "{many}");
+    }
+
+    #[test]
+    fn an_unfinished_map_is_not_told_how_stale_it_is() {
+        // There is a more pressing thing to fix first.
+        let out = CheckSummary(&CheckReport {
+            uncovered: vec!["src/a.rs".into()],
+            commits_behind: 4,
+            ..Default::default()
+        })
+        .to_string();
+
+        assert!(!out.contains("behind HEAD"), "{out}");
+    }
 }

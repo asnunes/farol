@@ -105,7 +105,7 @@ fn now() -> String {
 }
 
 #[cfg(test)]
-mod tests {
+pub(super) mod tests {
     use super::*;
     use crate::cmd::ServerUseCases;
     use crate::map::domain::ReviewMap;
@@ -137,6 +137,32 @@ mod tests {
 
     /// Wire the routes over fakes. Nothing listens on a port and nothing
     /// touches disk.
+    /// The use cases over fakes, shared with the tests that start a real
+    /// listener next door.
+    pub(in crate::server) fn use_cases() -> ServerUseCases {
+        use crate::diff::application::{FileDiffs, ReviewScope};
+        use crate::map::application::{GetFileDiff, GetReview};
+        use crate::progress::application::{MarkViewed, UnmarkViewed};
+
+        let paths = ["a.rs", "b.rs", "Cargo.lock"];
+        let diffs = FileDiffs::new(Arc::new(FakeDiffSource::with_paths(&paths)));
+        let scope = ReviewScope::new(Arc::new(FakeDiffSource::with_paths(&paths)));
+        let maps = crate::testing::services(
+            FakeDiffSource::with_paths(&paths),
+            Arc::new(crate::testing::InMemoryMapRepository::new()),
+        );
+        let progress = ProgressStore::new(
+            Arc::new(InMemoryProgressRepository::default()),
+            diffs.clone(),
+        );
+        ServerUseCases {
+            review: GetReview::new(maps.versions, scope, progress.clone()),
+            file_diff: GetFileDiff::new(diffs),
+            mark_viewed: MarkViewed::new(progress.clone()),
+            unmark_viewed: UnmarkViewed::new(progress),
+        }
+    }
+
     fn app() -> (Router, ProgressStore, broadcast::Sender<String>) {
         use crate::diff::application::{FileDiffs, ReviewScope};
         use crate::map::application::{GetFileDiff, GetReview};

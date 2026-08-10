@@ -163,4 +163,52 @@ mod tests {
         let m = ReviewMap::new("b", "main", "abc1234");
         assert!(render(&m, 0).contains("The map is empty"));
     }
+
+    #[test]
+    fn a_map_of_uncommitted_work_says_so_instead_of_printing_a_sha() {
+        // There is no commit to name, and a seven-character slice of the
+        // sentinel would be gibberish.
+        let mut m = sample();
+        m.generated_at = crate::map::domain::WORKING.to_string();
+
+        let out = render(&m, 0);
+
+        assert!(out.contains("generated at uncommitted work"), "{out}");
+    }
+
+    #[test]
+    fn a_block_with_no_context_prints_no_empty_field() {
+        // A `context:` line with nothing after it reads as a mistake.
+        let mut m = ReviewMap::new("feature/x", "main", "abc1234");
+        m.add_block(&slug("bare"), "Just a heading", "", Position::End)
+            .unwrap();
+
+        let out = render(&m, 0);
+
+        assert!(out.contains("bare"), "{out}");
+        assert!(!out.contains("context:"), "{out}");
+    }
+
+    #[test]
+    fn a_block_with_no_files_prints_no_empty_list() {
+        let mut m = ReviewMap::new("feature/x", "main", "abc1234");
+        m.add_block(&slug("bare"), "t", "c", Position::End).unwrap();
+
+        assert!(!render(&m, 0).contains("files:"));
+    }
+
+    #[test]
+    fn a_file_with_no_notes_of_any_kind_is_still_listed() {
+        // It is in the block, so the reviewer has to read it; the map simply
+        // has nothing extra to say about it.
+        let mut m = ReviewMap::new("feature/x", "main", "abc1234");
+        m.add_block(&slug("core"), "t", "c", Position::End).unwrap();
+        m.add_file(&slug("core"), "quiet.rs", None, None).unwrap();
+
+        let out = render(&m, 0);
+
+        assert!(out.contains("quiet.rs"), "{out}");
+        assert!(!out.contains("note:"), "{out}");
+        assert!(!out.contains("lines "), "{out}");
+    }
 }

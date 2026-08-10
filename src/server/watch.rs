@@ -24,28 +24,156 @@ pub(super) fn spawn(git_dir: PathBuf, tx: broadcast::Sender<String>) {
             return;
         }
 
-        let mut last = std::time::Instant::now();
+        // `None`, not "now": nothing has been sent yet, so the first change
+        // must get through. Starting the clock at startup swallowed it if it
+        // landed within the quiet period — which is exactly what happens when
+        // the skill finishes writing the map as the server comes up.
+        let mut last: Option<std::time::Instant> = None;
         for event in raw_rx {
             let Ok(event) = event else { continue };
-            let touched_map = event
-                .paths
-                .iter()
-                .any(|p| p.to_string_lossy().contains("/farol/"));
-            let touched_head = event
-                .paths
-                .iter()
-                .any(|p| p.ends_with("HEAD") || p.to_string_lossy().contains("/refs/"));
-
-            if !touched_map && !touched_head {
+            let Some(kind) = nudge_for(&event.paths) else {
                 continue;
-            }
+            };
             // Git rewrites several files per operation; one nudge is enough.
-            if last.elapsed() < std::time::Duration::from_millis(300) {
+            if last.is_some_and(|t| t.elapsed() < QUIET) {
                 continue;
             }
-            last = std::time::Instant::now();
-            let kind = if touched_map { "map" } else { "head" };
+            last = Some(std::time::Instant::now());
             let _ = tx.send(kind.to_string());
         }
     });
+}
+
+/// How long to ignore further events after nudging. A commit rewrites `HEAD`,
+/// a ref and the index in quick succession; the browser needs one reload, not
+/// three.
+const QUIET: std::time::Duration = std::time::Duration::from_millis(300);
+
+/// What an event on the git dir means for the browser, if anything.
+///
+/// Most of what lands in the git dir is none of the reviewer's business —
+/// objects being written, locks being taken. Only two things change what is on
+/// screen: the skill rewriting the map, and the branch moving.
+fn nudge_for(paths: &[PathBuf]) -> Option<&'static str> {
+    let touched_map = paths
+        .iter()
+        .any(|p| p.to_string_lossy().contains("/farol/"));
+    if touched_map {
+        return Some("map");
+    }
+    let touched_head = paths
+        .iter()
+        .any(|p| p.ends_with("HEAD") || p.to_string_lossy().contains("/refs/"));
+    touched_head.then_some("head")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn paths(list: &[&str]) -> Vec<PathBuf> {
+        list.iter().map(PathBuf::from).collect()
+    }
+
+    #[test]
+    fn the_skill_writing_a_map_reloads_the_screen() {
+        assert_eq!(
+            nudge_for(&paths(&["/repo/.git/farol/feature-x/maps/abc.json"])),
+            Some("map")
+        );
+    }
+
+    #[test]
+    fn the_branch_moving_reloads_the_screen() {
+        // A commit or a checkout: the diff underneath the reviewer changed.
+        assert_eq!(nudge_for(&paths(&["/repo/.git/HEAD"])), Some("head"));
+        assert_eq!(
+            nudge_for(&paths(&["/repo/.git/refs/heads/feature/x"])),
+            Some("head")
+        );
+    }
+
+    #[test]
+    fn the_rest_of_the_git_dir_is_none_of_the_reviewers_business() {
+        // Objects, locks and packs churn constantly; nudging on those would
+        // reload the page while someone is reading.
+        assert_eq!(nudge_for(&paths(&["/repo/.git/objects/ab/cdef"])), None);
+        assert_eq!(nudge_for(&paths(&["/repo/.git/index.lock"])), None);
+        assert_eq!(nudge_for(&paths(&["/repo/.git/COMMIT_EDITMSG"])), None);
+    }
+
+    #[test]
+    fn a_map_written_in_the_same_breath_as_a_commit_reports_the_map() {
+        // `map derive` writes the map and the branch may move around it. The
+        // map is the more specific news, and the screen needs it either way.
+        assert_eq!(
+            nudge_for(&paths(&[
+                "/repo/.git/HEAD",
+                "/repo/.git/farol/x/maps/a.json"
+            ])),
+            Some("map")
+        );
+    }
+
+    #[test]
+    fn an_event_carrying_no_paths_says_nothing() {
+        assert_eq!(nudge_for(&[]), None);
+    }
+
+    /// Wait for one nudge, or give up. The watcher runs on a real thread over
+    /// a real directory, so there is nothing to poll deterministically.
+    fn nudged(rx: &mut broadcast::Receiver<String>) -> Option<String> {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while std::time::Instant::now() < deadline {
+            if let Ok(kind) = rx.try_recv() {
+                return Some(kind);
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        None
+    }
+
+    #[test]
+    fn writing_a_map_nudges_the_browser() {
+        let dir = tempfile::tempdir().unwrap();
+        let maps = dir.path().join("farol").join("feature-x").join("maps");
+        std::fs::create_dir_all(&maps).unwrap();
+
+        let (tx, mut rx) = broadcast::channel(16);
+        spawn(dir.path().to_path_buf(), tx);
+        std::thread::sleep(std::time::Duration::from_millis(400));
+
+        std::fs::write(maps.join("abc123.json"), "{}").unwrap();
+
+        assert_eq!(nudged(&mut rx).as_deref(), Some("map"));
+    }
+
+    #[test]
+    fn churn_the_reviewer_does_not_care_about_is_left_alone() {
+        // Objects and locks are written constantly; reloading on those would
+        // pull the page out from under whoever is reading.
+        let dir = tempfile::tempdir().unwrap();
+        let objects = dir.path().join("objects").join("ab");
+        std::fs::create_dir_all(&objects).unwrap();
+
+        let (tx, mut rx) = broadcast::channel(16);
+        spawn(dir.path().to_path_buf(), tx);
+        std::thread::sleep(std::time::Duration::from_millis(400));
+
+        std::fs::write(objects.join("cdef01"), "an object").unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(600));
+
+        assert!(rx.try_recv().is_err(), "nothing should have been sent");
+    }
+
+    #[test]
+    fn a_directory_that_cannot_be_watched_gives_up_quietly() {
+        // No panic, no channel closed early: farol still serves what it has.
+        let (tx, mut rx) = broadcast::channel(16);
+
+        spawn(PathBuf::from("/definitely/not/here"), tx);
+        std::thread::sleep(std::time::Duration::from_millis(300));
+
+        assert!(rx.try_recv().is_err());
+    }
 }

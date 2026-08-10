@@ -34,10 +34,6 @@ impl Workspace {
         Self::discover(&std::env::current_dir()?)
     }
 
-    pub fn repo(&self) -> &gix::Repository {
-        &self.repo
-    }
-
     pub fn into_repo(self) -> gix::Repository {
         self.repo
     }

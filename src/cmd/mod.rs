@@ -182,3 +182,120 @@ pub struct ScopeOnlyArgs {
     #[command(flatten)]
     scope: ScopeArgs,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::CommandFactory;
+
+    fn parse(args: &[&str]) -> Cli {
+        Cli::try_parse_from(std::iter::once("farol").chain(args.iter().copied()))
+            .unwrap_or_else(|e| panic!("farol {args:?} should parse:\n{e}"))
+    }
+
+    fn refuses(args: &[&str]) {
+        assert!(
+            Cli::try_parse_from(std::iter::once("farol").chain(args.iter().copied())).is_err(),
+            "farol {args:?} should have been refused"
+        );
+    }
+
+    /// clap catches conflicting flag names and duplicate argument ids only at
+    /// runtime; without this the binary would panic on first use.
+    #[test]
+    fn the_command_surface_is_internally_consistent() {
+        Cli::command().debug_assert();
+    }
+
+    #[test]
+    fn the_window_flags_reach_every_group() {
+        // They are global so `farol block add … --dirty` works, rather than
+        // making the author remember which groups accept them.
+        for group in [
+            vec!["scope", "--dirty"],
+            vec!["map", "show", "--dirty"],
+            vec!["block", "remove", "core", "--direct"],
+            vec!["skim", "remove", "Cargo.lock", "--base", "develop"],
+        ] {
+            parse(&group);
+        }
+    }
+
+    #[test]
+    fn the_window_flags_become_the_request_that_opens_the_scope() {
+        let args = ScopeArgs {
+            base: Some("develop".into()),
+            flags: ScopeFlags {
+                direct: true,
+                dirty: true,
+            },
+        };
+
+        let req = args.request(Some("feature/x".into()));
+
+        assert_eq!(req.base.as_deref(), Some("develop"));
+        assert_eq!(req.head.as_deref(), Some("feature/x"));
+        assert!(req.direct);
+        assert!(req.dirty);
+    }
+
+    #[test]
+    fn asking_for_nothing_in_particular_asks_for_the_default_window() {
+        let req = ScopeArgs::default().request(None);
+
+        assert_eq!(req.base, None, "main, then master, is decided further down");
+        assert_eq!(req.head, None);
+        assert!(!req.direct);
+        assert!(!req.dirty);
+    }
+
+    #[test]
+    fn serve_takes_its_refs_positionally_and_the_base_flag_still_works() {
+        // The reason `--base` lives one level up: two arguments called `base`
+        // on the same command is the mistake this shape avoids.
+        parse(&["serve"]);
+        parse(&["serve", "main"]);
+        parse(&["serve", "main", "feature/x"]);
+        parse(&["scope", "--base", "main"]);
+    }
+
+    #[test]
+    fn every_group_refuses_a_subcommand_it_does_not_have() {
+        refuses(&["block", "sprinkle", "core"]);
+        refuses(&["map", "publish"]);
+        refuses(&["nonsense"]);
+    }
+
+    #[test]
+    fn commands_that_name_a_block_require_one() {
+        refuses(&["block", "remove"]);
+        refuses(&["file", "remove", "core"]);
+        refuses(&["line", "remove", "core", "src/a.rs"]);
+    }
+
+    #[test]
+    fn adding_a_block_requires_the_prose_that_makes_it_worth_reading() {
+        // A block with no context is a heading, and the map exists for what is
+        // under the heading.
+        refuses(&["block", "add", "core"]);
+        refuses(&["block", "add", "core", "--title", "t"]);
+        parse(&["block", "add", "core", "--title", "t", "--context", "c"]);
+    }
+
+    #[test]
+    fn a_block_cannot_be_placed_before_and_after_at_once() {
+        refuses(&[
+            "block",
+            "add",
+            "core",
+            "--title",
+            "t",
+            "--context",
+            "c",
+            "--before",
+            "a",
+            "--after",
+            "b",
+        ]);
+    }
+}

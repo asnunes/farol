@@ -204,3 +204,192 @@ struct Sides {
     /// database until it is read off disk.
     from_worktree: bool,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::diff::infra::fixture::Fixture;
+
+    fn numbered(lines: usize) -> String {
+        (1..=lines).map(|i| format!("line {i}\n")).collect()
+    }
+
+    /// The window between `main` and the branch, as `open` would build it.
+    fn window(f: &Fixture, dirty: bool) -> Window {
+        let git = f.open();
+        let base = git.resolve("main").unwrap();
+        let head = git.resolve("HEAD").unwrap();
+        Window::of(&git, base, head, dirty).expect("the window should build")
+    }
+
+    fn paths(w: &Window) -> Vec<&str> {
+        w.files.iter().map(|c| c.path.as_str()).collect()
+    }
+
+    #[test]
+    fn only_what_the_branch_touched_is_in_the_window() {
+        // The rest of the checkout is not read at all, which is the whole
+        // reason this goes through a tree diff.
+        let f = Fixture::new();
+        f.write("untouched.rs", "stays\n");
+        f.commit("a file the branch will not touch");
+        f.on_branch("feature/x");
+        f.write("changed.rs", &numbered(10));
+        f.commit("change one file");
+
+        let w = window(&f, false);
+
+        assert_eq!(paths(&w), vec!["changed.rs"]);
+        assert!(!w.head_blobs.contains_key("untouched.rs"));
+        assert!(!w.base_blobs.contains_key("untouched.rs"));
+    }
+
+    #[test]
+    fn both_sides_of_a_changed_file_are_read_in() {
+        let f = Fixture::new();
+        f.write("a.rs", &numbered(10));
+        f.commit("add a");
+        f.on_branch("feature/x");
+        f.write("a.rs", &numbered(12));
+        f.commit("extend a");
+
+        let w = window(&f, false);
+
+        assert_eq!(w.files[0].status, FileStatus::Modified);
+        assert_eq!(w.base_blobs["a.rs"].data, numbered(10).into_bytes());
+        assert_eq!(w.head_blobs["a.rs"].data, numbered(12).into_bytes());
+    }
+
+    #[test]
+    fn an_added_file_has_no_base_side_and_a_deleted_one_has_no_head_side() {
+        // Deliberately unalike, or git would pair them as a rename — which it
+        // does, and which `a_rename_keeps_the_old_side...` covers.
+        let f = Fixture::new();
+        f.write("goes.rs", "the one that leaves\n");
+        f.commit("add the one that will go");
+        f.on_branch("feature/x");
+        f.git(&["rm", "-q", "goes.rs"]);
+        f.write("arrives.rs", &numbered(30));
+        f.commit("swap them");
+
+        let w = window(&f, false);
+
+        assert!(!w.base_blobs.contains_key("arrives.rs"));
+        assert!(!w.head_blobs.contains_key("goes.rs"));
+        let statuses: Vec<_> = w.files.iter().map(|c| c.status).collect();
+        assert_eq!(statuses, vec![FileStatus::Added, FileStatus::Deleted]);
+    }
+
+    #[test]
+    fn a_rename_keeps_the_old_side_under_the_name_it_had() {
+        // Reading the base under the new path would show the whole file as
+        // added, which is the reading rename detection exists to prevent.
+        let f = Fixture::new();
+        f.write("old/a.rs", &numbered(40));
+        f.commit("add a");
+        f.on_branch("feature/x");
+        std::fs::create_dir_all(f.dir.path().join("new")).unwrap();
+        f.git(&["mv", "old/a.rs", "new/a.rs"]);
+        f.commit("move it");
+
+        let w = window(&f, false);
+
+        assert_eq!(w.files[0].status, FileStatus::Renamed);
+        assert_eq!(w.files[0].old_path.as_deref(), Some("old/a.rs"));
+        assert!(
+            w.base_blobs.contains_key("old/a.rs"),
+            "filed under the old name"
+        );
+        assert!(w.head_blobs.contains_key("new/a.rs"));
+    }
+
+    #[test]
+    fn the_window_is_listed_in_path_order() {
+        let f = Fixture::new();
+        f.on_branch("feature/x");
+        for name in ["z.rs", "a.rs", "m.rs"] {
+            f.write(name, "x\n");
+        }
+        f.commit("three files");
+
+        assert_eq!(paths(&window(&f, false)), vec!["a.rs", "m.rs", "z.rs"]);
+    }
+
+    #[test]
+    fn churn_comes_from_git_so_a_binary_file_reports_nothing() {
+        let f = Fixture::new();
+        f.on_branch("feature/x");
+        std::fs::write(
+            f.dir.path().join("logo.png"),
+            (0u8..=255).cycle().take(4000).collect::<Vec<u8>>(),
+        )
+        .unwrap();
+        f.commit("add a binary");
+
+        let w = window(&f, false);
+
+        assert_eq!((w.files[0].additions, w.files[0].deletions), (0, 0));
+    }
+
+    #[test]
+    fn uncommitted_work_joins_the_window_only_when_asked_for() {
+        let f = Fixture::new();
+        f.write("a.rs", &numbered(10));
+        f.commit("add a");
+        f.on_branch("feature/x");
+        f.write("a.rs", &numbered(12));
+        f.commit("extend a");
+        f.write("a.rs", &numbered(20));
+
+        assert_eq!(
+            window(&f, false).head_blobs["a.rs"].data,
+            numbered(12).into_bytes(),
+            "without --dirty the committed side is what is read"
+        );
+
+        let dirty = window(&f, true);
+        assert_eq!(dirty.head_blobs["a.rs"].data, numbered(20).into_bytes());
+        assert!(
+            dirty.from_worktree.contains("a.rs"),
+            "the diff has to be pointed at the working tree later"
+        );
+    }
+
+    #[test]
+    fn a_file_edited_and_then_put_back_is_not_a_change() {
+        // git reports it as touched because the mtime moved, but there is
+        // nothing to read and listing it would send the reviewer to an empty
+        // diff.
+        let f = Fixture::new();
+        f.write("a.rs", &numbered(10));
+        f.commit("add a");
+        f.on_branch("feature/x");
+        f.write("b.rs", "so the branch is not empty\n");
+        f.commit("add b");
+        f.write("a.rs", "changed my mind\n");
+        f.write("a.rs", &numbered(10));
+
+        assert_eq!(paths(&window(&f, true)), vec!["b.rs"]);
+    }
+
+    #[test]
+    fn a_file_only_the_worktree_knows_about_still_gets_its_base_side() {
+        // Uncommitted edits to a file the branch had not touched: the base is
+        // in the tree even though the tree diff never mentioned it.
+        let f = Fixture::new();
+        f.write("a.rs", &numbered(10));
+        f.commit("add a");
+        f.on_branch("feature/x");
+        f.write("b.rs", "unrelated\n");
+        f.commit("add b");
+        f.write("a.rs", &numbered(30));
+
+        let w = window(&f, true);
+
+        assert_eq!(w.base_blobs["a.rs"].data, numbered(10).into_bytes());
+        assert_eq!(
+            w.files.iter().find(|c| c.path == "a.rs").unwrap().status,
+            FileStatus::Modified
+        );
+    }
+}

@@ -512,4 +512,69 @@ mod tests {
             "the new side has to come off disk, not out of the object database"
         );
     }
+
+    // ---- repositories without a working tree ----------------------------
+
+    fn bare() -> tempfile::TempDir {
+        let dir = tempfile::tempdir().unwrap();
+        let out = std::process::Command::new("git")
+            .args(["init", "-q", "--bare"])
+            .arg(dir.path())
+            .output()
+            .expect("git should run");
+        assert!(out.status.success());
+        dir
+    }
+
+    #[test]
+    fn a_repository_with_no_working_tree_has_no_worktree_blob_to_offer() {
+        // A bare clone has no files on disk; asking is not an error, there is
+        // simply nothing there.
+        let dir = bare();
+        let git = Git::new(gix::open(dir.path()).unwrap());
+
+        assert!(git.worktree_blob("a.rs").unwrap().is_none());
+    }
+
+    #[test]
+    fn a_repository_with_no_working_tree_reports_no_uncommitted_changes() {
+        let dir = bare();
+        let git = Git::new(gix::open(dir.path()).unwrap());
+
+        assert!(git.worktree_changes().unwrap().is_empty());
+    }
+
+    #[test]
+    fn a_path_that_runs_through_a_file_is_simply_absent() {
+        // `a.rs/nested` cannot exist. git treats it as nothing there rather
+        // than as an error, and so does everything downstream — deriving asks
+        // for old sides that may never have existed.
+        let f = Fixture::new();
+        f.write("a.rs", "one\n");
+        f.commit("add a");
+
+        assert!(
+            f.open()
+                .blob_at(f.sha("HEAD"), "a.rs/nested")
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn a_file_moved_but_not_committed_is_reported_as_changed() {
+        // git's status pairs the two halves as a rewrite; both ends have to
+        // reach the review window or the move looks like a deletion.
+        let f = Fixture::new();
+        f.write("old.rs", &"a line\n".repeat(40));
+        f.commit("add it");
+        f.git(&["mv", "old.rs", "new.rs"]);
+
+        let changed = f.open().worktree_changes().unwrap();
+
+        assert!(
+            changed.iter().any(|p| p == "new.rs" || p == "old.rs"),
+            "{changed:?}"
+        );
+    }
 }

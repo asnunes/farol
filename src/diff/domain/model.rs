@@ -59,13 +59,6 @@ pub struct Hunk {
 }
 
 impl Hunk {
-    pub fn header(&self) -> String {
-        format!(
-            "@@ -{},{} +{},{} @@",
-            self.old_start, self.old_lines, self.new_start, self.new_lines
-        )
-    }
-
     /// Net line growth this hunk introduces.
     pub fn delta(&self) -> i64 {
         self.new_lines as i64 - self.old_lines as i64

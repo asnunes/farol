@@ -91,3 +91,86 @@ async fn serve(config: ServeConfig) -> Result<()> {
         .map_err(|e| Error::msg(e.to_string()))?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::map::domain::Position;
+    use std::time::Duration;
+
+    fn config(port: u16, watch: bool) -> ServeConfig {
+        let mut map = ReviewMap::new("feature/x", "main", "head");
+        map.add_block(&crate::testing::slug("core"), "t", "c", Position::End)
+            .unwrap();
+        ServeConfig {
+            use_cases: routes::tests::use_cases(),
+            map,
+            port,
+            open_browser: false,
+            watch,
+            git_dir: std::env::temp_dir(),
+        }
+    }
+
+    #[test]
+    fn the_state_hands_out_the_channel_the_watcher_writes_to() {
+        // The watcher and the SSE route have to meet on the same channel, or
+        // the browser is told nothing and never reloads.
+        let (state, changes) =
+            AppState::new(routes::tests::use_cases(), ReviewMap::new("b", "m", "h"));
+
+        let mut rx = state.changes.subscribe();
+        changes.send("map".into()).unwrap();
+
+        assert_eq!(rx.try_recv().unwrap(), "map");
+    }
+
+    #[tokio::test]
+    async fn the_server_listens_and_answers_on_the_port_it_was_given() {
+        // Port 0 asks the OS for a free one, which is also how `--port 0`
+        // behaves for the reviewer.
+        let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
+            .await
+            .unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
+
+        let handle = tokio::spawn(async move { serve(config(port, false)).await });
+        let url = format!("http://127.0.0.1:{port}/api/review");
+
+        let body = tokio::time::timeout(Duration::from_secs(10), async {
+            loop {
+                let out = tokio::process::Command::new("curl")
+                    .args(["-sf", &url])
+                    .output()
+                    .await
+                    .unwrap();
+                if out.status.success() {
+                    return String::from_utf8_lossy(&out.stdout).into_owned();
+                }
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+        })
+        .await
+        .expect("the server should have come up");
+
+        assert!(body.contains("feature/x"), "{body}");
+        handle.abort();
+    }
+
+    #[tokio::test]
+    async fn a_port_already_taken_is_reported_rather_than_swallowed() {
+        // Two farols on one port is an ordinary mistake, and the message has
+        // to say which port so the reviewer can pick another.
+        let held = tokio::net::TcpListener::bind(("127.0.0.1", 0))
+            .await
+            .unwrap();
+        let port = held.local_addr().unwrap().port();
+
+        let err = serve(config(port, false)).await.unwrap_err();
+
+        let msg = err.to_string();
+        assert!(msg.contains(&port.to_string()), "{msg}");
+        assert!(msg.contains("cannot listen"), "{msg}");
+    }
+}

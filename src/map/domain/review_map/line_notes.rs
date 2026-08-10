@@ -113,4 +113,25 @@ mod tests {
         assert_eq!(notes[0].text, "first");
         assert_eq!(notes[1].text, "replaced");
     }
+
+    #[test]
+    fn a_note_on_a_file_the_block_does_not_hold_is_refused() {
+        // The note would be written nowhere the screen ever looks.
+        let mut m = ReviewMap::new("feature/x", "main", "abc123");
+        m.add_block(&slug("core"), "t", "c", Position::End).unwrap();
+        m.add_file(&slug("core"), "a.rs", None, None).unwrap();
+
+        let err = m
+            .add_line_note(
+                &slug("core"),
+                "elsewhere.rs",
+                crate::testing::range(1, 2),
+                "n",
+            )
+            .unwrap_err();
+
+        let msg = err.to_string();
+        assert!(msg.contains("elsewhere.rs"), "{msg}");
+        assert!(msg.contains("a.rs"), "{msg}");
+    }
 }

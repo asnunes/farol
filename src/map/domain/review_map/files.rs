@@ -118,4 +118,24 @@ mod tests {
         let err = m.add_file(&slug("one"), "a.rs", None, None).unwrap_err();
         assert!(matches!(err, Error::DuplicatePath { .. }));
     }
+
+    #[test]
+    fn placing_a_file_after_one_the_block_does_not_hold_is_refused() {
+        // Silently appending would put the file somewhere the author did not
+        // choose, and the reading order is the point of the block.
+        let mut m = ReviewMap::new("feature/x", "main", "abc123");
+        m.add_block(&slug("core"), "t", "c", Position::End).unwrap();
+        m.add_file(&slug("core"), "a.rs", None, None).unwrap();
+
+        let err = m
+            .add_file(&slug("core"), "b.rs", None, Some("nowhere.rs"))
+            .unwrap_err();
+
+        let msg = err.to_string();
+        assert!(msg.contains("nowhere.rs"), "{msg}");
+        assert!(
+            msg.contains("a.rs"),
+            "the alternatives have to be listed: {msg}"
+        );
+    }
 }

@@ -61,3 +61,43 @@ pub trait CommitHistorySource: Send + Sync {
     /// commit that still has a map.
     fn is_ancestor(&self, sha: &str) -> Result<bool>;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::testing::FakeDiffSource;
+
+    #[test]
+    fn a_path_under_review_comes_back_proven_and_carrying_its_length() {
+        // The line count rides along because range validation needs it and
+        // this is the moment it is known.
+        let source = FakeDiffSource::with_paths(&["a.rs"]).with_line_count("a.rs", 42);
+
+        let path = source.review_path("a.rs").unwrap();
+
+        assert_eq!(path.as_str(), "a.rs");
+        assert_eq!(path.lines(), 42);
+    }
+
+    #[test]
+    fn a_path_outside_the_review_never_becomes_one() {
+        // This is the only constructor of `ReviewPath`, so refusing here is
+        // what makes every use case downstream unable to receive a bad path.
+        let source = FakeDiffSource::with_paths(&["a.rs"]);
+
+        let err = source.review_path("elsewhere.rs").unwrap_err();
+
+        assert!(err.to_string().contains("elsewhere.rs"), "{err}");
+    }
+
+    #[test]
+    fn the_rejection_carries_the_near_misses_back() {
+        // The reader is the session writing the map, and a hallucinated path
+        // is the mistake it makes most.
+        let source = FakeDiffSource::with_paths(&["src/store/db.rs"]);
+
+        let err = source.review_path("src/stores/db.rs").unwrap_err();
+
+        assert!(err.to_string().contains("src/store/db.rs"), "{err}");
+    }
+}
