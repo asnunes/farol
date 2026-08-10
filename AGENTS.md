@@ -302,6 +302,29 @@ decides (it holds the diff), the map applies it (it holds the rules). See
 place and gives their tests somewhere to drift to; the file name should be the
 answer to "where does adding a block live".
 
+## The screen
+
+Tailwind for styling, shadcn for the few components that earn it — the help
+panel is a `Dialog` because Radix brings focus trapping and `Escape` that the
+hand-rolled modal did not, the meter is a `Progress`, the tags are `Badge`s.
+Everything else on screen is a diff renderer and a sidebar, which shadcn has
+nothing to offer, so they are plain elements with utilities.
+
+**The palette is defined once and mapped with `@theme inline`.** Utilities
+resolve to variables rather than to values, so the dark palette follows without
+a single `dark:` in the markup. Putting colours directly in `@theme` bakes them
+in, and a second `@theme` inside a media query silently replaces the first —
+which is how the light palette went missing the first time this was written, in
+a build that compiled clean.
+
+**Farol's own tokens are prefixed `--farol-`.** shadcn defines `--muted` and
+`--accent` for its own semantics; without the prefix the bridge between the two
+refers to itself.
+
+**One component per file**, under `review/`, with the state in `hooks/`. Class
+names that carry no styling stay as markers: they name what a thing is, which is
+what the tests select on and what makes the inspector readable.
+
 ## Tests
 
 Three layers, and each covers something the others cannot.

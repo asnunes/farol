@@ -99,9 +99,12 @@ mod tests {
     async fn an_unknown_path_falls_back_to_the_page_or_says_it_is_not_built() {
         // Both are correct, and which one depends on whether `just build` has
         // run — so assert the pair rather than the state of this checkout.
+        // Read that state once: `vite build` empties `web/dist` as it goes, and
+        // asking twice has already produced one flake.
+        let built = Assets::get("index.html").is_some();
         let res = handler(Uri::from_static("/blocks/core")).await;
 
-        if Assets::get("index.html").is_some() {
+        if built {
             assert_eq!(
                 res.status(),
                 StatusCode::OK,
@@ -119,9 +122,10 @@ mod tests {
 
     #[tokio::test]
     async fn the_root_serves_the_page_itself() {
+        let built = Assets::get("index.html").is_some();
         let res = handler(Uri::from_static("/")).await;
 
-        if Assets::get("index.html").is_some() {
+        if built {
             assert_eq!(res.status(), StatusCode::OK);
             let kind = res
                 .headers()

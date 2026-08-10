@@ -1,604 +1,147 @@
+@import "tailwindcss";
+
 /* Typography carries meaning here, so it is not decoration:
    serif  = written for you by the session (block context, file note, line note)
    mono   = code and data
    sans   = chrome
    You can tell them apart without reading a word. */
 
-:root {
-  --ground: #f4f5f6;
-  --surface: #ffffff;
-  --sunken: #eceef0;
-  --ink: #16181b;
-  --ink-soft: #3d444c;
-  --muted: #697079;
-  --faint: #949ba3;
-  --rule: #dee1e4;
-  --rule-strong: #c6cbd1;
-  --accent: #96690f;
-  --accent-dim: #efe2c4;
-  --add-bg: #e3f2e8;
-  --add-ink: #1e6440;
-  --del-bg: #fbe7e7;
-  --del-ink: #9b2f2f;
-  --note-bg: #faf4e6;
-  --note-rule: #dcc48a;
+/* `@theme inline` maps the utility names onto variables rather than onto
+   values, so `bg-surface` resolves at runtime and follows whichever palette is
+   in force. Putting the colours directly in `@theme` bakes them in — and a
+   second `@theme` inside a media query silently replaces the first, which is
+   how the light palette went missing the first time this was written. */
+@theme inline {
+  --font-serif: ui-serif, Georgia, "Iowan Old Style", "Times New Roman", serif;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 
-  --serif: ui-serif, Georgia, "Iowan Old Style", "Times New Roman", serif;
-  --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  --color-ground: var(--farol-ground);
+  --color-surface: var(--farol-surface);
+  --color-sunken: var(--farol-sunken);
+  --color-ink: var(--farol-ink);
+  --color-ink-soft: var(--farol-ink-soft);
+  --color-muted: var(--farol-muted);
+  --color-faint: var(--farol-faint);
+  --color-rule: var(--farol-rule);
+  --color-rule-strong: var(--farol-rule-strong);
+  --color-accent: var(--farol-accent);
+  --color-accent-dim: var(--farol-accent-dim);
+  --color-add-bg: var(--farol-add-bg);
+  --color-add-ink: var(--farol-add-ink);
+  --color-del-bg: var(--farol-del-bg);
+  --color-del-ink: var(--farol-del-ink);
+  --color-note-bg: var(--farol-note-bg);
+  --color-note-rule: var(--farol-note-rule);
 }
 
+/* Prefixed because shadcn's components define `--muted` and `--accent` for
+   their own semantics; without the prefix the bridge below would refer to
+   itself and the two would resolve to each other. */
+:root {
+  --farol-ground: #f4f5f6;
+  --farol-surface: #ffffff;
+  --farol-sunken: #eceef0;
+  --farol-ink: #16181b;
+  --farol-ink-soft: #3d444c;
+  --farol-muted: #697079;
+  --farol-faint: #949ba3;
+  --farol-rule: #dee1e4;
+  --farol-rule-strong: #c6cbd1;
+  --farol-accent: #96690f;
+  --farol-accent-dim: #efe2c4;
+  --farol-add-bg: #e3f2e8;
+  --farol-add-ink: #1e6440;
+  --farol-del-bg: #fbe7e7;
+  --farol-del-ink: #9b2f2f;
+  --farol-note-bg: #faf4e6;
+  --farol-note-rule: #dcc48a;
+}
+
+/* The same design in different light, so every utility follows automatically
+   rather than being written twice with `dark:`. */
 @media (prefers-color-scheme: dark) {
   :root {
-    --ground: #15171a;
-    --surface: #1c1f23;
-    --sunken: #101215;
-    --ink: #e6e8ea;
-    --ink-soft: #bfc5cb;
-    --muted: #8a929b;
-    --faint: #6c747d;
-    --rule: #282c31;
-    --rule-strong: #3a4048;
-    --accent: #e3b23c;
-    --accent-dim: #3a2f16;
-    --add-bg: #16301f;
-    --add-ink: #78c79a;
-    --del-bg: #3a1d1d;
-    --del-ink: #e38b8b;
-    --note-bg: #241e12;
-    --note-rule: #574521;
+    --farol-ground: #15171a;
+    --farol-surface: #1c1f23;
+    --farol-sunken: #101215;
+    --farol-ink: #e6e8ea;
+    --farol-ink-soft: #bfc5cb;
+    --farol-muted: #8a929b;
+    --farol-faint: #6c747d;
+    --farol-rule: #282c31;
+    --farol-rule-strong: #3a4048;
+    --farol-accent: #e3b23c;
+    --farol-accent-dim: #3a2f16;
+    --farol-add-bg: #16301f;
+    --farol-add-ink: #78c79a;
+    --farol-del-bg: #3a1d1d;
+    --farol-del-ink: #e38b8b;
+    --farol-note-bg: #241e12;
+    --farol-note-rule: #574521;
   }
 }
 
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-
-body {
-  background: var(--ground);
-  color: var(--ink);
-  font-family: var(--sans);
-  line-height: 1.5;
-  -webkit-font-smoothing: antialiased;
-}
-
-.fatal,
-.loading {
-  padding: 2rem;
-  font-family: var(--mono);
-  font-size: 0.875rem;
-  color: var(--muted);
-  white-space: pre-wrap;
-}
-
-.app {
-  display: grid;
-  grid-template-columns: 19rem minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 1fr);
-  height: 100vh;
-}
-
-/* ---------- chrome ---------- */
-
-.top {
-  grid-column: 1 / -1;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 0.6rem 1.25rem;
-  border-bottom: 1px solid var(--rule);
-  background: var(--surface);
-}
-.refs {
-  font-family: var(--mono);
-  font-size: 0.8125rem;
-  display: flex;
-  gap: 0.5rem;
-  align-items: baseline;
-}
-.refs .head {
-  font-weight: 600;
-}
-.refs .arrow {
-  color: var(--rule-strong);
-}
-.refs .base {
-  color: var(--muted);
-}
-.top-right {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-.stale-chip {
-  font-size: 0.6875rem;
-  color: var(--accent);
-  border: 1px solid var(--note-rule);
-  background: var(--note-bg);
-  padding: 0.15rem 0.5rem;
-}
-.progress {
-  display: flex;
-  align-items: center;
-  gap: 0.55rem;
-  font-family: var(--mono);
-  font-size: 0.75rem;
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-}
-.progress .done {
-  font-size: 1rem;
-}
-.meter {
-  width: 4.5rem;
-  height: 3px;
-  background: var(--rule);
-  position: relative;
-}
-.meter span {
-  position: absolute;
-  inset: 0 auto 0 0;
-  background: var(--accent);
-  transition: width 160ms ease;
-}
-
-/* ---------- sidebar: navigation only, no prose ---------- */
-
-.map {
-  border-right: 1px solid var(--rule);
-  overflow-y: auto;
-  padding-bottom: 4rem;
-  background: var(--ground);
-}
-.blk {
-  padding: 0.85rem 0 0.35rem;
-}
-.blk + .blk {
-  border-top: 1px solid var(--rule);
-}
-.blk[data-state="loose"] {
-  opacity: 0.85;
-}
-.blk-head {
-  display: grid;
-  grid-template-columns: 1.375rem 1fr;
-  gap: 0 0.65rem;
-  align-items: center;
-  padding: 0 1.1rem 0.45rem;
-}
-.num {
-  width: 1.375rem;
-  height: 1.375rem;
-  border-radius: 50%;
-  border: 1.5px solid var(--rule-strong);
-  background: var(--ground);
-  display: grid;
-  place-items: center;
-  font-family: var(--mono);
-  font-size: 0.625rem;
-  font-weight: 600;
-  color: var(--faint);
-  font-variant-numeric: tabular-nums;
-}
-.blk[data-state="done"] .num {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--ground);
-}
-.blk[data-state="current"] .num {
-  border-color: var(--accent);
-  border-width: 2px;
-  color: var(--accent);
-}
-.num.loose {
-  border-style: dashed;
-}
-.blk-title {
-  font-size: 0.8125rem;
-  font-weight: 600;
-  letter-spacing: -0.005em;
-  line-height: 1.35;
-  text-wrap: balance;
-}
-.blk[data-state="done"] .blk-title {
-  color: var(--faint);
-  font-weight: 500;
-}
-.blk-title.loose {
-  font-weight: 500;
-  color: var(--faint);
-  font-size: 0.75rem;
-}
-.blk-files {
-  list-style: none;
-  padding: 0 1.1rem 0.5rem 3.15rem;
-  display: flex;
-  flex-direction: column;
-}
-.fileitem {
-  width: 100%;
-  text-align: left;
-  border: 0;
-  background: none;
-  font: inherit;
-  color: inherit;
-  display: flex;
-  align-items: baseline;
-  gap: 0.4rem;
-  font-family: var(--mono);
-  font-size: 0.75rem;
-  padding: 0.24rem 0.4rem;
-  margin-left: -0.4rem;
-  cursor: pointer;
-}
-.fileitem:hover {
-  background: var(--sunken);
-}
-.fileitem:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
-}
-.fileitem[aria-current="true"] {
-  background: var(--accent-dim);
-}
-.fileitem[aria-current="true"] .nm {
-  color: var(--ink);
-  font-weight: 600;
-}
-.fileitem .chk {
-  color: var(--accent);
-  font-size: 0.625rem;
-  width: 0.7rem;
-  flex: none;
-}
-.fileitem .nm {
-  color: var(--ink-soft);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.fileitem[data-seen="true"] .nm {
-  color: var(--faint);
-  text-decoration: line-through;
-}
-.fileitem.skim .nm {
-  color: var(--faint);
-}
-.fileitem .dot {
-  margin-left: auto;
-  flex: none;
-  color: var(--note-rule);
-  font-size: 0.625rem;
-}
-.fileitem .fast {
-  margin-left: auto;
-  flex: none;
-  font-size: 0.5625rem;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--faint);
-  border: 1px solid var(--rule);
-  padding: 0 0.25rem;
-}
-
-/* ---------- reading pane ---------- */
-
-.pane {
-  overflow-y: auto;
-  background: var(--surface);
-}
-
-.blockbar {
-  border-bottom: 1px solid var(--rule);
-  background: var(--ground);
-  padding: 1rem 1.75rem 1.15rem;
-}
-.blockbar .kicker {
-  font-family: var(--mono);
-  font-size: 0.6875rem;
-  color: var(--accent);
-  margin-bottom: 0.4rem;
-}
-.blockbar h2 {
-  font-size: 0.9375rem;
-  font-weight: 600;
-  letter-spacing: -0.005em;
-  margin-bottom: 0.5rem;
-  text-wrap: balance;
-}
-.blockbar p {
-  font-family: var(--serif);
-  font-size: 0.9375rem;
-  line-height: 1.6;
-  color: var(--ink-soft);
-  max-width: 66ch;
-  text-wrap: pretty;
-}
-
-.filehead {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem 1rem;
-  padding: 0.85rem 1.75rem;
-  background: var(--surface);
-  border-bottom: 1px solid var(--rule);
-}
-.filehead .left {
-  display: flex;
-  align-items: center;
-  gap: 0.7rem;
-  min-width: 0;
-  flex-wrap: wrap;
-}
-.filehead .path {
-  font-family: var(--mono);
-  font-size: 1rem;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-}
-.filehead .path .dir {
-  color: var(--faint);
-  font-weight: 400;
-}
-.filehead .churn {
-  font-family: var(--mono);
-  font-size: 0.75rem;
-  display: flex;
-  gap: 0.5rem;
-  flex: none;
-}
-.filehead .churn .a {
-  color: var(--add-ink);
-}
-.filehead .churn .d {
-  color: var(--del-ink);
-}
-.tags {
-  display: flex;
-  gap: 0.3rem;
-  flex-wrap: wrap;
-}
-.tag {
-  font-family: var(--mono);
-  font-size: 0.625rem;
-  padding: 0.05rem 0.35rem;
-  border: 1px solid var(--rule-strong);
-  color: var(--muted);
-}
-
-.markbox {
-  flex: none;
-  width: 1.25rem;
-  height: 1.25rem;
-  display: grid;
-  place-items: center;
-  border: 1.5px solid var(--rule-strong);
-  background: var(--surface);
-  color: transparent;
-  font-size: 0.6875rem;
-  line-height: 1;
-  cursor: pointer;
-  padding: 0;
-}
-.markbox:hover {
-  border-color: var(--accent);
-  color: var(--accent-dim);
-}
-.markbox:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-.markbox[aria-pressed="true"] {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--ground);
-}
-
-.filenote {
-  font-family: var(--serif);
-  font-size: 0.9375rem;
-  line-height: 1.6;
-  color: var(--ink-soft);
-  padding: 0.9rem 1.75rem 1rem;
-  border-bottom: 1px solid var(--rule);
-  max-width: 70ch;
-  text-wrap: pretty;
-}
-.filenote .from {
-  display: block;
-  font-family: var(--mono);
-  font-size: 0.625rem;
-  color: var(--accent);
-  margin-bottom: 0.25rem;
-}
-.filenote.skim-note {
-  color: var(--faint);
-  font-style: italic;
-}
-
-.diff {
-  font-family: var(--mono);
-  font-size: 0.8125rem;
-  line-height: 1.65;
-  padding-bottom: 6rem;
-}
-/* A file git will not diff. Chrome, not code: it is farol speaking, not the
-   repository. */
-.nodiff {
-  font-family: var(--sans);
-  font-size: 0.875rem;
-  color: var(--muted);
-  padding: 1.5rem 1rem;
-}
-.hunk {
-  padding: 0.3rem 1.75rem;
-  background: var(--sunken);
-  color: var(--faint);
-  font-size: 0.75rem;
-  border-bottom: 1px solid var(--rule);
-}
-.row {
-  display: grid;
-  grid-template-columns: 3.5rem 1fr;
-}
-.row .ln {
-  text-align: right;
-  padding: 0 0.75rem;
-  color: var(--rule-strong);
-  font-size: 0.75rem;
-  font-variant-numeric: tabular-nums;
-  user-select: none;
-}
-.row .code {
-  padding: 0 1.75rem 0 0.5rem;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-.row.add {
-  background: var(--add-bg);
-}
-.row.add .code {
-  color: var(--add-ink);
-}
-.row.del {
-  background: var(--del-bg);
-}
-.row.del .code {
-  color: var(--del-ink);
-}
-
-.note {
-  margin: 0.55rem 1.75rem 0.85rem 3.5rem;
-  background: var(--note-bg);
-  border-left: 2px solid var(--note-rule);
-  padding: 0.6rem 0.9rem;
-  font-family: var(--serif);
-  font-size: 0.9375rem;
-  line-height: 1.55;
-  color: var(--ink-soft);
-  max-width: 64ch;
-}
-.note .lbl {
-  display: block;
-  font-family: var(--mono);
-  font-size: 0.625rem;
-  color: var(--accent);
-  margin-bottom: 0.3rem;
-}
-
-.unmapped {
-  margin: 1.5rem 1.75rem 6rem;
-  padding: 0.9rem 1.1rem;
-  border: 1px solid var(--note-rule);
-  background: var(--note-bg);
-  max-width: 66ch;
-  font-size: 0.875rem;
-}
-.unmapped p {
-  color: var(--muted);
-  margin: 0.3rem 0 0.6rem;
-}
-.unmapped ul {
-  list-style: none;
-  font-family: var(--mono);
-  font-size: 0.75rem;
-  color: var(--ink-soft);
-}
-
-/* ---------- keys ---------- */
-
-.keybar {
-  position: fixed;
-  left: 19rem;
-  right: 0;
-  bottom: 0;
-  background: color-mix(in srgb, var(--surface) 90%, transparent);
-  backdrop-filter: blur(8px);
-  border-top: 1px solid var(--rule);
-  padding: 0.45rem 1.75rem;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem 1.4rem;
-  font-size: 0.75rem;
-  color: var(--faint);
-}
-.keybar span {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-kbd {
-  font-family: var(--mono);
-  font-size: 0.6875rem;
-  padding: 0.05rem 0.35rem;
-  border: 1px solid var(--rule-strong);
-  border-bottom-width: 2px;
-  color: var(--ink-soft);
-  background: var(--surface);
-}
-
-.help {
-  position: fixed;
-  inset: 0;
-  background: color-mix(in srgb, var(--ink) 45%, transparent);
-  display: grid;
-  place-items: center;
-  z-index: 10;
-}
-.help-card {
-  background: var(--surface);
-  border: 1px solid var(--rule-strong);
-  padding: 1.5rem 1.75rem;
-  min-width: 22rem;
-}
-.help-card h3 {
-  font-size: 0.75rem;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: var(--muted);
-  margin-bottom: 1rem;
-}
-.help-card dl {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 0.55rem 1.25rem;
-  font-size: 0.875rem;
-}
-.help-card dt {
-  font-family: var(--mono);
-  font-size: 0.75rem;
-  color: var(--accent);
-}
-.help-card dd {
-  color: var(--ink-soft);
-}
-
-@media (max-width: 60rem) {
-  .app {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto auto minmax(0, 1fr);
+/* What shadcn's components reach for, pointed at the palette above so they
+   arrive already dressed in farol's design instead of bringing a second one. */
+@layer base {
+  :root {
+    --background: var(--farol-surface);
+    --foreground: var(--farol-ink);
+    --card: var(--farol-surface);
+    --card-foreground: var(--farol-ink);
+    --popover: var(--farol-surface);
+    --popover-foreground: var(--farol-ink);
+    --primary: var(--farol-ink);
+    --primary-foreground: var(--farol-surface);
+    --secondary: var(--farol-sunken);
+    --secondary-foreground: var(--farol-ink);
+    --muted: var(--farol-sunken);
+    --muted-foreground: var(--farol-muted);
+    --accent: var(--farol-accent-dim);
+    --accent-foreground: var(--farol-accent);
+    --destructive: var(--farol-del-ink);
+    --border: var(--farol-rule);
+    --input: var(--farol-rule);
+    --ring: var(--farol-accent);
+    --radius: 0.375rem;
   }
-  .map {
-    border-right: 0;
-    border-bottom: 1px solid var(--rule);
-    max-height: 38vh;
-  }
-  .keybar {
-    left: 0;
+
+  body {
+    background: var(--farol-ground);
+    color: var(--farol-ink);
+    font-family: var(--font-sans);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  * {
-    transition: none !important;
-  }
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
+}
+
+/* The one thing utilities cannot express: the diff is a two-column grid whose
+   gutter stays the same width down the whole file, however long the line
+   numbers get. */
+@utility diff-row {
+  display: grid;
+  grid-template-columns: 4rem minmax(0, 1fr);
 }

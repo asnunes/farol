@@ -471,7 +471,7 @@ describe("the help panel", () => {
     expect(await screen.findByText("Keys")).toBeTruthy();
   });
 
-  it("closes when the backdrop is clicked but not the card itself", async () => {
+  it("closes on escape, and stays open when the card itself is clicked", async () => {
     serve({ review: review() });
     render(<App />);
     await waitForReading("a.rs");
@@ -481,8 +481,21 @@ describe("the help panel", () => {
     fireEvent.click(document.querySelector(".help-card")!);
     expect(screen.queryByText("Keys")).toBeTruthy();
 
-    fireEvent.click(document.querySelector(".help")!);
+    fireEvent.keyDown(document.querySelector(".help-card")!, { key: "Escape" });
     await waitFor(() => expect(screen.queryByText("Keys")).toBeNull());
+  });
+
+  it("is announced as a dialog rather than a floating box of text", async () => {
+    // Screen readers get a named dialog and the focus is trapped inside it —
+    // both of which the hand-rolled modal it replaced did not do.
+    serve({ review: review() });
+    render(<App />);
+    await waitForReading("a.rs");
+
+    fireEvent.keyDown(window, { key: "?" });
+
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog.textContent).toContain("Keys");
   });
 });
 
