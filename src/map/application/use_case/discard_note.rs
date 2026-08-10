@@ -1,7 +1,7 @@
 use crate::diff::domain::ReviewPath;
+use crate::error::Result;
 use crate::map::application::MapEditor;
 use crate::map::domain::{LineRange, ReviewMap, Slug};
-use crate::shared::error::Result;
 
 /// Let a deactivated note go, when the code it described is gone for good.
 #[derive(Clone)]

@@ -1,7 +1,7 @@
 use crate::diff::domain::ReviewPath;
+use crate::error::Result;
 use crate::map::application::MapEditor;
 use crate::map::domain::{LineRange, ReviewMap, Slug};
-use crate::shared::error::Result;
 
 /// Withdraw a note on purpose. Unlike a note the code moved out from under,
 /// this one is not kept as an orphan: there is nothing to restore later.

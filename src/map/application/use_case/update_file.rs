@@ -1,7 +1,7 @@
 use crate::diff::domain::ReviewPath;
+use crate::error::Result;
 use crate::map::application::MapEditor;
 use crate::map::domain::{ReviewMap, Slug};
-use crate::shared::error::Result;
 
 /// Rewrite the note that explains what a file contributes to its block.
 #[derive(Clone)]

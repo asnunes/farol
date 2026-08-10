@@ -7,7 +7,7 @@
 
 use std::path::Path;
 
-use crate::shared::error::{Error, Result};
+use crate::error::{Error, Result};
 
 use super::blob::{Blob, Diffed, Side};
 

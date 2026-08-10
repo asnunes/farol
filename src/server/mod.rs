@@ -15,8 +15,8 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::broadcast;
 
 use crate::cmd::ServerUseCases;
+use crate::error::{Error, Result};
 use crate::map::domain::ReviewMap;
-use crate::shared::error::{Error, Result};
 
 pub struct ServeConfig {
     pub use_cases: ServerUseCases,

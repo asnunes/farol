@@ -1,6 +1,6 @@
 use crate::diff::application::ReviewScope;
+use crate::error::Result;
 use crate::map::application::MapVersions;
-use crate::shared::error::Result;
 
 /// What the self-test found.
 #[derive(Debug, Default)]
@@ -53,6 +53,7 @@ impl CheckMap {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::map::domain::MapError;
     use crate::testing::{FakeDiffSource, InMemoryMapRepository, services, slug};
     use std::sync::Arc;
 
@@ -150,7 +151,7 @@ mod tests {
                         reason: crate::map::domain::OrphanReason::HunkOverlap,
                     })
                 })?;
-                Ok(())
+                Ok::<_, MapError>(())
             })
             .unwrap();
 

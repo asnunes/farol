@@ -418,9 +418,23 @@ If a comment restates the line under it, delete it.
 
 ## Errors
 
-One `Error` enum in `shared/error.rs`, with a variant per situation and the
-message written for whoever hits it. Messages say what went wrong **and what to
-do**:
+**An error belongs to the layer whose vocabulary it uses.** `MapError` in
+`map/domain`, `ScopeError` in `diff/domain`, and `Error` at the crate root for
+what belongs to no layer — the repository not being workable, and the world
+failing underneath. The root type unions the others with `#[from]`, so `?`
+carries a domain refusal upward without anyone writing a conversion.
+
+One enum held all of it once, which made `shared` import `LineRange` from the
+map: the module whose whole job is to be depended on, depending on a feature. If
+a new variant needs a type from a layer, it belongs in that layer.
+
+**A method that cannot fail on its own should not name an error.**
+`ReviewMap::reanchor_notes` and `MapEditor::edit` are generic over the caller's
+error, because neither decides anything — they carry out what they were handed.
+Forcing `MapError` on them would have made a git failure arrive wrapped in the
+map's vocabulary.
+
+Messages say what went wrong **and what to do**:
 
 ```
 no map for branch fix/retry-on-timeout
@@ -429,7 +443,7 @@ Run the review-map skill in the session that implemented this change.
 
 Rejections aimed at the skill carry the way out — near-miss paths for a
 hallucinated path, the existing slugs for an unknown one. That is what turns a
-rejection into a self-correction instead of a dead end.
+rejection into a self-correction rather than a guess.
 
 ## Things deliberately not done
 

@@ -9,8 +9,8 @@ use crate::diff::domain::FileDiff;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 
+use crate::error::Result;
 use crate::map::domain::{LineRange, NoteFate, OrphanReason, ReviewMap, ShiftOutcome};
-use crate::shared::error::Result;
 
 #[derive(Clone)]
 pub struct MapReconciler {

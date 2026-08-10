@@ -10,8 +10,8 @@ use std::sync::Arc;
 use super::reconciler::MapReconciler;
 use super::versions::MapVersions;
 use crate::diff::application::ReviewScope;
+use crate::error::Result;
 use crate::map::domain::{MapRepository, ReviewMap, WORKING};
-use crate::shared::error::Result;
 
 pub struct Derived {
     pub map: ReviewMap,
@@ -90,6 +90,7 @@ impl MapDerivation {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::map::domain::MapError;
     use crate::map::domain::{LineRange, NoteFate, OrphanReason, Position};
     use crate::testing::{FakeDiffSource, InMemoryMapRepository, hunk, services, slug};
     use std::sync::Arc;
@@ -172,7 +173,7 @@ mod tests {
         // map with an undecided orphan on it.
         stale
             .reanchor_notes(|_, _| {
-                Ok(NoteFate::Orphan {
+                Ok::<_, MapError>(NoteFate::Orphan {
                     snapshot: String::new(),
                     reason: OrphanReason::HunkOverlap,
                 })
@@ -252,7 +253,7 @@ mod tests {
                 .dirty(),
             repo.clone(),
         );
-        svc.editor.edit(|_| Ok(())).unwrap();
+        svc.editor.edit(|_| Ok::<_, MapError>(())).unwrap();
 
         svc.derivation.derive().unwrap();
 

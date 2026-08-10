@@ -1,7 +1,7 @@
 use crate::diff::domain::ReviewPath;
+use crate::error::Result;
 use crate::map::application::MapEditor;
 use crate::map::domain::{LineRange, ReviewMap, Slug};
-use crate::shared::error::Result;
 
 /// Pin a note to a span of lines. The span is checked against the file here,
 /// because a note past the end would render nowhere.

@@ -17,7 +17,7 @@ use serde::Deserialize;
 use tokio::sync::broadcast;
 
 use super::{AppState, assets, view};
-use crate::shared::error::Error;
+use crate::error::Error;
 
 /// The whole HTTP surface. Everything it serves arrives injected, so the routes
 /// can be exercised over fakes with nothing listening on a port.

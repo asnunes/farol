@@ -15,12 +15,12 @@ pub use orphans::NoteFate;
 use serde::{Deserialize, Serialize};
 
 use super::block::{Block, BlockFile, LineNote};
+use super::error::{MapError, Result};
 use super::orphan::{Orphan, OrphanReason};
 use super::position::Position;
 use super::range::LineRange;
 use super::skim_entry::SkimEntry;
 use super::slug::Slug;
-use crate::shared::error::{Error, Result};
 
 pub const MAP_VERSION: u32 = 1;
 
@@ -96,7 +96,7 @@ impl ReviewMap {
         self.blocks
             .iter_mut()
             .find(|b| &b.slug == slug)
-            .ok_or_else(|| Error::UnknownBlock {
+            .ok_or_else(|| MapError::UnknownBlock {
                 slug: slug.to_string(),
                 existing,
             })

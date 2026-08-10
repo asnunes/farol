@@ -3,7 +3,7 @@
 use clap::Args;
 
 use super::{Ctx, ScopeFlags};
-use crate::shared::error::Result;
+use crate::error::Result;
 
 #[derive(Args)]
 pub(super) struct ServeArgs {

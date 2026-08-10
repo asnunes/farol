@@ -1,5 +1,5 @@
+use crate::error::Result;
 use crate::progress::domain::{PROGRESS_VERSION, Progress, ProgressRepository};
-use crate::shared::error::Result;
 use crate::shared::paths::Store;
 
 pub struct JsonProgressRepository {

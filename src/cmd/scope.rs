@@ -1,8 +1,8 @@
 //! The files under review, as farol resolved them.
 
 use super::{Action, Ctx};
+use crate::error::Result;
 use crate::map::presentation::ScopeReport;
-use crate::shared::error::Result;
 
 /// `scope` takes no action of its own, but it still goes through the same door
 /// as every other command: resolve the window, then run.

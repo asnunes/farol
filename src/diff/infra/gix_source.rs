@@ -12,7 +12,7 @@ use super::window::Window;
 use crate::diff::domain::{
     CommitHistorySource, FileDiff, FileDiffSource, FileStatus, ReviewScopeSource, Scope,
 };
-use crate::shared::error::{Error, Result};
+use crate::error::{Error, Result};
 
 /// What the caller asked for on the command line, before resolution.
 #[derive(Debug, Clone, Default)]
@@ -106,7 +106,7 @@ impl ReviewScopeSource for GixSource {
         let blob = self
             .head_blobs
             .get(path)
-            .ok_or_else(|| self.scope.reject(path))?;
+            .ok_or_else(|| Error::from(self.scope.reject(path)))?;
         Ok(String::from_utf8_lossy(&blob.data).lines().count() as u32)
     }
 }
@@ -118,7 +118,7 @@ impl FileDiffSource for GixSource {
             .files
             .iter()
             .find(|f| f.path == path)
-            .ok_or_else(|| self.scope.reject(path))?;
+            .ok_or_else(|| Error::from(self.scope.reject(path)))?;
 
         let old_key = change.old_path.clone().unwrap_or_else(|| path.to_string());
         let old = self.base_blobs.get(&old_key);
@@ -143,7 +143,7 @@ impl FileDiffSource for GixSource {
         self.head_blobs
             .get(path)
             .map(Blob::hash)
-            .ok_or_else(|| self.scope.reject(path))
+            .ok_or_else(|| Error::from(self.scope.reject(path)))
     }
 
     fn file_diff_between(&self, from: &str, to: &str, path: &str) -> Result<Option<FileDiff>> {

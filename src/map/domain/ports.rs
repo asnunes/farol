@@ -1,5 +1,5 @@
 use super::review_map::ReviewMap;
-use crate::shared::error::Result;
+use crate::error::Result;
 
 /// Persistence for review maps, keyed by the commit each version was built
 /// against. Swapping this is what it would take to make maps travel — commit

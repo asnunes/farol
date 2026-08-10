@@ -1,4 +1,3 @@
-pub mod error;
 pub mod paths;
 
 /// Stands in for a commit id when the map covers uncommitted work.

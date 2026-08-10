@@ -3,8 +3,8 @@
 use clap::Subcommand;
 
 use super::{Action, Ctx, Reporting};
+use crate::error::Result;
 use crate::map::domain::Slug;
-use crate::shared::error::Result;
 
 #[derive(Subcommand)]
 pub(super) enum SkimAction {

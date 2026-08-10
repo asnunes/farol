@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::shared::error::{Error, Result};
+use super::error::{MapError, Result};
 
 /// A block's identity: short, kebab-case, chosen by whoever writes the map.
 ///
@@ -23,7 +23,7 @@ impl Slug {
             && !trimmed.ends_with('-');
 
         if !shaped {
-            return Err(Error::BadSlug {
+            return Err(MapError::BadSlug {
                 raw: raw.to_string(),
             });
         }

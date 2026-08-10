@@ -1,7 +1,7 @@
 use crate::diff::domain::ReviewPath;
+use crate::error::Result;
 use crate::map::application::MapEditor;
 use crate::map::domain::{ReviewMap, Slug};
-use crate::shared::error::Result;
 
 /// Take a file out of a block — because the change to it was reverted, or it
 /// turned out to belong elsewhere. Its line notes survive as orphans, the same

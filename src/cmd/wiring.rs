@@ -9,6 +9,7 @@ use std::sync::Arc;
 
 use crate::diff::application::{CommitHistory, FileDiffs, ReviewScope};
 use crate::diff::infra::{GixSource, ScopeRequest};
+use crate::error::Result;
 use crate::map::application::{
     AddBlock, AddFile, AddLineNote, AddSkim, CheckMap, DeriveMap, DiscardNote, GetFileDiff,
     GetReview, GetScope, MapDerivation, MapEditor, MapReconciler, MapVersions, MoveBlock,
@@ -18,7 +19,6 @@ use crate::map::application::{
 use crate::map::infra::JsonMapRepository;
 use crate::progress::application::{MarkViewed, ProgressStore, UnmarkViewed};
 use crate::progress::infra::JsonProgressRepository;
-use crate::shared::error::Result;
 use crate::shared::paths::Workspace;
 
 /// Every use case one invocation can reach.

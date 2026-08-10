@@ -6,8 +6,8 @@
 use std::sync::Arc;
 
 use crate::diff::application::{CommitHistory, ReviewScope};
-use crate::map::domain::{MapRepository, ReviewMap, WORKING};
-use crate::shared::error::{Error, Result};
+use crate::error::Result;
+use crate::map::domain::{MapError, MapRepository, ReviewMap, WORKING};
 
 #[derive(Clone)]
 pub struct MapVersions {
@@ -52,12 +52,15 @@ impl MapVersions {
 
     /// Same as `current`, but says so instead of returning nothing.
     pub fn require_current(&self) -> Result<ReviewMap> {
-        self.current()?.ok_or_else(|| Error::NoMap {
-            branch: self
-                .scope
-                .get()
-                .map(|s| s.branch.clone())
-                .unwrap_or_default(),
+        self.current()?.ok_or_else(|| {
+            MapError::NoMap {
+                branch: self
+                    .scope
+                    .get()
+                    .map(|s| s.branch.clone())
+                    .unwrap_or_default(),
+            }
+            .into()
         })
     }
 

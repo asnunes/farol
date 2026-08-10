@@ -1,7 +1,7 @@
 use crate::diff::domain::ReviewPath;
+use crate::error::Result;
 use crate::map::application::MapEditor;
 use crate::map::domain::{ReviewMap, Slug};
-use crate::shared::error::Result;
 
 /// Put a file into a block, at a chosen place in its reading order.
 #[derive(Clone)]

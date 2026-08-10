@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
-use crate::shared::error::{Error, Result};
+use crate::error::{Error, Result};
 
 /// The repository farol was invoked in, resolved once.
 ///

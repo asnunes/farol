@@ -7,7 +7,7 @@
 
 use super::model::{FileDiff, Scope};
 use super::path::ReviewPath;
-use crate::shared::error::Result;
+use crate::error::Result;
 
 /// What is under review, and whether a path is part of it.
 pub trait ReviewScopeSource: Send + Sync {
@@ -23,7 +23,7 @@ pub trait ReviewScopeSource: Send + Sync {
     fn review_path(&self, raw: &str) -> Result<ReviewPath> {
         let scope = self.scope()?;
         if !scope.contains(raw) {
-            return Err(scope.reject(raw));
+            return Err(scope.reject(raw).into());
         }
         Ok(ReviewPath::proven(raw, self.file_line_count(raw)?))
     }

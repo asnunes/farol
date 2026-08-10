@@ -13,7 +13,7 @@ impl ReviewMap {
         let block = self.block_mut(slug)?;
 
         if block.file(&path).is_some() {
-            return Err(Error::DuplicatePath {
+            return Err(MapError::DuplicatePath {
                 slug: slug.to_string(),
                 path,
             });
@@ -26,7 +26,7 @@ impl ReviewMap {
                 .iter()
                 .position(|f| f.path == target)
                 .map(|i| i + 1)
-                .ok_or_else(|| Error::PathNotInBlock {
+                .ok_or_else(|| MapError::PathNotInBlock {
                     slug: slug.to_string(),
                     path: target.to_string(),
                     existing: block.paths(),
@@ -39,11 +39,13 @@ impl ReviewMap {
     pub fn update_file(&mut self, slug: &Slug, path: &str, note: Option<String>) -> Result<()> {
         let block = self.block_mut(slug)?;
         let paths = block.paths();
-        let file = block.file_mut(path).ok_or_else(|| Error::PathNotInBlock {
-            slug: slug.to_string(),
-            path: path.to_string(),
-            existing: paths,
-        })?;
+        let file = block
+            .file_mut(path)
+            .ok_or_else(|| MapError::PathNotInBlock {
+                slug: slug.to_string(),
+                path: path.to_string(),
+                existing: paths,
+            })?;
         file.note = note;
         Ok(())
     }
@@ -55,7 +57,7 @@ impl ReviewMap {
             .files
             .iter()
             .position(|f| f.path == path)
-            .ok_or_else(|| Error::PathNotInBlock {
+            .ok_or_else(|| MapError::PathNotInBlock {
                 slug: slug.to_string(),
                 path: path.to_string(),
                 existing: paths,
@@ -116,7 +118,7 @@ mod tests {
         let mut m = map_with(&["one"]);
         m.add_file(&slug("one"), "a.rs", None, None).unwrap();
         let err = m.add_file(&slug("one"), "a.rs", None, None).unwrap_err();
-        assert!(matches!(err, Error::DuplicatePath { .. }));
+        assert!(matches!(err, MapError::DuplicatePath { .. }));
     }
 
     #[test]

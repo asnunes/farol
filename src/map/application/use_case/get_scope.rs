@@ -1,6 +1,6 @@
 use crate::diff::application::ReviewScope;
 use crate::diff::domain::{ReviewPath, Scope};
-use crate::shared::error::Result;
+use crate::error::Result;
 
 /// The files under review, as farol resolved them.
 #[derive(Clone)]

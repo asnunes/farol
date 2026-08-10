@@ -7,10 +7,10 @@ use std::sync::Arc;
 
 use super::derivation::MapDerivation;
 use super::versions::MapVersions;
+use crate::error::{Error, Result};
 #[cfg(test)]
 use crate::map::domain::Position;
 use crate::map::domain::{MapRepository, ReviewMap};
-use crate::shared::error::Result;
 
 pub enum ResetOutcome {
     /// Deleted; the named version is current again, or nothing is.
@@ -43,9 +43,13 @@ impl MapEditor {
     }
 
     /// Load the version for where we are, apply `f`, store it back.
-    pub fn edit<F>(&self, f: F) -> Result<ReviewMap>
+    /// Generic over what the change can refuse with, so a caller can hand it a
+    /// domain operation (`MapError`) or something that already failed for
+    /// another reason, without wrapping one in the other by hand.
+    pub fn edit<F, E>(&self, f: F) -> Result<ReviewMap>
     where
-        F: FnOnce(&mut ReviewMap) -> Result<()>,
+        F: FnOnce(&mut ReviewMap) -> std::result::Result<(), E>,
+        Error: From<E>,
     {
         let mut map = self.derivation.derive()?.map;
         f(&mut map)?;
@@ -69,6 +73,7 @@ impl MapEditor {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::map::domain::MapError;
     use crate::testing::{FakeDiffSource, InMemoryMapRepository, services, slug};
     use std::sync::Arc;
 
@@ -150,7 +155,7 @@ mod tests {
                 .at_distance("old", 1),
             repo,
         );
-        svc.editor.edit(|_| Ok(())).unwrap(); // a version for "head"
+        svc.editor.edit(|_| Ok::<_, MapError>(())).unwrap(); // a version for "head"
 
         let outcome = svc.editor.reset().unwrap();
 
@@ -170,7 +175,7 @@ mod tests {
     #[test]
     fn resetting_the_only_version_leaves_nothing_current() {
         let svc = on(head());
-        svc.editor.edit(|_| Ok(())).unwrap();
+        svc.editor.edit(|_| Ok::<_, MapError>(())).unwrap();
 
         let outcome = svc.editor.reset().unwrap();
 

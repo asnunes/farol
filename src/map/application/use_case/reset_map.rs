@@ -1,5 +1,5 @@
+use crate::error::Result;
 use crate::map::application::{MapEditor, ResetOutcome};
-use crate::shared::error::Result;
 
 /// Throw away the newest version so the one before it takes over.
 #[derive(Clone)]
@@ -20,6 +20,7 @@ impl ResetMap {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::map::domain::MapError;
     use crate::testing::{FakeDiffSource, InMemoryMapRepository, services};
     use std::sync::Arc;
 
@@ -45,7 +46,7 @@ mod tests {
                 .at_distance("old", 1),
             Arc::new(InMemoryMapRepository::new()),
         );
-        svc.editor.edit(|_| Ok(())).unwrap(); // a version for "head"
+        svc.editor.edit(|_| Ok::<_, MapError>(())).unwrap(); // a version for "head"
 
         let outcome = ResetMap::new(svc.editor).execute().unwrap();
 

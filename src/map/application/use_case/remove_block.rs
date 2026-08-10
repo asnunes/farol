@@ -1,6 +1,6 @@
+use crate::error::Result;
 use crate::map::application::MapEditor;
 use crate::map::domain::{ReviewMap, Slug};
-use crate::shared::error::Result;
 
 /// Drop a block. Its line notes survive as orphans, because the prose may still
 /// be worth moving somewhere else.

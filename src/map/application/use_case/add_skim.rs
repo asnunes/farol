@@ -1,7 +1,7 @@
 use crate::diff::domain::ReviewPath;
+use crate::error::Result;
 use crate::map::application::MapEditor;
 use crate::map::domain::{ReviewMap, Slug};
-use crate::shared::error::Result;
 
 /// Mark a file as safe to read diagonally, optionally next to the block that
 /// caused it to change.

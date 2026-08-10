@@ -1,5 +1,5 @@
+use crate::error::Result;
 use crate::map::domain::{MAP_VERSION, MapRepository, ReviewMap};
-use crate::shared::error::Result;
 use crate::shared::paths::Store;
 
 pub struct JsonMapRepository {

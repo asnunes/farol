@@ -104,8 +104,8 @@ impl Scope {
 
     /// Reject a path that is not under review, carrying the near misses with
     /// it. Built here so every caller rejects the same way.
-    pub fn reject(&self, path: &str) -> crate::shared::error::Error {
-        crate::shared::error::Error::PathOutOfScope {
+    pub fn reject(&self, path: &str) -> super::ScopeError {
+        super::ScopeError::PathOutOfScope {
             path: path.to_string(),
             similar: self.similar_paths(path),
         }

@@ -1,10 +1,10 @@
 use crate::diff::application::ReviewScope;
 use crate::diff::domain::Scope;
+use crate::error::Result;
 use crate::map::application::MapVersions;
 use crate::map::domain::ReviewMap;
 use crate::progress::application::ProgressStore;
 use crate::progress::domain::Progress;
-use crate::shared::error::Result;
 
 /// Everything the screen needs in one call: the map, how far behind it is, and
 /// what has been read.
@@ -44,6 +44,7 @@ impl GetReview {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::map::domain::MapError;
     use crate::progress::application::MarkViewed;
     use crate::testing::{
         FakeDiffSource, InMemoryMapRepository, InMemoryProgressRepository, services, slug,
@@ -97,7 +98,7 @@ mod tests {
         // The screen strikes files through on load; without this the reviewer
         // would start over every refresh.
         let (review, progress, editor) = on(&["a.rs", "b.rs"]);
-        let map = editor.edit(|_| Ok(())).unwrap();
+        let map = editor.edit(|_| Ok::<_, MapError>(())).unwrap();
         MarkViewed::new(progress).execute("a.rs", "now").unwrap();
 
         let snapshot = review.execute(&map).unwrap();

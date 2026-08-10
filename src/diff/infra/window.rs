@@ -11,7 +11,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use super::blob::{Blob, Diffed, Side};
 use super::git::Git;
 use crate::diff::domain::{FileChange, FileStatus};
-use crate::shared::error::Result;
+use crate::error::Result;
 
 /// The review window with both sides read in.
 pub(super) struct Window {

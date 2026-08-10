@@ -10,7 +10,7 @@ impl ReviewMap {
         position: Position,
     ) -> Result<()> {
         if self.index_of(slug).is_some() {
-            return Err(Error::DuplicateBlock {
+            return Err(MapError::DuplicateBlock {
                 slug: slug.to_string(),
             });
         }
@@ -46,7 +46,7 @@ impl ReviewMap {
     /// Removing a block orphans its line notes rather than dropping them: the
     /// prose may still be worth moving somewhere else.
     pub fn remove_block(&mut self, slug: &Slug) -> Result<()> {
-        let idx = self.index_of(slug).ok_or_else(|| Error::UnknownBlock {
+        let idx = self.index_of(slug).ok_or_else(|| MapError::UnknownBlock {
             slug: slug.to_string(),
             existing: self.slugs(),
         })?;
@@ -72,7 +72,7 @@ impl ReviewMap {
     }
 
     pub fn move_block(&mut self, slug: &Slug, position: Position) -> Result<()> {
-        let idx = self.index_of(slug).ok_or_else(|| Error::UnknownBlock {
+        let idx = self.index_of(slug).ok_or_else(|| MapError::UnknownBlock {
             slug: slug.to_string(),
             existing: self.slugs(),
         })?;
@@ -91,14 +91,16 @@ impl ReviewMap {
     fn resolve_position(&self, position: &Position) -> Result<usize> {
         match position {
             Position::End => Ok(self.blocks.len()),
-            Position::Before(target) => self.index_of(target).ok_or_else(|| Error::UnknownBlock {
-                slug: target.to_string(),
-                existing: self.slugs(),
-            }),
+            Position::Before(target) => {
+                self.index_of(target).ok_or_else(|| MapError::UnknownBlock {
+                    slug: target.to_string(),
+                    existing: self.slugs(),
+                })
+            }
             Position::After(target) => {
                 self.index_of(target)
                     .map(|i| i + 1)
-                    .ok_or_else(|| Error::UnknownBlock {
+                    .ok_or_else(|| MapError::UnknownBlock {
                         slug: target.to_string(),
                         existing: self.slugs(),
                     })
@@ -132,7 +134,7 @@ mod tests {
         let err = m
             .add_block(&slug("one"), "t", "c", Position::End)
             .unwrap_err();
-        assert!(matches!(err, Error::DuplicateBlock { .. }));
+        assert!(matches!(err, MapError::DuplicateBlock { .. }));
     }
 
     #[test]
@@ -166,7 +168,7 @@ mod tests {
             .add_block(&slug("x"), "t", "c", Position::After(slug("nope")))
             .unwrap_err();
         match err {
-            Error::UnknownBlock { existing, .. } => assert_eq!(existing, vec!["one", "two"]),
+            MapError::UnknownBlock { existing, .. } => assert_eq!(existing, vec!["one", "two"]),
             other => panic!("unexpected: {other:?}"),
         }
         assert_eq!(m.slugs(), vec!["one", "two"], "map must be untouched");
@@ -188,7 +190,7 @@ mod tests {
         let err = m
             .move_block(&slug("one"), Position::After(slug("ghost")))
             .unwrap_err();
-        assert!(matches!(err, Error::UnknownBlock { .. }));
+        assert!(matches!(err, MapError::UnknownBlock { .. }));
         assert_eq!(m.slugs(), vec!["one", "two"]);
     }
 

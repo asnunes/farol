@@ -1,6 +1,6 @@
+use crate::error::Result;
 use crate::map::application::MapEditor;
 use crate::map::domain::{ReviewMap, Slug};
-use crate::shared::error::Result;
 
 /// Rewrite a block's title or the text that explains why it exists.
 #[derive(Clone)]

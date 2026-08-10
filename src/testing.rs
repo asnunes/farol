@@ -11,9 +11,9 @@ use crate::diff::domain::{
     CommitHistorySource, FileChange, FileDiff, FileDiffSource, FileStatus, Hunk, Line, LineKind,
     ReviewScopeSource, Scope,
 };
+use crate::error::Result;
 use crate::map::domain::{MapRepository, ReviewMap, Slug};
 use crate::progress::domain::{Progress, ProgressRepository};
-use crate::shared::error::Result;
 
 /// A diff source you assemble by hand.
 pub struct FakeDiffSource {
@@ -108,7 +108,7 @@ impl ReviewScopeSource for FakeDiffSource {
 
     fn file_line_count(&self, path: &str) -> Result<u32> {
         if !self.scope.contains(path) {
-            return Err(self.scope.reject(path));
+            return Err(self.scope.reject(path).into());
         }
         // Generous by default so a test only declares a size when the size is
         // the thing under test.
@@ -126,7 +126,7 @@ impl FileDiffSource for FakeDiffSource {
         // The real source refuses a path outside the window; a fake that did
         // not would let tests pass over behaviour that does not exist.
         if !self.scope.contains(path) {
-            return Err(self.scope.reject(path));
+            return Err(self.scope.reject(path).into());
         }
         Ok(FileDiff {
             path: path.to_string(),
@@ -143,7 +143,7 @@ impl FileDiffSource for FakeDiffSource {
     fn content_hash(&self, path: &str) -> Result<String> {
         // The real source refuses a path outside the window; so does this.
         if !self.scope.contains(path) {
-            return Err(self.scope.reject(path));
+            return Err(self.scope.reject(path).into());
         }
         Ok(format!("hash-of-{path}"))
     }
@@ -233,11 +233,11 @@ pub struct BrokenProgressRepository;
 
 impl ProgressRepository for BrokenProgressRepository {
     fn load(&self) -> Result<Progress> {
-        Err(crate::shared::error::Error::msg("the store is unreadable"))
+        Err(crate::error::Error::msg("the store is unreadable"))
     }
 
     fn save(&self, _progress: &Progress) -> Result<()> {
-        Err(crate::shared::error::Error::msg("the store is unwritable"))
+        Err(crate::error::Error::msg("the store is unwritable"))
     }
 }
 
@@ -434,13 +434,13 @@ pub fn orphaned(
     old: crate::map::domain::LineRange,
     text: &str,
 ) {
-    use crate::map::domain::{NoteFate, OrphanReason};
+    use crate::map::domain::{MapError, NoteFate, OrphanReason};
 
     editor
         .edit(|map| {
             map.add_line_note(&slug("core"), "a.rs", old, text)?;
             map.reanchor_notes(|_, note| {
-                Ok(if note.range == old {
+                Ok::<_, MapError>(if note.range == old {
                     NoteFate::Orphan {
                         snapshot: "the code it covered".into(),
                         reason: OrphanReason::HunkOverlap,

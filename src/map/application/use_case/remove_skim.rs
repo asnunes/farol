@@ -1,7 +1,7 @@
 use crate::diff::domain::ReviewPath;
+use crate::error::Result;
 use crate::map::application::MapEditor;
 use crate::map::domain::ReviewMap;
-use crate::shared::error::Result;
 
 /// Take a file back off the skim list, when it turns out to deserve reading.
 #[derive(Clone)]

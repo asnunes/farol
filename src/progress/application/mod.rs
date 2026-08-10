@@ -3,8 +3,8 @@
 use std::sync::Arc;
 
 use crate::diff::application::FileDiffs;
+use crate::error::Result;
 use crate::progress::domain::{Progress, ProgressRepository};
-use crate::shared::error::Result;
 
 /// A **service**: the dependency the use cases share. Not called by transports.
 #[derive(Clone)]

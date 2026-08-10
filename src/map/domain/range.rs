@@ -12,8 +12,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use super::error::{MapError, Result};
 use crate::diff::domain::{Hunk, ReviewPath};
-use crate::shared::error::{Error, Result};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct LineRange {
@@ -34,7 +34,7 @@ pub enum ShiftOutcome {
 impl LineRange {
     pub fn new(from: u32, to: u32) -> Result<Self> {
         if from == 0 || to < from {
-            return Err(Error::BadRange {
+            return Err(MapError::BadRange {
                 raw: format!("{from}-{to}"),
             });
         }
@@ -43,7 +43,7 @@ impl LineRange {
 
     /// Parse the `<from>-<to>` form the CLI takes.
     pub fn parse(raw: &str) -> Result<Self> {
-        let bad = || Error::BadRange {
+        let bad = || MapError::BadRange {
             raw: raw.to_string(),
         };
         let (a, b) = raw.split_once('-').ok_or_else(bad)?;
@@ -57,7 +57,7 @@ impl LineRange {
     /// file's length — no reaching back for the diff source.
     pub fn require_within(&self, path: &ReviewPath) -> Result<()> {
         if self.to > path.lines() {
-            return Err(Error::RangeOutOfFile {
+            return Err(MapError::RangeOutOfFile {
                 path: path.to_string(),
                 from: self.from,
                 to: self.to,

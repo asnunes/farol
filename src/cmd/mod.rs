@@ -20,9 +20,9 @@ use skim::SkimAction;
 pub use wiring::{Ctx, ServerUseCases};
 
 use crate::diff::infra::ScopeRequest;
+use crate::error::Result;
 use crate::map::domain::ReviewMap;
 use crate::map::presentation::OrphanReport;
-use crate::shared::error::Result;
 
 #[derive(Parser)]
 #[command(

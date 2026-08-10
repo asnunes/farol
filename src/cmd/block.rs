@@ -3,13 +3,13 @@
 use clap::Subcommand;
 
 use super::{Action, Ctx, Reporting};
+use crate::error::Result;
 use crate::map::application::position_from;
 use crate::map::domain::Slug;
-use crate::shared::error::Result;
 
 /// `--before` and `--after` name a block, so they are slugs like any other.
 fn parse_opt(raw: Option<String>) -> Result<Option<Slug>> {
-    raw.map(|s| Slug::parse(&s)).transpose()
+    Ok(raw.map(|s| Slug::parse(&s)).transpose()?)
 }
 
 #[derive(Subcommand)]

@@ -31,7 +31,7 @@ impl ReviewMap {
             .line_notes
             .iter_mut()
             .find(|n| n.range == range)
-            .ok_or_else(|| Error::NoSuchLineNote {
+            .ok_or_else(|| MapError::NoSuchLineNote {
                 slug: slug.to_string(),
                 path: path.to_string(),
                 range,
@@ -45,7 +45,7 @@ impl ReviewMap {
         let before = file.line_notes.len();
         file.line_notes.retain(|n| n.range != range);
         if file.line_notes.len() == before {
-            return Err(Error::NoSuchLineNote {
+            return Err(MapError::NoSuchLineNote {
                 slug: slug.to_string(),
                 path: path.to_string(),
                 range,
@@ -57,11 +57,13 @@ impl ReviewMap {
     fn block_file_mut(&mut self, slug: &Slug, path: &str) -> Result<&mut BlockFile> {
         let block = self.block_mut(slug)?;
         let paths = block.paths();
-        block.file_mut(path).ok_or_else(|| Error::PathNotInBlock {
-            slug: slug.to_string(),
-            path: path.to_string(),
-            existing: paths,
-        })
+        block
+            .file_mut(path)
+            .ok_or_else(|| MapError::PathNotInBlock {
+                slug: slug.to_string(),
+                path: path.to_string(),
+                existing: paths,
+            })
     }
 }
 

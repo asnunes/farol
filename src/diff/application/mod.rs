@@ -11,7 +11,7 @@ use std::sync::Arc;
 use crate::diff::domain::{
     CommitHistorySource, FileDiff, FileDiffSource, ReviewPath, ReviewScopeSource, Scope,
 };
-use crate::shared::error::Result;
+use crate::error::Result;
 
 /// What is under review, and turning raw paths into proven ones.
 #[derive(Clone)]
@@ -91,7 +91,7 @@ impl CommitHistory {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::shared::error::Error;
+    use crate::error::Error;
     use crate::testing::FakeDiffSource;
 
     fn scope_over(paths: &[&str]) -> ReviewScope {

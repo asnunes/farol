@@ -12,7 +12,7 @@ impl ReviewMap {
         if let Some(slug) = &block
             && self.index_of(slug).is_none()
         {
-            return Err(Error::UnknownBlock {
+            return Err(MapError::UnknownBlock {
                 slug: slug.to_string(),
                 existing: self.slugs(),
             });
@@ -30,7 +30,9 @@ impl ReviewMap {
         let before = self.skim.len();
         self.skim.retain(|s| s.path != path);
         if self.skim.len() == before {
-            return Err(Error::msg(format!("'{path}' is not marked as skim")));
+            return Err(MapError::NotSkimmed {
+                path: path.to_string(),
+            });
         }
         Ok(())
     }
@@ -55,7 +57,7 @@ mod tests {
         let err = m
             .add_skim("Cargo.lock", "generated", Some(slug("ghost")))
             .unwrap_err();
-        assert!(matches!(err, Error::UnknownBlock { .. }));
+        assert!(matches!(err, MapError::UnknownBlock { .. }));
     }
 
     #[test]

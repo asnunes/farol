@@ -1,7 +1,7 @@
 use crate::diff::domain::ReviewPath;
+use crate::error::Result;
 use crate::map::application::MapEditor;
-use crate::map::domain::{Position, ReviewMap, Slug};
-use crate::shared::error::Result;
+use crate::map::domain::{MapError, Position, ReviewMap, Slug};
 
 /// Open a block and, optionally, seed it with files that need no note.
 #[derive(Clone)]
@@ -27,7 +27,7 @@ impl AddBlock {
             for path in paths {
                 map.add_file(slug, path.as_str(), None, None)?;
             }
-            Ok(())
+            Ok::<_, MapError>(())
         })
     }
 }

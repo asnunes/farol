@@ -36,10 +36,14 @@ impl ReviewMap {
     /// the right block, keeping the remaining notes in reading order — happens
     /// here, because it is the same bookkeeping every caller would otherwise
     /// have to repeat correctly.
-    pub fn reanchor_notes(
+    /// Generic over the caller's error because this method has none of its own:
+    /// it decides nothing and refuses nothing, it only carries out what `decide`
+    /// says. Forcing the caller to produce a `MapError` would make it wrap a git
+    /// failure in the map's vocabulary, which it is not.
+    pub fn reanchor_notes<E>(
         &mut self,
-        mut decide: impl FnMut(&str, &LineNote) -> Result<NoteFate>,
-    ) -> Result<()> {
+        mut decide: impl FnMut(&str, &LineNote) -> std::result::Result<NoteFate, E>,
+    ) -> std::result::Result<(), E> {
         // Decide everything before changing anything. `decide` reads a diff to
         // make up its mind and that can fail; applying as we go would leave the
         // map with notes already lifted off their files and no record of them.
@@ -121,7 +125,7 @@ impl ReviewMap {
             .orphans
             .iter()
             .position(|o| &o.block == slug && o.path == path && o.old_range == range)
-            .ok_or_else(|| Error::NoSuchOrphan {
+            .ok_or_else(|| MapError::NoSuchOrphan {
                 slug: slug.to_string(),
                 path: path.to_string(),
                 range,
@@ -159,7 +163,8 @@ mod tests {
     fn a_note_the_caller_keeps_is_left_exactly_as_it_was() {
         let mut m = mapped();
 
-        m.reanchor_notes(|_, _| Ok(NoteFate::Keep)).unwrap();
+        m.reanchor_notes(|_, _| Ok::<_, MapError>(NoteFate::Keep))
+            .unwrap();
 
         assert_eq!(notes(&m).len(), 2);
         assert!(m.orphans().is_empty());
@@ -170,7 +175,7 @@ mod tests {
         let mut m = mapped();
 
         m.reanchor_notes(|_, note| {
-            Ok(if note.range == range(10, 12) {
+            Ok::<_, MapError>(if note.range == range(10, 12) {
                 NoteFate::MoveTo(range(60, 62))
             } else {
                 NoteFate::Keep
@@ -187,7 +192,7 @@ mod tests {
         let mut m = mapped();
 
         m.reanchor_notes(|_, note| {
-            Ok(if note.range == range(10, 12) {
+            Ok::<_, MapError>(if note.range == range(10, 12) {
                 NoteFate::MoveTo(range(90, 92))
             } else {
                 NoteFate::Keep
@@ -204,7 +209,7 @@ mod tests {
         let mut m = mapped();
 
         m.reanchor_notes(|_, note| {
-            Ok(if note.range == range(10, 12) {
+            Ok::<_, MapError>(if note.range == range(10, 12) {
                 NoteFate::Orphan {
                     snapshot: "let timeout = 180;".into(),
                     reason: OrphanReason::HunkOverlap,
@@ -239,7 +244,7 @@ mod tests {
         let mut seen = Vec::new();
         m.reanchor_notes(|path, _| {
             seen.push(path.to_string());
-            Ok(NoteFate::Keep)
+            Ok::<_, MapError>(NoteFate::Keep)
         })
         .unwrap();
 
@@ -256,7 +261,7 @@ mod tests {
 
         let err = m.reanchor_notes(|_, note| {
             if note.range == range(40, 42) {
-                return Err(Error::msg("cannot read the diff"));
+                return Err("cannot read the diff");
             }
             Ok(NoteFate::MoveTo(range(60, 62)))
         });
@@ -334,7 +339,7 @@ mod tests {
     fn pruning_adds_to_the_orphans_already_there_rather_than_replacing_them() {
         let mut m = mapped();
         m.reanchor_notes(|_, note| {
-            Ok(if note.range == range(10, 12) {
+            Ok::<_, MapError>(if note.range == range(10, 12) {
                 NoteFate::Orphan {
                     snapshot: String::new(),
                     reason: OrphanReason::HunkOverlap,
@@ -356,7 +361,7 @@ mod tests {
     fn taking_an_orphan_hands_it_over_and_removes_it_from_the_list() {
         let mut m = mapped();
         m.reanchor_notes(|_, _| {
-            Ok(NoteFate::Orphan {
+            Ok::<_, MapError>(NoteFate::Orphan {
                 snapshot: String::new(),
                 reason: OrphanReason::HunkOverlap,
             })
@@ -382,7 +387,7 @@ mod tests {
         // would pile up a graveyard nobody revisits.
         let mut m = mapped();
         m.reanchor_notes(|_, _| {
-            Ok(NoteFate::Orphan {
+            Ok::<_, MapError>(NoteFate::Orphan {
                 snapshot: String::new(),
                 reason: OrphanReason::HunkOverlap,
             })

@@ -1,6 +1,6 @@
+use crate::error::Result;
 use crate::map::application::MapVersions;
 use crate::map::domain::ReviewMap;
-use crate::shared::error::Result;
 
 /// The map that belongs to where we are now, if there is one.
 #[derive(Clone)]

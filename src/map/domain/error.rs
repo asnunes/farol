@@ -1,9 +1,21 @@
+//! What the map refuses, in the map's own vocabulary.
+//!
+//! Separate from [`crate::error::Error`] because these are the things
+//! *this* layer knows how to be wrong about. Keeping them in the shared type
+//! made the shared layer import `LineRange` from here, which is the dependency
+//! running the wrong way.
+
 use std::fmt;
 
-pub type Result<T> = std::result::Result<T, Error>;
+use super::range::LineRange;
+
+/// Every message is read by the session writing the map, so each one names what
+/// went wrong and leaves a way forward.
+/// What this layer's functions return.
+pub type Result<T> = std::result::Result<T, MapError>;
 
 #[derive(Debug, thiserror::Error)]
-pub enum Error {
+pub enum MapError {
     #[error(
         "no map for branch {branch}\nRun the review-map skill in the session that implemented this change."
     )]
@@ -14,9 +26,6 @@ pub enum Error {
 
     #[error("block '{slug}' already exists — use `block update` to change it")]
     DuplicateBlock { slug: String },
-
-    #[error("'{path}' is not part of this review{}", Suggestion(.similar))]
-    PathOutOfScope { path: String, similar: Vec<String> },
 
     #[error("'{path}' is not in block '{slug}'\nFiles in that block: {}", Listing(.existing))]
     PathNotInBlock {
@@ -44,11 +53,14 @@ pub enum Error {
     #[error("invalid range '{raw}' — expected <from>-<to>, for example 82-116")]
     BadRange { raw: String },
 
+    #[error("'{path}' is not marked as skim")]
+    NotSkimmed { path: String },
+
     #[error("no line note at {range} on '{path}' in block '{slug}'")]
     NoSuchLineNote {
         slug: String,
         path: String,
-        range: crate::map::domain::LineRange,
+        range: LineRange,
     },
 
     #[error(
@@ -57,40 +69,12 @@ pub enum Error {
     NoSuchOrphan {
         slug: String,
         path: String,
-        range: crate::map::domain::LineRange,
+        range: LineRange,
     },
-
-    #[error("HEAD is detached — check out a branch first")]
-    DetachedHead,
-
-    #[error(
-        "--dirty only works on the branch you are standing on; head resolved to '{head}' but you are on '{current}'"
-    )]
-    DirtyOnOtherHead { head: String, current: String },
-
-    #[error("no base branch found — tried 'main' and 'master'")]
-    NoBaseBranch,
-
-    #[error("{0}")]
-    Message(String),
-
-    #[error(transparent)]
-    Io(#[from] std::io::Error),
-
-    #[error(transparent)]
-    Json(#[from] serde_json::Error),
-
-    #[error(transparent)]
-    Other(#[from] anyhow::Error),
 }
 
-impl Error {
-    pub fn msg(m: impl Into<String>) -> Self {
-        Error::Message(m.into())
-    }
-}
-
-/// Renders a list inline, or says there are none.
+/// Renders a list inline, or says there are none. An empty list would read as a
+/// formatting bug rather than as an answer.
 struct Listing<'a>(&'a Vec<String>);
 
 impl fmt::Display for Listing<'_> {
@@ -103,53 +87,13 @@ impl fmt::Display for Listing<'_> {
     }
 }
 
-/// Renders "did you mean" only when there is something to suggest.
-struct Suggestion<'a>(&'a Vec<String>);
-
-impl fmt::Display for Suggestion<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.0.is_empty() {
-            Ok(())
-        } else {
-            write!(f, "\nDid you mean: {}", self.0.join(", "))
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// Every message is read by the session writing the map, so each one has to
-    /// name what went wrong and leave a way forward.
-    #[test]
-    fn a_rejected_path_offers_the_near_misses() {
-        let e = Error::PathOutOfScope {
-            path: "src/stores/db.rs".into(),
-            similar: vec!["src/store/db.rs".into()],
-        };
-
-        let msg = e.to_string();
-        assert!(msg.contains("src/stores/db.rs"), "{msg}");
-        assert!(msg.contains("Did you mean: src/store/db.rs"), "{msg}");
-    }
-
-    #[test]
-    fn a_rejected_path_with_nothing_like_it_says_nothing_extra() {
-        // Better silence than sending the author off to another wrong path.
-        let e = Error::PathOutOfScope {
-            path: "nowhere.py".into(),
-            similar: vec![],
-        };
-
-        let msg = e.to_string();
-        assert!(msg.contains("nowhere.py"), "{msg}");
-        assert!(!msg.contains("Did you mean"), "{msg}");
-    }
-
     #[test]
     fn an_unknown_block_lists_the_ones_that_exist() {
-        let e = Error::UnknownBlock {
+        let e = MapError::UnknownBlock {
             slug: "nope".into(),
             existing: vec!["core".into(), "wiring".into()],
         };
@@ -161,9 +105,7 @@ mod tests {
 
     #[test]
     fn an_unknown_block_on_an_empty_map_says_there_are_none_yet() {
-        // An empty list would read as a formatting bug rather than as an
-        // answer.
-        let e = Error::UnknownBlock {
+        let e = MapError::UnknownBlock {
             slug: "nope".into(),
             existing: vec![],
         };
@@ -173,7 +115,7 @@ mod tests {
 
     #[test]
     fn a_missing_map_names_the_branch_and_says_how_to_make_one() {
-        let e = Error::NoMap {
+        let e = MapError::NoMap {
             branch: "feature/x".into(),
         };
 
@@ -187,7 +129,7 @@ mod tests {
 
     #[test]
     fn a_range_past_the_end_says_how_long_the_file_actually_is() {
-        let e = Error::RangeOutOfFile {
+        let e = MapError::RangeOutOfFile {
             path: "a.rs".into(),
             from: 200,
             to: 210,
@@ -200,41 +142,42 @@ mod tests {
     }
 
     #[test]
-    fn a_malformed_slug_shows_what_was_typed() {
-        assert!(
-            Error::BadSlug {
-                raw: "Not A Slug".into()
-            }
-            .to_string()
-            .contains("Not A Slug")
-        );
-    }
-
-    #[test]
-    fn dirty_on_another_head_names_both_sides_of_the_contradiction() {
-        let e = Error::DirtyOnOtherHead {
-            head: "other".into(),
-            current: "feature/x".into(),
+    fn a_deactivated_note_that_is_not_there_says_where_to_look() {
+        let e = MapError::NoSuchOrphan {
+            slug: "core".into(),
+            path: "a.rs".into(),
+            range: LineRange::new(10, 12).unwrap(),
         };
 
-        let msg = e.to_string();
-        assert!(msg.contains("other"), "{msg}");
-        assert!(msg.contains("feature/x"), "{msg}");
+        assert!(e.to_string().contains("farol map derive"), "{e}");
     }
 
     #[test]
     fn every_variant_says_something() {
-        // A blank message would strand whoever hit it.
         for e in [
-            Error::DetachedHead,
-            Error::NoBaseBranch,
-            Error::DuplicateBlock {
+            MapError::DuplicateBlock {
                 slug: "core".into(),
             },
-            Error::BadRange {
+            MapError::DuplicatePath {
+                slug: "core".into(),
+                path: "a.rs".into(),
+            },
+            MapError::BadSlug {
+                raw: "Not A Slug".into(),
+            },
+            MapError::BadRange {
                 raw: "10..20".into(),
             },
-            Error::msg("something went wrong"),
+            MapError::PathNotInBlock {
+                slug: "core".into(),
+                path: "a.rs".into(),
+                existing: vec![],
+            },
+            MapError::NoSuchLineNote {
+                slug: "core".into(),
+                path: "a.rs".into(),
+                range: LineRange::new(1, 2).unwrap(),
+            },
         ] {
             assert!(!e.to_string().trim().is_empty(), "{e:?}");
         }

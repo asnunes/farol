@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::shared::error::Result;
+use crate::error::Result;
 
 pub const PROGRESS_VERSION: u32 = 1;
 

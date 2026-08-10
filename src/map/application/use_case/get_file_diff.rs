@@ -1,6 +1,6 @@
 use crate::diff::application::FileDiffs;
 use crate::diff::domain::FileDiff;
-use crate::shared::error::Result;
+use crate::error::Result;
 
 /// One file's diff, for the pane on the right.
 #[derive(Clone)]

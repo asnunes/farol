@@ -3,9 +3,9 @@
 use clap::Subcommand;
 
 use super::{Action, Ctx};
+use crate::error::Result;
 use crate::map::application::ResetOutcome;
 use crate::map::presentation::{CheckSummary, MapReport, OrphanReport};
-use crate::shared::error::Result;
 
 #[derive(Subcommand)]
 pub(super) enum MapAction {

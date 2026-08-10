@@ -1,6 +1,6 @@
+use crate::error::Result;
 use crate::map::application::MapEditor;
 use crate::map::domain::{Position, ReviewMap, Slug};
-use crate::shared::error::Result;
 
 /// Move a block in the reading order.
 #[derive(Clone)]
