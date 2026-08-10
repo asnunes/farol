@@ -9,6 +9,19 @@ build:
     cd web && npm run build
     cargo build --release
 
+# Put `farol` on your PATH, pointing at this checkout.
+#
+# A symlink rather than a copy: `just build` then updates the installed binary
+# too, which is what you want while the tool is still being written. `cargo
+# install` would copy — and worse, it would skip the frontend build and embed
+# whatever happens to be in web/dist.
+install: build
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p ~/.local/bin
+    ln -sf "$(pwd)/target/release/farol" ~/.local/bin/farol
+    echo "farol -> $(readlink ~/.local/bin/farol)"
+
 # Serve with the frontend proxied from Vite instead of embedded.
 dev:
     @echo "run 'cd web && npm run dev' in another terminal, then:"
