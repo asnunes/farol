@@ -106,16 +106,22 @@ fn now() -> String {
 
 #[cfg(test)]
 pub(super) mod tests {
+    //! Only what a request over the wire cannot reach.
+    //!
+    //! The routes themselves are exercised in `tests/server.rs`, against a real
+    //! process: the browser talks to one, and the composition root and the
+    //! store are part of what can break. What is left here needs a collaborator
+    //! that fails, which no amount of driving the real binary can arrange.
+
     use super::*;
     use crate::cmd::ServerUseCases;
-    use crate::map::domain::ReviewMap;
-    use crate::map::domain::{LineRange, Position};
+    use crate::map::domain::{LineRange, Position, ReviewMap};
     use crate::progress::application::ProgressStore;
     use crate::testing::{FakeDiffSource, InMemoryProgressRepository, slug};
     use axum::body::Body;
-    use axum::http::{Request, StatusCode};
-    use serde_json::Value;
-    use tower::ServiceExt;
+    use axum::http::Request;
+    use std::sync::Arc;
+    use tower::ServiceExt as _;
 
     fn mapped() -> ReviewMap {
         let mut map = ReviewMap::new("feature/x", "main", "head");
@@ -135,8 +141,6 @@ pub(super) mod tests {
         map
     }
 
-    /// Wire the routes over fakes. Nothing listens on a port and nothing
-    /// touches disk.
     /// The use cases over fakes, shared with the tests that start a real
     /// listener next door.
     pub(in crate::server) fn use_cases() -> ServerUseCases {
@@ -161,193 +165,6 @@ pub(super) mod tests {
             mark_viewed: MarkViewed::new(progress.clone()),
             unmark_viewed: UnmarkViewed::new(progress),
         }
-    }
-
-    fn app() -> (Router, ProgressStore, broadcast::Sender<String>) {
-        use crate::diff::application::{FileDiffs, ReviewScope};
-        use crate::map::application::{GetFileDiff, GetReview};
-        use crate::progress::application::{MarkViewed, UnmarkViewed};
-
-        let source = Arc::new(FakeDiffSource::with_paths(&["a.rs", "b.rs", "Cargo.lock"]));
-        let diffs = FileDiffs::new(source.clone());
-        let scope = ReviewScope::new(source.clone());
-        let maps = crate::testing::services(
-            FakeDiffSource::with_paths(&["a.rs", "b.rs", "Cargo.lock"]),
-            Arc::new(crate::testing::InMemoryMapRepository::new()),
-        );
-        let progress = ProgressStore::new(
-            Arc::new(InMemoryProgressRepository::default()),
-            diffs.clone(),
-        );
-
-        let use_cases = ServerUseCases {
-            review: GetReview::new(maps.versions, scope, progress.clone()),
-            file_diff: GetFileDiff::new(diffs),
-            mark_viewed: MarkViewed::new(progress.clone()),
-            unmark_viewed: UnmarkViewed::new(progress.clone()),
-        };
-        let (state, changes) = AppState::new(use_cases, mapped());
-        (router(state), progress, changes)
-    }
-
-    async fn json(app: &Router, uri: &str) -> Value {
-        let response = app
-            .clone()
-            .oneshot(Request::builder().uri(uri).body(Body::empty()).unwrap())
-            .await
-            .unwrap();
-        assert_eq!(
-            response.status(),
-            StatusCode::OK,
-            "GET {uri} should succeed"
-        );
-        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .unwrap();
-        serde_json::from_slice(&bytes).unwrap()
-    }
-
-    async fn post_viewed(app: &Router, path: &str, viewed: bool) -> StatusCode {
-        app.clone()
-            .oneshot(
-                Request::builder()
-                    .method("POST")
-                    .uri("/api/viewed")
-                    .header("content-type", "application/json")
-                    .body(Body::from(
-                        serde_json::json!({ "path": path, "viewed": viewed }).to_string(),
-                    ))
-                    .unwrap(),
-            )
-            .await
-            .unwrap()
-            .status()
-    }
-
-    #[tokio::test]
-    async fn the_review_endpoint_serves_the_map_in_reading_order() {
-        let (app, _, _) = app();
-        let body = json(&app, "/api/review").await;
-
-        assert_eq!(body["branch"], "feature/x");
-        assert_eq!(body["blocks"][0]["slug"], "core");
-        assert_eq!(body["blocks"][0]["title"], "The change");
-        assert_eq!(body["blocks"][0]["context"], "why it exists");
-
-        let files = body["blocks"][0]["files"].as_array().unwrap();
-        assert_eq!(files[0]["path"], "a.rs");
-        assert_eq!(files[0]["notes"][0]["text"], "worth knowing");
-        assert_eq!(files[0]["lineNotes"][0]["from"], 4);
-        assert_eq!(body["looseSkim"][0]["path"], "Cargo.lock");
-    }
-
-    #[tokio::test]
-    async fn the_file_endpoint_returns_a_diff_and_refuses_a_path_outside_the_review() {
-        let (app, _, _) = app();
-        let body = json(&app, "/api/file?path=a.rs").await;
-        assert_eq!(body["path"], "a.rs");
-
-        let response = app
-            .clone()
-            .oneshot(
-                Request::builder()
-                    .uri("/api/file?path=nowhere.rs")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-    }
-
-    #[tokio::test]
-    async fn marking_a_file_read_is_visible_on_the_next_review() {
-        let (app, _, _) = app();
-        assert_eq!(json(&app, "/api/review").await["viewedFiles"], 0);
-
-        assert_eq!(
-            post_viewed(&app, "a.rs", true).await,
-            StatusCode::NO_CONTENT
-        );
-        assert_eq!(json(&app, "/api/review").await["viewedFiles"], 1);
-
-        assert_eq!(
-            post_viewed(&app, "a.rs", false).await,
-            StatusCode::NO_CONTENT
-        );
-        assert_eq!(json(&app, "/api/review").await["viewedFiles"], 0);
-    }
-
-    #[tokio::test]
-    async fn marking_writes_through_to_the_repository() {
-        // The count on screen must come from stored state, not from something
-        // the handler kept in memory.
-        let (app, progress, _) = app();
-        post_viewed(&app, "b.rs", true).await;
-        assert!(progress.load().unwrap().is_current("b.rs", "hash-of-b.rs"));
-    }
-
-    #[tokio::test]
-    async fn marking_a_path_outside_the_review_is_refused() {
-        let (app, _, _) = app();
-        assert_eq!(
-            post_viewed(&app, "nowhere.rs", true).await,
-            StatusCode::BAD_REQUEST
-        );
-    }
-
-    #[tokio::test]
-    async fn the_watch_channel_delivers_what_the_watcher_publishes() {
-        // The SSE route is a thin wrapper over this broadcast; if a subscriber
-        // gets the message, the page finds out the repository moved.
-        let (_, _, changes) = app();
-        let mut rx = changes.subscribe();
-        changes.send("map".to_string()).unwrap();
-
-        let received = tokio::time::timeout(std::time::Duration::from_secs(1), rx.recv())
-            .await
-            .expect("the channel should deliver promptly")
-            .unwrap();
-        assert_eq!(received, "map");
-    }
-
-    #[tokio::test]
-    async fn the_watch_route_streams_the_nudge_to_the_browser() {
-        // The previous test proves the channel carries it. This one proves the
-        // route turns it into an event the page can act on, which is what
-        // makes the screen reload without anyone pressing anything.
-        use http_body_util::BodyExt as _;
-
-        let (app, _, changes) = app();
-        let response = app
-            .oneshot(
-                Request::builder()
-                    .uri("/api/watch")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-
-        assert_eq!(response.status(), StatusCode::OK);
-        assert_eq!(
-            response
-                .headers()
-                .get("content-type")
-                .and_then(|v| v.to_str().ok()),
-            Some("text/event-stream")
-        );
-
-        changes.send("map".to_string()).unwrap();
-
-        let mut body = response.into_body();
-        let frame = tokio::time::timeout(std::time::Duration::from_secs(2), body.frame())
-            .await
-            .expect("the event should arrive promptly")
-            .expect("the stream should not have ended")
-            .unwrap();
-        let frame = String::from_utf8_lossy(frame.data_ref().expect("a data frame")).into_owned();
-        assert!(frame.contains("event: map"), "{frame}");
     }
 
     #[tokio::test]

@@ -5,131 +5,11 @@
 //! branch has moved, and whether the commands refuse the things they promise to
 //! refuse.
 
-use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
+mod common;
 
-const BIN: &str = env!("CARGO_BIN_EXE_farol");
-
-struct Repo {
-    dir: tempfile::TempDir,
-}
-
-impl Repo {
-    /// A repository with `main` holding one commit.
-    fn new() -> Self {
-        Self::with_default_branch("main")
-    }
-
-    fn with_default_branch(branch: &str) -> Self {
-        let dir = tempfile::tempdir().unwrap();
-        let repo = Repo { dir };
-        repo.git(&["init", "-q", "--initial-branch", branch]);
-        repo.git(&["config", "user.email", "test@farol"]);
-        repo.git(&["config", "user.name", "farol test"]);
-        repo.write("README.md", "start\n");
-        repo.git(&["add", "."]);
-        repo.commit("initial");
-        repo
-    }
-
-    fn path(&self) -> &Path {
-        self.dir.path()
-    }
-
-    fn git(&self, args: &[&str]) -> Output {
-        self.git_in(self.path(), args)
-    }
-
-    fn git_in(&self, cwd: &Path, args: &[&str]) -> Output {
-        let out = Command::new("git")
-            .args(args)
-            .current_dir(cwd)
-            .output()
-            .expect("git should run");
-        assert!(
-            out.status.success(),
-            "git {args:?} failed:\n{}",
-            String::from_utf8_lossy(&out.stderr)
-        );
-        out
-    }
-
-    fn write(&self, rel: &str, contents: &str) {
-        self.write_in(self.path(), rel, contents)
-    }
-
-    fn write_in(&self, root: &Path, rel: &str, contents: &str) {
-        let full = root.join(rel);
-        std::fs::create_dir_all(full.parent().unwrap()).unwrap();
-        std::fs::write(full, contents).unwrap();
-    }
-
-    fn commit(&self, message: &str) {
-        self.git(&["add", "-A"]);
-        self.git(&["commit", "-q", "-m", message, "--no-gpg-sign"]);
-    }
-
-    fn farol(&self, args: &[&str]) -> Output {
-        self.farol_in(self.path(), args)
-    }
-
-    fn farol_in(&self, cwd: &Path, args: &[&str]) -> Output {
-        Command::new(BIN)
-            .args(args)
-            .current_dir(cwd)
-            .output()
-            .expect("farol should run")
-    }
-
-    /// Run and require success, returning stdout.
-    fn ok(&self, args: &[&str]) -> String {
-        let out = self.farol(args);
-        assert!(
-            out.status.success(),
-            "farol {args:?} should have succeeded:\n{}",
-            String::from_utf8_lossy(&out.stderr)
-        );
-        String::from_utf8_lossy(&out.stdout).into_owned()
-    }
-
-    /// Run and require failure, returning stderr.
-    fn fails(&self, args: &[&str]) -> String {
-        let out = self.farol(args);
-        assert!(
-            !out.status.success(),
-            "farol {args:?} should have failed but printed:\n{}",
-            String::from_utf8_lossy(&out.stdout)
-        );
-        String::from_utf8_lossy(&out.stderr).into_owned()
-    }
-
-    /// Start the map for the current commit.
-    fn derive(&self) -> String {
-        self.ok(&["map", "derive"])
-    }
-
-    /// The block most tests need: one block holding the given files.
-    fn core_block(&self, paths: &[&str]) {
-        let mut args = vec!["block", "add", "core", "--title", "t", "--context", "c"];
-        args.extend_from_slice(paths);
-        self.ok(&args);
-    }
-
-    /// A branch off main with one file changed, ready to review.
-    fn feature(&self) -> &Self {
-        self.git(&["checkout", "-q", "-b", "feature/x"]);
-        self.write("src/a.rs", &numbered(60));
-        self.commit("add a");
-        self
-    }
-}
-
-/// A file with predictable line numbers, so ranges in tests mean something.
-fn numbered(lines: usize) -> String {
-    (1..=lines)
-        .map(|i| format!("line {i}\n"))
-        .collect::<String>()
-}
+use common::{BIN, Repo, numbered};
+use std::path::PathBuf;
+use std::process::Command;
 
 // ---- scope resolution ---------------------------------------------------
 
@@ -886,21 +766,6 @@ fn a_new_block_can_be_placed_ahead_of_an_existing_one() {
 
 // ---- serve --------------------------------------------------------------
 
-#[test]
-fn serve_refuses_to_start_without_a_map() {
-    let repo = Repo::new();
-    repo.feature();
-
-    let out = repo.farol(&["serve", "--no-open", "--port", "0"]);
-    assert!(!out.status.success(), "serve must not start without a map");
-    let err = String::from_utf8_lossy(&out.stderr);
-    assert!(err.contains("no map for branch"), "{err}");
-    assert!(
-        err.contains("review-map skill"),
-        "the message should say how to fix it:\n{err}"
-    );
-}
-
 // ---- resilience ---------------------------------------------------------
 
 #[test]
@@ -1206,56 +1071,6 @@ fn a_file_marked_not_diffable_is_left_alone() {
 }
 
 #[test]
-fn serve_comes_up_and_answers_with_the_map_it_was_given() {
-    // The one thing farol exists to do, and the only path that runs the
-    // composition root, the listener and the routes together. Everything else
-    // exercises them apart.
-    let repo = Repo::new();
-    repo.feature();
-    repo.derive();
-    repo.core_block(&["src/a.rs"]);
-    repo.ok(&[
-        "line",
-        "add",
-        "core",
-        "src/a.rs",
-        "10-12",
-        "--note",
-        "the actual fix",
-    ]);
-
-    let port = free_port();
-    let mut child = Command::new(BIN)
-        .args([
-            "serve",
-            "--port",
-            &port.to_string(),
-            "--no-open",
-            "--no-watch",
-        ])
-        .current_dir(repo.path())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-        .expect("farol serve should start");
-
-    let review = poll(&format!("http://127.0.0.1:{port}/api/review")).unwrap_or_else(|| {
-        let _ = child.kill();
-        panic!("the server never answered on port {port}");
-    });
-
-    let _ = child.kill();
-    let _ = child.wait();
-
-    assert!(review.contains("feature/x"), "{review}");
-    assert!(review.contains("src/a.rs"), "{review}");
-    assert!(
-        review.contains("the actual fix"),
-        "the line note has to reach the screen:\n{review}"
-    );
-}
-
-#[test]
 fn resetting_the_only_version_says_the_branch_is_unmapped_again() {
     let repo = Repo::new();
     repo.feature();
@@ -1279,50 +1094,6 @@ fn resetting_when_there_is_nothing_here_to_delete_says_so() {
     let out = repo.ok(&["map", "reset"]);
 
     assert!(out.contains("no map version for this commit"), "{out}");
-}
-
-#[test]
-fn serve_refuses_a_port_that_is_already_taken() {
-    // Two farols on one port is an ordinary mistake; the message has to say
-    // which port so the reviewer can pick another.
-    let repo = Repo::new();
-    repo.feature();
-    repo.derive();
-    repo.core_block(&["src/a.rs"]);
-
-    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-    let port = listener.local_addr().unwrap().port();
-
-    let out = repo.farol(&[
-        "serve",
-        "--port",
-        &port.to_string(),
-        "--no-open",
-        "--no-watch",
-    ]);
-
-    assert!(!out.status.success());
-    let err = String::from_utf8_lossy(&out.stderr);
-    assert!(err.contains(&port.to_string()), "{err}");
-}
-
-/// A port nothing is listening on. Racy in principle, free in practice.
-fn free_port() -> u16 {
-    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-    listener.local_addr().unwrap().port()
-}
-
-/// Ask until the server answers, or give up.
-fn poll(url: &str) -> Option<String> {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
-    while std::time::Instant::now() < deadline {
-        let out = Command::new("curl").args(["-sf", url]).output().ok()?;
-        if out.status.success() {
-            return Some(String::from_utf8_lossy(&out.stdout).into_owned());
-        }
-        std::thread::sleep(std::time::Duration::from_millis(100));
-    }
-    None
 }
 
 // ---- output --------------------------------------------------------------

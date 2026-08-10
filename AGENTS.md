@@ -310,13 +310,21 @@ Three layers, and each covers something the others cannot.
 of the file. Ordering, re-anchoring, view assembly and progress invalidation are
 faster and clearer over fakes than over commits.
 
-**Route tests live in `src/server/mod.rs`** and drive the real `Router` through
-`tower::ServiceExt::oneshot`, over in-memory repositories. Nothing listens on a
-port. They cover what a unit test cannot: that the wiring, the status codes and
-the JSON shape the browser depends on are what they claim.
+**Route tests live in `tests/server.rs`** and talk to a running `farol serve`
+over HTTP. The browser talks to a process, so the test does too: the composition
+root, the listener, git and the store on disk are all part of what can break,
+and handing the router a request in-process vouches for none of it. Only what
+needs a collaborator that fails — a store that will not answer — stays as a unit
+test in `src/server/routes.rs`, because no amount of driving the real binary can
+arrange that.
 
-**Integration tests live in `tests/cli.rs`** and drive the real binary against
-real repositories. They cover what only git can prove: how git dirs resolve
+The server shuts down on `SIGTERM` so the tests can stop it without cutting it
+down mid-flight. `SIGKILL` also throws away the coverage the process recorded,
+which is how the need for it was noticed.
+
+**Integration tests live in `tests/cli.rs` and `tests/server.rs`**, sharing the
+repository fixture in `tests/common/`, and drive the real binary against real
+repositories. They cover what only git can prove: how git dirs resolve
 inside a worktree, what a merge base returns once the base branch has moved,
 whether a command actually exits non-zero.
 
