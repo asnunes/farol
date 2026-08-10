@@ -9,18 +9,40 @@ build:
     cd web && npm run build
     cargo build --release
 
-# Put `farol` on your PATH, pointing at this checkout.
-#
 # A symlink rather than a copy: `just build` then updates the installed binary
 # too, which is what you want while the tool is still being written. `cargo
 # install` would copy — and worse, it would skip the frontend build and embed
 # whatever happens to be in web/dist.
+#
+# Put `farol` on your PATH, pointing at this checkout.
 install: build
     #!/usr/bin/env bash
     set -euo pipefail
     mkdir -p ~/.local/bin
     ln -sf "$(pwd)/target/release/farol" ~/.local/bin/farol
     echo "farol -> $(readlink ~/.local/bin/farol)"
+
+# Only removes a link pointing at this checkout: a `farol` installed from
+# somewhere else is somebody else's, and silently deleting it would be a
+# surprise.
+#
+# Take `farol` back off your PATH.
+uninstall:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    link=~/.local/bin/farol
+    if [ ! -e "$link" ] && [ ! -L "$link" ]; then
+      echo "nothing installed at $link"
+      exit 0
+    fi
+    target=$(readlink "$link" || true)
+    if [ "$target" != "$(pwd)/target/release/farol" ]; then
+      echo "$link does not point at this checkout (points at: ${target:-a real file})" >&2
+      echo "leaving it alone — remove it by hand if you meant to" >&2
+      exit 1
+    fi
+    rm "$link"
+    echo "removed $link"
 
 # Serve with the frontend proxied from Vite instead of embedded.
 dev:
@@ -58,10 +80,10 @@ layers:
     fi
     echo "layers ok"
 
-# What has to pass before a commit.
-#
 # `tsc` is here and not in `npm test` because vitest does not typecheck: a test
 # can pass while naming a field that does not exist.
+#
+# What has to pass before a commit.
 check: layers test
     cargo clippy --all-targets -- -D warnings
     cargo fmt --check
