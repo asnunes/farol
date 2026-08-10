@@ -56,16 +56,10 @@ impl Serving {
         ]);
         repo.ok(&["skim", "add", "Cargo.lock", "--reason", "regenerated"]);
 
-        // `--port 0` and read back what the OS gave it. Picking a free port
-        // ourselves means binding, releasing, and hoping nobody takes it in
-        // between — with these tests running in parallel, that is a race
-        // against our own suite.
-        let mut args = vec![
-            "serve".to_string(),
-            "--port".to_string(),
-            "0".to_string(),
-            "--no-open".to_string(),
-        ];
+        // No `--port` at all: this is how a reviewer starts one, and it
+        // exercises the search. The port comes back off the line the server
+        // prints, which is the only account that cannot be stale.
+        let mut args = vec!["serve".to_string(), "--no-open".to_string()];
         args.extend(extra.iter().map(|s| s.to_string()));
 
         let mut child = Command::new(BIN)
@@ -388,6 +382,18 @@ fn serve_will_not_start_without_a_map() {
     assert!(!out.status.success());
     let err = String::from_utf8_lossy(&out.stderr);
     assert!(err.contains("feature/x"), "{err}");
+}
+
+#[test]
+fn two_reviews_can_be_open_at_once() {
+    // One per worktree is the ordinary case, so the second must find its own
+    // port rather than colliding with the first.
+    let first = Serving::new();
+    let second = Serving::new();
+
+    assert_ne!(first.port, second.port);
+    assert!(first.get("/api/review").contains("feature/x"));
+    assert!(second.get("/api/review").contains("feature/x"));
 }
 
 #[test]

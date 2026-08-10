@@ -4,6 +4,7 @@ use clap::Args;
 
 use super::{Ctx, ScopeFlags};
 use crate::error::Result;
+use crate::server::Port;
 
 #[derive(Args)]
 pub(super) struct ServeArgs {
@@ -13,9 +14,10 @@ pub(super) struct ServeArgs {
     head: Option<String>,
     #[command(flatten)]
     scope: ScopeFlags,
-    /// Port to listen on. 0 picks a free one.
-    #[arg(long, default_value_t = 4600)]
-    port: u16,
+    /// Port to listen on. Omit it and farol takes the first free one from
+    /// 4600 up; `0` asks the operating system for any.
+    #[arg(long)]
+    port: Option<u16>,
     /// Do not open a browser.
     #[arg(long)]
     no_open: bool,
@@ -38,7 +40,10 @@ impl ServeArgs {
         crate::server::Server::new(crate::server::ServeConfig {
             use_cases: ctx.server().clone(),
             map,
-            port: self.port,
+            port: self.port.map_or(Port::Free, |p| match p {
+                0 => Port::Ephemeral,
+                p => Port::Exactly(p),
+            }),
             open_browser: !self.no_open,
             watch: !self.no_watch,
             git_dir: ctx.git_dir().clone(),

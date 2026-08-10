@@ -18,10 +18,32 @@ use crate::cmd::ServerUseCases;
 use crate::error::{Error, Result};
 use crate::map::domain::ReviewMap;
 
+/// Which port to listen on, and what to do if it is taken.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Port {
+    /// Whatever is free from `FIRST_PORT` upward. What you get when you did not
+    /// ask for anything in particular.
+    Free,
+    /// This one and no other. Asking for a port and silently getting a
+    /// different one would send you to the wrong tab.
+    Exactly(u16),
+    /// Whatever the OS hands out. For tests, which then read it back.
+    Ephemeral,
+}
+
+/// Where the search starts. Above the usual dev-server crowd (3000, 5173, 8080)
+/// so the first review of the day normally lands here.
+pub const FIRST_PORT: u16 = 4600;
+
+/// How far to look before giving up. Far enough for more reviews than anyone
+/// opens at once, short enough that a machine with something odd going on says
+/// so instead of scanning forever.
+const PORTS_TO_TRY: u16 = 64;
+
 pub struct ServeConfig {
     pub use_cases: ServerUseCases,
     pub map: ReviewMap,
-    pub port: u16,
+    pub port: Port,
     pub open_browser: bool,
     pub watch: bool,
     pub git_dir: PathBuf,
@@ -78,9 +100,7 @@ async fn serve(config: ServeConfig) -> Result<()> {
 
     let app = routes::router(state);
 
-    let listener = tokio::net::TcpListener::bind(("127.0.0.1", config.port))
-        .await
-        .map_err(|e| Error::msg(format!("cannot listen on port {}: {e}", config.port)))?;
+    let listener = bind(config.port).await?;
     let addr = listener
         .local_addr()
         .map_err(|e| Error::msg(e.to_string()))?;
@@ -96,6 +116,31 @@ async fn serve(config: ServeConfig) -> Result<()> {
         .await
         .map_err(|e| Error::msg(e.to_string()))?;
     Ok(())
+}
+
+/// Take the port that was asked for, or find one.
+async fn bind(port: Port) -> Result<tokio::net::TcpListener> {
+    let one = async |p: u16| tokio::net::TcpListener::bind(("127.0.0.1", p)).await;
+
+    match port {
+        Port::Exactly(p) => one(p)
+            .await
+            .map_err(|e| Error::msg(format!("cannot listen on port {p}: {e}"))),
+        Port::Ephemeral => one(0)
+            .await
+            .map_err(|e| Error::msg(format!("cannot listen: {e}"))),
+        Port::Free => {
+            for p in FIRST_PORT..FIRST_PORT.saturating_add(PORTS_TO_TRY) {
+                if let Ok(listener) = one(p).await {
+                    return Ok(listener);
+                }
+            }
+            Err(Error::msg(format!(
+                "no free port between {FIRST_PORT} and {} — pass --port to choose one",
+                FIRST_PORT + PORTS_TO_TRY - 1
+            )))
+        }
+    }
 }
 
 /// Ctrl-C, or a `kill` from whatever started us.
@@ -146,5 +191,51 @@ mod tests {
         changes.send("map".into()).unwrap();
 
         assert_eq!(rx.try_recv().unwrap(), "map");
+    }
+
+    #[tokio::test]
+    async fn a_port_nobody_asked_for_is_the_first_free_one() {
+        let listener = bind(Port::Free).await.unwrap();
+
+        let port = listener.local_addr().unwrap().port();
+        assert!(
+            (FIRST_PORT..FIRST_PORT + PORTS_TO_TRY).contains(&port),
+            "{port} is outside the range farol searches"
+        );
+    }
+
+    #[tokio::test]
+    async fn the_search_steps_over_ports_that_are_taken() {
+        // Two reviews open at once is the ordinary case — one per worktree.
+        let first = bind(Port::Free).await.unwrap();
+        let second = bind(Port::Free).await.unwrap();
+
+        assert_ne!(
+            first.local_addr().unwrap().port(),
+            second.local_addr().unwrap().port()
+        );
+    }
+
+    #[tokio::test]
+    async fn a_port_that_was_asked_for_is_the_one_you_get_or_none() {
+        // Quietly serving somewhere else would send the reviewer to a tab with
+        // nothing in it, or worse, to somebody else's review.
+        let held = tokio::net::TcpListener::bind(("127.0.0.1", 0))
+            .await
+            .unwrap();
+        let taken = held.local_addr().unwrap().port();
+
+        let err = bind(Port::Exactly(taken)).await.unwrap_err();
+
+        let msg = err.to_string();
+        assert!(msg.contains(&taken.to_string()), "{msg}");
+        assert!(msg.contains("cannot listen"), "{msg}");
+    }
+
+    #[tokio::test]
+    async fn asking_for_zero_lets_the_operating_system_choose() {
+        let listener = bind(Port::Ephemeral).await.unwrap();
+
+        assert_ne!(listener.local_addr().unwrap().port(), 0);
     }
 }
