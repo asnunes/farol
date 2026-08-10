@@ -337,4 +337,75 @@ mod tests {
         assert_eq!(view.total_files, 2);
         assert_eq!(view.viewed_files, 1);
     }
+
+    #[test]
+    fn a_file_marked_skim_inside_a_block_it_already_appears_in_is_not_listed_twice() {
+        // The reviewer would otherwise meet the same path twice in one block,
+        // once to read and once to skim.
+        let mut map = map_of(&[("first", "a.rs")]);
+        map.add_skim("a.rs", "mostly generated", Some(slug("first")))
+            .unwrap();
+
+        let view = built(
+            &map,
+            FakeDiffSource::with_paths(&["a.rs"]),
+            &Progress::new(),
+        );
+
+        let first = &view.blocks[0];
+        assert_eq!(
+            first.files.iter().filter(|f| f.path == "a.rs").count(),
+            1,
+            "{:?}",
+            first.files.iter().map(|f| &f.path).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn a_loose_skim_entry_already_read_in_a_block_does_not_reappear_at_the_bottom() {
+        let mut map = map_of(&[("first", "a.rs")]);
+        map.add_skim("a.rs", "mostly generated", None).unwrap();
+
+        let view = built(
+            &map,
+            FakeDiffSource::with_paths(&["a.rs"]),
+            &Progress::new(),
+        );
+
+        assert!(
+            !view.loose_skim.iter().any(|f| f.path == "a.rs"),
+            "it was already placed inside the block: {:?}",
+            view.loose_skim.iter().map(|f| &f.path).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn line_notes_arrive_in_the_order_the_reader_meets_them() {
+        // They are written in whatever order the session thought of them; the
+        // screen shows them going down the file.
+        let mut map = map_of(&[("first", "a.rs")]);
+        for (from, to, text) in [(40, 42, "later"), (10, 12, "earlier")] {
+            map.add_line_note(
+                &slug("first"),
+                "a.rs",
+                LineRange::new(from, to).unwrap(),
+                text,
+            )
+            .unwrap();
+        }
+
+        let view = built(
+            &map,
+            FakeDiffSource::with_paths(&["a.rs"]),
+            &Progress::new(),
+        );
+
+        let file = view.blocks[0]
+            .files
+            .iter()
+            .find(|f| f.path == "a.rs")
+            .unwrap();
+        let spans: Vec<_> = file.line_notes.iter().map(|n| (n.from, n.to)).collect();
+        assert_eq!(spans, vec![(10, 12), (40, 42)]);
+    }
 }

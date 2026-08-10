@@ -67,6 +67,11 @@ impl Server {
 async fn serve(config: ServeConfig) -> Result<()> {
     let (state, changes) = AppState::new(config.use_cases, config.map);
 
+    // One line of wiring, and the only one in this file with no test of its
+    // own: `watch::spawn` is tested next door over a real directory, and the
+    // route that carries its nudges is tested in `routes`. Driving both through
+    // a live server needed a streaming client, and the timing-dependent test
+    // that resulted was worse than saying so here.
     if config.watch {
         watch::spawn(config.git_dir, changes);
     }

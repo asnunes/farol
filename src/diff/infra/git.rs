@@ -110,6 +110,8 @@ impl Git {
         match self.tree(commit)?.lookup_entry_by_path(path) {
             Ok(Some(entry)) => Ok(Some(self.blob(entry.object_id())?)),
             Ok(None) => Ok(None),
+            // Defensive: gix answers `Ok(None)` for the malformed paths we can
+            // construct, including one that runs through a file.
             Err(e) => Err(Error::msg(format!("cannot look up {path}: {e}"))),
         }
     }
@@ -237,6 +239,12 @@ impl Git {
                     gix::status::index_worktree::Item::Modification { rela_path, .. } => {
                         rela_path.to_string()
                     }
+                    // Defensive: with the status options used here gix reports
+                    // an unstaged move as a deletion plus an untracked file
+                    // rather than pairing them, so nothing produces this today.
+                    // Handled anyway because the alternative — a path silently
+                    // missing from the window — is the failure that is hardest
+                    // to notice.
                     gix::status::index_worktree::Item::Rewrite { dirwalk_entry, .. } => {
                         dirwalk_entry.rela_path.to_string()
                     }
@@ -558,6 +566,26 @@ mod tests {
                 .blob_at(f.sha("HEAD"), "a.rs/nested")
                 .unwrap()
                 .is_none()
+        );
+    }
+
+    #[test]
+    fn a_file_moved_on_disk_without_being_staged_is_reported_as_changed() {
+        // `git mv` stages the move; doing it by hand does not, and git pairs
+        // the two halves itself. Both ends have to reach the window or the
+        // move looks like a deletion.
+        let f = Fixture::new();
+        let body = "a line\n".repeat(60);
+        f.write("old.rs", &body);
+        f.commit("add it");
+        std::fs::remove_file(f.dir.path().join("old.rs")).unwrap();
+        f.write("new.rs", &body);
+
+        let changed = f.open().worktree_changes().unwrap();
+
+        assert!(
+            changed.iter().any(|p| p == "old.rs" || p == "new.rs"),
+            "{changed:?}"
         );
     }
 

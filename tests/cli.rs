@@ -1205,6 +1205,126 @@ fn a_file_marked_not_diffable_is_left_alone() {
     );
 }
 
+#[test]
+fn serve_comes_up_and_answers_with_the_map_it_was_given() {
+    // The one thing farol exists to do, and the only path that runs the
+    // composition root, the listener and the routes together. Everything else
+    // exercises them apart.
+    let repo = Repo::new();
+    repo.feature();
+    repo.derive();
+    repo.core_block(&["src/a.rs"]);
+    repo.ok(&[
+        "line",
+        "add",
+        "core",
+        "src/a.rs",
+        "10-12",
+        "--note",
+        "the actual fix",
+    ]);
+
+    let port = free_port();
+    let mut child = Command::new(BIN)
+        .args([
+            "serve",
+            "--port",
+            &port.to_string(),
+            "--no-open",
+            "--no-watch",
+        ])
+        .current_dir(repo.path())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("farol serve should start");
+
+    let review = poll(&format!("http://127.0.0.1:{port}/api/review")).unwrap_or_else(|| {
+        let _ = child.kill();
+        panic!("the server never answered on port {port}");
+    });
+
+    let _ = child.kill();
+    let _ = child.wait();
+
+    assert!(review.contains("feature/x"), "{review}");
+    assert!(review.contains("src/a.rs"), "{review}");
+    assert!(
+        review.contains("the actual fix"),
+        "the line note has to reach the screen:\n{review}"
+    );
+}
+
+#[test]
+fn resetting_the_only_version_says_the_branch_is_unmapped_again() {
+    let repo = Repo::new();
+    repo.feature();
+    repo.derive();
+    repo.core_block(&["src/a.rs"]);
+
+    let out = repo.ok(&["map", "reset"]);
+
+    assert!(out.contains("Deleted the map version"), "{out}");
+    assert!(out.contains("unmapped"), "{out}");
+    assert!(repo.fails(&["map", "check"]).contains("feature/x"));
+}
+
+#[test]
+fn resetting_when_there_is_nothing_here_to_delete_says_so() {
+    // `map reset` on a commit that was never mapped is a no-op, and silence
+    // would look like it had deleted something.
+    let repo = Repo::new();
+    repo.feature();
+
+    let out = repo.ok(&["map", "reset"]);
+
+    assert!(out.contains("no map version for this commit"), "{out}");
+}
+
+#[test]
+fn serve_refuses_a_port_that_is_already_taken() {
+    // Two farols on one port is an ordinary mistake; the message has to say
+    // which port so the reviewer can pick another.
+    let repo = Repo::new();
+    repo.feature();
+    repo.derive();
+    repo.core_block(&["src/a.rs"]);
+
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+
+    let out = repo.farol(&[
+        "serve",
+        "--port",
+        &port.to_string(),
+        "--no-open",
+        "--no-watch",
+    ]);
+
+    assert!(!out.status.success());
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(err.contains(&port.to_string()), "{err}");
+}
+
+/// A port nothing is listening on. Racy in principle, free in practice.
+fn free_port() -> u16 {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    listener.local_addr().unwrap().port()
+}
+
+/// Ask until the server answers, or give up.
+fn poll(url: &str) -> Option<String> {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+    while std::time::Instant::now() < deadline {
+        let out = Command::new("curl").args(["-sf", url]).output().ok()?;
+        if out.status.success() {
+            return Some(String::from_utf8_lossy(&out.stdout).into_owned());
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    None
+}
+
 // ---- output --------------------------------------------------------------
 
 #[test]

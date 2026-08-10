@@ -102,10 +102,6 @@ impl Scope {
         self.files.iter().any(|f| f.path == path)
     }
 
-    pub fn paths(&self) -> Vec<&str> {
-        self.files.iter().map(|f| f.path.as_str()).collect()
-    }
-
     /// Reject a path that is not under review, carrying the near misses with
     /// it. Built here so every caller rejects the same way.
     pub fn reject(&self, path: &str) -> crate::shared::error::Error {

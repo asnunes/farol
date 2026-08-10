@@ -164,8 +164,11 @@ mod tests {
 
     impl CommitHistorySource for BrokenHistory {
         fn head_sha(&self) -> Result<String> {
-            Err(Error::Message("no head".into()))
+            // Required by the port; these tests only ask about distance and
+            // ancestry, so nothing calls it.
+            unreachable!("BrokenHistory is only asked about distance and ancestry")
         }
+
         fn commits_ahead_of(&self, _sha: &str) -> Result<u32> {
             Err(Error::Message("shallow clone".into()))
         }

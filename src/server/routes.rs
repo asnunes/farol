@@ -310,4 +310,86 @@ pub(super) mod tests {
             .unwrap();
         assert_eq!(received, "map");
     }
+
+    #[tokio::test]
+    async fn the_watch_route_streams_the_nudge_to_the_browser() {
+        // The previous test proves the channel carries it. This one proves the
+        // route turns it into an event the page can act on, which is what
+        // makes the screen reload without anyone pressing anything.
+        use http_body_util::BodyExt as _;
+
+        let (app, _, changes) = app();
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/watch")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response
+                .headers()
+                .get("content-type")
+                .and_then(|v| v.to_str().ok()),
+            Some("text/event-stream")
+        );
+
+        changes.send("map".to_string()).unwrap();
+
+        let mut body = response.into_body();
+        let frame = tokio::time::timeout(std::time::Duration::from_secs(2), body.frame())
+            .await
+            .expect("the event should arrive promptly")
+            .expect("the stream should not have ended")
+            .unwrap();
+        let frame = String::from_utf8_lossy(frame.data_ref().expect("a data frame")).into_owned();
+        assert!(frame.contains("event: map"), "{frame}");
+    }
+
+    #[tokio::test]
+    async fn a_review_that_cannot_be_assembled_is_a_bad_request_not_a_silent_empty_page() {
+        // If the progress store is unreadable the screen must say so rather
+        // than render as though nothing had been read.
+        use crate::diff::application::{FileDiffs, ReviewScope};
+        use crate::map::application::{GetFileDiff, GetReview};
+        use crate::progress::application::{MarkViewed, ProgressStore, UnmarkViewed};
+
+        let paths = ["a.rs"];
+        let diffs = FileDiffs::new(Arc::new(FakeDiffSource::with_paths(&paths)));
+        let maps = crate::testing::services(
+            FakeDiffSource::with_paths(&paths),
+            Arc::new(crate::testing::InMemoryMapRepository::new()),
+        );
+        let broken = ProgressStore::new(
+            Arc::new(crate::testing::BrokenProgressRepository),
+            diffs.clone(),
+        );
+        let use_cases = ServerUseCases {
+            review: GetReview::new(
+                maps.versions,
+                ReviewScope::new(Arc::new(FakeDiffSource::with_paths(&paths))),
+                broken.clone(),
+            ),
+            file_diff: GetFileDiff::new(diffs),
+            mark_viewed: MarkViewed::new(broken.clone()),
+            unmark_viewed: UnmarkViewed::new(broken),
+        };
+        let (state, _) = AppState::new(use_cases, mapped());
+
+        let response = router(state)
+            .oneshot(
+                Request::builder()
+                    .uri("/api/review")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
 }

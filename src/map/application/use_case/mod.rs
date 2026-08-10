@@ -80,6 +80,14 @@ mod tests {
     }
 
     #[test]
+    fn after_alone_places_it_behind_the_named_block() {
+        assert_eq!(
+            position_from(None, Some(slug("y"))),
+            Position::After(slug("y"))
+        );
+    }
+
+    #[test]
     fn no_flags_means_append() {
         assert_eq!(position_from(None, None), Position::End);
     }

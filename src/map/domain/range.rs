@@ -85,11 +85,14 @@ impl LineRange {
             return ShiftOutcome::Unchanged;
         }
 
-        // A hunk above deleting more than this span's own offset would push it
-        // off the top of the file. Treat that as overlap rather than clamping to
-        // a line that means nothing.
         let from = self.from as i64 + delta;
         let to = self.to as i64 + delta;
+
+        // Unreachable with well-formed hunks: everything above this span can
+        // delete at most the lines that are above it, which lands it on line 1
+        // and no higher. Kept because clamping a note to a line it was never
+        // about is the one outcome worse than deactivating it, and the cost of
+        // the guard is a comparison.
         if from < 1 || to < 1 {
             return ShiftOutcome::Overlapped;
         }

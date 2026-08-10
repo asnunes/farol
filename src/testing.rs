@@ -226,6 +226,21 @@ impl MapRepository for InMemoryMapRepository {
     }
 }
 
+/// Storage that refuses to answer, for the paths that only run when something
+/// underneath has broken.
+#[derive(Default)]
+pub struct BrokenProgressRepository;
+
+impl ProgressRepository for BrokenProgressRepository {
+    fn load(&self) -> Result<Progress> {
+        Err(crate::shared::error::Error::msg("the store is unreadable"))
+    }
+
+    fn save(&self, _progress: &Progress) -> Result<()> {
+        Err(crate::shared::error::Error::msg("the store is unwritable"))
+    }
+}
+
 #[derive(Default)]
 pub struct InMemoryProgressRepository {
     progress: Mutex<Progress>,

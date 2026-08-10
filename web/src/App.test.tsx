@@ -395,3 +395,120 @@ describe("the diff itself", () => {
     expect(document.querySelectorAll(".note").length).toBe(0);
   });
 });
+
+describe("when the backend fails", () => {
+  function serveBroken(failing: "review" | "file") {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.startsWith("/api/review")) {
+          return failing === "review"
+            ? new Response("the store is unreadable", { status: 400 })
+            : new Response(JSON.stringify(review()), {
+                headers: { "content-type": "application/json" },
+              });
+        }
+        return new Response("'nowhere.rs' is not part of this review", { status: 400 });
+      }),
+    );
+  }
+
+  it("says why the review could not be loaded instead of showing an empty page", async () => {
+    // An empty screen reads as "nothing to review", which is the opposite of
+    // what happened.
+    serveBroken("review");
+    render(<App />);
+
+    expect(await screen.findByText(/unreadable/)).toBeTruthy();
+  });
+
+  it("says why a file could not be loaded", async () => {
+    serveBroken("file");
+    render(<App />);
+
+    expect(await screen.findByText(/not part of this review/)).toBeTruthy();
+  });
+});
+
+describe("the skim list", () => {
+  it("renders files that belong to no block at the bottom", async () => {
+    // A lockfile has no story to sit in, but it is still in the diff and the
+    // reviewer has to be able to reach it.
+    const r = review();
+    r.looseSkim = [file("Cargo.lock", { skim: true, skimReason: "regenerated" })];
+    serve({ review: r });
+    render(<App />);
+
+    await waitForReading("a.rs");
+    const loose = document.querySelectorAll(".blk-files");
+    expect(
+      Array.from(loose).some((ul) => ul.textContent?.includes("Cargo.lock")),
+    ).toBe(true);
+  });
+
+  it("carries the reason as the tooltip so it can be read without leaving", async () => {
+    const r = review();
+    r.blocks[0].files[0] = file("src/a.rs", { skim: true, skimReason: "generated" });
+    serve({ review: r });
+    render(<App />);
+
+    await waitFor(() => {
+      const row = document.querySelector('[title="generated"]');
+      expect(row).toBeTruthy();
+    });
+  });
+});
+
+describe("the help panel", () => {
+  it("opens on ? and lists the keys", async () => {
+    serve({ review: review() });
+    render(<App />);
+    await waitForReading("a.rs");
+
+    fireEvent.keyDown(window, { key: "?" });
+
+    expect(await screen.findByText("Keys")).toBeTruthy();
+  });
+
+  it("closes when the backdrop is clicked but not the card itself", async () => {
+    serve({ review: review() });
+    render(<App />);
+    await waitForReading("a.rs");
+    fireEvent.keyDown(window, { key: "?" });
+    await screen.findByText("Keys");
+
+    fireEvent.click(document.querySelector(".help-card")!);
+    expect(screen.queryByText("Keys")).toBeTruthy();
+
+    fireEvent.click(document.querySelector(".help")!);
+    await waitFor(() => expect(screen.queryByText("Keys")).toBeNull());
+  });
+});
+
+describe("the sidebar", () => {
+  it("moves the reader to the file that was clicked", async () => {
+    // The keyboard is the fast path, but the sidebar is how you jump to a
+    // file you spotted further down.
+    serve({ review: review() });
+    render(<App />);
+    await waitForReading("a.rs");
+
+    const target = Array.from(document.querySelectorAll(".fileitem")).find((b) =>
+      b.textContent?.includes("c.rs"),
+    );
+    fireEvent.click(target!);
+
+    await waitForReading("c.rs");
+    expect(currentBlock()).toBe("The wiring");
+  });
+
+  it("marks the file being read so the reader can see where they are", async () => {
+    serve({ review: review() });
+    render(<App />);
+    await waitForReading("a.rs");
+
+    const marked = document.querySelector('.fileitem[aria-current="true"]');
+    expect(marked?.textContent).toContain("a.rs");
+  });
+});

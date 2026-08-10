@@ -90,4 +90,25 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn a_slug_reads_as_the_string_it_stands_for() {
+        // It is printed into error messages and into the map file, where a
+        // wrapper's debug shape would be noise.
+        let s = Slug::parse("recover-link").unwrap();
+
+        assert_eq!(s.to_string(), "recover-link");
+        assert_eq!(s.as_str(), "recover-link");
+        assert_eq!(<Slug as AsRef<str>>::as_ref(&s), "recover-link");
+    }
+
+    #[test]
+    fn a_slug_compares_against_a_bare_string() {
+        // The view models and the reports hold plain strings; without this
+        // every comparison would have to allocate one side.
+        let s = Slug::parse("core").unwrap();
+
+        assert!(s == *"core");
+        assert!(s != *"other");
+    }
 }

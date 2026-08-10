@@ -356,9 +356,10 @@ mod tests {
     }
 
     #[test]
-    fn a_file_edited_and_then_put_back_is_not_a_change() {
-        // git reports it as touched because the mtime moved, but there is
-        // nothing to read and listing it would send the reviewer to an empty
+    fn work_staged_and_then_undone_on_disk_is_not_a_change() {
+        // The index says the file moved and the worktree says it moved back,
+        // so git reports it on both counts — but against the base there is
+        // nothing to read, and listing it would send the reviewer to an empty
         // diff.
         let f = Fixture::new();
         f.write("a.rs", &numbered(10));
@@ -366,9 +367,19 @@ mod tests {
         f.on_branch("feature/x");
         f.write("b.rs", "so the branch is not empty\n");
         f.commit("add b");
+
         f.write("a.rs", "changed my mind\n");
+        f.git(&["add", "a.rs"]);
         f.write("a.rs", &numbered(10));
 
+        assert!(
+            f.open()
+                .worktree_changes()
+                .unwrap()
+                .iter()
+                .any(|p| p == "a.rs"),
+            "git should be reporting it, or this test proves nothing"
+        );
         assert_eq!(paths(&window(&f, true)), vec!["b.rs"]);
     }
 
