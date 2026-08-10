@@ -56,16 +56,19 @@ impl Serving {
         ]);
         repo.ok(&["skim", "add", "Cargo.lock", "--reason", "regenerated"]);
 
-        let port = free_port();
+        // `--port 0` and read back what the OS gave it. Picking a free port
+        // ourselves means binding, releasing, and hoping nobody takes it in
+        // between — with these tests running in parallel, that is a race
+        // against our own suite.
         let mut args = vec![
             "serve".to_string(),
             "--port".to_string(),
-            port.to_string(),
+            "0".to_string(),
             "--no-open".to_string(),
         ];
         args.extend(extra.iter().map(|s| s.to_string()));
 
-        let child = Command::new(BIN)
+        let mut child = Command::new(BIN)
             .args(&args)
             .current_dir(repo.path())
             .stdout(Stdio::piped())
@@ -73,6 +76,7 @@ impl Serving {
             .spawn()
             .expect("farol serve should start");
 
+        let port = port_from(child.stdout.take().expect("stdout was piped"));
         let serving = Serving { repo, child, port };
         serving
             .try_get("/api/review")
@@ -159,12 +163,19 @@ impl Drop for Serving {
     }
 }
 
-fn free_port() -> u16 {
-    std::net::TcpListener::bind("127.0.0.1:0")
-        .unwrap()
-        .local_addr()
-        .unwrap()
-        .port()
+/// The port the server actually got, off the line it prints on the way up.
+/// Reading it back is the only account that cannot be stale.
+fn port_from(stdout: std::process::ChildStdout) -> u16 {
+    use std::io::{BufRead, BufReader};
+
+    for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+        if let Some((_, tail)) = line.rsplit_once(':')
+            && let Ok(port) = tail.trim().parse()
+        {
+            return port;
+        }
+    }
+    panic!("the server never said where it was listening");
 }
 
 // ---- what the screen is built from --------------------------------------
