@@ -7,7 +7,7 @@ export function Unmapped({ paths }: { paths: string[] }) {
         {paths.length} file(s) changed after this map was made
       </strong>
       <p className="mt-1 font-serif text-sm text-ink-soft">
-        Run the review-map skill again to fold them in.
+        Run the farol skill again to fold them in.
       </p>
       <ul className="mt-2 font-mono text-xs text-muted">
         {paths.map((p) => (

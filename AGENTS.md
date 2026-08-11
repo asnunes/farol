@@ -438,7 +438,7 @@ Messages say what went wrong **and what to do**:
 
 ```
 no map for branch fix/retry-on-timeout
-Run the review-map skill in the session that implemented this change.
+Run the farol skill in the session that implemented this change.
 ```
 
 Rejections aimed at the skill carry the way out — near-miss paths for a

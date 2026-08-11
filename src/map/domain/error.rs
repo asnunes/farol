@@ -17,7 +17,7 @@ pub type Result<T> = std::result::Result<T, MapError>;
 #[derive(Debug, thiserror::Error)]
 pub enum MapError {
     #[error(
-        "no map for branch {branch}\nRun the review-map skill in the session that implemented this change."
+        "no map for branch {branch}\nRun the farol skill in the session that implemented this change."
     )]
     NoMap { branch: String },
 
