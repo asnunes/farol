@@ -103,11 +103,15 @@ impl ReviewScopeSource for GixSource {
     }
 
     fn file_line_count(&self, path: &str) -> Result<u32> {
-        let blob = self
-            .head_blobs
-            .get(path)
-            .ok_or_else(|| Error::from(self.scope.reject(path)))?;
-        Ok(String::from_utf8_lossy(&blob.data).lines().count() as u32)
+        match self.head_blobs.get(path) {
+            Some(blob) => Ok(String::from_utf8_lossy(&blob.data).lines().count() as u32),
+            // A deleted file is under review but has no head side to measure.
+            // Zero, not a rejection: it belongs in a block or in the skim list
+            // like any other change, and only a line note is impossible — which
+            // the range check then says in its own words.
+            None if self.scope.contains(path) => Ok(0),
+            None => Err(Error::from(self.scope.reject(path))),
+        }
     }
 }
 
@@ -311,6 +315,25 @@ mod tests {
             "one line changed, not forty: {:?}",
             diff.hunks.len()
         );
+    }
+
+    #[test]
+    fn a_deleted_file_can_still_be_put_in_a_block_even_though_it_has_no_lines() {
+        // It has no head side to measure, and reaching for one used to make the
+        // source claim the file was not part of the review — while the
+        // suggestion machinery, looking at the same scope, offered the very path
+        // it had just refused.
+        let f = Fixture::new();
+        f.write("gone.rs", &numbered(10));
+        f.commit("add gone");
+        f.on_branch("feature/x");
+        f.git(&["rm", "gone.rs"]);
+        f.commit("delete gone");
+
+        let source = f.source("feature/x", ScopeRequest::default());
+
+        assert_eq!(source.file_line_count("gone.rs").unwrap(), 0);
+        assert_eq!(source.review_path("gone.rs").unwrap().lines(), 0);
     }
 
     #[test]
