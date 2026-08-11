@@ -8,10 +8,6 @@ use std::sync::Arc;
 use super::derivation::MapDerivation;
 use super::versions::MapVersions;
 use crate::error::{Error, Result};
-#[cfg(test)]
-use crate::map::domain::Position;
-use crate::map::domain::{MapRepository, ReviewMap};
-
 pub enum ResetOutcome {
     /// Deleted; the named version is current again, or nothing is.
     Deleted {
@@ -19,6 +15,10 @@ pub enum ResetOutcome {
     },
     NothingToDelete,
 }
+
+#[cfg(test)]
+use crate::map::domain::Position;
+use crate::map::domain::{MapRepository, ReviewMap};
 
 #[derive(Clone)]
 pub struct MapEditor {

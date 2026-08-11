@@ -10,15 +10,7 @@ export function useShortcuts({
   setCurrent,
   toggleViewed,
   setHelpOpen,
-}: {
-  review: ReviewView | null;
-  order: FileView[];
-  index: number;
-  current: string | null;
-  setCurrent: (path: string) => void;
-  toggleViewed: (path: string, viewed: boolean) => Promise<void>;
-  setHelpOpen: (fn: (open: boolean) => boolean) => void;
-}) {
+}: Shortcuts) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -70,3 +62,13 @@ export function useShortcuts({
     return () => window.removeEventListener("keydown", onKey);
   }, [review, order, index, current, setCurrent, toggleViewed, setHelpOpen]);
 }
+
+type Shortcuts = {
+  review: ReviewView | null;
+  order: FileView[];
+  index: number;
+  current: string | null;
+  setCurrent: (path: string) => void;
+  toggleViewed: (path: string, viewed: boolean) => Promise<void>;
+  setHelpOpen: (fn: (open: boolean) => boolean) => void;
+};

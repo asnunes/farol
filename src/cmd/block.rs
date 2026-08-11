@@ -7,11 +7,6 @@ use crate::error::Result;
 use crate::map::application::position_from;
 use crate::map::domain::Slug;
 
-/// `--before` and `--after` name a block, so they are slugs like any other.
-fn parse_opt(raw: Option<String>) -> Result<Option<Slug>> {
-    Ok(raw.map(|s| Slug::parse(&s)).transpose()?)
-}
-
 #[derive(Subcommand)]
 pub(super) enum BlockAction {
     Add {
@@ -102,4 +97,9 @@ impl Action for BlockAction {
             }
         }
     }
+}
+
+/// `--before` and `--after` name a block, so they are slugs like any other.
+fn parse_opt(raw: Option<String>) -> Result<Option<Slug>> {
+    Ok(raw.map(|s| Slug::parse(&s)).transpose()?)
 }

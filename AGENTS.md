@@ -224,6 +224,35 @@ The same test applied to the map side. `MapService` was doing three things:
 When a use case does nothing but forward to a service, the logic is usually in
 the wrong place.
 
+### What a reader meets first
+
+**A file opens with the thing it is named after.** The component, the service,
+the type the file exists to define — that goes directly under the imports, and
+everything else in the file is arranged behind it.
+
+The order, top to bottom:
+
+1. the main thing the file exports
+2. the rest of the public functions
+3. the public types
+4. the private functions
+5. the private types, props among them
+
+Somebody who opens a file came for what it does. A props type above the
+component spends the first screenful on the part they would have skipped, and
+pushes what they came for below the fold — so the reader scrolls to reach the
+reason they opened the file at all. Declarations are hoisted, so the order costs
+nothing at runtime: it is entirely about who is served first.
+
+A file full of types follows the same list rather than escaping it.
+`web/src/api.ts` opens with `api`, the thing it is named after, then the two
+functions over it, then the shapes — `ReviewView` first, because it is what the
+screen is drawn against, and the pieces it is built from after.
+
+Constants are the one thing allowed above the main item, and only while they
+stay a line or two with a comment: at that size they read as the dial the file
+is tuned by, not as something to get past.
+
 ### Ports stay synchronous
 
 For local file IO, async in Rust is mostly theatre: `tokio::fs` is a threadpool
@@ -324,6 +353,13 @@ refers to itself.
 **One component per file**, under `review/`, with the state in `hooks/`. Class
 names that carry no styling stay as markers: they name what a thing is, which is
 what the tests select on and what makes the inspector readable.
+
+**Object types are declared, never written inline.** A component takes
+`FileHeaderProps`, a function returns `SplitPath`; neither spells the shape out
+in its own signature. The shape gets a name and a line of its own above the
+thing that uses it, so the signature says what it takes rather than burying it,
+and so the name can be referred to from somewhere else. This applies to props,
+to return types and to parameters alike.
 
 ## Tests
 

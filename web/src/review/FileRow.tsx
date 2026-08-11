@@ -8,11 +8,7 @@ export function FileRow({
   file,
   current,
   onPick,
-}: {
-  file: FileView;
-  current: string | null;
-  onPick: (path: string) => void;
-}) {
+}: FileRowProps) {
   return (
     <li>
       <button
@@ -59,3 +55,9 @@ export function FileRow({
     </li>
   );
 }
+
+type FileRowProps = {
+  file: FileView;
+  current: string | null;
+  onPick: (path: string) => void;
+};

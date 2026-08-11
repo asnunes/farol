@@ -5,11 +5,7 @@ export function BlockBar({
   block,
   number,
   total,
-}: {
-  block: BlockView;
-  number: number;
-  total: number;
-}) {
+}: BlockBarProps) {
   return (
     <div className="blockbar border-b border-rule bg-surface px-6 py-4">
       <div className="kicker font-mono text-[0.6875rem] tracking-wide text-faint uppercase">
@@ -24,3 +20,9 @@ export function BlockBar({
     </div>
   );
 }
+
+type BlockBarProps = {
+  block: BlockView;
+  number: number;
+  total: number;
+};

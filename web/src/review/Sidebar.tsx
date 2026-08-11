@@ -8,11 +8,7 @@ export function Sidebar({
   review,
   current,
   onPick,
-}: {
-  review: ReviewView;
-  current: string | null;
-  onPick: (path: string) => void;
-}) {
+}: SidebarProps) {
   return (
     <aside className="map overflow-y-auto border-r border-rule bg-surface py-3">
       {review.blocks.map((block, i) => (
@@ -54,12 +50,7 @@ function Block({
   number,
   current,
   onPick,
-}: {
-  block: BlockView;
-  number: number;
-  current: string | null;
-  onPick: (path: string) => void;
-}) {
+}: BlockProps) {
   const state =
     block.files.length > 0 && block.files.every((f) => f.viewed)
       ? "done"
@@ -98,3 +89,16 @@ function Block({
     </section>
   );
 }
+
+type SidebarProps = {
+  review: ReviewView;
+  current: string | null;
+  onPick: (path: string) => void;
+};
+
+type BlockProps = {
+  block: BlockView;
+  number: number;
+  current: string | null;
+  onPick: (path: string) => void;
+};

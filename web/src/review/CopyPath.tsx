@@ -10,7 +10,7 @@ const CONFIRM_FOR = 1500;
  * The tick appears only after the write came back: confirming a copy that did
  * not happen is worse than not confirming one that did, because the paste is
  * what finds out. */
-export function CopyPath({ path }: { path: string }) {
+export function CopyPath({ path }: CopyPathProps) {
   const [copied, setCopied] = useState(false);
   const clearing = useRef<number | undefined>(undefined);
 
@@ -40,3 +40,5 @@ export function CopyPath({ path }: { path: string }) {
     </button>
   );
 }
+
+type CopyPathProps = { path: string };

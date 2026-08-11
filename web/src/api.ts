@@ -1,73 +1,4 @@
-export type TaggedNote = { block: string; text: string };
-export type TaggedLineNote = {
-  block: string;
-  from: number;
-  to: number;
-  text: string;
-};
-
-export type FileView = {
-  path: string;
-  status: string;
-  additions: number;
-  deletions: number;
-  viewed: boolean;
-  notes: TaggedNote[];
-  lineNotes: TaggedLineNote[];
-  tags: string[];
-  skim: boolean;
-  skimReason: string | null;
-};
-
-export type BlockView = {
-  slug: string;
-  title: string;
-  context: string;
-  files: FileView[];
-};
-
-export type ReviewView = {
-  branch: string;
-  base: string;
-  generatedAt: string;
-  commitsBehind: number;
-  blocks: BlockView[];
-  looseSkim: FileView[];
-  unmapped: string[];
-  totalFiles: number;
-  viewedFiles: number;
-};
-
-export type DiffLine = {
-  kind: "context" | "added" | "removed";
-  old_number: number | null;
-  new_number: number | null;
-  content: string;
-};
-
-export type Hunk = {
-  old_start: number;
-  old_lines: number;
-  new_start: number;
-  new_lines: number;
-  lines: DiffLine[];
-};
-
-export type FileDiff = {
-  path: string;
-  status: string;
-  hunks: Hunk[];
-  /** git will not diff this file: binary content, or `-diff` in .gitattributes. */
-  binary: boolean;
-  additions: number;
-  deletions: number;
-};
-
-async function json<T>(res: Response): Promise<T> {
-  if (!res.ok) throw new Error(await res.text());
-  return res.json() as Promise<T>;
-}
-
+/** Everything the browser asks the server for. */
 export const api = {
   review: () => fetch("/api/review").then(json<ReviewView>),
   file: (path: string) =>
@@ -86,14 +17,89 @@ export function readingOrder(review: ReviewView): FileView[] {
 }
 
 /** The block a file is rendered under, for the band above the diff. */
-export function blockOf(
-  review: ReviewView,
-  path: string,
-): { block: BlockView; index: number } | null {
+export function blockOf(review: ReviewView, path: string): FileHome | null {
   for (let i = 0; i < review.blocks.length; i++) {
     if (review.blocks[i].files.some((f) => f.path === path)) {
       return { block: review.blocks[i], index: i };
     }
   }
   return null;
+}
+
+/** The whole review, as one answer. Read this first: the shapes below are the
+ * pieces it is built from, and this is the one the screen is drawn against. */
+export type ReviewView = {
+  branch: string;
+  base: string;
+  generatedAt: string;
+  commitsBehind: number;
+  blocks: BlockView[];
+  looseSkim: FileView[];
+  unmapped: string[];
+  totalFiles: number;
+  viewedFiles: number;
+};
+
+export type BlockView = {
+  slug: string;
+  title: string;
+  context: string;
+  files: FileView[];
+};
+
+export type FileView = {
+  path: string;
+  status: string;
+  additions: number;
+  deletions: number;
+  viewed: boolean;
+  notes: TaggedNote[];
+  lineNotes: TaggedLineNote[];
+  tags: string[];
+  skim: boolean;
+  skimReason: string | null;
+};
+
+export type TaggedNote = { block: string; text: string };
+
+export type TaggedLineNote = {
+  block: string;
+  from: number;
+  to: number;
+  text: string;
+};
+
+/** One file's diff, fetched when the reader opens it. */
+export type FileDiff = {
+  path: string;
+  status: string;
+  hunks: Hunk[];
+  /** git will not diff this file: binary content, or `-diff` in .gitattributes. */
+  binary: boolean;
+  additions: number;
+  deletions: number;
+};
+
+export type Hunk = {
+  old_start: number;
+  old_lines: number;
+  new_start: number;
+  new_lines: number;
+  lines: DiffLine[];
+};
+
+export type DiffLine = {
+  kind: "context" | "added" | "removed";
+  old_number: number | null;
+  new_number: number | null;
+  content: string;
+};
+
+/** Where a file sits: the block it is read under and how far down the map that
+ * block is, which is what the band above the diff counts off. */
+export type FileHome = { block: BlockView; index: number };
+
+async function json<T>(res: Response): Promise<T> {
+  if (!res.ok) throw new Error(await res.text());
+  return res.json() as Promise<T>;
 }

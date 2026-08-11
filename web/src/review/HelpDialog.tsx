@@ -16,10 +16,7 @@ const KEYS: [string, string][] = [
 export function HelpDialog({
   open,
   onOpenChange,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
+}: HelpDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="help-card border-rule bg-surface sm:max-w-sm">
@@ -38,3 +35,8 @@ export function HelpDialog({
     </Dialog>
   );
 }
+
+type HelpDialogProps = {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+};

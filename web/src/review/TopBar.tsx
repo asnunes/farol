@@ -2,7 +2,7 @@ import { Progress } from "@/components/ui/progress";
 import type { ReviewView } from "@/api";
 
 /** Where you are and how far through you are. */
-export function TopBar({ review }: { review: ReviewView }) {
+export function TopBar({ review }: TopBarProps) {
   const done = review.totalFiles > 0 && review.viewedFiles === review.totalFiles;
 
   return (
@@ -41,3 +41,5 @@ export function TopBar({ review }: { review: ReviewView }) {
     </header>
   );
 }
+
+type TopBarProps = { review: ReviewView };

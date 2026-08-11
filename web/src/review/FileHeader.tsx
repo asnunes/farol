@@ -7,10 +7,7 @@ import type { FileView } from "@/api";
 export function FileHeader({
   file,
   onToggleViewed,
-}: {
-  file: FileView;
-  onToggleViewed: () => void;
-}) {
+}: FileHeaderProps) {
   const { dir, name } = splitPath(file.path);
 
   return (
@@ -58,3 +55,8 @@ export function FileHeader({
     </div>
   );
 }
+
+type FileHeaderProps = {
+  file: FileView;
+  onToggleViewed: () => void;
+};
