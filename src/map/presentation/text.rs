@@ -7,7 +7,7 @@ use std::fmt::Write as _;
 
 use crate::map::domain::WORKING;
 
-pub(super) fn short(sha: &str) -> String {
+pub fn short(sha: &str) -> String {
     if sha == WORKING {
         sha.to_string()
     } else {

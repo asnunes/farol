@@ -5,7 +5,7 @@ use clap::Subcommand;
 use super::{Action, Ctx};
 use crate::error::Result;
 use crate::map::application::ResetOutcome;
-use crate::map::presentation::{CheckSummary, MapReport, OrphanReport};
+use crate::map::presentation::{CheckSummary, MapReport, MapSummary, OrphanReport, short};
 
 #[derive(Subcommand)]
 pub(super) enum MapAction {
@@ -24,22 +24,28 @@ impl Action for MapAction {
         match self {
             MapAction::Derive => {
                 let derived = ctx.derive_map.execute()?;
-                println!(
-                    "{}",
-                    if derived.created {
-                        "Created the map version for this commit."
-                    } else {
-                        "A map version for this commit already exists — continuing from it."
+                let map = &derived.map;
+                let at = short(&map.generated_at);
+
+                // Not the whole map: `map show` prints that, and after deriving
+                // the reader wrote most of it themselves. What they cannot know
+                // without being told is where this version came from and what
+                // came loose on the way.
+                match (derived.created, &map.parent) {
+                    (true, Some(parent)) => {
+                        println!(
+                            "Created the map for {at}, inherited from {}.",
+                            short(parent)
+                        )
                     }
-                );
-                print!(
-                    "{}",
-                    MapReport {
-                        behind: ctx.derive_map.behind(&derived.map),
-                        map: &derived.map,
-                    }
-                );
-                print!("{}", OrphanReport(derived.map.orphans()));
+                    (true, None) => println!("Started the map for {at}. Nothing is mapped yet."),
+                    (false, _) => println!("The map for {at} already exists — continuing from it."),
+                }
+
+                if !map.is_empty() {
+                    print!("{}", MapSummary(map));
+                }
+                print!("{}", OrphanReport(map.orphans()));
                 Ok(())
             }
             MapAction::Show => {

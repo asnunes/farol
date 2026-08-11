@@ -10,11 +10,14 @@
 
 mod check_summary;
 mod map_report;
+mod map_summary;
 mod orphan_report;
 mod scope_report;
 mod text;
 
 pub use check_summary::*;
 pub use map_report::*;
+pub use map_summary::*;
 pub use orphan_report::*;
 pub use scope_report::*;
+pub use text::short;

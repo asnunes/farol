@@ -446,8 +446,17 @@ fn a_new_commit_inherits_the_previous_map() {
     let derived = repo.derive();
     assert!(derived.contains("Created"), "{derived}");
     assert!(
-        derived.contains("Original title"),
-        "the new version must inherit the previous blocks:\n{derived}"
+        derived.contains("inherited from"),
+        "deriving should say where the version came from:\n{derived}"
+    );
+
+    // Read it back with the command whose job that is. Asserting on `derive`'s
+    // output was only possible while it printed the whole map, which is what
+    // `map show` is for.
+    let show = repo.ok(&["map", "show"]);
+    assert!(
+        show.contains("Original title"),
+        "the new version must inherit the previous blocks:\n{show}"
     );
 }
 
@@ -1131,4 +1140,34 @@ fn quitting_a_pager_early_does_not_end_in_a_backtrace() {
         !stderr.contains("panicked"),
         "a closed pipe should not be a crash:\n{stderr}"
     );
+}
+
+#[test]
+fn showing_the_map_admits_there_is_a_decision_waiting() {
+    // The session reads the state with `map show`. If a deactivated note only
+    // appeared in `map derive`, it would finish thinking it was done.
+    let repo = Repo::new();
+    repo.feature();
+    repo.derive();
+    repo.core_block(&["src/a.rs"]);
+    repo.ok(&[
+        "line",
+        "add",
+        "core",
+        "src/a.rs",
+        "10-12",
+        "--note",
+        "worth keeping",
+    ]);
+
+    // Rewrite exactly under the note.
+    let rewritten = numbered(40).replace("line 11\n", "REWRITTEN\n");
+    repo.write("src/a.rs", &rewritten);
+    repo.commit("rewrite under the note");
+    repo.derive();
+
+    let show = repo.ok(&["map", "show"]);
+
+    assert!(show.contains("1 line note is deactivated"), "{show}");
+    assert!(show.contains("farol map derive"), "{show}");
 }

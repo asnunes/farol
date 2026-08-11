@@ -73,6 +73,22 @@ impl Display for MapReport<'_> {
                 writeln!(f, "  {} — {}", entry.path, entry.reason)?;
             }
         }
+
+        // One line, not the whole orphan report — that is `map derive`'s, and
+        // printing it twice would teach the reader to skip both. But a command
+        // called `show` that hides open work is a trap: a session reading the
+        // state here would never learn there is any.
+        match map.orphans().len() {
+            0 => {}
+            1 => writeln!(
+                f,
+                "\n1 line note is deactivated — run `farol map derive` to decide about it."
+            )?,
+            n => writeln!(
+                f,
+                "\n{n} line notes are deactivated — run `farol map derive` to decide about them."
+            )?,
+        }
         Ok(())
     }
 }
@@ -210,5 +226,56 @@ mod tests {
         assert!(out.contains("quiet.rs"), "{out}");
         assert!(!out.contains("note:"), "{out}");
         assert!(!out.contains("lines "), "{out}");
+    }
+
+    #[test]
+    fn a_deactivated_note_is_admitted_without_reprinting_the_whole_report() {
+        // `show` hiding open work is a trap: a session reading the state here
+        // would never learn there is any. But the full orphan report belongs to
+        // `map derive`, and printing it in both places teaches the reader to
+        // skim both.
+        let mut m = sample();
+        m.reanchor_notes(|_, _| {
+            Ok::<_, crate::map::domain::MapError>(crate::map::domain::NoteFate::Orphan {
+                snapshot: "if attempt.state == State::Pending {".into(),
+                reason: crate::map::domain::OrphanReason::HunkOverlap,
+            })
+        })
+        .unwrap();
+
+        let out = render(&m, 0);
+
+        assert!(out.contains("1 line note is deactivated"), "{out}");
+        assert!(out.contains("farol map derive"), "{out}");
+        assert!(
+            !out.contains("code it covered"),
+            "the snapshot belongs to the orphan report, not here:\n{out}"
+        );
+    }
+
+    #[test]
+    fn several_deactivated_notes_are_counted() {
+        let mut m = sample();
+        m.add_line_note(
+            &slug("retry-window"),
+            "src/retry.rs",
+            LineRange::new(20, 22).unwrap(),
+            "another",
+        )
+        .unwrap();
+        m.reanchor_notes(|_, _| {
+            Ok::<_, crate::map::domain::MapError>(crate::map::domain::NoteFate::Orphan {
+                snapshot: String::new(),
+                reason: crate::map::domain::OrphanReason::HunkOverlap,
+            })
+        })
+        .unwrap();
+
+        assert!(render(&m, 0).contains("2 line notes are deactivated"));
+    }
+
+    #[test]
+    fn a_map_with_nothing_pending_says_nothing_about_it() {
+        assert!(!render(&sample(), 0).contains("deactivated"));
     }
 }

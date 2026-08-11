@@ -120,15 +120,25 @@ mod tests {
         assert_eq!(nudge_for(&[]), None);
     }
 
-    /// Wait for one nudge, or give up. The watcher runs on a real thread over
-    /// a real directory, so there is nothing to poll deterministically.
-    fn nudged(rx: &mut broadcast::Receiver<String>) -> Option<String> {
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    /// Touch the file until a nudge arrives, or give up.
+    ///
+    /// The watcher runs on a real thread and the platform takes its time to
+    /// start delivering events. Sleeping "long enough" before writing once is a
+    /// race that loses on a loaded machine — this one lost intermittently for a
+    /// day before anyone caught it. Writing repeatedly cannot lose: either the
+    /// watcher is up and the next touch is seen, or the deadline passes and the
+    /// watcher genuinely never worked.
+    fn nudged_by(touch: impl Fn(), rx: &mut broadcast::Receiver<String>) -> Option<String> {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
         while std::time::Instant::now() < deadline {
-            if let Ok(kind) = rx.try_recv() {
-                return Some(kind);
+            touch();
+            let until = std::time::Instant::now() + std::time::Duration::from_millis(400);
+            while std::time::Instant::now() < until {
+                if let Ok(kind) = rx.try_recv() {
+                    return Some(kind);
+                }
+                std::thread::sleep(std::time::Duration::from_millis(20));
             }
-            std::thread::sleep(std::time::Duration::from_millis(20));
         }
         None
     }
@@ -141,11 +151,11 @@ mod tests {
 
         let (tx, mut rx) = broadcast::channel(16);
         spawn(dir.path().to_path_buf(), tx);
-        std::thread::sleep(std::time::Duration::from_millis(400));
 
-        std::fs::write(maps.join("abc123.json"), "{}").unwrap();
+        let file = maps.join("abc123.json");
+        let kind = nudged_by(|| std::fs::write(&file, "{}").unwrap(), &mut rx);
 
-        assert_eq!(nudged(&mut rx).as_deref(), Some("map"));
+        assert_eq!(kind.as_deref(), Some("map"));
     }
 
     #[test]
@@ -154,11 +164,24 @@ mod tests {
         // pull the page out from under whoever is reading.
         let dir = tempfile::tempdir().unwrap();
         let objects = dir.path().join("objects").join("ab");
+        let maps = dir.path().join("farol").join("x").join("maps");
         std::fs::create_dir_all(&objects).unwrap();
+        std::fs::create_dir_all(&maps).unwrap();
 
         let (tx, mut rx) = broadcast::channel(16);
         spawn(dir.path().to_path_buf(), tx);
-        std::thread::sleep(std::time::Duration::from_millis(400));
+
+        // Prove the watcher is awake first, or the silence below would be the
+        // silence of a watcher that never started — and the test would pass
+        // for the one reason that makes it worthless.
+        let map = maps.join("abc123.json");
+        assert_eq!(
+            nudged_by(|| std::fs::write(&map, "{}").unwrap(), &mut rx).as_deref(),
+            Some("map"),
+            "the watcher never came up, so this test proves nothing"
+        );
+        // Past the quiet period, so a second nudge would be allowed through.
+        std::thread::sleep(QUIET * 2);
 
         std::fs::write(objects.join("cdef01"), "an object").unwrap();
         std::thread::sleep(std::time::Duration::from_millis(600));
