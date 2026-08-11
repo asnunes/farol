@@ -2,17 +2,19 @@ import { cn } from "@/lib/utils";
 import { FileRow } from "./FileRow";
 import type { BlockView, ReviewView } from "@/api";
 
+type SidebarProps = {
+  review: ReviewView;
+  current: string | null;
+  onPick: (path: string) => void;
+};
+
 /** Navigation only, deliberately: no prose here, or the reader would try to
  * read the map instead of the code. */
 export function Sidebar({
   review,
   current,
   onPick,
-}: {
-  review: ReviewView;
-  current: string | null;
-  onPick: (path: string) => void;
-}) {
+}: SidebarProps) {
   return (
     <aside className="map overflow-y-auto border-r border-rule bg-surface py-3">
       {review.blocks.map((block, i) => (
@@ -49,17 +51,19 @@ export function Sidebar({
   );
 }
 
+type BlockProps = {
+  block: BlockView;
+  number: number;
+  current: string | null;
+  onPick: (path: string) => void;
+};
+
 function Block({
   block,
   number,
   current,
   onPick,
-}: {
-  block: BlockView;
-  number: number;
-  current: string | null;
-  onPick: (path: string) => void;
-}) {
+}: BlockProps) {
   const state =
     block.files.length > 0 && block.files.every((f) => f.viewed)
       ? "done"

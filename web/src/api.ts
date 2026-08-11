@@ -85,11 +85,12 @@ export function readingOrder(review: ReviewView): FileView[] {
   return [...review.blocks.flatMap((b) => b.files), ...review.looseSkim];
 }
 
+/** Where a file sits: the block it is read under and how far down the map that
+ * block is, which is what the band above the diff counts off. */
+export type FileHome = { block: BlockView; index: number };
+
 /** The block a file is rendered under, for the band above the diff. */
-export function blockOf(
-  review: ReviewView,
-  path: string,
-): { block: BlockView; index: number } | null {
+export function blockOf(review: ReviewView, path: string): FileHome | null {
   for (let i = 0; i < review.blocks.length; i++) {
     if (review.blocks[i].files.some((f) => f.path === path)) {
       return { block: review.blocks[i], index: i };

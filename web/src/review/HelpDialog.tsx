@@ -13,13 +13,15 @@ const KEYS: [string, string][] = [
   ["?", "this list"],
 ];
 
+type HelpDialogProps = {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+};
+
 export function HelpDialog({
   open,
   onOpenChange,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
+}: HelpDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="help-card border-rule bg-surface sm:max-w-sm">

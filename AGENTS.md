@@ -325,6 +325,13 @@ refers to itself.
 names that carry no styling stay as markers: they name what a thing is, which is
 what the tests select on and what makes the inspector readable.
 
+**Object types are declared, never written inline.** A component takes
+`FileHeaderProps`, a function returns `SplitPath`; neither spells the shape out
+in its own signature. The shape gets a name and a line of its own above the
+thing that uses it, so the signature says what it takes rather than burying it,
+and so the name can be referred to from somewhere else. This applies to props,
+to return types and to parameters alike.
+
 ## Tests
 
 Three layers, and each covers something the others cannot.

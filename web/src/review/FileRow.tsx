@@ -3,16 +3,18 @@ import { cn } from "@/lib/utils";
 import { splitPath } from "@/lib/path";
 import type { FileView } from "@/api";
 
+type FileRowProps = {
+  file: FileView;
+  current: string | null;
+  onPick: (path: string) => void;
+};
+
 /** One file in the sidebar: read state, name, and what is waiting inside it. */
 export function FileRow({
   file,
   current,
   onPick,
-}: {
-  file: FileView;
-  current: string | null;
-  onPick: (path: string) => void;
-}) {
+}: FileRowProps) {
   return (
     <li>
       <button

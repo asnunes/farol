@@ -1,6 +1,8 @@
+type UnmappedProps = { paths: string[] };
+
 /** Files the branch changed after the map was written. They are in the diff and
  * nowhere in the map, so the screen would otherwise never mention them. */
-export function Unmapped({ paths }: { paths: string[] }) {
+export function Unmapped({ paths }: UnmappedProps) {
   return (
     <div className="unmapped m-6 rounded-md border border-note-rule bg-note-bg p-4">
       <strong className="font-sans text-sm text-ink">

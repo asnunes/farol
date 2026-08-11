@@ -1,15 +1,17 @@
 import type { BlockView } from "@/api";
 
+type BlockBarProps = {
+  block: BlockView;
+  number: number;
+  total: number;
+};
+
 /** The band above the diff: which block you are in and why it exists. */
 export function BlockBar({
   block,
   number,
   total,
-}: {
-  block: BlockView;
-  number: number;
-  total: number;
-}) {
+}: BlockBarProps) {
   return (
     <div className="blockbar border-b border-rule bg-surface px-6 py-4">
       <div className="kicker font-mono text-[0.6875rem] tracking-wide text-faint uppercase">

@@ -1,6 +1,16 @@
 import { useEffect } from "react";
 import { blockOf, type FileView, type ReviewView } from "@/api";
 
+type Shortcuts = {
+  review: ReviewView | null;
+  order: FileView[];
+  index: number;
+  current: string | null;
+  setCurrent: (path: string) => void;
+  toggleViewed: (path: string, viewed: boolean) => Promise<void>;
+  setHelpOpen: (fn: (open: boolean) => boolean) => void;
+};
+
 /** The keyboard is the primary way through a review; the mouse is the fallback. */
 export function useShortcuts({
   review,
@@ -10,15 +20,7 @@ export function useShortcuts({
   setCurrent,
   toggleViewed,
   setHelpOpen,
-}: {
-  review: ReviewView | null;
-  order: FileView[];
-  index: number;
-  current: string | null;
-  setCurrent: (path: string) => void;
-  toggleViewed: (path: string, viewed: boolean) => Promise<void>;
-  setHelpOpen: (fn: (open: boolean) => boolean) => void;
-}) {
+}: Shortcuts) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;

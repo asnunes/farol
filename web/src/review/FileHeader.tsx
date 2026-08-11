@@ -3,14 +3,16 @@ import { CopyPath } from "@/review/CopyPath";
 import { splitPath } from "@/lib/path";
 import type { FileView } from "@/api";
 
+type FileHeaderProps = {
+  file: FileView;
+  onToggleViewed: () => void;
+};
+
 /** The file being read: the tick on the left, the path, the churn on the right. */
 export function FileHeader({
   file,
   onToggleViewed,
-}: {
-  file: FileView;
-  onToggleViewed: () => void;
-}) {
+}: FileHeaderProps) {
   const { dir, name } = splitPath(file.path);
 
   return (

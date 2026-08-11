@@ -4,9 +4,11 @@ import { colourHunk, type Token, type Tokenize } from "@/highlight/tokens";
 import { useHighlight } from "@/hooks/useHighlight";
 import type { FileDiff, FileView, Hunk } from "@/api";
 
+type DiffProps = { diff: FileDiff; file: FileView };
+
 /** The code itself, with the session's line notes beside the lines they are
  * about. */
-export function Diff({ diff, file }: { diff: FileDiff; file: FileView }) {
+export function Diff({ diff, file }: DiffProps) {
   const tokenize = useHighlight(diff.binary ? null : diff.path);
 
   if (diff.binary) {
@@ -28,15 +30,17 @@ export function Diff({ diff, file }: { diff: FileDiff; file: FileView }) {
   );
 }
 
+type DiffHunkProps = {
+  hunk: Hunk;
+  file: FileView;
+  tokenize: Tokenize | null;
+};
+
 function DiffHunk({
   hunk,
   file,
   tokenize,
-}: {
-  hunk: Hunk;
-  file: FileView;
-  tokenize: Tokenize | null;
-}) {
+}: DiffHunkProps) {
   // Both sides of the hunk go through the tokenizer once, not once per render:
   // navigation redraws this on every keystroke.
   const coloured = useMemo(
@@ -92,10 +96,12 @@ function DiffHunk({
   );
 }
 
+type CodeProps = { tokens?: Token[]; plain: string };
+
 /** The line, coloured if its grammar has arrived and plain until then. The
  * palette for both themes rides on the token as custom properties, so the
  * stylesheet decides which one applies and nothing is tokenized twice. */
-function Code({ tokens, plain }: { tokens?: Token[]; plain: string }) {
+function Code({ tokens, plain }: CodeProps) {
   if (!tokens) return <>{plain}</>;
 
   return (

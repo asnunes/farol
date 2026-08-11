@@ -1,5 +1,15 @@
 import type { ThemeRegistrationRaw } from "shiki/core";
 
+/** The six things syntax is allowed to say here. */
+type Palette = {
+  comment: string;
+  keyword: string;
+  literal: string;
+  name: string;
+  text: string;
+  punctuation: string;
+};
+
 /** Syntax colour, on a screen where colour already means something else.
  *
  * Green and red are taken by added and removed, amber is the session's own
@@ -7,14 +17,7 @@ import type { ThemeRegistrationRaw } from "shiki/core";
  * five roles and no more, and punctuation is quieter than the text it sits in.
  * A theme lifted from an editor would put a seventh and eighth colour on a
  * screen whose whole argument is that colour carries meaning. */
-function roles(c: {
-  comment: string;
-  keyword: string;
-  literal: string;
-  name: string;
-  text: string;
-  punctuation: string;
-}) {
+function roles(c: Palette) {
   return [
     {
       scope: ["comment", "punctuation.definition.comment"],
