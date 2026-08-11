@@ -16,7 +16,7 @@ export function FileHeader({
     <div className="filehead flex items-center justify-between gap-4 border-b border-rule bg-surface px-6 py-2.5">
       <div className="left flex min-w-0 items-center gap-3">
         <button
-          className="markbox grid size-5 shrink-0 place-items-center rounded border border-rule-strong text-xs text-transparent transition-colors hover:border-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none aria-pressed:border-accent aria-pressed:bg-accent aria-pressed:text-surface"
+          className="markbox grid size-5 shrink-0 cursor-pointer place-items-center rounded border border-rule-strong text-xs text-transparent transition-colors hover:border-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none aria-pressed:border-accent aria-pressed:bg-accent aria-pressed:text-surface"
           aria-pressed={file.viewed}
           title="Mark as read — key e"
           onClick={onToggleViewed}

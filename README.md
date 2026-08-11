@@ -23,7 +23,16 @@ farol map derive     # start (or continue) the map for this commit
 farol serve          # read it in a browser
 ```
 
-The map itself is normally written by the `review-map` skill at the end of the
+`serve` prints the port and gives the terminal back; the review stays open
+until you stop it.
+
+```bash
+farol servers            # what is open, and where
+farol servers stop 4600
+farol servers stop --all
+```
+
+The map itself is normally written by the `farol` skill at the end of the
 session that implemented the change. By hand it looks like this:
 
 ```bash
@@ -52,6 +61,13 @@ keys.
 standing on. The diff is taken from the merge base, so what the base branch did
 after you branched stays out of your review — `--direct` opts out. Detached
 HEAD is refused: there is no branch name to key state on.
+
+**One server per review.** `farol serve` goes into the background and takes the
+first free port from 4600 up. Asking again for the same branch hands back the
+one already open rather than starting a second; asking for a different window —
+another base, `--dirty`, a port of your own — starts its own. What is running is
+kept under `$XDG_STATE_HOME/farol`, and it is a cache of what the operating
+system already knows: entries whose process is gone are dropped on the way past.
 
 **State lives with the worktree.** Everything is stored under the worktree's own
 git dir, so removing a worktree takes the review with it. That is the intended

@@ -8,7 +8,7 @@
 
 mod common;
 
-use common::{BIN, Repo, numbered};
+use common::{Repo, numbered};
 use serde_json::Value;
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
@@ -27,44 +27,23 @@ impl Serving {
     }
 
     fn with(extra: &[&str]) -> Self {
-        let repo = Repo::new();
-        repo.feature();
-        repo.write("src/b.rs", &numbered(20));
-        repo.write("Cargo.lock", "checksums\n");
-        repo.commit("more to review");
-        repo.derive();
-        repo.core_block(&["src/a.rs"]);
-        repo.ok(&["file", "update", "core", "src/a.rs", "--note", "start here"]);
-        repo.ok(&[
-            "line",
-            "add",
-            "core",
-            "src/a.rs",
-            "10-12",
-            "--note",
-            "the actual fix",
-        ]);
-        repo.ok(&[
-            "block",
-            "add",
-            "wiring",
-            "--title",
-            "The wiring",
-            "--context",
-            "why",
-            "src/b.rs",
-        ]);
-        repo.ok(&["skim", "add", "Cargo.lock", "--reason", "regenerated"]);
-
+        let repo = mapped();
         // No `--port` at all: this is how a reviewer starts one, and it
         // exercises the search. The port comes back off the line the server
         // prints, which is the only account that cannot be stale.
-        let mut args = vec!["serve".to_string(), "--no-open".to_string()];
+        //
+        // `--foreground`, so this test owns the process it is talking to: the
+        // detached start is a different thing and is tested as one, further
+        // down.
+        let mut args = vec![
+            "serve".to_string(),
+            "--no-open".to_string(),
+            "--foreground".to_string(),
+        ];
         args.extend(extra.iter().map(|s| s.to_string()));
 
-        let mut child = Command::new(BIN)
-            .args(&args)
-            .current_dir(repo.path())
+        let mut child = repo
+            .command(&args.iter().map(String::as_str).collect::<Vec<_>>())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
@@ -157,19 +136,55 @@ impl Drop for Serving {
     }
 }
 
+/// A branch with a map worth serving: two blocks, all three levels of prose,
+/// and something marked skim.
+fn mapped() -> Repo {
+    let repo = Repo::new();
+    repo.feature();
+    repo.write("src/b.rs", &numbered(20));
+    repo.write("Cargo.lock", "checksums\n");
+    repo.commit("more to review");
+    repo.derive();
+    repo.core_block(&["src/a.rs"]);
+    repo.ok(&["file", "update", "core", "src/a.rs", "--note", "start here"]);
+    repo.ok(&[
+        "line",
+        "add",
+        "core",
+        "src/a.rs",
+        "10-12",
+        "--note",
+        "the actual fix",
+    ]);
+    repo.ok(&[
+        "block",
+        "add",
+        "wiring",
+        "--title",
+        "The wiring",
+        "--context",
+        "why",
+        "src/b.rs",
+    ]);
+    repo.ok(&["skim", "add", "Cargo.lock", "--reason", "regenerated"]);
+    repo
+}
+
 /// The port the server actually got, off the line it prints on the way up.
 /// Reading it back is the only account that cannot be stale.
 fn port_from(stdout: std::process::ChildStdout) -> u16 {
     use std::io::{BufRead, BufReader};
 
-    for line in BufReader::new(stdout).lines().map_while(Result::ok) {
-        if let Some((_, tail)) = line.rsplit_once(':')
-            && let Ok(port) = tail.trim().parse()
-        {
-            return port;
-        }
-    }
-    panic!("the server never said where it was listening");
+    BufReader::new(stdout)
+        .lines()
+        .map_while(Result::ok)
+        .find_map(|line| port_in(&line))
+        .expect("the server never said where it was listening")
+}
+
+fn port_in(line: &str) -> Option<u16> {
+    line.rsplit_once(':')
+        .and_then(|(_, tail)| tail.trim().parse().ok())
 }
 
 // ---- what the screen is built from --------------------------------------
@@ -419,4 +434,198 @@ fn serve_refuses_a_port_that_is_already_taken() {
     assert!(!out.status.success());
     let err = String::from_utf8_lossy(&out.stderr);
     assert!(err.contains(&port.to_string()), "{err}");
+}
+
+// ---- servers, and the terminal you get back -----------------------------
+
+/// A review started the way a reviewer starts one: the command returns, and the
+/// server stays.
+struct Detached {
+    repo: Repo,
+    port: u16,
+}
+
+impl Detached {
+    fn new() -> Self {
+        let repo = mapped();
+        let port = Self::start(&repo);
+        Detached { repo, port }
+    }
+
+    /// Start one and read back the port it announced.
+    fn start(repo: &Repo) -> u16 {
+        let out = repo.farol(&["serve", "--no-open", "--no-watch"]);
+        assert!(
+            out.status.success(),
+            "serve should have returned:\n{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let said = String::from_utf8_lossy(&out.stdout).into_owned();
+        said.lines()
+            .find_map(port_in)
+            .unwrap_or_else(|| panic!("serve should say where it landed:\n{said}"))
+    }
+
+    fn answering(&self, port: u16) -> bool {
+        Command::new("curl")
+            .args(["-sf", &format!("http://127.0.0.1:{port}/api/review")])
+            .output()
+            .is_ok_and(|o| o.status.success())
+    }
+
+    /// The process behind a port, read out of the registry.
+    ///
+    /// Whether a *port* is free proves nothing here: these tests run alongside
+    /// each other and the next server to start takes whatever was let go. The
+    /// claim worth making is about the process that was asked to stop.
+    fn pid_on(&self, port: u16) -> u32 {
+        let file = self.repo.state_dir().join(format!("servers/{port}.json"));
+        let raw = std::fs::read_to_string(&file)
+            .unwrap_or_else(|e| panic!("{} should be registered: {e}", file.display()));
+        serde_json::from_str::<Value>(&raw).unwrap()["pid"]
+            .as_u64()
+            .expect("an entry carries the pid") as u32
+    }
+}
+
+/// Whether a process is still there, asked the way `stop` asks.
+fn running(pid: u32) -> bool {
+    Command::new("kill")
+        .args(["-0", &pid.to_string()])
+        .output()
+        .is_ok_and(|o| o.status.success())
+}
+
+impl Drop for Detached {
+    fn drop(&mut self) {
+        // Nothing else will: the process is not this test's child any more,
+        // which is the whole point of it.
+        let _ = self.repo.farol(&["servers", "stop", "--all"]);
+    }
+}
+
+#[test]
+fn serve_hands_the_terminal_back_and_leaves_the_review_open() {
+    let d = Detached::new();
+
+    assert!(
+        d.answering(d.port),
+        "the server should still be serving after the command that started it returned"
+    );
+}
+
+#[test]
+fn a_server_that_is_running_can_be_found_from_anywhere() {
+    // The point of the registry: you are in another directory, or another
+    // terminal, and you want to know what is open.
+    let d = Detached::new();
+
+    let list = d.repo.ok(&["servers"]);
+
+    assert!(list.contains(&d.port.to_string()), "{list}");
+    assert!(list.contains("feature/x → main"), "{list}");
+    assert!(
+        list.contains(&d.repo.path().to_string_lossy().to_string()),
+        "{list}"
+    );
+}
+
+#[test]
+fn asking_for_the_same_review_twice_hands_back_the_one_already_open() {
+    // Otherwise every `farol serve` leaves another server behind, and the
+    // reviewer ends up with a row of tabs showing the same thing.
+    let d = Detached::new();
+
+    let again = Detached::start(&d.repo);
+
+    assert_eq!(again, d.port);
+}
+
+#[test]
+fn stopping_a_server_ends_it_and_takes_it_off_the_list() {
+    let d = Detached::new();
+    let pid = d.pid_on(d.port);
+
+    d.repo.ok(&["servers", "stop", &d.port.to_string()]);
+
+    assert!(!running(pid), "the server should have been stopped");
+    assert!(d.repo.ok(&["servers"]).contains("No farol server"));
+}
+
+#[test]
+fn stopping_them_all_reaches_reviews_from_other_repositories() {
+    // The registry belongs to the machine, not to a repository: `--all` from
+    // one checkout has to stop the review open in another.
+    let first = Detached::new();
+    let registry = first.repo.state_dir();
+    let second = mapped();
+    let out = second.farol_sharing(&registry, &["serve", "--no-open", "--no-watch"]);
+    assert!(out.status.success());
+    let second_port = String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .find_map(port_in)
+        .expect("the second server should say where it landed");
+
+    let stopped = first.repo.ok(&["servers", "stop", "--all"]);
+
+    assert!(stopped.contains(&first.port.to_string()), "{stopped}");
+    assert!(stopped.contains(&second_port.to_string()), "{stopped}");
+    assert!(first.repo.ok(&["servers"]).contains("No farol server"));
+}
+
+#[test]
+fn stopping_a_port_with_nothing_on_it_says_so_instead_of_pretending() {
+    let repo = mapped();
+
+    let err = repo.fails(&["servers", "stop", "65000"]);
+
+    assert!(err.contains("65000"), "{err}");
+}
+
+#[test]
+fn stopping_without_saying_what_refuses_rather_than_guessing() {
+    // `--all` has to be typed. Stopping every review on the machine is not
+    // something to infer from a bare command.
+    let repo = mapped();
+
+    let err = repo.fails(&["servers", "stop"]);
+
+    assert!(err.contains("--all"), "{err}");
+}
+
+#[test]
+fn nothing_running_is_an_answer_rather_than_silence() {
+    let repo = mapped();
+
+    assert!(
+        repo.ok(&["servers"])
+            .contains("No farol server is running.")
+    );
+}
+
+#[test]
+fn a_server_stopped_from_outside_takes_itself_off_the_list() {
+    // Not through `farol servers stop`: a Ctrl-C, or a kill from a script.
+    // Going out on its own is what graceful shutdown buys, and the difference
+    // shows here — the file is gone the moment the process is, rather than
+    // waiting for the next reader to sweep it up.
+    let d = Detached::new();
+    let pid = d.pid_on(d.port);
+    let entry = d.repo.state_dir().join(format!("servers/{}.json", d.port));
+
+    Command::new("kill")
+        .args(["-TERM", &pid.to_string()])
+        .status()
+        .expect("kill runs");
+
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while running(pid) && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(20));
+    }
+
+    assert!(!running(pid), "it should have stopped");
+    assert!(
+        !entry.exists(),
+        "it should have taken its own entry out on the way"
+    );
 }

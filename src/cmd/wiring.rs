@@ -53,6 +53,7 @@ pub struct Ctx {
 
     server: ServerUseCases,
     git_dir: PathBuf,
+    root: PathBuf,
 }
 
 /// The subset a running server needs, kept together so `serve` hands over one
@@ -70,6 +71,7 @@ impl Ctx {
     pub fn from_workspace(request: ScopeRequest) -> Result<Self> {
         let workspace = Workspace::here()?;
         let git_dir = workspace.git_dir().to_path_buf();
+        let root = workspace.root();
         let branch = workspace.branch().to_string();
 
         let maps = Arc::new(JsonMapRepository::new(workspace.store()));
@@ -119,6 +121,7 @@ impl Ctx {
                 unmark_viewed: UnmarkViewed::new(progress),
             },
             git_dir,
+            root,
         })
     }
 
@@ -128,5 +131,10 @@ impl Ctx {
 
     pub fn git_dir(&self) -> &PathBuf {
         &self.git_dir
+    }
+
+    /// The working tree the review is of.
+    pub fn root(&self) -> &PathBuf {
+        &self.root
     }
 }

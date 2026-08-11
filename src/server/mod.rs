@@ -5,9 +5,15 @@
 //! `assets` serves the frontend. What is left here is starting and stopping.
 
 mod assets;
+pub mod detach;
+mod registry;
 mod routes;
+mod server_list;
 pub mod view;
 mod watch;
+
+pub use registry::{Registry, ServerEntry};
+pub use server_list::ServerList;
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -47,6 +53,8 @@ pub struct ServeConfig {
     pub open_browser: bool,
     pub watch: bool,
     pub git_dir: PathBuf,
+    /// The working tree, for the list of what is running.
+    pub repo: PathBuf,
 }
 
 struct AppState {
@@ -87,6 +95,8 @@ impl Server {
 }
 
 async fn serve(config: ServeConfig) -> Result<()> {
+    let registry = Registry::open()?;
+    let (branch, base) = (config.map.branch.clone(), config.map.base.clone());
     let (state, changes) = AppState::new(config.use_cases, config.map);
 
     // One line of wiring, and the only one in this file with no test of its
@@ -106,16 +116,32 @@ async fn serve(config: ServeConfig) -> Result<()> {
         .map_err(|e| Error::msg(e.to_string()))?;
     let url = format!("http://{addr}");
 
+    // Announced before anything else: whoever started this is waiting for a
+    // port, and if it is a detached parent it is watching the registry for it.
+    let entry = ServerEntry {
+        port: addr.port(),
+        pid: std::process::id(),
+        repo: config.repo,
+        branch,
+        base,
+    };
+    registry.register(&entry)?;
+
     println!("farol is reading at {url}");
     if config.open_browser {
         let _ = std::process::Command::new("open").arg(&url).spawn();
     }
 
-    axum::serve(listener, app)
+    let served = axum::serve(listener, app)
         .with_graceful_shutdown(stopped())
         .await
-        .map_err(|e| Error::msg(e.to_string()))?;
-    Ok(())
+        .map_err(|e| Error::msg(e.to_string()));
+
+    // Taking itself out of the list is the whole reason shutdown is graceful.
+    // A server that is cut down leaves its entry behind, and the next read of
+    // the registry clears it.
+    registry.deregister(entry.port)?;
+    served
 }
 
 /// Take the port that was asked for, or find one.

@@ -36,6 +36,14 @@ impl Repo {
         self.dir.path()
     }
 
+    /// A registry of running servers belonging to this test alone.
+    ///
+    /// Without it a test run would list — and stop — the servers of whoever is
+    /// running it, and two tests would fight over the same ports.
+    pub fn state_dir(&self) -> std::path::PathBuf {
+        self.path().join(".farol-state")
+    }
+
     pub fn git(&self, args: &[&str]) -> Output {
         self.git_in(self.path(), args)
     }
@@ -74,11 +82,28 @@ impl Repo {
     }
 
     pub fn farol_in(&self, cwd: &Path, args: &[&str]) -> Output {
-        Command::new(BIN)
-            .args(args)
+        self.command(args)
             .current_dir(cwd)
             .output()
             .expect("farol should run")
+    }
+
+    /// Run here, but against another repository's registry — which is what a
+    /// single machine looks like to two repositories.
+    pub fn farol_sharing(&self, registry: &Path, args: &[&str]) -> Output {
+        self.command(args)
+            .env("FAROL_STATE_DIR", registry)
+            .output()
+            .expect("farol should run")
+    }
+
+    /// `farol`, pointed at this repository's own state.
+    pub fn command(&self, args: &[&str]) -> Command {
+        let mut cmd = Command::new(BIN);
+        cmd.args(args)
+            .current_dir(self.path())
+            .env("FAROL_STATE_DIR", self.state_dir());
+        cmd
     }
 
     /// Run and require success, returning stdout.

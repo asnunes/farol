@@ -46,6 +46,13 @@ impl Workspace {
         &self.git_dir
     }
 
+    /// The working tree — what the person reading a list of open reviews
+    /// recognises. A bare repository has none, and there the git dir is the
+    /// only name it has.
+    pub fn root(&self) -> PathBuf {
+        self.repo.workdir().unwrap_or(&self.git_dir).to_path_buf()
+    }
+
     /// Where farol keeps everything for this branch.
     pub fn store(&self) -> Store {
         Store::new(&self.git_dir, &self.branch)
@@ -62,6 +69,26 @@ impl Workspace {
             None => Err(Error::DetachedHead),
         }
     }
+}
+
+/// Serialise and write so that a crash never leaves half a file behind.
+///
+/// The write goes to a sibling temp file, is flushed to disk, then renamed over
+/// the target. Rename within a filesystem is atomic, so the old copy survives
+/// intact until the new one is complete. Review state accumulates over days;
+/// losing it to a mistimed Ctrl-C is not acceptable.
+pub fn write_json<T: Serialize>(path: &Path, value: &T) -> Result<()> {
+    use std::io::Write;
+
+    let body = serde_json::to_vec_pretty(value)?;
+    let tmp = path.with_extension("tmp");
+    {
+        let mut file = std::fs::File::create(&tmp)?;
+        file.write_all(&body)?;
+        file.sync_all()?;
+    }
+    std::fs::rename(&tmp, path)?;
+    Ok(())
 }
 
 /// Everything farol stores for one branch.
@@ -97,25 +124,10 @@ impl Store {
         Ok(())
     }
 
-    /// Serialise and write so that a crash never leaves half a file behind.
-    ///
-    /// The write goes to a sibling temp file, is flushed to disk, then renamed
-    /// over the target. Rename within a filesystem is atomic, so the old copy
-    /// survives intact until the new one is complete. Review state accumulates
-    /// over days; losing it to a mistimed Ctrl-C is not acceptable.
+    /// Write into this store, creating it first if this is the first time.
     pub fn write_json<T: Serialize>(&self, path: &Path, value: &T) -> Result<()> {
-        use std::io::Write;
-
         self.ensure()?;
-        let body = serde_json::to_vec_pretty(value)?;
-        let tmp = path.with_extension("tmp");
-        {
-            let mut file = std::fs::File::create(&tmp)?;
-            file.write_all(&body)?;
-            file.sync_all()?;
-        }
-        std::fs::rename(&tmp, path)?;
-        Ok(())
+        write_json(path, value)
     }
 
     /// Read and parse, treating anything unreadable as absent. `on_stale` is

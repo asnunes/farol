@@ -6,6 +6,7 @@ mod line;
 mod map;
 mod scope;
 mod serve;
+mod servers;
 mod skim;
 mod wiring;
 
@@ -15,6 +16,7 @@ use line::LineAction;
 use map::MapAction;
 use scope::ShowScope;
 use serve::ServeArgs;
+use servers::ServersArgs;
 use skim::SkimAction;
 
 pub use wiring::{Ctx, ServerUseCases};
@@ -55,6 +57,12 @@ pub struct ScopeFlags {
 }
 
 impl ScopeFlags {
+    /// Whether the window was left alone. `serve` asks so it can tell a plain
+    /// start from one that asked for something in particular.
+    fn is_default(&self) -> bool {
+        !self.direct && !self.dirty
+    }
+
     fn with_base(&self, base: Option<String>) -> ScopeArgs {
         ScopeArgs {
             base,
@@ -116,6 +124,8 @@ impl Reporting for Ctx {
 enum Command {
     /// Serve the review in a browser.
     Serve(ServeArgs),
+    /// The reviews open on this machine.
+    Servers(ServersArgs),
     /// List the files under review, as farol sees them.
     Scope(ScopeOnlyArgs),
     /// Create, inspect and verify the map.
@@ -161,6 +171,10 @@ impl Command {
             // Serve is the one that does not fit: it takes its refs
             // positionally and hands the use cases to a long-lived server.
             Command::Serve(args) => args.run(),
+
+            // And `servers` asks about the machine rather than a repository:
+            // it answers from anywhere, including outside a git repository.
+            Command::Servers(args) => args.run(),
 
             // The rest are uniform. The window is resolved once per group and
             // handed down, instead of every action reopening it. The match
