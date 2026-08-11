@@ -72,7 +72,10 @@ function DiffHunk({
               <div className="ln shrink-0 pr-3 text-right text-faint select-none">
                 {line.new_number ?? line.old_number ?? ""}
               </div>
-              <div className="code overflow-x-auto whitespace-pre">
+              {/* Wraps instead of scrolling sideways: a narrow window would
+                  otherwise cut the line off, and reading code by dragging a
+                  horizontal bar is worse than reading it on two lines. */}
+              <div className="code break-words whitespace-pre-wrap">
                 {marker} <Code tokens={coloured?.[i]} plain={line.content} />
               </div>
             </div>

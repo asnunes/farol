@@ -3,7 +3,12 @@ import { CopyPath } from "@/review/CopyPath";
 import { splitPath } from "@/lib/path";
 import type { FileView } from "@/api";
 
-/** The file being read: the tick on the left, the path, the churn on the right. */
+/** The file being read: the tick on the left, the path, the churn on the right.
+ *
+ * Sticks to the top of the pane while the file scrolls under it, so marking a
+ * file read never means scrolling back up to find the box. The block band above
+ * it does not stick: it is read once, at the start of the block, and pinning it
+ * would spend the top of the screen on prose the reader has already finished. */
 export function FileHeader({
   file,
   onToggleViewed,
@@ -11,7 +16,7 @@ export function FileHeader({
   const { dir, name } = splitPath(file.path);
 
   return (
-    <div className="filehead flex items-center justify-between gap-4 border-b border-rule bg-surface px-6 py-2.5">
+    <div className="filehead sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-rule bg-surface px-6 py-2.5">
       <div className="left flex min-w-0 items-center gap-3">
         <button
           className="markbox grid size-5 shrink-0 cursor-pointer place-items-center rounded border border-rule-strong text-xs text-transparent transition-colors hover:border-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none aria-pressed:border-accent aria-pressed:bg-accent aria-pressed:text-surface"
