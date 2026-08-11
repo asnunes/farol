@@ -160,3 +160,10 @@
     font-style: var(--shiki-dark-font-style, normal);
   }
 }
+
+/* The lines a note is about. A rail rather than a background, because added and
+   removed already own the background of a row, and it runs on into the note
+   itself so the span and its prose read as one thing. */
+.noted {
+  box-shadow: inset 3px 0 0 var(--farol-note-rule);
+}
