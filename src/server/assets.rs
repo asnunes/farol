@@ -54,6 +54,7 @@ fn mime_for(path: &str) -> &'static str {
         Some("css") => "text/css; charset=utf-8",
         Some("json") => "application/json",
         Some("svg") => "image/svg+xml",
+        Some("png") => "image/png",
         Some("woff2") => "font/woff2",
         _ => "application/octet-stream",
     }
@@ -74,12 +75,17 @@ mod tests {
         assert_eq!(mime_for("data.json"), "application/json");
         assert_eq!(mime_for("icon.svg"), "image/svg+xml");
         assert_eq!(mime_for("font.woff2"), "font/woff2");
+
+        // The tab icon. Handed over as bytes, a browser declines to use it and
+        // falls back to asking for /favicon.ico, which the single-page
+        // fallback answers with the page itself.
+        assert_eq!(mime_for("favicon.png"), "image/png");
     }
 
     #[test]
     fn anything_unrecognised_is_handed_over_as_bytes() {
-        assert_eq!(mime_for("favicon.png"), "application/octet-stream");
         assert_eq!(mime_for("LICENSE"), "application/octet-stream");
+        assert_eq!(mime_for("notes.txt"), "application/octet-stream");
     }
 
     #[test]

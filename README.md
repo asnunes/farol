@@ -1,6 +1,10 @@
-# farol
+<p align="center">
+  <img src="docs/logo.png" alt="farol" width="420">
+</p>
 
-Read a branch in the order the person who wrote it would walk you through.
+<p align="center">
+  Read a branch in the order the person who wrote it would walk you through.
+</p>
 
 Every automated reviewer today works post-hoc: it receives a diff and tries to
 reconstruct intent by reverse engineering. The session that implemented the
