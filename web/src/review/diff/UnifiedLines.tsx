@@ -2,12 +2,13 @@ import { cn } from "@/lib/utils";
 import { Code } from "./Code";
 import { LineNotes } from "./LineNotes";
 import { marker, notedBy, notesAt } from "./line";
+import type { Range } from "./intraline";
 import type { Token } from "@/highlight/tokens";
 import type { FileView, Hunk } from "@/api";
 
 /** One line under another, the way a diff is written down: removals first,
  * then the additions that replaced them. */
-export function UnifiedLines({ hunk, file, coloured }: UnifiedLinesProps) {
+export function UnifiedLines({ hunk, file, coloured, marks }: UnifiedLinesProps) {
   return hunk.lines.map((line, i) => (
     <div key={i}>
       <div
@@ -25,7 +26,7 @@ export function UnifiedLines({ hunk, file, coloured }: UnifiedLinesProps) {
             cut the line off, and reading code by dragging a horizontal bar is
             worse than reading it on two lines. */}
         <div className="code break-words whitespace-pre-wrap">
-          {marker(line)} <Code tokens={coloured?.[i]} plain={line.content} />
+          {marker(line)} <Code tokens={coloured?.[i]} plain={line.content} marks={marks[i]} />
         </div>
       </div>
       <LineNotes notes={notesAt(file, line)} file={file} />
@@ -37,4 +38,5 @@ type UnifiedLinesProps = {
   hunk: Hunk;
   file: FileView;
   coloured: Token[][] | null;
+  marks: (Range[] | undefined)[];
 };

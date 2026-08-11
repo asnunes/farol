@@ -51,8 +51,10 @@
   --farol-accent: #96690f;
   --farol-accent-dim: #efe2c4;
   --farol-add-bg: #e3f2e8;
+  --farol-add-strong: #b7e3c8;
   --farol-add-ink: #1e6440;
   --farol-del-bg: #fbe7e7;
+  --farol-del-strong: #f5c2c2;
   --farol-del-ink: #9b2f2f;
   --farol-note-bg: #faf4e6;
   --farol-note-rule: #dcc48a;
@@ -74,8 +76,10 @@
     --farol-accent: #e3b23c;
     --farol-accent-dim: #3a2f16;
     --farol-add-bg: #16301f;
+    --farol-add-strong: #2a6440;
     --farol-add-ink: #78c79a;
     --farol-del-bg: #3a1d1d;
+    --farol-del-strong: #7a3030;
     --farol-del-ink: #e38b8b;
     --farol-note-bg: #241e12;
     --farol-note-rule: #574521;
@@ -174,4 +178,19 @@
    itself so the span and its prose read as one thing. */
 .noted {
   box-shadow: inset 3px 0 0 var(--farol-note-rule);
+}
+
+/* What changed inside a line, when a removal and an addition are the same line
+   edited. A deeper wash of the colour the row already carries, so it reads as
+   more of the same signal rather than as a fourth one.
+
+   No rounding: a mark rarely lands on one span, because the grammar cuts the
+   line wherever a token ends, and rounded corners on every piece would notch
+   the mark wherever the two segmentations disagree. */
+.changed {
+  background: var(--farol-del-strong);
+}
+
+.add .changed {
+  background: var(--farol-add-strong);
 }

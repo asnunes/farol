@@ -4,11 +4,12 @@ import { Code } from "./Code";
 import { LineNotes } from "./LineNotes";
 import { marker, notedBy, notesAt } from "./line";
 import { splitRows } from "./split";
+import type { Range } from "./intraline";
 import type { Token } from "@/highlight/tokens";
 import type { FileView, Hunk } from "@/api";
 
 /** The old side and the new one, facing each other. */
-export function SplitLines({ hunk, file, coloured }: SplitLinesProps) {
+export function SplitLines({ hunk, file, coloured, marks }: SplitLinesProps) {
   const rows = useMemo(() => splitRows(hunk.lines), [hunk]);
 
   return rows.map((row, i) => {
@@ -20,8 +21,8 @@ export function SplitLines({ hunk, file, coloured }: SplitLinesProps) {
     return (
       <div key={i}>
         <div className={cn("row split-row", line && notedBy(file, line) && "noted")}>
-          <Side index={row.left} hunk={hunk} coloured={coloured} side="old" />
-          <Side index={row.right} hunk={hunk} coloured={coloured} side="new" />
+          <Side index={row.left} hunk={hunk} coloured={coloured} marks={marks} side="old" />
+          <Side index={row.right} hunk={hunk} coloured={coloured} marks={marks} side="new" />
         </div>
         {line && <LineNotes notes={notesAt(file, line)} file={file} />}
       </div>
@@ -34,7 +35,7 @@ export function SplitLines({ hunk, file, coloured }: SplitLinesProps) {
  *
  * The two cells are separate grid children so the columns line up across every
  * row of the hunk, however the lines wrap. */
-function Side({ index, hunk, coloured, side }: SideProps) {
+function Side({ index, hunk, coloured, marks, side }: SideProps) {
   if (index === null) {
     return (
       <>
@@ -58,7 +59,7 @@ function Side({ index, hunk, coloured, side }: SideProps) {
         {side === "old" ? line.old_number : line.new_number}
       </div>
       <div className={cn("code break-words whitespace-pre-wrap", tint)}>
-        {marker(line)} <Code tokens={coloured?.[index]} plain={line.content} />
+        {marker(line)} <Code tokens={coloured?.[index]} plain={line.content} marks={marks[index]} />
       </div>
     </>
   );
@@ -68,11 +69,13 @@ type SplitLinesProps = {
   hunk: Hunk;
   file: FileView;
   coloured: Token[][] | null;
+  marks: (Range[] | undefined)[];
 };
 
 type SideProps = {
   index: number | null;
   hunk: Hunk;
   coloured: Token[][] | null;
+  marks: (Range[] | undefined)[];
   side: "old" | "new";
 };

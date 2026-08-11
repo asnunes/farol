@@ -1,5 +1,7 @@
 import { useMemo } from "react";
 import { colourHunk } from "@/highlight/tokens";
+import { changedRanges, type Range } from "./intraline";
+import { splitRows } from "./split";
 import { SplitLines } from "./SplitLines";
 import { UnifiedLines } from "./UnifiedLines";
 import type { Tokenize } from "@/highlight/tokens";
@@ -15,6 +17,21 @@ export function DiffHunk({ hunk, file, tokenize, view }: DiffHunkProps) {
     [hunk, tokenize],
   );
 
+  // What changed inside each line, for the rows where a removal and an
+  // addition face each other. The pairing is the one the split layout uses, so
+  // both layouts mark the same words.
+  const marks = useMemo(() => {
+    const found: (Range[] | undefined)[] = [];
+    for (const row of splitRows(hunk.lines)) {
+      if (row.left === null || row.right === null) continue;
+      const changed = changedRanges(hunk.lines[row.left].content, hunk.lines[row.right].content);
+      if (!changed) continue;
+      found[row.left] = changed.before;
+      found[row.right] = changed.after;
+    }
+    return found;
+  }, [hunk]);
+
   const Lines = view === "split" ? SplitLines : UnifiedLines;
 
   return (
@@ -22,7 +39,7 @@ export function DiffHunk({ hunk, file, tokenize, view }: DiffHunkProps) {
       <div className="hunk bg-sunken px-6 py-1 text-xs text-faint">
         @@ -{hunk.old_start},{hunk.old_lines} +{hunk.new_start},{hunk.new_lines} @@
       </div>
-      <Lines hunk={hunk} file={file} coloured={coloured} />
+      <Lines hunk={hunk} file={file} coloured={coloured} marks={marks} />
     </div>
   );
 }
