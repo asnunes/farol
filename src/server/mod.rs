@@ -6,6 +6,7 @@
 
 mod assets;
 pub mod detach;
+mod health;
 mod registry;
 mod routes;
 mod server_list;
@@ -108,8 +109,6 @@ async fn serve(config: ServeConfig) -> Result<()> {
         watch::spawn(config.git_dir, changes);
     }
 
-    let app = routes::router(state);
-
     let listener = bind(config.port).await?;
     let addr = listener
         .local_addr()
@@ -126,6 +125,10 @@ async fn serve(config: ServeConfig) -> Result<()> {
         base,
     };
     registry.register(&entry)?;
+
+    // The same entry the registry holds, so that asking the server who it is
+    // and asking the file who it should be can be compared.
+    let app = routes::router(state, entry.clone());
 
     println!("farol is reading at {url}");
     if config.open_browser {

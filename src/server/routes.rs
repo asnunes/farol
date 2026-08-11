@@ -16,19 +16,30 @@ use serde::Deserialize;
 
 use tokio::sync::broadcast;
 
+use super::registry::ServerEntry;
 use super::{AppState, assets, view};
 use crate::error::Error;
 
 /// The whole HTTP surface. Everything it serves arrives injected, so the routes
 /// can be exercised over fakes with nothing listening on a port.
-pub(super) fn router(state: Arc<AppState>) -> Router {
+pub(super) fn router(state: Arc<AppState>, identity: ServerEntry) -> Router {
     Router::new()
         .route("/api/review", get(review))
         .route("/api/file", get(file))
         .route("/api/viewed", post(viewed))
         .route("/api/watch", get(watch))
+        .route("/health", get(move || health(identity.clone())))
         .fallback(assets::handler)
         .with_state(state)
+}
+
+/// Who is answering on this port.
+///
+/// It carries the whole entry rather than an empty 200 because a port that was
+/// let go and taken by another server answers just as readily — what settles it
+/// is the process id coming back the same.
+async fn health(identity: ServerEntry) -> impl IntoResponse {
+    Json(identity)
 }
 
 /// Everything the screen needs to draw itself, in one call.
@@ -123,6 +134,18 @@ pub(super) mod tests {
     use std::sync::Arc;
     use tower::ServiceExt as _;
 
+    /// Who the server would say it is. Nothing under test here asks, but the
+    /// router carries it.
+    fn identity() -> ServerEntry {
+        ServerEntry {
+            port: 4600,
+            pid: std::process::id(),
+            repo: std::path::PathBuf::from("/repo"),
+            branch: "feature/x".into(),
+            base: "main".into(),
+        }
+    }
+
     fn mapped() -> ReviewMap {
         let mut map = ReviewMap::new("feature/x", "main", "head");
         map.add_block(&slug("core"), "The change", "why it exists", Position::End)
@@ -197,7 +220,7 @@ pub(super) mod tests {
         };
         let (state, _) = AppState::new(use_cases, mapped());
 
-        let response = router(state)
+        let response = router(state, identity())
             .oneshot(
                 Request::builder()
                     .uri("/api/review")

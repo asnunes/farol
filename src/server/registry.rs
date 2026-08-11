@@ -15,6 +15,7 @@ use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 
+use super::health;
 use crate::error::{Error, Result};
 use crate::shared::paths::write_json;
 
@@ -113,10 +114,31 @@ impl Registry {
         Ok(entries)
     }
 
-    /// A server already showing this branch of this repository, if there is one.
-    pub fn serving(&self, repo: &Path, branch: &str) -> Result<Option<ServerEntry>> {
+    /// The servers that are actually serving.
+    ///
+    /// `running` believes the file as long as the process is there; this asks
+    /// the port. They disagree whenever a server stopped serving without
+    /// ending — which it does when it is asked to stop while a browser holds
+    /// the change stream open.
+    ///
+    /// An entry that fails here is left on disk on purpose. It is not reported
+    /// as a running review, but `stop` still has to be able to reach it, and
+    /// deleting the file would leave the process with nothing pointing at it.
+    pub fn answering(&self) -> Result<Vec<ServerEntry>> {
         Ok(self
             .running()?
+            .into_iter()
+            .filter(health::answers)
+            .collect())
+    }
+
+    /// A server already showing this branch of this repository, if there is one.
+    ///
+    /// Answering, not merely registered: handing back a port that stopped
+    /// serving would send the reviewer to an empty tab.
+    pub fn serving(&self, repo: &Path, branch: &str) -> Result<Option<ServerEntry>> {
+        Ok(self
+            .answering()?
             .into_iter()
             .find(|e| e.repo == repo && e.branch == branch))
     }
@@ -264,8 +286,14 @@ mod tests {
 
     #[test]
     fn a_repository_and_branch_find_the_server_already_showing_them() {
+        // Answering, so something has to be there to answer: `serving` is what
+        // hands a second `farol serve` back the review already open, and a port
+        // that stopped serving must not be handed to anybody.
         let (_dir, registry) = registry();
-        registry.register(&entry(4600)).unwrap();
+        let port = super::health::tests::server_answering(Some(entry(4600)));
+        let mut open = entry(port);
+        open.pid = std::process::id();
+        registry.register(&open).unwrap();
 
         assert!(
             registry

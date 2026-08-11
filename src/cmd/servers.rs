@@ -38,7 +38,9 @@ impl ServersArgs {
 
         match self.action {
             None | Some(ServersAction::List) => {
-                print!("{}", ServerList(&registry.running()?));
+                // Answering, not registered: the list is worth nothing if it
+                // reports a review that is not there any more.
+                print!("{}", ServerList(&registry.answering()?));
                 Ok(())
             }
             Some(ServersAction::Stop(stop)) => stop.run(&registry),

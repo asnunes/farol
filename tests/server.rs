@@ -629,3 +629,53 @@ fn a_server_stopped_from_outside_takes_itself_off_the_list() {
         "it should have taken its own entry out on the way"
     );
 }
+
+#[test]
+fn a_server_that_stopped_answering_stops_being_listed() {
+    // Alive is not the same as serving. A server can stop listening without
+    // ending — freezing it is the cheapest way to arrange that — and until the
+    // list asks the port, it goes on reporting a review nobody can open.
+    let d = Detached::new();
+    let pid = d.pid_on(d.port);
+    assert!(d.repo.ok(&["servers"]).contains(&d.port.to_string()));
+
+    Command::new("kill")
+        .args(["-STOP", &pid.to_string()])
+        .status()
+        .expect("kill runs");
+
+    let list = d.repo.ok(&["servers"]);
+
+    assert!(
+        running(pid),
+        "it is still a process, it just does not answer"
+    );
+    assert!(!list.contains(&d.port.to_string()), "{list}");
+
+    // And it is still reachable, because the entry was left where `stop` looks:
+    // a list that hides a server must not also strand it.
+    Command::new("kill")
+        .args(["-CONT", &pid.to_string()])
+        .status()
+        .expect("kill runs");
+    d.repo.ok(&["servers", "stop", &d.port.to_string()]);
+    assert!(!running(pid));
+}
+
+#[test]
+fn the_health_route_says_which_server_is_answering() {
+    // What the list compares against. Without the process id, a port taken by
+    // somebody else's review would pass for yours.
+    let d = Detached::new();
+
+    let answered = Command::new("curl")
+        .args(["-sf", &format!("http://127.0.0.1:{}/health", d.port)])
+        .output()
+        .expect("curl runs");
+    let health: Value =
+        serde_json::from_slice(&answered.stdout).expect("health should answer json");
+
+    assert_eq!(health["port"], d.port);
+    assert_eq!(health["pid"], d.pid_on(d.port));
+    assert_eq!(health["branch"], "feature/x");
+}
