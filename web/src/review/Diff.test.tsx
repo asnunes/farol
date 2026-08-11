@@ -59,7 +59,7 @@ describe("the diff on screen", () => {
           { content: line, style: { "--shiki-light": "#7d4fae", "--shiki-dark": "#c39ae8" } },
         ]);
 
-    const { container } = render(<Diff diff={diff()} file={file()} />);
+    const { container } = render(<Diff diff={diff()} file={file()} view="unified" />);
 
     const tokens = container.querySelectorAll(".tok");
     expect(tokens).toHaveLength(2);
@@ -72,7 +72,7 @@ describe("the diff on screen", () => {
     // stays here. Neither is an error on screen.
     tokenizer = null;
 
-    const { container } = render(<Diff diff={diff()} file={file()} />);
+    const { container } = render(<Diff diff={diff()} file={file()} view="unified" />);
 
     expect(container.textContent).toContain("fn main() {}");
     expect(container.querySelectorAll(".tok")).toHaveLength(0);

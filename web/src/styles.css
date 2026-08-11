@@ -146,6 +146,14 @@
   grid-template-columns: 4rem minmax(0, 1fr);
 }
 
+/* Side by side: number and code twice over. The two halves are cells of one
+   grid rather than two stacked lists, so a line that wraps on one side pushes
+   its counterpart down with it and the rows stay facing each other. */
+@utility split-row {
+  display: grid;
+  grid-template-columns: 3.5rem minmax(0, 1fr) 3.5rem minmax(0, 1fr);
+}
+
 /* Syntax colour arrives on the token itself, as one custom property per theme,
    so the palette follows the light and dark switch without anything being
    tokenized a second time. */
