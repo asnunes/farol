@@ -21,7 +21,7 @@ knowing why it is in front of you. By hand that was never worth doing, and the
 people who could explain a change best were the ones with the least time left to
 do it.
 
-Today a great deal of code is written with AI, which is what makes it practical:
+A lot of code is written with AI now, which is what makes it practical:
 farol's CLI is driven by the session doing the implementation, so the reasons
 are recorded as the decisions are taken.
 
