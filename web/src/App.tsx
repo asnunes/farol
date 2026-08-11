@@ -9,7 +9,7 @@ import { Sidebar } from "@/review/Sidebar";
 import { BlockBar } from "@/review/BlockBar";
 import { FileHeader } from "@/review/FileHeader";
 import { FileNote } from "@/review/FileNote";
-import { Diff } from "@/review/Diff";
+import { Diff } from "@/review/diff/Diff";
 import { KeyBar } from "@/review/KeyBar";
 import { HelpDialog } from "@/review/HelpDialog";
 import { Unmapped } from "@/review/Unmapped";
