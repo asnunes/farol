@@ -23,9 +23,11 @@ do it.
 
 Today a great deal of code is written with AI, which is what makes it practical:
 farol's CLI is driven by the session doing the implementation, so the reasons
-are recorded as the decisions are taken. It works in both directions, for a
-reviewer who did not write the change and for the author reading back what a
-session just built, before a pull request exists and before anything is pushed.
+are recorded as the decisions are taken.
+
+The same works on your own branch. Hand a feature to a session, and when the
+work is done, open farol and read the change back in the session's order, with
+the reasons attached.
 
 ## Using it
 
