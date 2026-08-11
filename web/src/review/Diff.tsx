@@ -51,6 +51,12 @@ function DiffHunk({
         const notes = file.lineNotes.filter(
           (n) => line.new_number !== null && n.to === line.new_number,
         );
+        // The lines the note is about, marked so the span is visible before the
+        // note explains it. The range printed on the note says which lines it
+        // covers, but nobody counts line numbers to find them.
+        const noted = file.lineNotes.some(
+          (n) => line.new_number !== null && n.from <= line.new_number && line.new_number <= n.to,
+        );
         const marker = line.kind === "added" ? "+" : line.kind === "removed" ? "−" : " ";
 
         return (
@@ -60,6 +66,7 @@ function DiffHunk({
                 "row diff-row",
                 line.kind === "added" && "add bg-add-bg text-add-ink",
                 line.kind === "removed" && "del bg-del-bg text-del-ink",
+                noted && "noted",
               )}
             >
               <div className="ln shrink-0 pr-3 text-right text-faint select-none">
@@ -72,7 +79,7 @@ function DiffHunk({
             {notes.map((n, j) => (
               <div
                 key={j}
-                className="note border-y border-note-rule bg-note-bg py-2 pr-6 pl-16 font-serif text-[0.9375rem] leading-relaxed text-ink-soft"
+                className="note noted border-b border-note-rule bg-note-bg py-2 pr-6 pl-16 font-serif text-[0.9375rem] leading-relaxed text-ink-soft"
               >
                 <span className="lbl mr-2 font-mono text-xs text-accent">
                   {n.from}–{n.to}
