@@ -1,11 +1,5 @@
 import type { BlockView } from "@/api";
 
-type BlockBarProps = {
-  block: BlockView;
-  number: number;
-  total: number;
-};
-
 /** The band above the diff: which block you are in and why it exists. */
 export function BlockBar({
   block,
@@ -26,3 +20,9 @@ export function BlockBar({
     </div>
   );
 }
+
+type BlockBarProps = {
+  block: BlockView;
+  number: number;
+  total: number;
+};

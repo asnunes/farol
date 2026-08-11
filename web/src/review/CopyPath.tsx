@@ -5,8 +5,6 @@ import { Check, Copy } from "lucide-react";
  * gone before anyone wonders whether it is about the copy they just made. */
 const CONFIRM_FOR = 1500;
 
-type CopyPathProps = { path: string };
-
 /** Copy a path to the clipboard, for pasting into a terminal or a message.
  *
  * The tick appears only after the write came back: confirming a copy that did
@@ -42,3 +40,5 @@ export function CopyPath({ path }: CopyPathProps) {
     </button>
   );
 }
+
+type CopyPathProps = { path: string };

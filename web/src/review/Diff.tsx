@@ -4,8 +4,6 @@ import { colourHunk, type Token, type Tokenize } from "@/highlight/tokens";
 import { useHighlight } from "@/hooks/useHighlight";
 import type { FileDiff, FileView, Hunk } from "@/api";
 
-type DiffProps = { diff: FileDiff; file: FileView };
-
 /** The code itself, with the session's line notes beside the lines they are
  * about. */
 export function Diff({ diff, file }: DiffProps) {
@@ -29,12 +27,6 @@ export function Diff({ diff, file }: DiffProps) {
     </div>
   );
 }
-
-type DiffHunkProps = {
-  hunk: Hunk;
-  file: FileView;
-  tokenize: Tokenize | null;
-};
 
 function DiffHunk({
   hunk,
@@ -96,8 +88,6 @@ function DiffHunk({
   );
 }
 
-type CodeProps = { tokens?: Token[]; plain: string };
-
 /** The line, coloured if its grammar has arrived and plain until then. The
  * palette for both themes rides on the token as custom properties, so the
  * stylesheet decides which one applies and nothing is tokenized twice. */
@@ -114,3 +104,13 @@ function Code({ tokens, plain }: CodeProps) {
     </>
   );
 }
+
+type DiffProps = { diff: FileDiff; file: FileView };
+
+type DiffHunkProps = {
+  hunk: Hunk;
+  file: FileView;
+  tokenize: Tokenize | null;
+};
+
+type CodeProps = { tokens?: Token[]; plain: string };

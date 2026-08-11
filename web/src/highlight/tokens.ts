@@ -1,13 +1,5 @@
 import type { DiffLine, Hunk } from "@/api";
 
-/** A run of code that shares one colour. `style` carries both palettes at once,
- * as custom properties, so switching theme is a CSS matter and nothing is
- * tokenized twice. */
-export type Token = { content: string; style?: Record<string, string> };
-
-/** Turns a block of code into one array of tokens per line. */
-export type Tokenize = (code: string) => Token[][];
-
 /** Colour the two sides of a hunk and hand each row the tokens for its line.
  *
  * A whole side at a time, never line by line: a tokenizer carries state across
@@ -42,3 +34,11 @@ export function colourHunk(hunk: Hunk, tokenize: Tokenize): Token[][] {
     return row;
   });
 }
+
+/** A run of code that shares one colour. `style` carries both palettes at once,
+ * as custom properties, so switching theme is a CSS matter and nothing is
+ * tokenized twice. */
+export type Token = { content: string; style?: Record<string, string> };
+
+/** Turns a block of code into one array of tokens per line. */
+export type Tokenize = (code: string) => Token[][];

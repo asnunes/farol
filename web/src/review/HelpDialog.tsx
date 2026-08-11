@@ -13,11 +13,6 @@ const KEYS: [string, string][] = [
   ["?", "this list"],
 ];
 
-type HelpDialogProps = {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-};
-
 export function HelpDialog({
   open,
   onOpenChange,
@@ -40,3 +35,8 @@ export function HelpDialog({
     </Dialog>
   );
 }
+
+type HelpDialogProps = {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+};

@@ -2,12 +2,6 @@ import { cn } from "@/lib/utils";
 import { FileRow } from "./FileRow";
 import type { BlockView, ReviewView } from "@/api";
 
-type SidebarProps = {
-  review: ReviewView;
-  current: string | null;
-  onPick: (path: string) => void;
-};
-
 /** Navigation only, deliberately: no prose here, or the reader would try to
  * read the map instead of the code. */
 export function Sidebar({
@@ -50,13 +44,6 @@ export function Sidebar({
     </aside>
   );
 }
-
-type BlockProps = {
-  block: BlockView;
-  number: number;
-  current: string | null;
-  onPick: (path: string) => void;
-};
 
 function Block({
   block,
@@ -102,3 +89,16 @@ function Block({
     </section>
   );
 }
+
+type SidebarProps = {
+  review: ReviewView;
+  current: string | null;
+  onPick: (path: string) => void;
+};
+
+type BlockProps = {
+  block: BlockView;
+  number: number;
+  current: string | null;
+  onPick: (path: string) => void;
+};

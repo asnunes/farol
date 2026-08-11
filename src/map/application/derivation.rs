@@ -13,12 +13,6 @@ use crate::diff::application::ReviewScope;
 use crate::error::Result;
 use crate::map::domain::{MapRepository, ReviewMap, WORKING};
 
-pub struct Derived {
-    pub map: ReviewMap,
-    /// True when this call created the version rather than finding it.
-    pub created: bool,
-}
-
 #[derive(Clone)]
 pub struct MapDerivation {
     versions: MapVersions,
@@ -85,6 +79,12 @@ impl MapDerivation {
 
         Ok(Derived { map, created: true })
     }
+}
+
+pub struct Derived {
+    pub map: ReviewMap,
+    /// True when this call created the version rather than finding it.
+    pub created: bool,
 }
 
 #[cfg(test)]

@@ -1,5 +1,3 @@
-type FileNoteProps = { children: React.ReactNode };
-
 /** Prose written by the session, in serif because that is what serif means
  * here: someone wrote this for you. */
 export function FileNote({ children }: FileNoteProps) {
@@ -9,3 +7,5 @@ export function FileNote({ children }: FileNoteProps) {
     </div>
   );
 }
+
+type FileNoteProps = { children: React.ReactNode };

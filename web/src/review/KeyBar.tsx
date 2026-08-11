@@ -21,8 +21,6 @@ export function KeyBar() {
   );
 }
 
-type KeyProps = { children: React.ReactNode };
-
 function Key({ children }: KeyProps) {
   return (
     <kbd className="mr-1 rounded border border-rule-strong bg-sunken px-1.5 py-0.5 font-mono text-[0.6875rem] text-ink-soft">
@@ -30,3 +28,5 @@ function Key({ children }: KeyProps) {
     </kbd>
   );
 }
+
+type KeyProps = { children: React.ReactNode };
