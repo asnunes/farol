@@ -1,4 +1,5 @@
 import { Badge } from "@/components/ui/badge";
+import { CopyPath } from "@/review/CopyPath";
 import { splitPath } from "@/lib/path";
 import type { FileView } from "@/api";
 
@@ -28,6 +29,10 @@ export function FileHeader({
           <span className="dir font-normal text-faint">{dir}</span>
           {name}
         </div>
+
+        {/* Keyed by path so moving to another file cannot inherit the tick from
+            the one before it. */}
+        <CopyPath key={file.path} path={file.path} />
 
         {/* Only worth showing when the file belongs to more than one block —
             otherwise the tag says what the block band already said. */}
