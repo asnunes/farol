@@ -13,14 +13,21 @@ import type { Token, Tokenize } from "./tokens";
  * front of you needs. */
 
 let core: Promise<HighlighterCore> | null = null;
+let built: HighlighterCore | null = null;
 const loaded = new Map<string, Promise<void>>();
 
+/** The highlighter once it exists, and a promise for it before that.
+ *
+ * `built` is filled in as part of building, not by a callback hung off the
+ * promise afterwards. Hanging one on means the first render after a grammar
+ * arrives still finds nothing — which showed up exactly as the code appearing
+ * plain until the reader moved to another file and came back. */
 function highlighter(): Promise<HighlighterCore> {
   core ??= createHighlighterCore({
     langs: [],
     themes: [light, dark],
     engine: createJavaScriptRegexEngine(),
-  });
+  }).then((made) => (built = made));
   return core;
 }
 
@@ -52,7 +59,7 @@ export async function load(id: string): Promise<void> {
  * and awaiting per hunk would make the code arrive after the page. Loading is
  * the caller's business, and until it has finished the file is drawn plain. */
 export function tokenizerFor(id: string): Tokenize | null {
-  const engine = ready();
+  const engine = built;
   if (!engine || !engine.getLoadedLanguages().includes(id)) return null;
 
   return (code: string) =>
@@ -61,11 +68,4 @@ export function tokenizerFor(id: string): Tokenize | null {
       .tokens.map((line) =>
         line.map((token): Token => ({ content: token.content, style: token.htmlStyle })),
       );
-}
-
-/** The highlighter if it has finished being built, without waiting for it. */
-let built: HighlighterCore | null = null;
-function ready(): HighlighterCore | null {
-  if (!built && core) void core.then((h) => (built = h));
-  return built;
 }
