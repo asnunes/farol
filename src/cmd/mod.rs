@@ -29,7 +29,7 @@ use crate::map::presentation::OrphanReport;
 #[derive(Parser)]
 #[command(
     name = "farol",
-    about = "Read a branch in the order the person who wrote it would walk you through.",
+    about = "A walkthrough, not a diff: the author's order, and the reasons behind it.",
     version
 )]
 pub struct Cli {
