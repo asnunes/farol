@@ -1,9 +1,14 @@
+import { useMemo } from "react";
 import { cn } from "@/lib/utils";
+import { colourHunk, type Token, type Tokenize } from "@/highlight/tokens";
+import { useHighlight } from "@/hooks/useHighlight";
 import type { FileDiff, FileView, Hunk } from "@/api";
 
 /** The code itself, with the session's line notes beside the lines they are
  * about. */
 export function Diff({ diff, file }: { diff: FileDiff; file: FileView }) {
+  const tokenize = useHighlight(diff.binary ? null : diff.path);
+
   if (diff.binary) {
     // Nothing to read line by line, so say that rather than show an empty pane
     // the reviewer would take for a loading failure.
@@ -17,13 +22,28 @@ export function Diff({ diff, file }: { diff: FileDiff; file: FileView }) {
   return (
     <div className="diff pb-24 font-mono text-[0.8125rem] leading-relaxed">
       {diff.hunks.map((hunk, i) => (
-        <DiffHunk key={i} hunk={hunk} file={file} />
+        <DiffHunk key={i} hunk={hunk} file={file} tokenize={tokenize} />
       ))}
     </div>
   );
 }
 
-function DiffHunk({ hunk, file }: { hunk: Hunk; file: FileView }) {
+function DiffHunk({
+  hunk,
+  file,
+  tokenize,
+}: {
+  hunk: Hunk;
+  file: FileView;
+  tokenize: Tokenize | null;
+}) {
+  // Both sides of the hunk go through the tokenizer once, not once per render:
+  // navigation redraws this on every keystroke.
+  const coloured = useMemo(
+    () => (tokenize ? colourHunk(hunk, tokenize) : null),
+    [hunk, tokenize],
+  );
+
   return (
     <div>
       <div className="hunk bg-sunken px-6 py-1 text-xs text-faint">
@@ -50,7 +70,7 @@ function DiffHunk({ hunk, file }: { hunk: Hunk; file: FileView }) {
                 {line.new_number ?? line.old_number ?? ""}
               </div>
               <div className="code overflow-x-auto whitespace-pre">
-                {marker} {line.content}
+                {marker} <Code tokens={coloured?.[i]} plain={line.content} />
               </div>
             </div>
             {notes.map((n, j) => (
@@ -69,5 +89,22 @@ function DiffHunk({ hunk, file }: { hunk: Hunk; file: FileView }) {
         );
       })}
     </div>
+  );
+}
+
+/** The line, coloured if its grammar has arrived and plain until then. The
+ * palette for both themes rides on the token as custom properties, so the
+ * stylesheet decides which one applies and nothing is tokenized twice. */
+function Code({ tokens, plain }: { tokens?: Token[]; plain: string }) {
+  if (!tokens) return <>{plain}</>;
+
+  return (
+    <>
+      {tokens.map((token, i) => (
+        <span key={i} className="tok" style={token.style}>
+          {token.content}
+        </span>
+      ))}
+    </>
   );
 }

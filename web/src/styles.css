@@ -145,3 +145,18 @@
   display: grid;
   grid-template-columns: 4rem minmax(0, 1fr);
 }
+
+/* Syntax colour arrives on the token itself, as one custom property per theme,
+   so the palette follows the light and dark switch without anything being
+   tokenized a second time. */
+.tok {
+  color: var(--shiki-light);
+  font-style: var(--shiki-light-font-style, normal);
+}
+
+@media (prefers-color-scheme: dark) {
+  .tok {
+    color: var(--shiki-dark);
+    font-style: var(--shiki-dark-font-style, normal);
+  }
+}
