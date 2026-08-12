@@ -5,7 +5,8 @@ import { useReview } from "@/hooks/useReview";
 import { useShortcuts } from "@/hooks/useShortcuts";
 import { HelpDialog } from "@/review/HelpDialog";
 import { KeyBar } from "@/review/KeyBar";
-import { Reading, scrollToFile } from "@/review/Reading";
+import { scrollToFile } from "@/lib/scroll";
+import { Reading } from "@/review/Reading";
 import { Sidebar } from "@/review/Sidebar";
 import { TopBar } from "@/review/TopBar";
 
