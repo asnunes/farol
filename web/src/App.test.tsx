@@ -161,6 +161,32 @@ describe("keyboard navigation", () => {
     await waitForReading("b.rs");
   });
 
+  it("the arrows walk the files the way j and k do", async () => {
+    // Both sets exist because the reader who knows the keys and the reader who
+    // is guessing are the same person on different days.
+    serve({ review: review() });
+    render(<App />);
+    await waitForReading("a.rs");
+
+    fireEvent.keyDown(window, { key: "ArrowDown" });
+    await waitForReading("b.rs");
+
+    fireEvent.keyDown(window, { key: "ArrowUp" });
+    await waitForReading("a.rs");
+  });
+
+  it("page down and page up move between blocks, the way ] and [ do", async () => {
+    serve({ review: review() });
+    render(<App />);
+    await waitForReading("a.rs");
+
+    fireEvent.keyDown(window, { key: "PageDown" });
+    await waitFor(() => expect(currentBlock()).toBe("The wiring"));
+
+    fireEvent.keyDown(window, { key: "PageUp" });
+    await waitFor(() => expect(currentBlock()).toBe("The change itself"));
+  });
+
   it("n skips to the next file that has not been read", async () => {
     const r = review();
     r.blocks[0].files[1].viewed = true; // b.rs already read
@@ -204,7 +230,18 @@ describe("marking read", () => {
     render(<App />);
     await waitForReading("a.rs");
 
-    fireEvent.keyDown(window, { key: "l" });
+    fireEvent.keyDown(window, { key: "e" });
+    await waitFor(() => expect(calls).toHaveLength(1));
+    expect(calls[0]).toEqual({ path: "src/a.rs", viewed: true });
+  });
+
+  it("Enter marks the file read, the way e does", async () => {
+    const calls = serve({ review: review() });
+    render(<App />);
+    await waitForReading("a.rs");
+
+    fireEvent.keyDown(window, { key: "Enter" });
+
     await waitFor(() => expect(calls).toHaveLength(1));
     expect(calls[0]).toEqual({ path: "src/a.rs", viewed: true });
   });
@@ -221,7 +258,7 @@ describe("marking read", () => {
     render(<App />);
     await waitForReading("a.rs");
 
-    fireEvent.click(screen.getByTitle("Mark as read — key l"));
+    fireEvent.click(screen.getByTitle("Mark as read — key e"));
     await waitFor(() => expect(calls).toHaveLength(1));
     expect(calls[0].viewed).toBe(false);
   });

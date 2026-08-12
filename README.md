@@ -70,8 +70,9 @@ lands inside the first file rather than on an index. Typography says where a
 text came from: serif is what the session wrote for you, monospace is code.
 
 `j` and `k` move between files in reading order, `n` jumps to the next unread
-one, `l` marks the current file read, `[` and `]` move between blocks, and `?`
-shows the keys.
+one, `e` marks the current file read, `[` and `]` move between blocks, and `?`
+shows the keys. The arrows, `Enter` and page up and down do the same, for
+whoever would rather not learn them.
 
 ## How it behaves
 
