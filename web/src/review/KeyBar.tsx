@@ -23,7 +23,7 @@ export function KeyBar() {
 
 function Key({ children }: KeyProps) {
   return (
-    <kbd className="mr-1 inline-grid h-[1.35rem] min-w-[1.35rem] place-items-center rounded border border-rule-strong bg-sunken px-1.5 font-mono text-[0.6875rem] text-ink-soft">
+    <kbd className="mr-1 inline-grid size-[1.35rem] place-items-center rounded border border-rule-strong bg-sunken font-mono text-[0.6875rem] text-ink-soft">
       {children}
     </kbd>
   );
