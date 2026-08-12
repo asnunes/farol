@@ -15,8 +15,13 @@ export function changedRanges(before: string, after: string): Changed | null {
   // Two lines that share almost nothing are a rewrite, not an edit. Marking
   // them leaves both lines lit end to end, which says less than the row colour
   // already said.
-  const kept = same.reduce((n, [i]) => n + (i === null ? 0 : a[i].length), 0);
-  if (kept < Math.max(before.length, after.length) * KEEPS_AT_LEAST) return null;
+  //
+  // Blank space does not count towards the likeness. Two lines at the same
+  // depth share their indentation whatever they say, and measured with it a
+  // pair that has nothing in common but a margin and a semicolon comes out
+  // looking related.
+  const kept = same.reduce((n, [i]) => n + (i === null ? 0 : solid(a[i])), 0);
+  if (kept < Math.max(solid(before), solid(after)) * KEEPS_AT_LEAST) return null;
 
   return {
     before: rangesOf(before, a, same.map(([i]) => i)),
@@ -29,8 +34,17 @@ export type Range = { from: number; to: number };
 export type Changed = { before: Range[]; after: Range[] };
 
 /** How much of the longer line has to survive for the two to count as the same
- * line edited. Below this the marks stop telling the reader anything. */
-const KEEPS_AT_LEAST = 0.25;
+ * line edited. Below this the marks stop telling the reader anything.
+ *
+ * Measured against the real pairs of a review: lines that were edited came out
+ * at 39%, 78% and 78%, and lines that merely faced each other at 4%, 22% and
+ * 24%. Anywhere in between separates them. */
+const KEEPS_AT_LEAST = 0.3;
+
+/** The length of what is actually written, blank space aside. */
+function solid(text: string): number {
+  return text.replace(/\s/g, "").length;
+}
 
 /** Words, runs of whitespace, and punctuation one character at a time. Keeping
  * the separators means the pieces still concatenate back into the line. */

@@ -17,24 +17,24 @@ export function DiffHunk({ hunk, file, tokenize, view }: DiffHunkProps) {
     [hunk, tokenize],
   );
 
-  // What changed inside a line, and only where one line was replaced by one
-  // line. In a longer run the third removal faces the third addition because
-  // they sit at the same position and for no other reason, so the words that
-  // differ are not the words that were edited, and the marks land on lines
-  // nobody rewrote.
+  // What changed inside each line, for every pair the layout puts face to
+  // face. Whether a pair is the same line edited or two lines that merely
+  // ended up at the same position is decided one pair at a time, by how much
+  // of the line survives.
   const marks = useMemo(() => {
     const found: (Range[] | undefined)[] = [];
 
     for (const segment of segments(hunk.lines)) {
       if ("context" in segment) continue;
-      if (segment.removed.length !== 1 || segment.added.length !== 1) continue;
 
-      const [before, after] = [segment.removed[0], segment.added[0]];
-      const changed = changedRanges(hunk.lines[before].content, hunk.lines[after].content);
-      if (!changed) continue;
+      for (let k = 0; k < Math.min(segment.removed.length, segment.added.length); k++) {
+        const [before, after] = [segment.removed[k], segment.added[k]];
+        const changed = changedRanges(hunk.lines[before].content, hunk.lines[after].content);
+        if (!changed) continue;
 
-      found[before] = changed.before;
-      found[after] = changed.after;
+        found[before] = changed.before;
+        found[after] = changed.after;
+      }
     }
 
     return found;

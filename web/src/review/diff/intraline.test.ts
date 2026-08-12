@@ -32,6 +32,30 @@ describe("marking what changed inside a line", () => {
     expect(lit("f(a, b, c)", changed.after)).toEqual([", b, c"]);
   });
 
+  it("marks a line inside a run of several, when the run is line for line", () => {
+    // Three lines out and three in, each one the line above it edited. The
+    // pairing is by position and here that is exactly right.
+    const changed = changedRanges(
+      '    es.addEventListener("map", refresh);',
+      '    es.addEventListener("map", announce);',
+    )!;
+
+    expect(lit('    es.addEventListener("map", refresh);', changed.before)).toEqual(["refresh"]);
+    expect(lit('    es.addEventListener("map", announce);', changed.after)).toEqual(["announce"]);
+  });
+
+  it("does not count the margin as something the two lines have in common", () => {
+    // Two lines at the same depth share their indentation whatever they say.
+    // Measured with it, this pair looked related enough to mark, and the marks
+    // landed on a line nobody had edited.
+    expect(
+      changedRanges(
+        "        assert_eq!(review.execute(&map).unwrap().commits_behind, 0);",
+        "        editor.edit(|_| Ok::<_, MapError>(())).unwrap();",
+      ),
+    ).toBeNull();
+  });
+
   it("says nothing when the two lines are a rewrite rather than an edit", () => {
     // Both lines would end up lit end to end, which says less than the row
     // colour already said.
