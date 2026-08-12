@@ -12,7 +12,6 @@ const KEYS: [string, string][] = [
   [";", "mark the current file read"],
   ["Enter", "the same"],
   ["[ / ]", "previous and next block"],
-  ["PageUp / PageDown", "the same"],
   ["?", "this list"],
 ];
 

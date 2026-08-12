@@ -53,15 +53,15 @@ export function useShortcuts({
           if (file) void toggleViewed(file.path, !file.viewed);
           break;
         }
+        // The page keys are left alone on purpose. They are the only way to
+        // scroll a long file by the screenful, and the brackets already move
+        // between blocks.
         case "[":
-        case "]":
-        case "PageUp":
-        case "PageDown": {
+        case "]": {
           e.preventDefault();
           const here = blockOf(review, current ?? "");
           if (!here) break;
-          const back = e.key === "[" || e.key === "PageUp";
-          const target = review.blocks[here.index + (back ? -1 : 1)];
+          const target = review.blocks[here.index + (e.key === "]" ? 1 : -1)];
           if (target?.files[0]) setCurrent(target.files[0].path);
           break;
         }

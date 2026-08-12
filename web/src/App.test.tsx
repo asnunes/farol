@@ -175,18 +175,6 @@ describe("keyboard navigation", () => {
     await waitForReading("a.rs");
   });
 
-  it("page down and page up move between blocks, the way ] and [ do", async () => {
-    serve({ review: review() });
-    render(<App />);
-    await waitForReading("a.rs");
-
-    fireEvent.keyDown(window, { key: "PageDown" });
-    await waitFor(() => expect(currentBlock()).toBe("The wiring"));
-
-    fireEvent.keyDown(window, { key: "PageUp" });
-    await waitFor(() => expect(currentBlock()).toBe("The change itself"));
-  });
-
   it("n skips to the next file that has not been read", async () => {
     const r = review();
     r.blocks[0].files[1].viewed = true; // b.rs already read
