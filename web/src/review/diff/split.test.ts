@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { splitRows } from "./split";
+import { segments, splitRows } from "./split";
 import type { DiffLine } from "@/api";
 
 function lines(...kinds: [DiffLine["kind"], string][]): DiffLine[] {
@@ -96,5 +96,29 @@ describe("laying a hunk out in two columns", () => {
     seen.delete(null);
 
     expect(seen.size).toBe(l.length);
+  });
+});
+
+describe("the segments a hunk is made of", () => {
+  it("keeps each context line on its own and gathers the change between them", () => {
+    const l = lines(
+      ["context", "a"],
+      ["removed", "b"],
+      ["added", "c"],
+      ["added", "d"],
+      ["context", "e"],
+    );
+
+    expect(segments(l)).toEqual([
+      { context: 0 },
+      { removed: [1], added: [2, 3] },
+      { context: 4 },
+    ]);
+  });
+
+  it("gathers a run that only adds, with nothing on the old side", () => {
+    const l = lines(["added", "a"], ["added", "b"]);
+
+    expect(segments(l)).toEqual([{ removed: [], added: [0, 1] }]);
   });
 });

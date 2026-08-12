@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { colourHunk } from "@/highlight/tokens";
 import { changedRanges, type Range } from "./intraline";
-import { splitRows } from "./split";
+import { segments } from "./split";
 import { SplitLines } from "./SplitLines";
 import { UnifiedLines } from "./UnifiedLines";
 import type { Tokenize } from "@/highlight/tokens";
@@ -17,18 +17,26 @@ export function DiffHunk({ hunk, file, tokenize, view }: DiffHunkProps) {
     [hunk, tokenize],
   );
 
-  // What changed inside each line, for the rows where a removal and an
-  // addition face each other. The pairing is the one the split layout uses, so
-  // both layouts mark the same words.
+  // What changed inside a line, and only where one line was replaced by one
+  // line. In a longer run the third removal faces the third addition because
+  // they sit at the same position and for no other reason, so the words that
+  // differ are not the words that were edited, and the marks land on lines
+  // nobody rewrote.
   const marks = useMemo(() => {
     const found: (Range[] | undefined)[] = [];
-    for (const row of splitRows(hunk.lines)) {
-      if (row.left === null || row.right === null) continue;
-      const changed = changedRanges(hunk.lines[row.left].content, hunk.lines[row.right].content);
+
+    for (const segment of segments(hunk.lines)) {
+      if ("context" in segment) continue;
+      if (segment.removed.length !== 1 || segment.added.length !== 1) continue;
+
+      const [before, after] = [segment.removed[0], segment.added[0]];
+      const changed = changedRanges(hunk.lines[before].content, hunk.lines[after].content);
       if (!changed) continue;
-      found[row.left] = changed.before;
-      found[row.right] = changed.after;
+
+      found[before] = changed.before;
+      found[after] = changed.after;
     }
+
     return found;
   }, [hunk]);
 

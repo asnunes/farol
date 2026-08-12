@@ -11,12 +11,29 @@ import type { DiffLine } from "@/api";
  * The rows carry indices into the hunk rather than the lines themselves,
  * because the tokens for the code are indexed the same way. */
 export function splitRows(lines: DiffLine[]): SplitRow[] {
-  const rows: SplitRow[] = [];
+  return segments(lines).flatMap((segment) => {
+    if ("context" in segment) return [{ left: segment.context, right: segment.context }];
+
+    const { removed, added } = segment;
+    return Array.from({ length: Math.max(removed.length, added.length) }, (_, k) => ({
+      left: removed[k] ?? null,
+      right: added[k] ?? null,
+    }));
+  });
+}
+
+/** A hunk as the reader meets it: single context lines, and runs of change
+ * between them.
+ *
+ * The runs are what both the layout and the word marks are built on, and one
+ * walk means the two cannot come to disagree about where a change begins. */
+export function segments(lines: DiffLine[]): Segment[] {
+  const found: Segment[] = [];
   let i = 0;
 
   while (i < lines.length) {
     if (lines[i].kind === "context") {
-      rows.push({ left: i, right: i });
+      found.push({ context: i });
       i++;
       continue;
     }
@@ -27,14 +44,13 @@ export function splitRows(lines: DiffLine[]): SplitRow[] {
       (lines[i].kind === "removed" ? removed : added).push(i);
       i++;
     }
-
-    for (let k = 0; k < Math.max(removed.length, added.length); k++) {
-      rows.push({ left: removed[k] ?? null, right: added[k] ?? null });
-    }
+    found.push({ removed, added });
   }
 
-  return rows;
+  return found;
 }
+
+export type Segment = { context: number } | { removed: number[]; added: number[] };
 
 /** One row of the two column layout: which line sits on each side, if any. */
 export type SplitRow = { left: number | null; right: number | null };
