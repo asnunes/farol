@@ -10,11 +10,14 @@ export function KeyBar() {
   return (
     <nav className="keybar col-span-full flex gap-5 border-t border-rule bg-surface px-5 py-1.5 font-sans text-xs text-muted">
       {SHORTCUTS.map(({ keys, what }) => (
-        <span key={what}>
+        // Centred rather than sitting on a baseline: a chip holding an icon
+        // and a chip holding a letter have different baselines inside them, and
+        // a row aligned that way comes out stepped.
+        <span key={what} className="flex items-center gap-1">
           {keys.map((key, i) => (
             <Key key={i}>{typeof key === "string" ? key : <key.Icon className="size-3" />}</Key>
           ))}
-          {what}
+          <span className="ml-0.5">{what}</span>
         </span>
       ))}
     </nav>
@@ -23,7 +26,7 @@ export function KeyBar() {
 
 function Key({ children }: KeyProps) {
   return (
-    <kbd className="mr-1 inline-grid size-[1.35rem] place-items-center rounded border border-rule-strong bg-sunken font-mono text-[0.6875rem] text-ink-soft">
+    <kbd className="grid size-[1.35rem] shrink-0 place-items-center rounded border border-rule-strong bg-sunken font-mono text-[0.6875rem] text-ink-soft">
       {children}
     </kbd>
   );
