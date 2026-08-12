@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import { readingOrder } from "@/api";
 import { useDiffView } from "@/hooks/useDiffView";
+import { useOpenFiles } from "@/hooks/useOpenFiles";
 import { useReview } from "@/hooks/useReview";
 import { useShortcuts } from "@/hooks/useShortcuts";
 import { HelpDialog } from "@/review/HelpDialog";
@@ -17,6 +18,7 @@ export default function App() {
     useReview();
   const [helpOpen, setHelpOpen] = useState(false);
   const [view, setView] = useDiffView();
+  const files = useOpenFiles();
 
   const order = review ? readingOrder(review) : [];
   const index = order.findIndex((f) => f.path === current);
@@ -27,12 +29,28 @@ export default function App() {
   const goTo = useCallback(
     (path: string) => {
       setCurrent(path);
+      // Going to a file opens it. Being taken to one that stayed folded away
+      // because it had been read would look like arriving nowhere.
+      files.set(path, true);
       scrollToFile(path);
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [setCurrent],
   );
 
-  useShortcuts({ review, order, index, current, goTo, toggleViewed, setHelpOpen });
+  // Marking a file read folds it away, and unmarking opens it again: the two
+  // states are separate and this is where they meet. One function for both
+  // ways of marking, or the keyboard and the tick box behave differently.
+  const mark = useCallback(
+    (path: string, viewed: boolean) => {
+      files.set(path, !viewed);
+      return toggleViewed(path, viewed);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [toggleViewed],
+  );
+
+  useShortcuts({ review, order, index, current, goTo, toggleViewed: mark, setHelpOpen });
 
   const banner = "fatal p-8 font-mono text-sm text-muted whitespace-pre-wrap";
   if (error) return <div className={banner}>{error}</div>;
@@ -54,8 +72,9 @@ export default function App() {
         view={view}
         current={current}
         onCurrent={setCurrent}
-        onToggleViewed={(path, viewed) => void toggleViewed(path, viewed)}
+        onToggleViewed={(path, viewed) => void mark(path, viewed)}
         onError={setError}
+        files={files}
       />
 
       <KeyBar />

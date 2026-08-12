@@ -7,7 +7,15 @@ import type { FileDiff, FileView } from "@/api";
 
 /** One file on the long page: its header, the prose the session wrote about it,
  * and the diff. */
-export function FileSection({ file, diff, view, onReach, onToggleViewed }: FileSectionProps) {
+export function FileSection({
+  file,
+  diff,
+  view,
+  open,
+  onToggleOpen,
+  onReach,
+  onToggleViewed,
+}: FileSectionProps) {
   const heavy = file.additions + file.deletions > BIG;
   const [asked, setAsked] = useState(false);
   const box = useRef<HTMLDivElement>(null);
@@ -16,7 +24,9 @@ export function FileSection({ file, diff, view, onReach, onToggleViewed }: FileS
   // by the time they arrive. A heavy file waits to be asked for by hand.
   useEffect(() => {
     const el = box.current;
-    if (!el || (heavy && !asked)) return;
+    // A closed file is not worth fetching: it has been read, or the reader
+    // folded it away.
+    if (!el || !open || (heavy && !asked)) return;
 
     // No observer means no reason to hold anything back: it is a browser too
     // old to be running this, or a test.
@@ -35,12 +45,19 @@ export function FileSection({ file, diff, view, onReach, onToggleViewed }: FileS
     );
     watching.observe(el);
     return () => watching.disconnect();
-  }, [heavy, asked, onReach]);
+  }, [open, heavy, asked, onReach]);
 
   return (
     <div ref={box} className="filesection" data-path={file.path}>
-      <FileHeader file={file} onToggleViewed={onToggleViewed} />
+      <FileHeader
+        file={file}
+        open={open}
+        onToggleOpen={onToggleOpen}
+        onToggleViewed={onToggleViewed}
+      />
 
+      {!open ? null : (
+        <>
       {file.skim && file.skimReason && <FileNote>Safe to skim — {file.skimReason}</FileNote>}
       {file.notes.map((note, i) => (
         <FileNote key={i}>
@@ -68,6 +85,8 @@ export function FileSection({ file, diff, view, onReach, onToggleViewed }: FileS
       ) : (
         <div className="loading px-6 py-6 font-mono text-sm text-faint">Loading diff…</div>
       )}
+        </>
+      )}
     </div>
   );
 }
@@ -82,6 +101,8 @@ type FileSectionProps = {
   file: FileView;
   diff?: FileDiff;
   view: DiffView;
+  open: boolean;
+  onToggleOpen: () => void;
   onReach: () => void;
   onToggleViewed: () => void;
 };

@@ -6,6 +6,7 @@ import { BlockBar } from "@/review/BlockBar";
 import { FileSection } from "@/review/FileSection";
 import { Unmapped } from "@/review/Unmapped";
 import type { DiffView } from "@/hooks/useDiffView";
+import type { OpenFiles } from "@/hooks/useOpenFiles";
 import type { BlockView, FileView, ReviewView } from "@/api";
 
 /** The whole review, in one scroll.
@@ -21,6 +22,7 @@ export function Reading({
   onCurrent,
   onToggleViewed,
   onError,
+  files,
 }: ReadingProps) {
   const pane = useRef<HTMLElement>(null);
   const { diffs, request } = useDiffs(onError);
@@ -44,6 +46,8 @@ export function Reading({
             file={row.file}
             diff={diffs[row.file.path]}
             view={view}
+            open={files.isOpen(row.file)}
+            onToggleOpen={() => files.set(row.file.path, !files.isOpen(row.file))}
             onReach={() => request(row.file.path)}
             onToggleViewed={() => onToggleViewed(row.file.path, !row.file.viewed)}
           />
@@ -76,4 +80,5 @@ type ReadingProps = {
   onCurrent: (path: string) => void;
   onToggleViewed: (path: string, viewed: boolean) => void;
   onError: (message: string) => void;
+  files: OpenFiles;
 };

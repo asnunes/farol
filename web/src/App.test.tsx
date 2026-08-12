@@ -458,6 +458,66 @@ describe("the diff itself", () => {
   });
 });
 
+describe("open and closed", () => {
+  it("folds a file that has been read, and leaves the header", async () => {
+    // Read means done. The files still to read should not be buried under it.
+    const r = review();
+    r.blocks[0].files[0].viewed = true;
+    r.viewedFiles = 1;
+    serve({ review: r });
+
+    render(<App />);
+    await waitForReading("b.rs");
+
+    expect(section("src/a.rs").textContent).toContain("a.rs");
+    expect(section("src/a.rs").querySelector(".diff")).toBeNull();
+    expect(section("src/b.rs").querySelector(".diff")).toBeTruthy();
+  });
+
+  it("opens a folded file when the reader asks for it", async () => {
+    const r = review();
+    r.blocks[0].files[0].viewed = true;
+    r.viewedFiles = 1;
+    serve({ review: r });
+
+    render(<App />);
+    await waitForReading("b.rs");
+
+    fireEvent.click(section("src/a.rs").querySelector(".fold")!);
+
+    await waitFor(() => expect(section("src/a.rs").querySelector(".diff")).toBeTruthy());
+  });
+
+  it("opens a folded file when it is picked in the sidebar", async () => {
+    // Being taken to a file that stayed folded away would look like arriving
+    // nowhere.
+    const r = review();
+    r.blocks[0].files[0].viewed = true;
+    r.viewedFiles = 1;
+    serve({ review: r });
+
+    render(<App />);
+    await waitForReading("b.rs");
+
+    const target = Array.from(document.querySelectorAll(".fileitem")).find((b) =>
+      b.textContent?.includes("a.rs"),
+    );
+    fireEvent.click(target!);
+
+    await waitFor(() => expect(section("src/a.rs").querySelector(".diff")).toBeTruthy());
+  });
+
+  it("folds a file the moment it is marked read", async () => {
+    serve({ review: review() });
+    render(<App />);
+    await waitForReading("a.rs");
+
+    fireEvent.keyDown(window, { key: ";" });
+
+    await waitFor(() => expect(section("src/a.rs").querySelector(".diff")).toBeNull());
+  });
+});
+
 describe("a long review", () => {
   it("asks for one diff per file, and only for the files on the page", async () => {
     // The pane is one page now. Fetching every diff up front would mean a
