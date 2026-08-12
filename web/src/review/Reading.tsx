@@ -75,42 +75,66 @@ function useLandsWhereTheReaderLeftOff(current: string | null) {
   }, [current]);
 }
 
-/** Watch the sections go by and name the one at the top of the pane.
+/** Name the file the reader is on, from where the pane is scrolled.
  *
- * The top band rather than the middle: the reader works down a file, and the
- * one they are working on is the one whose header they last passed. */
+ * The file whose header last passed a line a quarter down the pane, which is
+ * the one being worked on. Two ends need saying out loud: at the very top no
+ * header has passed the line yet, and at the very bottom the last files never
+ * reach it at all, because the scroll runs out first. Reading only the top slice
+ * left the last file of a review impossible to mark with the keyboard, since it
+ * never became the current one.
+ *
+ * Measured on scroll rather than watched with an observer: an observer reports
+ * crossings, and neither end of the list produces one. */
 function useReportsWhatIsOnScreen(
   pane: React.RefObject<HTMLElement | null>,
   review: ReviewView,
   onCurrent: (path: string) => void,
 ) {
-  const order = readingOrder(review).map((f) => f.path);
   const onCurrentRef = useRef(onCurrent);
   onCurrentRef.current = onCurrent;
 
   useEffect(() => {
     const root = pane.current;
-    if (!root || typeof IntersectionObserver === "undefined") return;
+    if (!root) return;
 
-    const here = new Set<string>();
-    const watching = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          const path = (entry.target as HTMLElement).dataset.path ?? "";
-          if (entry.isIntersecting) here.add(path);
-          else here.delete(path);
-        }
-        const first = order.find((p) => here.has(p));
-        if (first) onCurrentRef.current(first);
-      },
-      // Only the top slice of the pane counts as "where the reader is".
-      { root, rootMargin: "0px 0px -75% 0px" },
-    );
+    let queued = 0;
+    const look = () => {
+      const sections = [...root.querySelectorAll<HTMLElement>("[data-path]")];
+      if (!sections.length) return;
 
-    root.querySelectorAll("[data-path]").forEach((el) => watching.observe(el));
-    return () => watching.disconnect();
-  }, [pane, order.join("\n")]);
+      const pane = root.getBoundingClientRect();
+      const atTheEnd = root.scrollTop + root.clientHeight >= root.scrollHeight - 2;
+      const line = pane.top + pane.height * READING_LINE;
+
+      const visible = sections.filter(
+        (el) => el.getBoundingClientRect().bottom > pane.top && el.getBoundingClientRect().top < pane.bottom,
+      );
+      if (!visible.length) return;
+
+      const passed = visible.filter((el) => el.getBoundingClientRect().top <= line);
+      const here = atTheEnd ? visible[visible.length - 1] : (passed[passed.length - 1] ?? visible[0]);
+
+      if (here.dataset.path) onCurrentRef.current(here.dataset.path);
+    };
+
+    const onScroll = () => {
+      cancelAnimationFrame(queued);
+      queued = requestAnimationFrame(look);
+    };
+
+    look();
+    root.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      cancelAnimationFrame(queued);
+      root.removeEventListener("scroll", onScroll);
+    };
+  }, [pane, review]);
 }
+
+/** How far down the pane a header has to be before the file counts as the one
+ * being read. Near the top, because the reader works downwards. */
+const READING_LINE = 0.25;
 
 type ReadingProps = {
   review: ReviewView;
