@@ -47,7 +47,7 @@ export function useShortcuts({
           if (next) setCurrent(next.path);
           break;
         }
-        case "e":
+        case ";":
         case "Enter": {
           const file = order[index];
           if (file) void toggleViewed(file.path, !file.viewed);

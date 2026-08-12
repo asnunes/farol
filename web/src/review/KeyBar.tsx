@@ -4,10 +4,10 @@ export function KeyBar() {
   return (
     <nav className="keybar col-span-full flex gap-5 border-t border-rule bg-surface px-5 py-1.5 font-sans text-xs text-muted">
       {[
-        [["j", "k"], "file"],
+        [["j", "k", "↑", "↓"], "file"],
         [["n"], "next unread"],
-        [["e"], "mark read"],
-        [["[", "]"], "block"],
+        [[";", "↵"], "mark read"],
+        [["[", "]", "⇞", "⇟"], "block"],
         [["?"], "help"],
       ].map(([keys, what], i) => (
         <span key={i}>

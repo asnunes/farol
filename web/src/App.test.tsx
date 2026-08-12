@@ -225,17 +225,17 @@ describe("keyboard navigation", () => {
 });
 
 describe("marking read", () => {
-  it("e sends the current file to the backend", async () => {
+  it("; sends the current file to the backend", async () => {
     const calls = serve({ review: review() });
     render(<App />);
     await waitForReading("a.rs");
 
-    fireEvent.keyDown(window, { key: "e" });
+    fireEvent.keyDown(window, { key: ";" });
     await waitFor(() => expect(calls).toHaveLength(1));
     expect(calls[0]).toEqual({ path: "src/a.rs", viewed: true });
   });
 
-  it("Enter marks the file read, the way e does", async () => {
+  it("Enter marks the file read, the way ; does", async () => {
     const calls = serve({ review: review() });
     render(<App />);
     await waitForReading("a.rs");
@@ -258,7 +258,7 @@ describe("marking read", () => {
     render(<App />);
     await waitForReading("a.rs");
 
-    fireEvent.click(screen.getByTitle("Mark as read — key e"));
+    fireEvent.click(screen.getByTitle("Mark as read — key ;"));
     await waitFor(() => expect(calls).toHaveLength(1));
     expect(calls[0].viewed).toBe(false);
   });

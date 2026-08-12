@@ -21,7 +21,7 @@ export function FileHeader({
         <button
           className="markbox grid size-5 shrink-0 cursor-pointer place-items-center rounded border border-rule-strong text-xs text-transparent transition-colors hover:border-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none aria-pressed:border-accent aria-pressed:bg-accent aria-pressed:text-surface"
           aria-pressed={file.viewed}
-          title="Mark as read — key e"
+          title="Mark as read — key ;"
           onClick={onToggleViewed}
         >
           <span aria-hidden="true">✓</span>
