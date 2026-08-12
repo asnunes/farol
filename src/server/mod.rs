@@ -17,13 +17,12 @@ pub use registry::{Registry, ServerEntry};
 pub use server_list::ServerList;
 
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use tokio::sync::broadcast;
 
 use crate::cmd::ServerUseCases;
 use crate::error::{Error, Result};
-use crate::map::domain::ReviewMap;
 
 /// Which port to listen on, and what to do if it is taken.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -49,29 +48,31 @@ const PORTS_TO_TRY: u16 = 64;
 
 pub struct ServeConfig {
     pub use_cases: ServerUseCases,
-    pub map: ReviewMap,
     pub port: Port,
     pub open_browser: bool,
     pub watch: bool,
     pub git_dir: PathBuf,
     /// The working tree, for the list of what is running.
     pub repo: PathBuf,
+    /// What this server is showing, for that same list. The map itself is not
+    /// held here: it is read from disk on every request, so one written while
+    /// the server runs reaches the browser without a restart.
+    pub branch: String,
+    pub base: String,
 }
 
 struct AppState {
     /// Transport holds use cases and nothing else: the routes translate HTTP
     /// into a call and back, and own no business logic of their own.
     use_cases: ServerUseCases,
-    map: Mutex<ReviewMap>,
     changes: broadcast::Sender<String>,
 }
 
 impl AppState {
-    fn new(use_cases: ServerUseCases, map: ReviewMap) -> (Arc<Self>, broadcast::Sender<String>) {
+    fn new(use_cases: ServerUseCases) -> (Arc<Self>, broadcast::Sender<String>) {
         let (changes, _) = broadcast::channel(16);
         let state = Arc::new(Self {
             use_cases,
-            map: Mutex::new(map),
             changes: changes.clone(),
         });
         (state, changes)
@@ -97,8 +98,7 @@ impl Server {
 
 async fn serve(config: ServeConfig) -> Result<()> {
     let registry = Registry::open()?;
-    let (branch, base) = (config.map.branch.clone(), config.map.base.clone());
-    let (state, changes) = AppState::new(config.use_cases, config.map);
+    let (state, changes) = AppState::new(config.use_cases);
 
     // One line of wiring, and the only one in this file with no test of its
     // own: `watch::spawn` is tested next door over a real directory, and the
@@ -121,8 +121,8 @@ async fn serve(config: ServeConfig) -> Result<()> {
         port: addr.port(),
         pid: std::process::id(),
         repo: config.repo,
-        branch,
-        base,
+        branch: config.branch,
+        base: config.base,
     };
     registry.register(&entry)?;
 
@@ -211,10 +211,7 @@ mod tests {
     fn the_state_hands_out_the_channel_the_watcher_writes_to() {
         // The watcher and the SSE route have to meet on the same channel, or
         // the browser is told nothing and never reloads.
-        let (state, changes) = AppState::new(
-            routes::tests::use_cases(),
-            ReviewMap::new("feature/x", "main", "head"),
-        );
+        let (state, changes) = AppState::new(routes::tests::use_cases());
 
         let mut rx = state.changes.subscribe();
         changes.send("map".into()).unwrap();

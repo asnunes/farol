@@ -17,7 +17,8 @@ import { Unmapped } from "@/review/Unmapped";
 /** Composition only: what is on screen and in what order. Everything that
  * decides how a thing looks lives in the piece that draws it. */
 export default function App() {
-  const { review, current, setCurrent, error, setError, toggleViewed } = useReview();
+  const { review, current, setCurrent, error, setError, toggleViewed, stale, refresh } =
+    useReview();
   const [helpOpen, setHelpOpen] = useState(false);
   const [view, setView] = useDiffView();
 
@@ -44,7 +45,13 @@ export default function App() {
 
   return (
     <div className="app grid h-screen grid-cols-[19rem_minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)]">
-      <TopBar review={review} view={view} onView={setView} />
+      <TopBar
+        review={review}
+        view={view}
+        onView={setView}
+        stale={stale}
+        onRefresh={() => void refresh()}
+      />
       <Sidebar review={review} current={current} onPick={setCurrent} />
 
       <main className="pane overflow-y-auto bg-ground">

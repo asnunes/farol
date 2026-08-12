@@ -75,7 +75,8 @@ impl ServeArgs {
 
         crate::server::Server::new(crate::server::ServeConfig {
             use_cases: ctx.server().clone(),
-            map,
+            branch: map.branch,
+            base: map.base,
             port: self.port.map_or(Port::Free, |p| match p {
                 0 => Port::Ephemeral,
                 p => Port::Exactly(p),

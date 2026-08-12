@@ -1,10 +1,11 @@
 import { Progress } from "@/components/ui/progress";
+import { Refresh } from "@/review/Refresh";
 import { ViewToggle } from "@/review/ViewToggle";
 import type { DiffView } from "@/hooks/useDiffView";
 import type { ReviewView } from "@/api";
 
 /** Where you are and how far through you are. */
-export function TopBar({ review, view, onView }: TopBarProps) {
+export function TopBar({ review, view, onView, stale, onRefresh }: TopBarProps) {
   const done = review.totalFiles > 0 && review.viewedFiles === review.totalFiles;
 
   return (
@@ -16,6 +17,7 @@ export function TopBar({ review, view, onView }: TopBarProps) {
       </div>
 
       <div className="flex items-center gap-4">
+        {stale && <Refresh onRefresh={onRefresh} />}
         <ViewToggle view={view} onChange={onView} />
         {review.commitsBehind > 0 && (
           <div className="stale-chip rounded-full bg-accent-dim px-2.5 py-1 font-mono text-xs text-accent">
@@ -49,4 +51,6 @@ type TopBarProps = {
   review: ReviewView;
   view: DiffView;
   onView: (view: DiffView) => void;
+  stale: boolean;
+  onRefresh: () => void;
 };

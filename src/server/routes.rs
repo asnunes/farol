@@ -44,8 +44,7 @@ async fn health(identity: ServerEntry) -> impl IntoResponse {
 
 /// Everything the screen needs to draw itself, in one call.
 async fn review(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    let map = state.map.lock().unwrap().clone();
-    match state.use_cases.review.execute(&map) {
+    match state.use_cases.review.execute() {
         Ok(snapshot) => Json(view::ReviewView::build(&snapshot)).into_response(),
         Err(e) => fail(e),
     }
@@ -126,9 +125,8 @@ pub(super) mod tests {
 
     use super::*;
     use crate::cmd::ServerUseCases;
-    use crate::map::domain::{LineRange, Position, ReviewMap};
     use crate::progress::application::ProgressStore;
-    use crate::testing::{FakeDiffSource, InMemoryProgressRepository, slug};
+    use crate::testing::{FakeDiffSource, InMemoryProgressRepository};
     use axum::body::Body;
     use axum::http::Request;
     use std::sync::Arc;
@@ -144,24 +142,6 @@ pub(super) mod tests {
             branch: "feature/x".into(),
             base: "main".into(),
         }
-    }
-
-    fn mapped() -> ReviewMap {
-        let mut map = ReviewMap::new("feature/x", "main", "head");
-        map.add_block(&slug("core"), "The change", "why it exists", Position::End)
-            .unwrap();
-        map.add_file(&slug("core"), "a.rs", Some("worth knowing".into()), None)
-            .unwrap();
-        map.add_line_note(
-            &slug("core"),
-            "a.rs",
-            LineRange::new(4, 8).unwrap(),
-            "local point",
-        )
-        .unwrap();
-        map.add_file(&slug("core"), "b.rs", None, None).unwrap();
-        map.add_skim("Cargo.lock", "generated", None).unwrap();
-        map
     }
 
     /// The use cases over fakes, shared with the tests that start a real
@@ -204,6 +184,11 @@ pub(super) mod tests {
             FakeDiffSource::with_paths(&paths),
             Arc::new(crate::testing::InMemoryMapRepository::new()),
         );
+        // A map has to exist, or the request fails looking for one and never
+        // reaches the collaborator this test is about.
+        maps.editor
+            .edit(|_| Ok::<_, crate::map::domain::MapError>(()))
+            .unwrap();
         let broken = ProgressStore::new(
             Arc::new(crate::testing::BrokenProgressRepository),
             diffs.clone(),
@@ -218,7 +203,7 @@ pub(super) mod tests {
             mark_viewed: MarkViewed::new(broken.clone()),
             unmark_viewed: UnmarkViewed::new(broken),
         };
-        let (state, _) = AppState::new(use_cases, mapped());
+        let (state, _) = AppState::new(use_cases);
 
         let response = router(state, identity())
             .oneshot(
