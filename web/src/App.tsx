@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { blockOf, readingOrder } from "@/api";
+import { useDiffView } from "@/hooks/useDiffView";
 import { useReview } from "@/hooks/useReview";
 import { useFileDiff } from "@/hooks/useFileDiff";
 import { useShortcuts } from "@/hooks/useShortcuts";
@@ -8,7 +9,7 @@ import { Sidebar } from "@/review/Sidebar";
 import { BlockBar } from "@/review/BlockBar";
 import { FileHeader } from "@/review/FileHeader";
 import { FileNote } from "@/review/FileNote";
-import { Diff } from "@/review/Diff";
+import { Diff } from "@/review/diff/Diff";
 import { KeyBar } from "@/review/KeyBar";
 import { HelpDialog } from "@/review/HelpDialog";
 import { Unmapped } from "@/review/Unmapped";
@@ -16,8 +17,10 @@ import { Unmapped } from "@/review/Unmapped";
 /** Composition only: what is on screen and in what order. Everything that
  * decides how a thing looks lives in the piece that draws it. */
 export default function App() {
-  const { review, current, setCurrent, error, setError, toggleViewed } = useReview();
+  const { review, current, setCurrent, error, setError, toggleViewed, stale, refresh } =
+    useReview();
   const [helpOpen, setHelpOpen] = useState(false);
+  const [view, setView] = useDiffView();
 
   const order = review ? readingOrder(review) : [];
   const index = order.findIndex((f) => f.path === current);
@@ -42,7 +45,13 @@ export default function App() {
 
   return (
     <div className="app grid h-screen grid-cols-[19rem_minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)]">
-      <TopBar review={review} />
+      <TopBar
+        review={review}
+        view={view}
+        onView={setView}
+        stale={stale}
+        onRefresh={() => void refresh()}
+      />
       <Sidebar review={review} current={current} onPick={setCurrent} />
 
       <main className="pane overflow-y-auto bg-ground">
@@ -70,7 +79,7 @@ export default function App() {
             ))}
 
             {diff && diff.path === file.path ? (
-              <Diff diff={diff} file={file} />
+              <Diff diff={diff} file={file} view={view} />
             ) : (
               <div className="loading p-8 font-mono text-sm text-muted">Loading diff…</div>
             )}

@@ -161,6 +161,20 @@ describe("keyboard navigation", () => {
     await waitForReading("b.rs");
   });
 
+  it("the arrows walk the files the way j and k do", async () => {
+    // Both sets exist because the reader who knows the keys and the reader who
+    // is guessing are the same person on different days.
+    serve({ review: review() });
+    render(<App />);
+    await waitForReading("a.rs");
+
+    fireEvent.keyDown(window, { key: "ArrowDown" });
+    await waitForReading("b.rs");
+
+    fireEvent.keyDown(window, { key: "ArrowUp" });
+    await waitForReading("a.rs");
+  });
+
   it("n skips to the next file that has not been read", async () => {
     const r = review();
     r.blocks[0].files[1].viewed = true; // b.rs already read
@@ -199,12 +213,23 @@ describe("keyboard navigation", () => {
 });
 
 describe("marking read", () => {
-  it("e sends the current file to the backend", async () => {
+  it("; sends the current file to the backend", async () => {
     const calls = serve({ review: review() });
     render(<App />);
     await waitForReading("a.rs");
 
-    fireEvent.keyDown(window, { key: "e" });
+    fireEvent.keyDown(window, { key: ";" });
+    await waitFor(() => expect(calls).toHaveLength(1));
+    expect(calls[0]).toEqual({ path: "src/a.rs", viewed: true });
+  });
+
+  it("Enter marks the file read, the way ; does", async () => {
+    const calls = serve({ review: review() });
+    render(<App />);
+    await waitForReading("a.rs");
+
+    fireEvent.keyDown(window, { key: "Enter" });
+
     await waitFor(() => expect(calls).toHaveLength(1));
     expect(calls[0]).toEqual({ path: "src/a.rs", viewed: true });
   });
@@ -221,7 +246,7 @@ describe("marking read", () => {
     render(<App />);
     await waitForReading("a.rs");
 
-    fireEvent.click(screen.getByTitle("Mark as read — key e"));
+    fireEvent.click(screen.getByTitle("Mark as read — key ;"));
     await waitFor(() => expect(calls).toHaveLength(1));
     expect(calls[0].viewed).toBe(false);
   });

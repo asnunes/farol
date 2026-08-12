@@ -29,6 +29,9 @@ pub struct FileChange {
     pub status: FileStatus,
     pub additions: u32,
     pub deletions: u32,
+    /// git's id for the content under review, which is what a mark of `read`
+    /// is anchored to. A deleted file carries the content that went away.
+    pub content_hash: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -160,6 +163,7 @@ mod tests {
                     status: FileStatus::Modified,
                     additions: 0,
                     deletions: 0,
+                    content_hash: format!("hash-of-{p}"),
                 })
                 .collect(),
         }

@@ -47,6 +47,7 @@ mod tests {
 
     fn change(path: &str, status: FileStatus, old_path: Option<&str>) -> FileChange {
         FileChange {
+            content_hash: format!("hash-of-{path}"),
             path: path.into(),
             old_path: old_path.map(Into::into),
             status,

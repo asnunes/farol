@@ -7,8 +7,10 @@ import {
 
 const KEYS: [string, string][] = [
   ["j / k", "previous and next file, in reading order"],
+  ["↑ / ↓", "the same"],
   ["n", "jump to the next file you have not read"],
-  ["e", "mark the current file read"],
+  [";", "mark the current file read"],
+  ["Enter", "the same"],
   ["[ / ]", "previous and next block"],
   ["?", "this list"],
 ];

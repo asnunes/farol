@@ -16,6 +16,9 @@ export function useShortcuts({
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       const target = e.target as HTMLElement;
       if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") return;
+      // A focused button already answers to Enter, and pressing it would both
+      // press the button and mark the file read.
+      if (target.tagName === "BUTTON") return;
       if (!review) return;
 
       const go = (i: number) => {
@@ -23,11 +26,18 @@ export function useShortcuts({
         if (next) setCurrent(next.path);
       };
 
+      // The letters are the short way, the arrows and Enter the obvious one.
+      // Both are here because the reader who knows the keys and the reader who
+      // is guessing are the same person on different days.
       switch (e.key) {
         case "j":
+        case "ArrowDown":
+          e.preventDefault();
           go(index + 1);
           break;
         case "k":
+        case "ArrowUp":
+          e.preventDefault();
           go(index - 1);
           break;
         case "n": {
@@ -37,13 +47,18 @@ export function useShortcuts({
           if (next) setCurrent(next.path);
           break;
         }
-        case "e": {
+        case ";":
+        case "Enter": {
           const file = order[index];
           if (file) void toggleViewed(file.path, !file.viewed);
           break;
         }
+        // The page keys are left alone on purpose. They are the only way to
+        // scroll a long file by the screenful, and the brackets already move
+        // between blocks.
         case "[":
         case "]": {
+          e.preventDefault();
           const here = blockOf(review, current ?? "");
           if (!here) break;
           const target = review.blocks[here.index + (e.key === "]" ? 1 : -1)];

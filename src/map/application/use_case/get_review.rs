@@ -31,12 +31,20 @@ impl GetReview {
         }
     }
 
-    pub fn execute(&self, map: &ReviewMap) -> Result<ReviewSnapshot> {
+    /// Read afresh every time, never from something the caller is holding.
+    ///
+    /// The server used to keep the map it started with and hand that back on
+    /// every request, so a map written while it ran reached the browser only
+    /// after a restart. The watcher would announce the change and the answer
+    /// would be the same as before.
+    pub fn execute(&self) -> Result<ReviewSnapshot> {
+        let map = self.versions.require_current()?;
+
         Ok(ReviewSnapshot {
-            map: map.clone(),
+            commits_behind: self.versions.behind(&map),
+            map,
             scope: self.scope.get()?.clone(),
             progress: self.progress.load()?,
-            commits_behind: self.versions.behind(map),
         })
     }
 }
@@ -71,7 +79,7 @@ mod tests {
     #[test]
     fn one_call_carries_everything_the_screen_needs() {
         let (review, _, editor) = on(&["a.rs", "b.rs"]);
-        let map = editor
+        editor
             .edit(|map| {
                 map.add_block(
                     &slug("core"),
@@ -82,7 +90,7 @@ mod tests {
             })
             .unwrap();
 
-        let snapshot = review.execute(&map).unwrap();
+        let snapshot = review.execute().unwrap();
 
         assert_eq!(
             snapshot.map.block(&slug("core")).unwrap().title,
@@ -98,22 +106,43 @@ mod tests {
         // The screen strikes files through on load; without this the reviewer
         // would start over every refresh.
         let (review, progress, editor) = on(&["a.rs", "b.rs"]);
-        let map = editor.edit(|_| Ok::<_, MapError>(())).unwrap();
+        editor.edit(|_| Ok::<_, MapError>(())).unwrap();
         MarkViewed::new(progress).execute("a.rs", "now").unwrap();
 
-        let snapshot = review.execute(&map).unwrap();
+        let snapshot = review.execute().unwrap();
 
         assert!(snapshot.progress.is_current("a.rs", "hash-of-a.rs"));
         assert!(!snapshot.progress.is_current("b.rs", "hash-of-b.rs"));
     }
 
     #[test]
-    fn a_map_from_an_earlier_commit_reports_how_far_behind_it_is() {
-        let (review, _, _) = on(&["a.rs"]);
-        let map = crate::map::domain::ReviewMap::new("feature/x", "main", "old");
+    fn a_map_written_after_the_first_call_is_the_one_that_comes_back() {
+        // The server keeps this use case for the life of the process and
+        // answers every request with it. Holding on to the map it first read is
+        // what left a freshly derived map invisible until a restart, while the
+        // watcher announced a change that never arrived.
+        let (review, _, editor) = on(&["a.rs"]);
+        editor.edit(|_| Ok::<_, MapError>(())).unwrap();
+        review.execute().unwrap();
 
-        // The fake places no distance on "old", so this is the shape of the
-        // answer rather than the arithmetic, which `MapVersions` owns.
-        assert_eq!(review.execute(&map).unwrap().commits_behind, 0);
+        editor
+            .edit(|map| {
+                map.add_block(
+                    &slug("later"),
+                    "Written while the server ran",
+                    "why",
+                    crate::map::domain::Position::End,
+                )
+            })
+            .unwrap();
+
+        assert!(
+            review
+                .execute()
+                .unwrap()
+                .map
+                .block(&slug("later"))
+                .is_some()
+        );
     }
 }

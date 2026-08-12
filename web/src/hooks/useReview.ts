@@ -9,11 +9,13 @@ export function useReview() {
   const [review, setReview] = useState<ReviewView | null>(null);
   const [current, setCurrent] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [stale, setStale] = useState(false);
 
   const load = useCallback(async () => {
     try {
       const next = await api.review();
       setReview(next);
+      setStale(false);
       setCurrent((prev) => {
         // Stay where the reader is, unless the file they were on is gone.
         if (prev && readingOrder(next).some((f) => f.path === prev)) return prev;
@@ -29,13 +31,16 @@ export function useReview() {
     void load();
   }, [load]);
 
+  // A change is announced, not applied. Swapping the map under someone who is
+  // halfway through a file would move the blocks and the file they are on; the
+  // reader decides when to take it.
   useEffect(() => {
     const es = new EventSource("/api/watch");
-    const refresh = () => void load();
-    es.addEventListener("map", refresh);
-    es.addEventListener("head", refresh);
+    const announce = () => setStale(true);
+    es.addEventListener("map", announce);
+    es.addEventListener("head", announce);
     return () => es.close();
-  }, [load]);
+  }, []);
 
   const toggleViewed = useCallback(
     async (path: string, viewed: boolean) => {
@@ -45,5 +50,5 @@ export function useReview() {
     [load],
   );
 
-  return { review, current, setCurrent, error, setError, toggleViewed };
+  return { review, current, setCurrent, error, setError, toggleViewed, stale, refresh: load };
 }
