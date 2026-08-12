@@ -7,7 +7,7 @@ export function useShortcuts({
   order,
   index,
   current,
-  setCurrent,
+  goTo,
   toggleViewed,
   setHelpOpen,
 }: Shortcuts) {
@@ -23,7 +23,7 @@ export function useShortcuts({
 
       const go = (i: number) => {
         const next = order[Math.max(0, Math.min(order.length - 1, i))];
-        if (next) setCurrent(next.path);
+        if (next) goTo(next.path);
       };
 
       // The letters are the short way, the arrows and Enter the obvious one.
@@ -44,7 +44,7 @@ export function useShortcuts({
           // Wrap: the last unread may be behind you after marking things read.
           const next =
             order.slice(index + 1).find((f) => !f.viewed) ?? order.find((f) => !f.viewed);
-          if (next) setCurrent(next.path);
+          if (next) goTo(next.path);
           break;
         }
         case ";":
@@ -62,7 +62,7 @@ export function useShortcuts({
           const here = blockOf(review, current ?? "");
           if (!here) break;
           const target = review.blocks[here.index + (e.key === "]" ? 1 : -1)];
-          if (target?.files[0]) setCurrent(target.files[0].path);
+          if (target?.files[0]) goTo(target.files[0].path);
           break;
         }
         case "?":
@@ -75,7 +75,7 @@ export function useShortcuts({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [review, order, index, current, setCurrent, toggleViewed, setHelpOpen]);
+  }, [review, order, index, current, goTo, toggleViewed, setHelpOpen]);
 }
 
 type Shortcuts = {
@@ -83,7 +83,7 @@ type Shortcuts = {
   order: FileView[];
   index: number;
   current: string | null;
-  setCurrent: (path: string) => void;
+  goTo: (path: string) => void;
   toggleViewed: (path: string, viewed: boolean) => Promise<void>;
   setHelpOpen: (fn: (open: boolean) => boolean) => void;
 };

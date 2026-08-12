@@ -1,18 +1,13 @@
-import { useState } from "react";
-import { blockOf, readingOrder } from "@/api";
+import { useCallback, useState } from "react";
+import { readingOrder } from "@/api";
 import { useDiffView } from "@/hooks/useDiffView";
 import { useReview } from "@/hooks/useReview";
-import { useFileDiff } from "@/hooks/useFileDiff";
 import { useShortcuts } from "@/hooks/useShortcuts";
-import { TopBar } from "@/review/TopBar";
-import { Sidebar } from "@/review/Sidebar";
-import { BlockBar } from "@/review/BlockBar";
-import { FileHeader } from "@/review/FileHeader";
-import { FileNote } from "@/review/FileNote";
-import { Diff } from "@/review/diff/Diff";
-import { KeyBar } from "@/review/KeyBar";
 import { HelpDialog } from "@/review/HelpDialog";
-import { Unmapped } from "@/review/Unmapped";
+import { KeyBar } from "@/review/KeyBar";
+import { Reading, scrollToFile } from "@/review/Reading";
+import { Sidebar } from "@/review/Sidebar";
+import { TopBar } from "@/review/TopBar";
 
 /** Composition only: what is on screen and in what order. Everything that
  * decides how a thing looks lives in the piece that draws it. */
@@ -24,24 +19,23 @@ export default function App() {
 
   const order = review ? readingOrder(review) : [];
   const index = order.findIndex((f) => f.path === current);
-  const diff = useFileDiff(current, setError);
 
-  useShortcuts({
-    review,
-    order,
-    index,
-    current,
-    setCurrent,
-    toggleViewed,
-    setHelpOpen,
-  });
+  // Moving names the file *and* scrolls to it. Naming it only through the
+  // scroll would mean waiting for the observer to answer, and two presses in a
+  // row would both count from the file the reader had already left.
+  const goTo = useCallback(
+    (path: string) => {
+      setCurrent(path);
+      scrollToFile(path);
+    },
+    [setCurrent],
+  );
+
+  useShortcuts({ review, order, index, current, goTo, toggleViewed, setHelpOpen });
 
   const banner = "fatal p-8 font-mono text-sm text-muted whitespace-pre-wrap";
   if (error) return <div className={banner}>{error}</div>;
   if (!review) return <div className={banner}>Loading…</div>;
-
-  const file = order[index] ?? null;
-  const here = current ? blockOf(review, current) : null;
 
   return (
     <div className="app grid h-screen grid-cols-[19rem_minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)]">
@@ -52,42 +46,16 @@ export default function App() {
         stale={stale}
         onRefresh={() => void refresh()}
       />
-      <Sidebar review={review} current={current} onPick={setCurrent} />
+      <Sidebar review={review} current={current} onPick={goTo} />
 
-      <main className="pane overflow-y-auto bg-ground">
-        {here && (
-          <BlockBar block={here.block} number={here.index + 1} total={review.blocks.length} />
-        )}
-
-        {file && (
-          <>
-            <FileHeader
-              file={file}
-              onToggleViewed={() => void toggleViewed(file.path, !file.viewed)}
-            />
-
-            {file.skim && file.skimReason && (
-              <FileNote>Safe to skim — {file.skimReason}</FileNote>
-            )}
-            {file.notes.map((n, i) => (
-              <FileNote key={i}>
-                {file.tags.length > 1 && (
-                  <span className="from mr-2 font-mono text-xs text-accent">{n.block}</span>
-                )}
-                {n.text}
-              </FileNote>
-            ))}
-
-            {diff && diff.path === file.path ? (
-              <Diff diff={diff} file={file} view={view} />
-            ) : (
-              <div className="loading p-8 font-mono text-sm text-muted">Loading diff…</div>
-            )}
-          </>
-        )}
-
-        {review.unmapped.length > 0 && <Unmapped paths={review.unmapped} />}
-      </main>
+      <Reading
+        review={review}
+        view={view}
+        current={current}
+        onCurrent={setCurrent}
+        onToggleViewed={(path, viewed) => void toggleViewed(path, viewed)}
+        onError={setError}
+      />
 
       <KeyBar />
       <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
