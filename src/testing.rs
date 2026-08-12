@@ -98,6 +98,9 @@ fn change(path: &str) -> FileChange {
         status: FileStatus::Modified,
         additions: 3,
         deletions: 1,
+        // The same identity `content_hash` hands out, so a fake scope and a
+        // fake mark of `read` agree with each other.
+        content_hash: format!("hash-of-{path}"),
     }
 }
 

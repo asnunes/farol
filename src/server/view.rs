@@ -200,10 +200,10 @@ impl FileView {
         }
         line_notes.sort_by_key(|n| (n.from, n.to));
 
-        let viewed = progress
-            .viewed
-            .iter()
-            .any(|v| v.path == path && change.is_some());
+        // Read *and still the same file*. Comparing paths alone was what kept
+        // a file struck through after it had changed under the mark, which is
+        // the one thing this is supposed to catch.
+        let viewed = change.is_some_and(|c| progress.is_current(path, &c.content_hash));
 
         FileView {
             path: path.to_string(),
@@ -331,11 +331,29 @@ mod tests {
         let map = map_of(&[("one", "a.rs"), ("one", "b.rs")]);
         let source = FakeDiffSource::with_paths(&["a.rs", "b.rs"]);
         let mut progress = Progress::new();
-        progress.mark("a.rs", "hash", "now");
+        progress.mark("a.rs", "hash-of-a.rs", "now");
 
         let view = built(&map, source, &progress);
         assert_eq!(view.total_files, 2);
         assert_eq!(view.viewed_files, 1);
+    }
+
+    #[test]
+    fn a_file_that_changed_under_the_mark_comes_back_unread() {
+        // The whole point of anchoring progress to the content: a rebase that
+        // only moves the file leaves the mark alone, and a real change takes it
+        // off. Comparing paths alone left every file struck through for good,
+        // and this test passed anyway because it marked a hash that matched
+        // nothing.
+        let map = map_of(&[("one", "a.rs")]);
+        let source = FakeDiffSource::with_paths(&["a.rs"]);
+        let mut progress = Progress::new();
+        progress.mark("a.rs", "the-hash-it-had-before-the-fix", "now");
+
+        let view = built(&map, source, &progress);
+
+        assert_eq!(view.viewed_files, 0);
+        assert!(!view.blocks[0].files[0].viewed);
     }
 
     #[test]

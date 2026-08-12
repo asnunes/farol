@@ -158,6 +158,13 @@ impl Window {
                 status,
                 additions,
                 deletions,
+                // The new side, or the old one for a file that was deleted:
+                // either way it is the content the reviewer is being shown.
+                content_hash: new
+                    .as_ref()
+                    .or(old.as_ref())
+                    .map(Blob::hash)
+                    .unwrap_or_default(),
             });
 
             if let Some(blob) = old {
