@@ -146,6 +146,11 @@ impl FileDiffSource for GixSource {
     fn content_hash(&self, path: &str) -> Result<String> {
         self.head_blobs
             .get(path)
+            // A deleted file has no head side, and what the reviewer read is
+            // the content that went away. Anchoring the mark to the old blob
+            // keeps it stable, and refusing here left the file impossible to
+            // tick off at all.
+            .or_else(|| self.base_blobs.get(path))
             .map(Blob::hash)
             .ok_or_else(|| Error::from(self.scope.reject(path)))
     }
@@ -334,6 +339,30 @@ mod tests {
 
         assert_eq!(source.file_line_count("gone.rs").unwrap(), 0);
         assert_eq!(source.review_path("gone.rs").unwrap().lines(), 0);
+    }
+
+    #[test]
+    fn a_deleted_file_can_be_marked_read_like_any_other() {
+        // Progress is anchored to the content the reviewer read, and for a
+        // deleted file that is the side that went away. Reaching for the head
+        // blob left the one file in the review that could not be ticked off,
+        // and the refusal came back as `not part of this review`.
+        let f = Fixture::new();
+        f.write("gone.rs", &numbered(10));
+        f.commit("add gone");
+        f.on_branch("feature/x");
+        f.git(&["rm", "gone.rs"]);
+        f.commit("delete gone");
+
+        let source = f.source("feature/x", ScopeRequest::default());
+
+        let hash = source.content_hash("gone.rs").unwrap();
+        assert!(!hash.is_empty());
+        assert_eq!(
+            hash,
+            source.content_hash("gone.rs").unwrap(),
+            "the same content has to keep the same identity, or the mark reopens"
+        );
     }
 
     #[test]
