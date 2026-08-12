@@ -204,7 +204,7 @@ describe("marking read", () => {
     render(<App />);
     await waitForReading("a.rs");
 
-    fireEvent.keyDown(window, { key: "e" });
+    fireEvent.keyDown(window, { key: "l" });
     await waitFor(() => expect(calls).toHaveLength(1));
     expect(calls[0]).toEqual({ path: "src/a.rs", viewed: true });
   });
@@ -221,7 +221,7 @@ describe("marking read", () => {
     render(<App />);
     await waitForReading("a.rs");
 
-    fireEvent.click(screen.getByTitle("Mark as read — key e"));
+    fireEvent.click(screen.getByTitle("Mark as read — key l"));
     await waitFor(() => expect(calls).toHaveLength(1));
     expect(calls[0].viewed).toBe(false);
   });

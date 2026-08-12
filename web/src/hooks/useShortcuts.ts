@@ -37,7 +37,10 @@ export function useShortcuts({
           if (next) setCurrent(next.path);
           break;
         }
-        case "e": {
+        // Under the ring finger, one key past `k`. Marking a file read is the
+        // thing done most often after moving between them, and it used to sit
+        // on the other hand.
+        case "l": {
           const file = order[index];
           if (file) void toggleViewed(file.path, !file.viewed);
           break;

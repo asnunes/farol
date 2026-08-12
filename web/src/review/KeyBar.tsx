@@ -6,7 +6,7 @@ export function KeyBar() {
       {[
         [["j", "k"], "file"],
         [["n"], "next unread"],
-        [["e"], "mark read"],
+        [["l"], "mark read"],
         [["[", "]"], "block"],
         [["?"], "help"],
       ].map(([keys, what], i) => (
