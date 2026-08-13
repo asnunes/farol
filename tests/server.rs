@@ -704,6 +704,41 @@ fn asking_for_the_same_review_twice_hands_back_the_one_already_open() {
 }
 
 #[test]
+fn a_page_watching_for_changes_does_not_keep_the_server_alive() {
+    // Graceful shutdown waits for every connection in flight, and the change
+    // stream is a connection that never ends on its own. Without the stream
+    // listening for the signal, a single open page made `stop` time out, and
+    // the process stayed on its port for good — invisible to the CLI, because
+    // a server that has stopped accepting no longer answers `/health`.
+    let d = Detached::new();
+    let pid = d.pid_on(d.port);
+
+    let mut watching = Command::new("curl")
+        .args([
+            "-sN",
+            "--max-time",
+            "30",
+            &format!("http://127.0.0.1:{}/api/watch", d.port),
+        ])
+        .stdout(Stdio::null())
+        .spawn()
+        .expect("curl should start");
+    // Long enough for the request to have been accepted and the handler to be
+    // sitting on the channel.
+    std::thread::sleep(Duration::from_millis(500));
+
+    let out = d.repo.ok(&["servers", "stop", &d.port.to_string()]);
+
+    assert!(out.contains("Stopped"), "{out}");
+    assert!(
+        !running(pid),
+        "the server should have stopped with a page watching"
+    );
+    let _ = watching.kill();
+    let _ = watching.wait();
+}
+
+#[test]
 fn stopping_a_server_ends_it_and_takes_it_off_the_list() {
     let d = Detached::new();
     let pid = d.pid_on(d.port);

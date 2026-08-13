@@ -135,16 +135,33 @@ async fn close_comment(
 /// reaches a page.
 async fn watch(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     let mut rx = state.changes.subscribe();
+    let mut stopping = state.stopping.clone();
     let stream = async_stream::stream! {
         loop {
-            match rx.recv().await {
-                Ok(kind) => yield Ok::<_, std::convert::Infallible>(Event::default().event(&kind).data(&kind)),
-                Err(broadcast::error::RecvError::Lagged(_)) => continue,
-                Err(_) => break,
+            tokio::select! {
+                // Whichever comes first, and the second arm is why the process
+                // can be stopped at all: this stream is what graceful shutdown
+                // would otherwise wait on forever.
+                nudge = rx.recv() => match nudge {
+                    Ok(kind) => yield Ok::<_, std::convert::Infallible>(Event::default().event(&kind).data(&kind)),
+                    Err(broadcast::error::RecvError::Lagged(_)) => continue,
+                    Err(_) => break,
+                },
+                _ = asked_to_stop(&mut stopping) => break,
             }
         }
     };
     Sse::new(stream).keep_alive(axum::response::sse::KeepAlive::default())
+}
+
+/// Resolves once the process has been asked to stop.
+///
+/// `wait_for` rather than `changed`, so a connection that arrives after the
+/// signal reads the state instead of waiting for a second one that is never
+/// coming. It is a function of its own because the borrow the watch hands back
+/// is not `Send`, and the stream it is selected in has to be.
+async fn asked_to_stop(stopping: &mut tokio::sync::watch::Receiver<bool>) {
+    let _ = stopping.wait_for(|asked| *asked).await;
 }
 
 /// Every failure here is the caller asking for something that is not under
@@ -264,7 +281,7 @@ pub(super) mod tests {
                 )))),
             ),
         };
-        let (state, _) = AppState::new(use_cases);
+        let (state, _) = AppState::new(use_cases, tokio::sync::watch::channel(false).1);
 
         let response = router(state, identity())
             .oneshot(
