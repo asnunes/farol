@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 import { readingOrder } from "@/api";
 import { useDiffView } from "@/hooks/useDiffView";
 import { useOpenFiles } from "@/hooks/useOpenFiles";
+import { useTheme } from "@/hooks/useTheme";
 import { useReview } from "@/hooks/useReview";
 import { useShortcuts } from "@/hooks/useShortcuts";
 import { HelpDialog } from "@/review/HelpDialog";
@@ -19,6 +20,7 @@ export default function App() {
   const [helpOpen, setHelpOpen] = useState(false);
   const [view, setView] = useDiffView();
   const files = useOpenFiles();
+  const [theme, setTheme] = useTheme();
 
   const order = review ? readingOrder(review) : [];
   const index = order.findIndex((f) => f.path === current);
@@ -83,7 +85,7 @@ export default function App() {
         files={files}
       />
 
-      <KeyBar />
+      <KeyBar theme={theme} onTheme={setTheme} />
       <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
     </div>
   );

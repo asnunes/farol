@@ -1,4 +1,6 @@
 import { ArrowDown, ArrowUp, Space } from "lucide-react";
+import { ThemeSwitch } from "@/review/ThemeSwitch";
+import type { Theme } from "@/hooks/useTheme";
 
 /** The shortcuts, always visible, so the keyboard does not have to be
  * discovered.
@@ -6,9 +8,12 @@ import { ArrowDown, ArrowUp, Space } from "lucide-react";
  * A key with a letter or a symbol on it is written; a key that only has a name
  * is drawn. The characters for those, `↵` and `⇞`, come out of a monospace font
  * as two indistinguishable ticks at this size. */
-export function KeyBar() {
+export function KeyBar({ theme, onTheme }: KeyBarProps) {
   return (
-    <nav className="keybar col-span-full flex gap-5 border-t border-rule bg-surface px-5 py-1.5 font-sans text-xs text-muted">
+    <nav className="keybar col-span-full flex items-center justify-between border-t border-rule bg-surface px-5 py-1.5 font-sans text-xs text-muted">
+      <ThemeSwitch theme={theme} onChange={onTheme} />
+
+      <div className="flex gap-5">
       {SHORTCUTS.map(({ keys, what }) => (
         // Centred rather than sitting on a baseline: a chip holding an icon
         // and a chip holding a letter have different baselines inside them, and
@@ -20,6 +25,7 @@ export function KeyBar() {
           <span className="ml-0.5">{what}</span>
         </span>
       ))}
+      </div>
     </nav>
   );
 }
@@ -39,5 +45,7 @@ const SHORTCUTS: { keys: (string | { Icon: typeof ArrowUp })[]; what: string }[]
   { keys: ["[", "]"], what: "block" },
   { keys: ["?"], what: "help" },
 ];
+
+type KeyBarProps = { theme: Theme; onTheme: (theme: Theme) => void };
 
 type KeyProps = { children: React.ReactNode };

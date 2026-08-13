@@ -529,6 +529,20 @@ describe("open and closed", () => {
   });
 });
 
+describe("light and dark", () => {
+  it("puts the choice on the root element, which is what the stylesheet reads", async () => {
+    serve({ review: review() });
+    render(<App />);
+    await waitForReading("a.rs");
+
+    const before = document.documentElement.dataset.theme;
+    fireEvent.click(screen.getByTitle(/Switch to the/));
+
+    await waitFor(() => expect(document.documentElement.dataset.theme).not.toBe(before));
+    expect(localStorage.getItem("farol:theme")).toBe(document.documentElement.dataset.theme);
+  });
+});
+
 describe("a long review", () => {
   it("asks for one diff per file, and only for the files on the page", async () => {
     // The pane is one page now. Fetching every diff up front would mean a
