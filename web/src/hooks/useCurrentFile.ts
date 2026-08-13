@@ -1,14 +1,17 @@
 import { useEffect, useRef } from "react";
+import { isSettling } from "@/lib/scroll";
 import type { ReviewView } from "@/api";
 
 /** Name the file the reader is on, from where the pane is scrolled.
  *
  * The file whose header last passed a line a quarter down the pane, which is
- * the one being worked on. Two ends need saying out loud: at the very top no
- * header has passed the line yet, and at the very bottom the last files never
- * reach it at all, because the scroll runs out first. Reading only the top
- * slice left the last file of a review impossible to mark with the keyboard,
- * since it never became the current one.
+ * the one being worked on, and the first one on screen before any has.
+ *
+ * The pane keeps most of a screen of room under the last file, so every file
+ * can be brought up to the line. Without that room the tail of the review
+ * cannot reach it, and picking the last visible file instead makes the whole
+ * last screenful report the same one: every file but the bottom one becomes
+ * impossible to mark from the keyboard.
  *
  * Measured on scroll rather than watched with an observer: an observer reports
  * crossings, and neither end of the list produces one. */
@@ -26,6 +29,7 @@ export function useCurrentFile(
 
     let queued = 0;
     const look = () => {
+      if (isSettling()) return;
       const found = whereTheReaderIs(root);
       if (found) onCurrentRef.current(found);
     };
@@ -46,7 +50,6 @@ export function useCurrentFile(
 function whereTheReaderIs(root: HTMLElement): string | null {
   const pane = root.getBoundingClientRect();
   const line = pane.top + pane.height * READING_LINE;
-  const atTheEnd = root.scrollTop + root.clientHeight >= root.scrollHeight - 2;
 
   const visible = [...root.querySelectorAll<HTMLElement>("[data-path]")]
     .map((el) => ({ el, box: el.getBoundingClientRect() }))
@@ -54,7 +57,7 @@ function whereTheReaderIs(root: HTMLElement): string | null {
   if (!visible.length) return null;
 
   const passed = visible.filter(({ box }) => box.top <= line);
-  const here = atTheEnd ? visible[visible.length - 1] : (passed[passed.length - 1] ?? visible[0]);
+  const here = passed[passed.length - 1] ?? visible[0];
 
   return here.el.dataset.path ?? null;
 }
