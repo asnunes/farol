@@ -3,7 +3,7 @@ import { Progress } from "@/components/ui/progress";
 import { Refresh } from "@/review/Refresh";
 import { ViewToggle } from "@/review/ViewToggle";
 import type { DiffView } from "@/hooks/useDiffView";
-import type { ReviewView } from "@/api";
+import type { ReviewView, Unreadable as UnreadableView } from "@/api";
 
 /** Where you are and how far through you are. */
 export function TopBar({ review, view, onView, stale, onRefresh, unreadable }: TopBarProps) {
@@ -18,7 +18,7 @@ export function TopBar({ review, view, onView, stale, onRefresh, unreadable }: T
       </div>
 
       <div className="flex items-center gap-4">
-        {unreadable.length > 0 && <Unreadable files={unreadable} />}
+        {unreadable.length > 0 && <Unreadable broken={unreadable} />}
         {stale && <Refresh onRefresh={onRefresh} />}
         <ViewToggle view={view} onChange={onView} />
         {review.commitsBehind > 0 && (
@@ -54,16 +54,22 @@ export function TopBar({ review, view, onView, stale, onRefresh, unreadable }: T
  * Up here rather than beside the code, because a comment whose header is broken
  * has no line left to sit next to — that is exactly what is wrong with it. The
  * chip names the files in its tooltip, since fixing one means opening it. */
-function Unreadable({ files }: { files: string[] }) {
+function Unreadable({ broken }: { broken: UnreadableView[] }) {
   return (
     <div
       className="unreadable flex items-center gap-1.5 rounded-full bg-del-bg px-2.5 py-1 font-mono text-xs text-del-ink"
-      title={`Could not be read — the header needs path: and lines: between two --- lines.\n\n${files.join("\n")}`}
+      title={broken.map(names).join("\n\n")}
     >
       <TriangleAlert className="size-3.5" aria-hidden="true" />
-      {files.length} comment file{files.length === 1 ? "" : "s"} unreadable
+      {broken.length} comment{broken.length === 1 ? "" : "s"} unreadable
     </div>
   );
+}
+
+/** What the reviewer knows it by, then why, then the file to open. */
+function names(one: UnreadableView): string {
+  const headline = one.about ?? (one.excerpt === null ? "an empty comment" : `"${one.excerpt}"`);
+  return `${headline}\n${one.why}\n${one.file}`;
 }
 
 type TopBarProps = {
@@ -72,6 +78,6 @@ type TopBarProps = {
   onView: (view: DiffView) => void;
   stale: boolean;
   onRefresh: () => void;
-  /** Paths of comment files that could not be parsed. */
-  unreadable: string[];
+  /** Comment files that could not be parsed, in the reviewer's terms. */
+  unreadable: UnreadableView[];
 };

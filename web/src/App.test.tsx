@@ -641,7 +641,14 @@ describe("a comment file that cannot be read", () => {
           return new Response(
             JSON.stringify({
               comments: [],
-              unreadable: [".git/farol/feature-x/comments/18cb-3731.md"],
+              unreadable: [
+                {
+                  file: ".git/farol/feature-x/comments/18cb-3731.md",
+                  about: null,
+                  excerpt: "Por que essa ordem?",
+                  why: "its header is gone, so nothing says where it belongs",
+                },
+              ],
             }),
             { headers: { "content-type": "application/json" } },
           );
@@ -659,8 +666,12 @@ describe("a comment file that cannot be read", () => {
 
     render(<App />);
 
-    const chip = await screen.findByText(/1 comment file unreadable/);
-    // The file has to be named: fixing one means opening it.
+    const chip = await screen.findByText(/1 comment unreadable/);
+    // Known by what the reviewer wrote, since the header no longer says which
+    // file it was about — and the file to open comes with it, because that is
+    // the fix.
+    expect(chip.getAttribute("title")).toContain('"Por que essa ordem?"');
+    expect(chip.getAttribute("title")).toContain("header is gone");
     expect(chip.getAttribute("title")).toContain("18cb-3731.md");
   });
 });

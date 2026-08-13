@@ -1,6 +1,6 @@
 use std::fmt::{self, Display};
 
-use crate::comments::domain::Found;
+use crate::comments::domain::{Found, Unread, Unreadable};
 
 /// The comments, for the terminal and for the session reading its own review.
 pub struct CommentList<'a>(pub &'a Found);
@@ -23,25 +23,46 @@ impl Display for CommentList<'_> {
             writeln!(f)?;
         }
 
-        // Loudly, and by name. A file that cannot be read is a comment somebody
-        // wrote and can no longer see, and the only way to get it back is to
-        // open the file — so the file is what this says.
+        // Named the way the review is read, not the way it is stored: the file
+        // it was written about when the header still says, and the start of
+        // the prose when it does not. The `.md` comes last, because opening it
+        // is the fix rather than the point.
         if !self.0.unreadable.is_empty() {
             let n = self.0.unreadable.len();
             let s = match n == 1 {
                 true => "",
                 false => "s",
             };
-            writeln!(f, "{n} comment file{s} could not be read:")?;
-            for path in &self.0.unreadable {
-                writeln!(f, "    {path}")?;
+            writeln!(f, "{n} comment{s} could not be read:")?;
+            for one in &self.0.unreadable {
+                writeln!(f, "    {}", headline(one))?;
+                writeln!(f, "    {}", says(one.why))?;
+                writeln!(f, "    {}\n", one.file)?;
             }
-            writeln!(
-                f,
-                "The header needs `path:` and `lines:` between two --- lines."
-            )?;
         }
         Ok(())
+    }
+}
+
+/// What the reviewer knows it by: the file it was about, or failing that, the
+/// first line of what they wrote.
+fn headline(one: &Unreadable) -> String {
+    match (&one.about, &one.excerpt) {
+        (Some(path), _) => path.clone(),
+        (None, Some(text)) => format!("\"{text}\""),
+        (None, None) => "an empty comment".to_string(),
+    }
+}
+
+/// Why a comment could not be read, in one clause.
+///
+/// Shared with the view the browser gets, so the terminal and the screen say
+/// the same thing about the same file.
+pub fn says(why: Unread) -> &'static str {
+    match why {
+        Unread::NoHeader => "its header is gone, so nothing says where it belongs",
+        Unread::NoPath => "the header no longer says which file it is about",
+        Unread::NoLines => "the header no longer says which lines",
     }
 }
 
@@ -60,10 +81,19 @@ mod tests {
         }
     }
 
-    fn found(comments: Vec<Comment>, unreadable: Vec<&str>) -> Found {
+    fn found(comments: Vec<Comment>, unreadable: Vec<Unreadable>) -> Found {
         Found {
             comments,
-            unreadable: unreadable.into_iter().map(String::from).collect(),
+            unreadable,
+        }
+    }
+
+    fn broken(about: Option<&str>, excerpt: Option<&str>, why: Unread) -> Unreadable {
+        Unreadable {
+            file: ".git/farol/b/comments/x.md".into(),
+            about: about.map(String::from),
+            excerpt: excerpt.map(String::from),
+            why,
         }
     }
 
@@ -84,24 +114,49 @@ mod tests {
     }
 
     #[test]
-    fn a_file_that_could_not_be_read_is_named_and_counted() {
-        // Silence here reads as "you never wrote that comment", which is the
-        // one thing the reviewer cannot recover from.
-        let out = CommentList(&found(vec![], vec![".git/farol/b/comments/x.md"])).to_string();
+    fn one_that_still_knows_its_file_is_named_by_the_file() {
+        // The review is read in file names, so that is what the reviewer is
+        // told whenever the header still carries one.
+        let out = CommentList(&found(
+            vec![],
+            vec![broken(Some("src/a.rs"), Some("Why?"), Unread::NoLines)],
+        ))
+        .to_string();
 
-        assert!(out.contains("1 comment file could not be read"), "{out}");
-        assert!(out.contains(".git/farol/b/comments/x.md"), "{out}");
+        assert!(out.contains("src/a.rs"), "{out}");
+        assert!(out.contains("no longer says which lines"), "{out}");
         assert!(
-            out.contains("path:"),
-            "it has to say what a header needs: {out}"
+            out.contains(".git/farol/b/comments/x.md"),
+            "the fix is to open it: {out}"
         );
     }
 
     #[test]
-    fn several_of_them_read_as_several() {
-        let out = CommentList(&found(vec![], vec!["a.md", "b.md"])).to_string();
+    fn one_that_lost_its_file_is_named_by_what_it_says() {
+        // Nothing left to place it by, so the reviewer gets their own words
+        // back — which is how a person recognises a comment they wrote.
+        let out = CommentList(&found(
+            vec![],
+            vec![broken(None, Some("Por que essa ordem?"), Unread::NoHeader)],
+        ))
+        .to_string();
 
-        assert!(out.contains("2 comment files could not be read"), "{out}");
+        assert!(out.contains("\"Por que essa ordem?\""), "{out}");
+        assert!(out.contains("nothing says where it belongs"), "{out}");
+    }
+
+    #[test]
+    fn several_of_them_read_as_several() {
+        let out = CommentList(&found(
+            vec![],
+            vec![
+                broken(None, Some("a"), Unread::NoHeader),
+                broken(None, Some("b"), Unread::NoPath),
+            ],
+        ))
+        .to_string();
+
+        assert!(out.contains("2 comments could not be read"), "{out}");
     }
 
     #[test]

@@ -457,13 +457,23 @@ fn a_comment_file_edited_into_nonsense_is_reported_to_the_page() {
     assert_eq!(answer["comments"].as_array().unwrap().len(), 0);
     let unreadable = answer["unreadable"].as_array().unwrap();
     assert_eq!(unreadable.len(), 1);
-    // From the root of the worktree, not from the root of the disk: the name
-    // is there to be pasted into an editor, and the absolute form is mostly a
-    // prefix the reviewer already knows.
+    // Named the way the review is read. The header is gone here, so all that
+    // is left to know it by is what the reviewer wrote.
+    assert_eq!(unreadable[0]["excerpt"], "somebody deleted the header");
+    assert!(
+        unreadable[0]["why"]
+            .as_str()
+            .unwrap()
+            .contains("header is gone"),
+        "{unreadable:?}"
+    );
+    // And the file to open, from the root of the worktree rather than the disk.
     assert_eq!(
-        unreadable[0].as_str().unwrap(),
-        ".git/farol/feature-x/comments/".to_string().to_owned()
-            + file.file_name().unwrap().to_str().unwrap()
+        unreadable[0]["file"].as_str().unwrap(),
+        format!(
+            ".git/farol/feature-x/comments/{}",
+            file.file_name().unwrap().to_str().unwrap()
+        )
     );
 }
 

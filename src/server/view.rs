@@ -8,6 +8,7 @@
 use serde::Serialize;
 
 use crate::comments::domain::{Comment, Found};
+use crate::comments::presentation::says;
 use crate::diff::domain::FileStatus;
 use crate::map::application::ReviewSnapshot;
 use crate::map::domain::ReviewMap;
@@ -96,7 +97,19 @@ pub struct CommentView {
 #[serde(rename_all = "camelCase")]
 pub struct CommentsView {
     pub comments: Vec<CommentView>,
-    pub unreadable: Vec<String>,
+    pub unreadable: Vec<UnreadableView>,
+}
+
+/// A comment the store could not read, in the terms the page speaks: the file
+/// it was written about, or the start of the prose when the header no longer
+/// says which file that was.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnreadableView {
+    pub file: String,
+    pub about: Option<String>,
+    pub excerpt: Option<String>,
+    pub why: &'static str,
 }
 
 impl ReviewView {
@@ -196,7 +209,16 @@ impl CommentsView {
     pub fn of(found: &Found) -> Self {
         Self {
             comments: found.comments.iter().map(CommentView::of).collect(),
-            unreadable: found.unreadable.clone(),
+            unreadable: found
+                .unreadable
+                .iter()
+                .map(|one| UnreadableView {
+                    file: one.file.clone(),
+                    about: one.about.clone(),
+                    excerpt: one.excerpt.clone(),
+                    why: says(one.why),
+                })
+                .collect(),
         }
     }
 }

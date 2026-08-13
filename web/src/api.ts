@@ -103,8 +103,20 @@ export type DiffLine = {
  * rendering, and silence there reads as never having written it. */
 export type CommentsView = {
   comments: CommentView[];
-  /** Paths of the files to open and fix. */
-  unreadable: string[];
+  unreadable: Unreadable[];
+};
+
+/** A comment the store could not read.
+ *
+ * What broke is the header, which is the part saying where the comment belongs
+ * — so `about` is there only when the header still names a file. When it does
+ * not, `excerpt` is what the reviewer recognises it by. */
+export type Unreadable = {
+  /** The file to open to fix it, from the root of the worktree. */
+  file: string;
+  about: string | null;
+  excerpt: string | null;
+  why: string;
 };
 
 /** A question the reviewer left over a span of lines they were reading.

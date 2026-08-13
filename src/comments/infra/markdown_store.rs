@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use crate::comments::domain::{Comment, CommentStore, Found};
+use crate::comments::domain::{Comment, CommentStore, Found, Unread, Unreadable};
 use crate::error::{Error, Result};
 use crate::shared::paths::Store;
 
@@ -66,14 +66,13 @@ impl CommentStore for MarkdownComments {
             .map(|e| e.path())
             .filter(|p| p.extension().is_some_and(|x| x == "md"))
         {
-            let read = std::fs::read_to_string(&file)
-                .ok()
-                .zip(file.file_stem())
-                .and_then(|(raw, id)| parse(&id.to_string_lossy(), &raw));
+            let Some((raw, id)) = std::fs::read_to_string(&file).ok().zip(file.file_stem()) else {
+                continue;
+            };
 
-            match read {
-                Some(comment) => found.comments.push(comment),
-                None => found.unreadable.push(self.named(&file)),
+            match parse(&id.to_string_lossy(), self.named(&file), &raw) {
+                Ok(comment) => found.comments.push(comment),
+                Err(unread) => found.unreadable.push(unread),
             }
         }
 
@@ -81,7 +80,7 @@ impl CommentStore for MarkdownComments {
         // order it happened. The unreadable ones by name, for the same reason
         // any list of files is sorted — so it reads the same twice running.
         found.comments.sort_by(|a, b| a.id.cmp(&b.id));
-        found.unreadable.sort();
+        found.unreadable.sort_by(|a, b| a.file.cmp(&b.file));
         Ok(found)
     }
 
@@ -114,17 +113,30 @@ fn render(comment: &Comment) -> String {
 /// two keys do not justify a dependency, and a file a person edited by hand and
 /// got slightly wrong should be skipped, not fatal.
 ///
-/// A key it does not know is ignored rather than refused, which is what lets an
-/// older file — one still carrying `resolved:` from when closing kept the
-/// comment — be read without a migration.
-fn parse(id: &str, raw: &str) -> Option<Comment> {
-    let rest = raw.strip_prefix("---\n")?;
-    let (head, body) = rest.split_once("\n---\n")?;
+/// Anything in the header that is not one of the two keys is passed over: a key
+/// from an older farol, a line somebody was drafting, a blank one. Only the two
+/// facts it needs can stop it — and when they do, what survived comes back so
+/// the reviewer is told in their own terms rather than in file names.
+fn parse(id: &str, file: String, raw: &str) -> std::result::Result<Comment, Unreadable> {
+    let unreadable = |why, about: Option<String>, body: &str| Unreadable {
+        file: file.clone(),
+        about,
+        excerpt: excerpt(body),
+        why,
+    };
+
+    let Some((head, body)) = raw
+        .strip_prefix("---\n")
+        .and_then(|rest| rest.split_once("\n---\n"))
+    else {
+        // Nothing to read but the prose, which is all the reviewer has left to
+        // recognise it by.
+        return Err(unreadable(Unread::NoHeader, None, raw));
+    };
 
     let mut path = None;
     let mut lines = None;
-    for line in head.lines() {
-        let (key, value) = line.split_once(':')?;
+    for (key, value) in head.lines().filter_map(|line| line.split_once(':')) {
         match key.trim() {
             "path" => path = Some(value.trim().to_string()),
             "lines" => lines = Some(value.trim().to_string()),
@@ -132,16 +144,40 @@ fn parse(id: &str, raw: &str) -> Option<Comment> {
         }
     }
 
-    let lines = lines?;
-    let (from, to) = lines.split_once('-').unwrap_or((&lines, &lines));
+    let Some(path) = path else {
+        return Err(unreadable(Unread::NoPath, None, body));
+    };
+    let range = lines
+        .as_deref()
+        .map(|l| l.split_once('-').unwrap_or((l, l)))
+        .and_then(|(a, b)| Some((a.trim().parse().ok()?, b.trim().parse().ok()?)));
+    let Some((from, to)) = range else {
+        return Err(unreadable(Unread::NoLines, Some(path), body));
+    };
 
-    Some(Comment {
+    Ok(Comment {
         id: id.to_string(),
-        path: path?,
-        from: from.trim().parse().ok()?,
-        to: to.trim().parse().ok()?,
+        path,
+        from,
+        to,
         body: body.trim().to_string(),
     })
+}
+
+/// How much of a comment it takes to recognise it. One line, because that is
+/// what a chip and a terminal row have room for, and the first line of a
+/// comment is where people put the question.
+const EXCERPT: usize = 60;
+
+fn excerpt(body: &str) -> Option<String> {
+    let line = body.trim().lines().next()?.trim();
+    if line.is_empty() {
+        return None;
+    }
+    match line.chars().count() > EXCERPT {
+        true => Some(line.chars().take(EXCERPT).collect::<String>() + "…"),
+        false => Some(line.to_string()),
+    }
 }
 
 #[cfg(test)]
@@ -226,9 +262,9 @@ mod tests {
 
         let found = store.list().unwrap();
         assert_eq!(found.comments.len(), 1);
+        assert_eq!(found.unreadable.len(), 1);
         assert_eq!(
-            found.unreadable,
-            vec!["farol/feature-x/comments/2.md"],
+            found.unreadable[0].file, "farol/feature-x/comments/2.md",
             "named from the root of the worktree, to be pasted into an editor"
         );
     }
@@ -249,34 +285,73 @@ mod tests {
         let found = comments.list().unwrap();
 
         assert_eq!(
-            found.unreadable,
-            vec!["../../main/.git/farol/feature-x/comments/1.md"]
+            found.unreadable[0].file,
+            "../../main/.git/farol/feature-x/comments/1.md"
         );
     }
 
     #[test]
-    fn every_way_of_breaking_the_header_is_reported_rather_than_swallowed() {
-        // The four a person actually produces by editing the file: the header
-        // gone, either key gone, and a stray line with no colon in it.
+    fn a_broken_header_is_reported_in_the_terms_the_review_is_read_in() {
+        // Each way a person actually breaks it by editing, and what is left to
+        // tell them by: the reviewed file when the header still names it, and
+        // the first line of their own prose when it does not.
         let (_dir, store) = store();
-        let broken = [
-            ("a", "no header at all, just prose\n"),
-            ("b", "---\nlines: 1-2\n---\n\nWhy?\n"),
-            ("c", "---\npath: src/a.rs\n---\n\nWhy?\n"),
-            (
-                "d",
-                "---\npath: src/a.rs\nrascunho\nlines: 1-2\n---\n\nWhy?\n",
-            ),
-        ];
-        for (id, raw) in broken {
-            std::fs::create_dir_all(&store.dir).unwrap();
+        std::fs::create_dir_all(&store.dir).unwrap();
+        for (id, raw) in [
+            ("a", "no header at all, just the question I asked\n"),
+            ("b", "---\nlines: 1-2\n---\n\nWhy this order?\n"),
+            ("c", "---\npath: src/a.rs\n---\n\nWhy this order?\n"),
+        ] {
             std::fs::write(store.file(id), raw).unwrap();
         }
 
+        let broken = store.list().unwrap().unreadable;
+
+        assert_eq!(broken.len(), 3);
+        assert_eq!(broken[0].why, Unread::NoHeader);
+        assert_eq!(broken[0].about, None);
+        assert_eq!(
+            broken[0].excerpt.as_deref(),
+            Some("no header at all, just the question I asked")
+        );
+
+        assert_eq!(broken[1].why, Unread::NoPath);
+        assert_eq!(broken[1].about, None);
+        assert_eq!(broken[1].excerpt.as_deref(), Some("Why this order?"));
+
+        // The one case where the review still has a name for it.
+        assert_eq!(broken[2].why, Unread::NoLines);
+        assert_eq!(broken[2].about.as_deref(), Some("src/a.rs"));
+    }
+
+    #[test]
+    fn a_stray_line_in_the_header_costs_nothing() {
+        // A draft, a blank line, a key from an older farol. None of them is a
+        // reason to lose the comment underneath.
+        let (_dir, store) = store();
+        std::fs::create_dir_all(&store.dir).unwrap();
+        std::fs::write(
+            store.file("1"),
+            "---\npath: src/a.rs\nrascunho\n\nresolved: false\nlines: 4-6\n---\n\nWhy?\n",
+        )
+        .unwrap();
+
         let found = store.list().unwrap();
 
-        assert!(found.comments.is_empty());
-        assert_eq!(found.unreadable.len(), 4, "{:?}", found.unreadable);
+        assert!(found.unreadable.is_empty(), "{:?}", found.unreadable);
+        assert_eq!(found.comments[0].from, 4);
+        assert_eq!(found.comments[0].body, "Why?");
+    }
+
+    #[test]
+    fn a_long_comment_is_cut_short_enough_to_recognise() {
+        let (_dir, store) = store();
+        std::fs::create_dir_all(&store.dir).unwrap();
+        std::fs::write(store.file("1"), format!("no header\n{}", "a".repeat(200))).unwrap();
+
+        let excerpt = store.list().unwrap().unreadable[0].excerpt.clone().unwrap();
+
+        assert_eq!(excerpt, "no header");
     }
 
     #[test]

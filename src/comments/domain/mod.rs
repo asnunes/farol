@@ -46,9 +46,38 @@ pub trait CommentStore: Send + Sync {
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Found {
     pub comments: Vec<Comment>,
-    /// Paths of the files that could not be read, so they can be opened and
-    /// fixed rather than hunted for.
-    pub unreadable: Vec<String>,
+    pub unreadable: Vec<Unreadable>,
+}
+
+/// A file that could not be turned into a comment, and everything that can
+/// still be said about it.
+///
+/// What broke is the header, which is the part that says where the comment
+/// belongs — so half the time there is no reviewed file left to name. When
+/// there is, it is what the reviewer is told, because that is the language the
+/// review is read in. When there is not, they get the start of what they wrote,
+/// which is how a person recognises their own comment.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Unreadable {
+    /// The file to open to fix it, from where the reviewer is standing.
+    pub file: String,
+    /// The reviewed file it was written about, when the header still says.
+    pub about: Option<String>,
+    /// The start of what they wrote, when it does not.
+    pub excerpt: Option<String>,
+    pub why: Unread,
+}
+
+/// What the header is missing. A closed set, so the wording lives with the
+/// presentation rather than being built where the file is read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Unread {
+    /// No `---` header at all.
+    NoHeader,
+    /// Nothing saying which file it is about.
+    NoPath,
+    /// Nothing saying which lines, or something that is not a range.
+    NoLines,
 }
 
 #[cfg(test)]
