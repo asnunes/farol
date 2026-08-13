@@ -1,4 +1,4 @@
-//! The four things the browser asks for.
+//! What the browser asks for.
 //!
 //! Handlers only: each one unpacks the request, calls one use case, and turns
 //! the answer into a response. No business logic passes through here — that is
@@ -6,11 +6,11 @@
 
 use std::sync::Arc;
 
-use axum::extract::{Query, State};
+use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::response::sse::{Event, Sse};
-use axum::routing::{get, post};
+use axum::routing::{delete, get, post};
 use axum::{Json, Router};
 use serde::Deserialize;
 
@@ -27,6 +27,9 @@ pub(super) fn router(state: Arc<AppState>, identity: ServerEntry) -> Router {
         .route("/api/review", get(review))
         .route("/api/file", get(file))
         .route("/api/viewed", post(viewed))
+        .route("/api/comments", get(comments).post(write_comment))
+        .route("/api/comments/{id}/resolve", post(resolve_comment))
+        .route("/api/comments/{id}", delete(remove_comment))
         .route("/api/watch", get(watch))
         .route("/health", get(move || health(identity.clone())))
         .fallback(assets::handler)
@@ -79,6 +82,63 @@ async fn viewed(
     };
     match result {
         Ok(_) => StatusCode::NO_CONTENT.into_response(),
+        Err(e) => fail(e),
+    }
+}
+
+/// What the reviewer wrote back, all of it — closed ones included, because the
+/// screen keeps them on the page rather than hiding what was settled.
+async fn comments(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    match state.use_cases.comments.all() {
+        Ok(all) => Json(all.iter().map(view::CommentView::of).collect::<Vec<_>>()).into_response(),
+        Err(e) => fail(e),
+    }
+}
+
+#[derive(Deserialize)]
+struct NewComment {
+    path: String,
+    from: u32,
+    to: u32,
+    body: String,
+}
+
+async fn write_comment(
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<NewComment>,
+) -> impl IntoResponse {
+    match state
+        .use_cases
+        .comments
+        .add(&body.path, body.from, body.to, &body.body)
+    {
+        Ok(comment) => Json(view::CommentView::of(&comment)).into_response(),
+        Err(e) => fail(e),
+    }
+}
+
+#[derive(Deserialize)]
+struct Resolution {
+    resolved: bool,
+}
+
+async fn resolve_comment(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+    Json(body): Json<Resolution>,
+) -> impl IntoResponse {
+    match state.use_cases.comments.resolve(&id, body.resolved) {
+        Ok(comment) => Json(view::CommentView::of(&comment)).into_response(),
+        Err(e) => fail(e),
+    }
+}
+
+async fn remove_comment(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    match state.use_cases.comments.remove(&id) {
+        Ok(()) => StatusCode::NO_CONTENT.into_response(),
         Err(e) => fail(e),
     }
 }
@@ -149,7 +209,7 @@ pub(super) mod tests {
     /// listener next door.
     pub(in crate::server) fn use_cases() -> ServerUseCases {
         use crate::diff::application::{FileDiffs, ReviewScope};
-        use crate::map::application::{GetFileDiff, GetReview};
+        use crate::map::application::{GetFileDiff, GetReview, GetScope};
         use crate::progress::application::{MarkViewed, UnmarkViewed};
 
         let paths = ["a.rs", "b.rs", "Cargo.lock"];
@@ -168,7 +228,12 @@ pub(super) mod tests {
             file_diff: GetFileDiff::new(diffs),
             mark_viewed: MarkViewed::new(progress.clone()),
             unmark_viewed: UnmarkViewed::new(progress),
-            comments: Comments::new(Arc::new(crate::testing::InMemoryComments::default())),
+            comments: Comments::new(
+                Arc::new(crate::testing::InMemoryComments::default()),
+                GetScope::new(ReviewScope::new(Arc::new(FakeDiffSource::with_paths(
+                    &paths,
+                )))),
+            ),
         }
     }
 
@@ -177,7 +242,7 @@ pub(super) mod tests {
         // If the progress store is unreadable the screen must say so rather
         // than render as though nothing had been read.
         use crate::diff::application::{FileDiffs, ReviewScope};
-        use crate::map::application::{GetFileDiff, GetReview};
+        use crate::map::application::{GetFileDiff, GetReview, GetScope};
         use crate::progress::application::{MarkViewed, ProgressStore, UnmarkViewed};
 
         let paths = ["a.rs"];
@@ -204,7 +269,12 @@ pub(super) mod tests {
             file_diff: GetFileDiff::new(diffs),
             mark_viewed: MarkViewed::new(broken.clone()),
             unmark_viewed: UnmarkViewed::new(broken),
-            comments: Comments::new(Arc::new(crate::testing::InMemoryComments::default())),
+            comments: Comments::new(
+                Arc::new(crate::testing::InMemoryComments::default()),
+                GetScope::new(ReviewScope::new(Arc::new(FakeDiffSource::with_paths(
+                    &paths,
+                )))),
+            ),
         };
         let (state, _) = AppState::new(use_cases);
 

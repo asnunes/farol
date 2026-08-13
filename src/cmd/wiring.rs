@@ -79,7 +79,7 @@ impl Ctx {
         let root = workspace.root();
         let branch = workspace.branch().to_string();
 
-        let comments = Comments::new(Arc::new(MarkdownComments::new(&workspace.store())));
+        let comment_store = Arc::new(MarkdownComments::new(&workspace.store()));
         let maps = Arc::new(JsonMapRepository::new(workspace.store()));
         let progress_repo = Arc::new(JsonProgressRepository::new(workspace.store()));
         let source = Arc::new(GixSource::open(workspace.into_repo(), &branch, &request)?);
@@ -88,6 +88,7 @@ impl Ctx {
         let diffs = FileDiffs::new(source.clone());
         let history = CommitHistory::new(source);
 
+        let comments = Comments::new(comment_store, GetScope::new(scope.clone()));
         let reconciler = MapReconciler::new(scope.clone(), diffs.clone());
         let versions = MapVersions::new(scope.clone(), history, maps.clone());
         let derivation =

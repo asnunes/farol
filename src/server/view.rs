@@ -7,6 +7,7 @@
 
 use serde::Serialize;
 
+use crate::comments::domain::Comment;
 use crate::diff::domain::FileStatus;
 use crate::map::application::ReviewSnapshot;
 use crate::map::domain::ReviewMap;
@@ -70,6 +71,21 @@ pub struct ReviewView {
     pub unmapped: Vec<String>,
     pub total_files: usize,
     pub viewed_files: usize,
+}
+
+/// One comment, for the wire.
+///
+/// The domain keeps its own shape: comments are stored as markdown, so serde on
+/// `Comment` would exist for nothing but this hop.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommentView {
+    pub id: String,
+    pub path: String,
+    pub from: u32,
+    pub to: u32,
+    pub body: String,
+    pub resolved: bool,
 }
 
 impl ReviewView {
@@ -161,6 +177,19 @@ impl ReviewView {
             unmapped,
             total_files,
             viewed_files,
+        }
+    }
+}
+
+impl CommentView {
+    pub fn of(comment: &Comment) -> Self {
+        Self {
+            id: comment.id.clone(),
+            path: comment.path.clone(),
+            from: comment.from,
+            to: comment.to,
+            body: comment.body.clone(),
+            resolved: comment.resolved,
         }
     }
 }

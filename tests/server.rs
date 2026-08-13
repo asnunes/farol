@@ -329,6 +329,111 @@ fn marking_a_path_outside_the_review_is_refused() {
     assert_eq!(s.json("/api/review")["viewedFiles"], 0);
 }
 
+// ---- what the reviewer writes back --------------------------------------
+
+#[test]
+fn a_comment_written_from_the_page_can_be_read_closed_and_dropped() {
+    // The whole life of a comment over the wire, in one go: each step is only
+    // worth anything if the one before it stuck.
+    let s = Serving::new();
+    assert_eq!(s.json("/api/comments").as_array().unwrap().len(), 0);
+
+    let (status, body) = s.probe(
+        "POST",
+        "/api/comments",
+        Some(r#"{"path":"src/a.rs","from":10,"to":12,"body":"Why this order?"}"#),
+    );
+    assert_eq!(status, 200, "{body}");
+    let id = serde_json::from_str::<Value>(&body).unwrap()["id"]
+        .as_str()
+        .expect("the new comment comes back with the id to address it by")
+        .to_string();
+
+    let all = s.json("/api/comments");
+    assert_eq!(all[0]["path"], "src/a.rs");
+    assert_eq!(all[0]["from"], 10);
+    assert_eq!(all[0]["to"], 12);
+    assert_eq!(all[0]["body"], "Why this order?");
+    assert_eq!(all[0]["resolved"], false);
+
+    let (status, _) = s.probe(
+        "POST",
+        &format!("/api/comments/{id}/resolve"),
+        Some(r#"{"resolved":true}"#),
+    );
+    assert_eq!(status, 200);
+    let all = s.json("/api/comments");
+    assert_eq!(all.as_array().unwrap().len(), 1, "closed is not deleted");
+    assert_eq!(all[0]["resolved"], true);
+
+    let (status, _) = s.probe("DELETE", &format!("/api/comments/{id}"), None);
+    assert_eq!(status, 204);
+    assert_eq!(s.json("/api/comments").as_array().unwrap().len(), 0);
+}
+
+#[test]
+fn a_comment_is_written_to_the_git_dir_as_markdown() {
+    // The file is the point: it outlives the server, and it is meant to be
+    // opened in an editor.
+    let s = Serving::new();
+    s.probe(
+        "POST",
+        "/api/comments",
+        Some(r#"{"path":"src/a.rs","from":10,"to":12,"body":"Why this order?"}"#),
+    );
+
+    let dir = s.repo.path().join(".git/farol/feature-x/comments");
+    let written = std::fs::read_dir(&dir)
+        .unwrap_or_else(|e| panic!("{} should exist: {e}", dir.display()))
+        .map(|e| e.unwrap().path())
+        .collect::<Vec<_>>();
+
+    assert_eq!(written.len(), 1);
+    assert_eq!(written[0].extension().unwrap(), "md");
+    let raw = std::fs::read_to_string(&written[0]).unwrap();
+    assert!(raw.contains("path: src/a.rs"), "{raw}");
+    assert!(raw.contains("lines: 10-12"), "{raw}");
+    assert!(raw.contains("Why this order?"), "{raw}");
+}
+
+#[test]
+fn a_comment_the_review_cannot_hold_is_refused() {
+    // Both ways of asking for a line that is not there: a file outside the
+    // window, and a span past the end of one inside it. Either would render
+    // nowhere.
+    let s = Serving::new();
+
+    let (outside, _) = s.probe(
+        "POST",
+        "/api/comments",
+        Some(r#"{"path":"elsewhere.rs","from":1,"to":1,"body":"Why?"}"#),
+    );
+    let (past_end, _) = s.probe(
+        "POST",
+        "/api/comments",
+        Some(r#"{"path":"src/a.rs","from":9000,"to":9001,"body":"Why?"}"#),
+    );
+
+    assert_eq!(outside, 400);
+    assert_eq!(past_end, 400);
+    assert_eq!(s.json("/api/comments").as_array().unwrap().len(), 0);
+}
+
+#[test]
+fn addressing_a_comment_that_is_not_there_is_refused_rather_than_ignored() {
+    let s = Serving::new();
+
+    let (resolve, _) = s.probe(
+        "POST",
+        "/api/comments/nope/resolve",
+        Some(r#"{"resolved":true}"#),
+    );
+    let (remove, _) = s.probe("DELETE", "/api/comments/nope", None);
+
+    assert_eq!(resolve, 400);
+    assert_eq!(remove, 400);
+}
+
 // ---- the page finding out on its own ------------------------------------
 
 #[test]

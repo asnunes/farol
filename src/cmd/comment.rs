@@ -16,7 +16,11 @@ pub(super) enum CommentAction {
         #[arg(long)]
         text: String,
     },
-    List,
+    List {
+        /// Only the ones still waiting for an answer.
+        #[arg(long)]
+        open: bool,
+    },
     /// Close one, because it was answered.
     Resolve {
         id: String,
@@ -34,21 +38,23 @@ impl Action for CommentAction {
     fn run(self, ctx: &Ctx) -> Result<()> {
         match self {
             CommentAction::Add { path, range, text } => {
-                // Through the scope, so a comment cannot be left on a file the
-                // reviewer is not looking at, and a range past the end of the
-                // file is refused where it is written rather than on screen.
-                let path = ctx.scope.path(&path)?;
+                // Only the range is parsed here: `<from>-<to>` is how the
+                // terminal spells a span, and everything the comment is checked
+                // against lives in the use case, where the browser reaches it
+                // too.
                 let range = LineRange::parse(&range)?;
-                range.require_within(&path)?;
 
-                let one = ctx
-                    .comments
-                    .add(path.as_str(), range.from, range.to, &text)?;
+                let one = ctx.comments.add(&path, range.from, range.to, &text)?;
                 println!("Wrote comment {} on {}.", one.id, one.path);
                 Ok(())
             }
-            CommentAction::List => {
-                print!("{}", CommentList(&ctx.comments.all()?));
+            CommentAction::List { open } => {
+                let all = ctx.comments.all()?;
+                let shown: Vec<_> = match open {
+                    true => all.into_iter().filter(|c| !c.resolved).collect(),
+                    false => all,
+                };
+                print!("{}", CommentList(&shown));
                 Ok(())
             }
             CommentAction::Resolve { id } => {

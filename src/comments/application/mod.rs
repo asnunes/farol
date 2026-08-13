@@ -2,30 +2,40 @@ use std::sync::Arc;
 
 use crate::comments::domain::{Comment, CommentStore};
 use crate::error::{Error, Result};
+use crate::map::application::GetScope;
+use crate::map::domain::LineRange;
 
 /// Everything that can be done to the reviewer's comments.
 #[derive(Clone)]
 pub struct Comments {
     store: Arc<dyn CommentStore>,
+    scope: GetScope,
 }
 
 impl Comments {
-    pub fn new(store: Arc<dyn CommentStore>) -> Self {
-        Self { store }
+    pub fn new(store: Arc<dyn CommentStore>, scope: GetScope) -> Self {
+        Self { store, scope }
     }
 
     pub fn all(&self) -> Result<Vec<Comment>> {
         self.store.list()
     }
 
+    /// Written against the review, not against a path someone typed: a file
+    /// outside the window and a span past the end of the file are both refused
+    /// here rather than in each caller. The CLI and the browser reach this by
+    /// different roads and the rule has to be the same on both.
     pub fn add(&self, path: &str, from: u32, to: u32, body: &str) -> Result<Comment> {
         if body.trim().is_empty() {
             return Err(Error::msg("a comment with no text says nothing"));
         }
 
+        let path = self.scope.path(path)?;
+        LineRange::new(from, to)?.require_within(&path)?;
+
         let comment = Comment {
             id: fresh_id(),
-            path: path.to_string(),
+            path: path.as_str().to_string(),
             from,
             to,
             body: body.trim().to_string(),
@@ -83,12 +93,21 @@ fn fresh_id() -> String {
 mod tests {
     use super::*;
     use crate::comments::infra::MarkdownComments;
+    use crate::diff::application::ReviewScope;
     use crate::shared::paths::Store;
+    use crate::testing::FakeDiffSource;
 
+    /// Comments over a real folder, because the store is half of what `add`
+    /// does, and over a review that holds one 200-line file.
     fn comments() -> (tempfile::TempDir, Comments) {
         let dir = tempfile::tempdir().unwrap();
         let store = Store::new(dir.path(), "feature/x");
-        (dir, Comments::new(Arc::new(MarkdownComments::new(&store))))
+        let source = FakeDiffSource::with_paths(&["src/a.rs"]).with_line_count("src/a.rs", 200);
+        let scope = GetScope::new(ReviewScope::new(Arc::new(source)));
+        (
+            dir,
+            Comments::new(Arc::new(MarkdownComments::new(&store)), scope),
+        )
     }
 
     #[test]
@@ -109,6 +128,29 @@ mod tests {
         let (_dir, comments) = comments();
 
         assert!(comments.add("src/a.rs", 1, 1, "   \n ").is_err());
+        assert!(comments.all().unwrap().is_empty());
+    }
+
+    #[test]
+    fn a_comment_on_a_file_outside_the_review_is_refused() {
+        // The browser and the terminal both reach this, and neither should be
+        // able to leave a note on a file the reviewer is not looking at.
+        let (_dir, comments) = comments();
+
+        let err = comments.add("elsewhere.rs", 1, 1, "Why?").unwrap_err();
+
+        assert!(err.to_string().contains("elsewhere.rs"), "{err}");
+        assert!(comments.all().unwrap().is_empty());
+    }
+
+    #[test]
+    fn a_comment_past_the_end_of_the_file_is_refused() {
+        // It would render nowhere: there is no line to hang it under.
+        let (_dir, comments) = comments();
+
+        let err = comments.add("src/a.rs", 300, 320, "Why?").unwrap_err();
+
+        assert!(err.to_string().contains("200"), "{err}");
         assert!(comments.all().unwrap().is_empty());
     }
 
