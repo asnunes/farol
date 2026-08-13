@@ -491,8 +491,10 @@ describe("open and closed", () => {
     await waitForReading("b.rs");
 
     expect(section("src/a.rs").textContent).toContain("a.rs");
+    // Waited for, not asserted on the spot: the diff arrives from a fetch, and
+    // the reading marker this test waited on says nothing about that.
+    await waitFor(() => expect(section("src/b.rs").querySelector(".diff")).toBeTruthy());
     expect(section("src/a.rs").querySelector(".diff")).toBeNull();
-    expect(section("src/b.rs").querySelector(".diff")).toBeTruthy();
   });
 
   it("opens a folded file when the reader asks for it", async () => {

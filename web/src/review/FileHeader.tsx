@@ -1,6 +1,7 @@
 import { ChevronDown, ChevronRight, MessageSquare } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { CopyPath } from "@/review/CopyPath";
 import { commentsOn } from "@/review/diff/line";
 import { splitPath } from "@/lib/path";
@@ -35,14 +36,15 @@ export function FileHeader({ file, open, onToggleOpen, onToggleViewed, comments 
           )}
         </Button>
 
-        <button
-          className="markbox grid size-5 shrink-0 cursor-pointer place-items-center rounded border border-rule-strong text-xs text-transparent transition-colors hover:border-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none aria-pressed:border-accent aria-pressed:bg-accent aria-pressed:text-surface"
-          aria-pressed={file.viewed}
+        {/* A checkbox, and built as one: it was a button pretending, with
+            `aria-pressed` where a screen reader expects a checked state. */}
+        <Checkbox
+          className="markbox size-5 cursor-pointer border-rule-strong hover:border-accent data-[state=checked]:border-accent data-[state=checked]:bg-accent data-[state=checked]:text-surface"
+          checked={file.viewed}
+          onCheckedChange={onToggleViewed}
+          aria-label="Mark as read"
           title="Mark as read — key ;"
-          onClick={onToggleViewed}
-        >
-          <span aria-hidden="true">✓</span>
-        </button>
+        />
 
         <div className="path truncate font-mono text-sm font-semibold text-ink">
           <span className="dir font-normal text-faint">{dir}</span>

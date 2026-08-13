@@ -1,4 +1,5 @@
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { splitPath } from "@/lib/path";
 import type { FileView } from "@/api";
@@ -11,10 +12,11 @@ export function FileRow({
 }: FileRowProps) {
   return (
     <li>
-      <button
+      <Button
+        variant="ghost"
         className={cn(
-          "fileitem flex w-full items-center gap-2 rounded px-2 py-1 text-left font-mono text-[0.8125rem] text-ink-soft",
-          "hover:bg-sunken focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+          "fileitem h-auto w-full justify-start gap-2 px-2 py-1 font-mono text-[0.8125rem] font-normal text-ink-soft",
+          "hover:bg-sunken hover:text-ink-soft",
           "aria-[current=true]:bg-accent-dim aria-[current=true]:text-ink",
           file.skim && "skim text-faint",
         )}
@@ -51,7 +53,7 @@ export function FileRow({
             </span>
           )
         )}
-      </button>
+      </Button>
     </li>
   );
 }
