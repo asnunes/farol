@@ -7,6 +7,8 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use crate::comments::application::Comments;
+use crate::comments::infra::MarkdownComments;
 use crate::diff::application::{CommitHistory, FileDiffs, ReviewScope};
 use crate::diff::infra::{GixSource, ScopeRequest};
 use crate::error::Result;
@@ -51,6 +53,8 @@ pub struct Ctx {
     pub reset_map: ResetMap,
     pub scope: GetScope,
 
+    pub comments: Comments,
+
     server: ServerUseCases,
     git_dir: PathBuf,
     root: PathBuf,
@@ -64,6 +68,7 @@ pub struct ServerUseCases {
     pub file_diff: GetFileDiff,
     pub mark_viewed: MarkViewed,
     pub unmark_viewed: UnmarkViewed,
+    pub comments: Comments,
 }
 
 impl Ctx {
@@ -74,6 +79,7 @@ impl Ctx {
         let root = workspace.root();
         let branch = workspace.branch().to_string();
 
+        let comments = Comments::new(Arc::new(MarkdownComments::new(&workspace.store())));
         let maps = Arc::new(JsonMapRepository::new(workspace.store()));
         let progress_repo = Arc::new(JsonProgressRepository::new(workspace.store()));
         let source = Arc::new(GixSource::open(workspace.into_repo(), &branch, &request)?);
@@ -114,11 +120,14 @@ impl Ctx {
             reset_map: ResetMap::new(editor),
             scope: GetScope::new(scope.clone()),
 
+            comments: comments.clone(),
+
             server: ServerUseCases {
                 review: GetReview::new(versions, scope, progress.clone()),
                 file_diff: GetFileDiff::new(diffs),
                 mark_viewed: MarkViewed::new(progress.clone()),
                 unmark_viewed: UnmarkViewed::new(progress),
+                comments,
             },
             git_dir,
             root,

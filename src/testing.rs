@@ -7,6 +7,7 @@
 
 use std::sync::{Arc, Mutex};
 
+use crate::comments::domain::{Comment, CommentStore};
 use crate::diff::domain::{
     CommitHistorySource, FileChange, FileDiff, FileDiffSource, FileStatus, Hunk, Line, LineKind,
     ReviewScopeSource, Scope,
@@ -257,6 +258,34 @@ impl ProgressRepository for InMemoryProgressRepository {
     fn save(&self, progress: &Progress) -> Result<()> {
         *self.progress.lock().unwrap() = progress.clone();
         Ok(())
+    }
+}
+
+/// Comments that never touch the disk.
+#[derive(Default)]
+pub struct InMemoryComments {
+    comments: Mutex<Vec<Comment>>,
+}
+
+impl CommentStore for InMemoryComments {
+    fn list(&self) -> Result<Vec<Comment>> {
+        Ok(self.comments.lock().unwrap().clone())
+    }
+
+    fn save(&self, comment: &Comment) -> Result<()> {
+        let mut all = self.comments.lock().unwrap();
+        match all.iter_mut().find(|c| c.id == comment.id) {
+            Some(existing) => *existing = comment.clone(),
+            None => all.push(comment.clone()),
+        }
+        Ok(())
+    }
+
+    fn remove(&self, id: &str) -> Result<bool> {
+        let mut all = self.comments.lock().unwrap();
+        let before = all.len();
+        all.retain(|c| c.id != id);
+        Ok(all.len() != before)
     }
 }
 

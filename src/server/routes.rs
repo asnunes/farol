@@ -125,6 +125,7 @@ pub(super) mod tests {
 
     use super::*;
     use crate::cmd::ServerUseCases;
+    use crate::comments::application::Comments;
     use crate::progress::application::ProgressStore;
     use crate::testing::{FakeDiffSource, InMemoryProgressRepository};
     use axum::body::Body;
@@ -167,6 +168,7 @@ pub(super) mod tests {
             file_diff: GetFileDiff::new(diffs),
             mark_viewed: MarkViewed::new(progress.clone()),
             unmark_viewed: UnmarkViewed::new(progress),
+            comments: Comments::new(Arc::new(crate::testing::InMemoryComments::default())),
         }
     }
 
@@ -202,6 +204,7 @@ pub(super) mod tests {
             file_diff: GetFileDiff::new(diffs),
             mark_viewed: MarkViewed::new(broken.clone()),
             unmark_viewed: UnmarkViewed::new(broken),
+            comments: Comments::new(Arc::new(crate::testing::InMemoryComments::default())),
         };
         let (state, _) = AppState::new(use_cases);
 
