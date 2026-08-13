@@ -281,7 +281,7 @@ impl CommentStore for InMemoryComments {
         Ok(())
     }
 
-    fn remove(&self, id: &str) -> Result<bool> {
+    fn close(&self, id: &str) -> Result<bool> {
         let mut all = self.comments.lock().unwrap();
         let before = all.len();
         all.retain(|c| c.id != id);

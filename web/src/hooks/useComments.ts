@@ -46,8 +46,7 @@ export function useComments(onError: (message: string) => void) {
     comments,
     add: (path: string, from: number, to: number, body: string) =>
       write(api.addComment(path, from, to, body)),
-    resolve: (id: string, resolved: boolean) => write(api.resolveComment(id, resolved)),
-    remove: (id: string) => write(api.removeComment(id)),
+    close: (id: string) => write(api.closeComment(id)),
   };
 }
 

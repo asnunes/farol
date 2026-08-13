@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { LineComments, quoted } from "./LineComments";
 import { comment, noComments } from "./testing";
@@ -25,25 +25,26 @@ describe("a comment on the page", () => {
     expect(screen.getByText("82–116")).toBeTruthy();
   });
 
-  it("keeps a closed comment on the page and says it is closed", () => {
-    // Closing is answering, not withdrawing. Hiding it would take away the
-    // record of why the code looks the way it does.
-    const { container } = render(
-      <LineComments comments={[comment({ resolved: true })]} actions={noComments()} />,
-    );
-
-    expect(container.textContent).toContain("Why this order?");
-    expect(container.textContent).toContain("closed");
-    expect(container.querySelector(".comment")?.className).toContain("resolved");
-  });
-
-  it("offers to reopen a closed one, and to close an open one", () => {
+  it("asks before closing, because closing removes it for good", () => {
+    // The file is deleted and it was never in git. One press arms, the second
+    // one does it — and the button that copies is a few pixels away.
     const actions = noComments();
     render(<LineComments comments={[comment()]} actions={actions} />);
 
-    screen.getByLabelText("Close this comment").click();
+    fireEvent.click(screen.getByLabelText("Close this comment"));
 
-    expect(actions.resolve).toHaveBeenCalledWith("18cb-3731", true);
+    expect(actions.close).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Press again to close this comment")).toBeTruthy();
+  });
+
+  it("closes on the second press", () => {
+    const actions = noComments();
+    render(<LineComments comments={[comment()]} actions={actions} />);
+
+    fireEvent.click(screen.getByLabelText("Close this comment"));
+    fireEvent.click(screen.getByLabelText("Press again to close this comment"));
+
+    expect(actions.close).toHaveBeenCalledWith("18cb-3731");
   });
 
   it("copies where it was and what it said, in one paste", () => {
@@ -58,7 +59,7 @@ describe("a comment on the page", () => {
     vi.stubGlobal("navigator", { clipboard: { writeText } });
     render(<LineComments comments={[comment({ from: 82, to: 116 })]} actions={noComments()} />);
 
-    screen.getByLabelText("Copy this comment").click();
+    fireEvent.click(screen.getByLabelText("Copy this comment"));
 
     expect(writeText).toHaveBeenCalledWith("src/a.rs:82-116\n\nWhy this order?");
     vi.unstubAllGlobals();

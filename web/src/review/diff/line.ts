@@ -40,11 +40,7 @@ export function notesAt(file: FileView, line: DiffLine): TaggedLineNote[] {
 }
 
 /** Whether a comment covers this line. The reviewer's writing gets the same
- * treatment as the session's: the span is marked, and the prose sits under it.
- *
- * A resolved comment still marks its lines. It was answered, not withdrawn, and
- * a rail that vanished would take with it the reason the code looks the way it
- * does. */
+ * treatment as the session's: the span is marked, and the prose sits under it. */
 export function commentedBy(comments: CommentView[], line: DiffLine): boolean {
   return comments.some(
     (c) => line.new_number !== null && c.from <= line.new_number && line.new_number <= c.to,

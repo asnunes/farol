@@ -53,7 +53,7 @@ impl CommentStore for MarkdownComments {
         Ok(())
     }
 
-    fn remove(&self, id: &str) -> Result<bool> {
+    fn close(&self, id: &str) -> Result<bool> {
         match std::fs::remove_file(self.file(id)) {
             Ok(()) => Ok(true),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
@@ -64,31 +64,32 @@ impl CommentStore for MarkdownComments {
 
 fn render(comment: &Comment) -> String {
     format!(
-        "---\npath: {}\nlines: {}-{}\nresolved: {}\n---\n\n{}\n",
+        "---\npath: {}\nlines: {}-{}\n---\n\n{}\n",
         comment.path,
         comment.from,
         comment.to,
-        comment.resolved,
         comment.body.trim()
     )
 }
 
 /// The header, then the prose. Written by hand rather than with a yaml crate:
-/// four keys do not justify a dependency, and a file a person edited by hand
-/// and got slightly wrong should be skipped, not fatal.
+/// two keys do not justify a dependency, and a file a person edited by hand and
+/// got slightly wrong should be skipped, not fatal.
+///
+/// A key it does not know is ignored rather than refused, which is what lets an
+/// older file — one still carrying `resolved:` from when closing kept the
+/// comment — be read without a migration.
 fn parse(id: &str, raw: &str) -> Option<Comment> {
     let rest = raw.strip_prefix("---\n")?;
     let (head, body) = rest.split_once("\n---\n")?;
 
     let mut path = None;
     let mut lines = None;
-    let mut resolved = false;
     for line in head.lines() {
         let (key, value) = line.split_once(':')?;
         match key.trim() {
             "path" => path = Some(value.trim().to_string()),
             "lines" => lines = Some(value.trim().to_string()),
-            "resolved" => resolved = value.trim() == "true",
             _ => {}
         }
     }
@@ -102,7 +103,6 @@ fn parse(id: &str, raw: &str) -> Option<Comment> {
         from: from.trim().parse().ok()?,
         to: to.trim().parse().ok()?,
         body: body.trim().to_string(),
-        resolved,
     })
 }
 
@@ -123,7 +123,6 @@ mod tests {
             from: 82,
             to: 116,
             body: "Why **this** order?".into(),
-            resolved: false,
         }
     }
 
@@ -146,17 +145,20 @@ mod tests {
     }
 
     #[test]
-    fn closing_one_keeps_it() {
-        // Resolved is not deleted: the thread is the record of what was asked.
+    fn a_file_still_carrying_a_key_from_an_older_farol_is_read_anyway() {
+        // `resolved:` was written into every comment while closing kept it.
+        // Refusing those files would lose comments somebody is mid-review on.
         let (_dir, store) = store();
-        store
-            .save(&Comment {
-                resolved: true,
-                ..comment("1")
-            })
-            .unwrap();
+        store.save(&comment("1")).unwrap();
+        std::fs::write(
+            store.file("2"),
+            "---\npath: src/a.rs\nlines: 4-6\nresolved: false\n---\n\nWhy?\n",
+        )
+        .unwrap();
 
-        assert!(store.list().unwrap()[0].resolved);
+        let all = store.list().unwrap();
+        assert_eq!(all.len(), 2);
+        assert_eq!(all[1].body, "Why?");
     }
 
     #[test]
@@ -186,12 +188,12 @@ mod tests {
     }
 
     #[test]
-    fn removing_says_whether_there_was_anything_to_remove() {
+    fn closing_says_whether_there_was_anything_to_close() {
         let (_dir, store) = store();
         store.save(&comment("1")).unwrap();
 
-        assert!(store.remove("1").unwrap());
-        assert!(!store.remove("1").unwrap());
+        assert!(store.close("1").unwrap());
+        assert!(!store.close("1").unwrap());
         assert!(store.list().unwrap().is_empty());
     }
 

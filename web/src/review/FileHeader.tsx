@@ -13,7 +13,7 @@ import type { CommentView, FileView } from "@/api";
  * would spend the top of the screen on prose the reader has already finished. */
 export function FileHeader({ file, open, onToggleOpen, onToggleViewed, comments }: FileHeaderProps) {
   const { dir, name } = splitPath(file.path);
-  const unanswered = commentsOn(comments, file.path).filter((c) => !c.resolved).length;
+  const unanswered = commentsOn(comments, file.path).length;
 
   return (
     <div className="filehead sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-rule bg-surface px-6 py-2.5">

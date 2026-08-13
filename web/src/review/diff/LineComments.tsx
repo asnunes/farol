@@ -1,11 +1,11 @@
-import { Check, Copy, RotateCcw, Trash2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Check, Copy } from "lucide-react";
 import Markdown from "react-markdown";
 import { useCopy } from "@/hooks/useCopy";
-import { cn } from "@/lib/utils";
 import type { CommentActions } from "@/hooks/useComments";
 import type { CommentView } from "@/api";
 
-/** What the reviewer wrote, under the last line it is about.
+/** What the reviewer asked, under the last line it is about.
  *
  * Anchored and railed the same way the session's line notes are, and coloured
  * differently: one is the author explaining, the other is the reader asking, and
@@ -14,14 +14,10 @@ export function LineComments({ comments, actions }: LineCommentsProps) {
   return comments.map((comment) => (
     <div
       key={comment.id}
-      className={cn(
-        "comment commented flex items-start gap-3 border-b border-comment-rule bg-comment-bg py-2 pr-6 pl-16",
-        comment.resolved && "resolved opacity-55",
-      )}
+      className="comment commented flex items-start gap-3 border-b border-comment-rule bg-comment-bg py-2 pr-6 pl-16"
     >
       <span className="lbl mt-0.5 shrink-0 font-mono text-xs text-comment-ink">
         {comment.from === comment.to ? comment.from : `${comment.from}–${comment.to}`}
-        {comment.resolved && " · closed"}
       </span>
 
       {/* `prose` is not in play here: the body is a sentence or two, and a
@@ -31,21 +27,9 @@ export function LineComments({ comments, actions }: LineCommentsProps) {
         <Markdown>{comment.body}</Markdown>
       </div>
 
-      <div className="acts flex shrink-0 gap-0.5">
+      <div className="acts flex shrink-0 items-center gap-0.5">
         <CopyComment comment={comment} />
-        <Act
-          label={comment.resolved ? "Reopen this comment" : "Close this comment"}
-          onClick={() => void actions.resolve(comment.id, !comment.resolved)}
-        >
-          {comment.resolved ? (
-            <RotateCcw className="size-3.5" aria-hidden="true" />
-          ) : (
-            <Check className="size-3.5" aria-hidden="true" />
-          )}
-        </Act>
-        <Act label="Delete this comment" onClick={() => void actions.remove(comment.id)}>
-          <Trash2 className="size-3.5" aria-hidden="true" />
-        </Act>
+        <CloseComment comment={comment} actions={actions} />
       </div>
     </div>
   ));
@@ -59,12 +43,59 @@ export function quoted(comment: CommentView): string {
   return `${comment.path}:${lines}\n\n${comment.body.trim()}`;
 }
 
+/** How long the button stays armed. Long enough to press it twice on purpose,
+ * short enough that one left armed by accident is safe again by the time
+ * anybody comes back to it. */
+const ARMED_FOR = 4000;
+
+/** Closing answers the comment and drops it, in that order and with no undo:
+ * the file is deleted, and it was never in git to be recovered from.
+ *
+ * So it asks first. Two presses rather than a dialog, because a dialog over a
+ * diff covers the code the question is about — and the button that copies sits
+ * a few pixels away, which is the misclick worth guarding against. */
+function CloseComment({ comment, actions }: CloseCommentProps) {
+  const [armed, setArmed] = useState(false);
+  const disarming = useRef<number | undefined>(undefined);
+
+  useEffect(() => () => window.clearTimeout(disarming.current), []);
+
+  function press() {
+    if (armed) {
+      window.clearTimeout(disarming.current);
+      void actions.close(comment.id);
+      return;
+    }
+    setArmed(true);
+    disarming.current = window.setTimeout(() => setArmed(false), ARMED_FOR);
+  }
+
+  return (
+    <button
+      className={
+        armed
+          ? "closer flex h-6 cursor-pointer items-center gap-1 rounded bg-comment-ink px-2 font-sans text-[0.6875rem] text-surface focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          : "closer grid size-6 cursor-pointer place-items-center rounded text-faint transition-colors hover:bg-sunken hover:text-comment-ink focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+      }
+      aria-label={armed ? "Press again to close this comment" : "Close this comment"}
+      title={armed ? "Press again — closing removes it" : "Close this comment"}
+      onClick={press}
+      onBlur={() => setArmed(false)}
+    >
+      <Check className="size-3.5" aria-hidden="true" />
+      {armed && "Sure?"}
+    </button>
+  );
+}
+
 function CopyComment({ comment }: { comment: CommentView }) {
   const { copied, copy } = useCopy();
 
   return (
-    <Act
-      label={copied ? "Comment copied" : "Copy this comment"}
+    <button
+      className="grid size-6 cursor-pointer place-items-center rounded text-faint transition-colors hover:bg-sunken hover:text-comment-ink focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+      aria-label={copied ? "Comment copied" : "Copy this comment"}
+      title="Copy this comment"
       onClick={() => void copy(quoted(comment))}
     >
       {copied ? (
@@ -72,23 +103,10 @@ function CopyComment({ comment }: { comment: CommentView }) {
       ) : (
         <Copy className="size-3.5" aria-hidden="true" />
       )}
-    </Act>
-  );
-}
-
-function Act({ label, onClick, children }: ActProps) {
-  return (
-    <button
-      className="grid size-6 cursor-pointer place-items-center rounded text-faint transition-colors hover:bg-sunken hover:text-comment-ink focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-      aria-label={label}
-      title={label}
-      onClick={onClick}
-    >
-      {children}
     </button>
   );
 }
 
 type LineCommentsProps = { comments: CommentView[]; actions: CommentActions };
 
-type ActProps = { label: string; onClick: () => void; children: React.ReactNode };
+type CloseCommentProps = { comment: CommentView; actions: CommentActions };

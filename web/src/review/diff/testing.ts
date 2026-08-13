@@ -8,8 +8,7 @@ export function noComments(): CommentActions {
   return {
     comments: [],
     add: vi.fn().mockResolvedValue(undefined),
-    resolve: vi.fn().mockResolvedValue(undefined),
-    remove: vi.fn().mockResolvedValue(undefined),
+    close: vi.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -20,7 +19,6 @@ export function comment(over: Partial<CommentView> = {}): CommentView {
     from: 1,
     to: 1,
     body: "Why this order?",
-    resolved: false,
     ...over,
   };
 }

@@ -9,9 +9,7 @@ export const api = {
   comments: () => fetch("/api/comments").then(json<CommentView[]>),
   addComment: (path: string, from: number, to: number, body: string) =>
     send("/api/comments", "POST", { path, from, to, body }),
-  resolveComment: (id: string, resolved: boolean) =>
-    send(`/api/comments/${encodeURIComponent(id)}/resolve`, "POST", { resolved }),
-  removeComment: (id: string) => send(`/api/comments/${encodeURIComponent(id)}`, "DELETE"),
+  closeComment: (id: string) => send(`/api/comments/${encodeURIComponent(id)}`, "DELETE"),
 };
 
 /** Flat reading order across blocks — what j/k and "next unread" walk. */
@@ -98,7 +96,10 @@ export type DiffLine = {
   content: string;
 };
 
-/** What the reviewer wrote back, over a span of lines they were reading. */
+/** A question the reviewer left over a span of lines they were reading.
+ *
+ * There is no answered state: closing one removes it, so every comment the
+ * page holds is still waiting. */
 export type CommentView = {
   id: string;
   path: string;
@@ -106,7 +107,6 @@ export type CommentView = {
   to: number;
   /** Markdown, as it was typed. */
   body: string;
-  resolved: boolean;
 };
 
 /** Where a file sits: the block it is read under and how far down the map that

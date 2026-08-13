@@ -16,22 +16,10 @@ pub(super) enum CommentAction {
         #[arg(long)]
         text: String,
     },
-    List {
-        /// Only the ones still waiting for an answer.
-        #[arg(long)]
-        open: bool,
-    },
-    /// Close one, because it was answered.
-    Resolve {
-        id: String,
-    },
-    /// Open one again.
-    Reopen {
-        id: String,
-    },
-    Remove {
-        id: String,
-    },
+    /// Everything still waiting for an answer.
+    List,
+    /// Answered, so it goes.
+    Close { id: String },
 }
 
 impl Action for CommentAction {
@@ -48,28 +36,13 @@ impl Action for CommentAction {
                 println!("Wrote comment {} on {}.", one.id, one.path);
                 Ok(())
             }
-            CommentAction::List { open } => {
-                let all = ctx.comments.all()?;
-                let shown: Vec<_> = match open {
-                    true => all.into_iter().filter(|c| !c.resolved).collect(),
-                    false => all,
-                };
-                print!("{}", CommentList(&shown));
+            CommentAction::List => {
+                print!("{}", CommentList(&ctx.comments.all()?));
                 Ok(())
             }
-            CommentAction::Resolve { id } => {
-                ctx.comments.resolve(&id, true)?;
+            CommentAction::Close { id } => {
+                ctx.comments.close(&id)?;
                 println!("Closed comment {id}.");
-                Ok(())
-            }
-            CommentAction::Reopen { id } => {
-                ctx.comments.resolve(&id, false)?;
-                println!("Reopened comment {id}.");
-                Ok(())
-            }
-            CommentAction::Remove { id } => {
-                ctx.comments.remove(&id)?;
-                println!("Removed comment {id}.");
                 Ok(())
             }
         }

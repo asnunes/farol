@@ -85,7 +85,6 @@ pub struct CommentView {
     pub from: u32,
     pub to: u32,
     pub body: String,
-    pub resolved: bool,
 }
 
 impl ReviewView {
@@ -189,7 +188,6 @@ impl CommentView {
             from: comment.from,
             to: comment.to,
             body: comment.body.clone(),
-            resolved: comment.resolved,
         }
     }
 }

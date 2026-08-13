@@ -16,11 +16,7 @@ impl Display for CommentList<'_> {
                 true => format!("{}", comment.from),
                 false => format!("{}-{}", comment.from, comment.to),
             };
-            let state = match comment.resolved {
-                true => " · closed",
-                false => "",
-            };
-            writeln!(f, "{}  {}:{}{}", comment.id, comment.path, lines, state)?;
+            writeln!(f, "{}  {}:{}", comment.id, comment.path, lines)?;
             for line in comment.body.lines() {
                 writeln!(f, "    {line}")?;
             }
@@ -34,20 +30,19 @@ impl Display for CommentList<'_> {
 mod tests {
     use super::*;
 
-    fn comment(from: u32, to: u32, resolved: bool) -> Comment {
+    fn comment(from: u32, to: u32) -> Comment {
         Comment {
             id: "abc-1".into(),
             path: "src/a.rs".into(),
             from,
             to,
             body: "Why this order?\nIt reads backwards.".into(),
-            resolved,
         }
     }
 
     #[test]
     fn each_comment_says_where_it_is_and_what_it_says() {
-        let out = CommentList(&[comment(82, 116, false)]).to_string();
+        let out = CommentList(&[comment(82, 116)]).to_string();
 
         assert!(out.contains("abc-1  src/a.rs:82-116"), "{out}");
         assert!(out.contains("    Why this order?"), "{out}");
@@ -55,11 +50,11 @@ mod tests {
     }
 
     #[test]
-    fn a_closed_one_says_so() {
+    fn a_comment_on_one_line_says_one_line() {
         assert!(
-            CommentList(&[comment(9, 9, true)])
+            CommentList(&[comment(9, 9)])
                 .to_string()
-                .contains("src/a.rs:9 · closed")
+                .contains("src/a.rs:9\n")
         );
     }
 

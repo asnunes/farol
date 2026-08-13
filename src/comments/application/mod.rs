@@ -39,39 +39,23 @@ impl Comments {
             from,
             to,
             body: body.trim().to_string(),
-            resolved: false,
         };
         self.store.save(&comment)?;
         Ok(comment)
     }
 
-    /// Close one, or open it again. Closing keeps it: the thread is the record
-    /// of what was asked and answered.
-    pub fn resolve(&self, id: &str, resolved: bool) -> Result<Comment> {
-        let mut comment = self.one(id)?;
-        comment.resolved = resolved;
-        self.store.save(&comment)?;
-        Ok(comment)
-    }
-
-    pub fn remove(&self, id: &str) -> Result<()> {
-        match self.store.remove(id)? {
+    /// Close one, which is to say drop it.
+    ///
+    /// There is no settled-but-kept state. A comment lives as long as it is
+    /// waiting for an answer, and the list is therefore always what is still
+    /// open — nothing to filter, nothing to reopen.
+    pub fn close(&self, id: &str) -> Result<()> {
+        match self.store.close(id)? {
             true => Ok(()),
-            false => Err(Self::unknown(id)),
+            false => Err(Error::msg(format!(
+                "no comment with id {id} — `farol comment list` shows them"
+            ))),
         }
-    }
-
-    fn one(&self, id: &str) -> Result<Comment> {
-        self.all()?
-            .into_iter()
-            .find(|c| c.id == id)
-            .ok_or_else(|| Self::unknown(id))
-    }
-
-    fn unknown(id: &str) -> Error {
-        Error::msg(format!(
-            "no comment with id {id} — `farol comment list` shows them"
-        ))
     }
 }
 
@@ -120,7 +104,6 @@ mod tests {
         let all = comments.all().unwrap();
         assert_eq!(all.len(), 1);
         assert_eq!(all[0].body, "Why this order?");
-        assert!(!all[0].resolved);
     }
 
     #[test]
@@ -155,33 +138,22 @@ mod tests {
     }
 
     #[test]
-    fn closing_a_comment_keeps_it_on_the_page() {
+    fn closing_a_comment_takes_it_off_the_list() {
+        // Closing is answering, and an answered question is not a thing the
+        // review keeps: the list is what is still waiting.
         let (_dir, comments) = comments();
         let one = comments.add("src/a.rs", 1, 1, "Why?").unwrap();
 
-        comments.resolve(&one.id, true).unwrap();
+        comments.close(&one.id).unwrap();
 
-        let all = comments.all().unwrap();
-        assert_eq!(all.len(), 1, "closed is not deleted");
-        assert!(all[0].resolved);
-    }
-
-    #[test]
-    fn a_closed_comment_can_be_opened_again() {
-        let (_dir, comments) = comments();
-        let one = comments.add("src/a.rs", 1, 1, "Why?").unwrap();
-        comments.resolve(&one.id, true).unwrap();
-
-        comments.resolve(&one.id, false).unwrap();
-
-        assert!(!comments.all().unwrap()[0].resolved);
+        assert!(comments.all().unwrap().is_empty());
     }
 
     #[test]
     fn naming_a_comment_that_is_not_there_says_how_to_find_out() {
         let (_dir, comments) = comments();
 
-        let err = comments.remove("nope").unwrap_err().to_string();
+        let err = comments.close("nope").unwrap_err().to_string();
         assert!(err.contains("nope"), "{err}");
         assert!(err.contains("comment list"), "{err}");
     }

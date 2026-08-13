@@ -28,8 +28,7 @@ pub(super) fn router(state: Arc<AppState>, identity: ServerEntry) -> Router {
         .route("/api/file", get(file))
         .route("/api/viewed", post(viewed))
         .route("/api/comments", get(comments).post(write_comment))
-        .route("/api/comments/{id}/resolve", post(resolve_comment))
-        .route("/api/comments/{id}", delete(remove_comment))
+        .route("/api/comments/{id}", delete(close_comment))
         .route("/api/watch", get(watch))
         .route("/health", get(move || health(identity.clone())))
         .fallback(assets::handler)
@@ -86,8 +85,8 @@ async fn viewed(
     }
 }
 
-/// What the reviewer wrote back, all of it — closed ones included, because the
-/// screen keeps them on the page rather than hiding what was settled.
+/// What the reviewer wrote back, which is everything still waiting for an
+/// answer: closing a comment removes it, so there is nothing here to filter.
 async fn comments(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     match state.use_cases.comments.all() {
         Ok(all) => Json(all.iter().map(view::CommentView::of).collect::<Vec<_>>()).into_response(),
@@ -117,27 +116,11 @@ async fn write_comment(
     }
 }
 
-#[derive(Deserialize)]
-struct Resolution {
-    resolved: bool,
-}
-
-async fn resolve_comment(
-    State(state): State<Arc<AppState>>,
-    Path(id): Path<String>,
-    Json(body): Json<Resolution>,
-) -> impl IntoResponse {
-    match state.use_cases.comments.resolve(&id, body.resolved) {
-        Ok(comment) => Json(view::CommentView::of(&comment)).into_response(),
-        Err(e) => fail(e),
-    }
-}
-
-async fn remove_comment(
+async fn close_comment(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
 ) -> impl IntoResponse {
-    match state.use_cases.comments.remove(&id) {
+    match state.use_cases.comments.close(&id) {
         Ok(()) => StatusCode::NO_CONTENT.into_response(),
         Err(e) => fail(e),
     }

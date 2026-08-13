@@ -13,9 +13,6 @@ pub struct Comment {
     pub to: u32,
     /// Markdown, kept as written.
     pub body: String,
-    /// Settled, but still on the page. Closing a comment is not deleting it:
-    /// the thread is the record of what was asked and answered.
-    pub resolved: bool,
 }
 
 impl Comment {
@@ -35,7 +32,8 @@ impl Comment {
 pub trait CommentStore: Send + Sync {
     fn list(&self) -> Result<Vec<Comment>>;
     fn save(&self, comment: &Comment) -> Result<()>;
-    fn remove(&self, id: &str) -> Result<bool>;
+    /// Whether there was one to close.
+    fn close(&self, id: &str) -> Result<bool>;
 }
 
 #[cfg(test)]
@@ -49,7 +47,6 @@ mod tests {
             from,
             to,
             body: "  Why this order?  ".into(),
-            resolved: false,
         }
     }
 

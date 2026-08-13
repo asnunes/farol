@@ -332,7 +332,7 @@ fn marking_a_path_outside_the_review_is_refused() {
 // ---- what the reviewer writes back --------------------------------------
 
 #[test]
-fn a_comment_written_from_the_page_can_be_read_closed_and_dropped() {
+fn a_comment_written_from_the_page_can_be_read_and_closed() {
     // The whole life of a comment over the wire, in one go: each step is only
     // worth anything if the one before it stuck.
     let s = Serving::new();
@@ -354,18 +354,9 @@ fn a_comment_written_from_the_page_can_be_read_closed_and_dropped() {
     assert_eq!(all[0]["from"], 10);
     assert_eq!(all[0]["to"], 12);
     assert_eq!(all[0]["body"], "Why this order?");
-    assert_eq!(all[0]["resolved"], false);
 
-    let (status, _) = s.probe(
-        "POST",
-        &format!("/api/comments/{id}/resolve"),
-        Some(r#"{"resolved":true}"#),
-    );
-    assert_eq!(status, 200);
-    let all = s.json("/api/comments");
-    assert_eq!(all.as_array().unwrap().len(), 1, "closed is not deleted");
-    assert_eq!(all[0]["resolved"], true);
-
+    // Closing is answering, and an answered question is not kept: what comes
+    // back is the list of what is still waiting.
     let (status, _) = s.probe("DELETE", &format!("/api/comments/{id}"), None);
     assert_eq!(status, 204);
     assert_eq!(s.json("/api/comments").as_array().unwrap().len(), 0);
@@ -393,6 +384,10 @@ fn a_comment_is_written_to_the_git_dir_as_markdown() {
     let raw = std::fs::read_to_string(&written[0]).unwrap();
     assert!(raw.contains("path: src/a.rs"), "{raw}");
     assert!(raw.contains("lines: 10-12"), "{raw}");
+    assert!(
+        !raw.contains("resolved"),
+        "there is no answered state to store: {raw}"
+    );
     assert!(raw.contains("Why this order?"), "{raw}");
 }
 
@@ -420,18 +415,12 @@ fn a_comment_the_review_cannot_hold_is_refused() {
 }
 
 #[test]
-fn addressing_a_comment_that_is_not_there_is_refused_rather_than_ignored() {
+fn closing_a_comment_that_is_not_there_is_refused_rather_than_ignored() {
     let s = Serving::new();
 
-    let (resolve, _) = s.probe(
-        "POST",
-        "/api/comments/nope/resolve",
-        Some(r#"{"resolved":true}"#),
-    );
-    let (remove, _) = s.probe("DELETE", "/api/comments/nope", None);
+    let (status, _) = s.probe("DELETE", "/api/comments/nope", None);
 
-    assert_eq!(resolve, 400);
-    assert_eq!(remove, 400);
+    assert_eq!(status, 400);
 }
 
 // ---- the page finding out on its own ------------------------------------
