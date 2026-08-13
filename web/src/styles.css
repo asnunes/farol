@@ -37,53 +37,44 @@
 
 /* Prefixed because shadcn's components define `--muted` and `--accent` for
    their own semantics; without the prefix the bridge below would refer to
-   itself and the two would resolve to each other. */
+   itself and the two would resolve to each other.
+
+   Both palettes are written once, side by side, and `color-scheme` picks the
+   half that applies. Two blocks under a media query would mean maintaining the
+   same eighteen names twice over, and a third copy the moment the reader is
+   allowed to choose. */
 :root {
-  --farol-ground: #f4f5f6;
-  --farol-surface: #ffffff;
-  --farol-sunken: #eceef0;
-  --farol-ink: #16181b;
-  --farol-ink-soft: #3d444c;
-  --farol-muted: #697079;
-  --farol-faint: #949ba3;
-  --farol-rule: #dee1e4;
-  --farol-rule-strong: #c6cbd1;
-  --farol-accent: #96690f;
-  --farol-accent-dim: #efe2c4;
-  --farol-add-bg: #e3f2e8;
-  --farol-add-strong: #b7e3c8;
-  --farol-add-ink: #1e6440;
-  --farol-del-bg: #fbe7e7;
-  --farol-del-strong: #f5c2c2;
-  --farol-del-ink: #9b2f2f;
-  --farol-note-bg: #faf4e6;
-  --farol-note-rule: #dcc48a;
+  color-scheme: light dark;
+
+  --farol-ground: light-dark(#f4f5f6, #15171a);
+  --farol-surface: light-dark(#ffffff, #1c1f23);
+  --farol-sunken: light-dark(#eceef0, #101215);
+  --farol-ink: light-dark(#16181b, #e6e8ea);
+  --farol-ink-soft: light-dark(#3d444c, #bfc5cb);
+  --farol-muted: light-dark(#697079, #8a929b);
+  --farol-faint: light-dark(#949ba3, #6c747d);
+  --farol-rule: light-dark(#dee1e4, #282c31);
+  --farol-rule-strong: light-dark(#c6cbd1, #3a4048);
+  --farol-accent: light-dark(#96690f, #e3b23c);
+  --farol-accent-dim: light-dark(#efe2c4, #3a2f16);
+  --farol-add-bg: light-dark(#e3f2e8, #16301f);
+  --farol-add-strong: light-dark(#b7e3c8, #2a6440);
+  --farol-add-ink: light-dark(#1e6440, #78c79a);
+  --farol-del-bg: light-dark(#fbe7e7, #3a1d1d);
+  --farol-del-strong: light-dark(#f5c2c2, #7a3030);
+  --farol-del-ink: light-dark(#9b2f2f, #e38b8b);
+  --farol-note-bg: light-dark(#faf4e6, #241e12);
+  --farol-note-rule: light-dark(#dcc48a, #574521);
 }
 
-/* The same design in different light, so every utility follows automatically
-   rather than being written twice with `dark:`. */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --farol-ground: #15171a;
-    --farol-surface: #1c1f23;
-    --farol-sunken: #101215;
-    --farol-ink: #e6e8ea;
-    --farol-ink-soft: #bfc5cb;
-    --farol-muted: #8a929b;
-    --farol-faint: #6c747d;
-    --farol-rule: #282c31;
-    --farol-rule-strong: #3a4048;
-    --farol-accent: #e3b23c;
-    --farol-accent-dim: #3a2f16;
-    --farol-add-bg: #16301f;
-    --farol-add-strong: #2a6440;
-    --farol-add-ink: #78c79a;
-    --farol-del-bg: #3a1d1d;
-    --farol-del-strong: #7a3030;
-    --farol-del-ink: #e38b8b;
-    --farol-note-bg: #241e12;
-    --farol-note-rule: #574521;
-  }
+/* The reader's choice, when they have made one. Nothing else in the sheet
+   changes: `color-scheme` is what every `light-dark` above is reading. */
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
 }
 
 /* What shadcn's components reach for, pointed at the palette above so they
@@ -162,15 +153,11 @@
    so the palette follows the light and dark switch without anything being
    tokenized a second time. */
 .tok {
-  color: var(--shiki-light);
-  font-style: var(--shiki-light-font-style, normal);
-}
-
-@media (prefers-color-scheme: dark) {
-  .tok {
-    color: var(--shiki-dark);
-    font-style: var(--shiki-dark-font-style, normal);
-  }
+  color: light-dark(var(--shiki-light), var(--shiki-dark));
+  font-style: light-dark(
+    var(--shiki-light-font-style, normal),
+    var(--shiki-dark-font-style, normal)
+  );
 }
 
 /* The lines a note is about. A rail rather than a background, because added and
