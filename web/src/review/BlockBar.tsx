@@ -1,13 +1,17 @@
+import { cn } from "@/lib/utils";
 import type { BlockView } from "@/api";
 
 /** The band above the diff: which block you are in and why it exists. */
-export function BlockBar({
-  block,
-  number,
-  total,
-}: BlockBarProps) {
+export function BlockBar({ block, number, total }: BlockBarProps) {
   return (
-    <div className="blockbar border-b border-rule bg-surface px-6 py-4">
+    <div
+      className={cn(
+        "blockbar border-y border-rule bg-surface px-6 py-4",
+        // Air between blocks, so one does not run into the file list of the
+        // block before it. Not above the first: nothing precedes it.
+        number > 1 && "mt-10",
+      )}
+    >
       <div className="kicker font-mono text-[0.6875rem] tracking-wide text-faint uppercase">
         block {number} of {total}
       </div>

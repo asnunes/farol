@@ -19,7 +19,7 @@ export function Diff({ diff, file, view }: DiffProps) {
   }
 
   return (
-    <div className="diff pb-24 font-mono text-[0.8125rem] leading-relaxed">
+    <div className="diff font-mono text-[0.8125rem] leading-relaxed">
       {diff.hunks.map((hunk, i) => (
         <DiffHunk key={i} hunk={hunk} file={file} tokenize={tokenize} view={view} />
       ))}

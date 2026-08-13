@@ -1,3 +1,4 @@
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { CopyPath } from "@/review/CopyPath";
 import { splitPath } from "@/lib/path";
@@ -9,15 +10,26 @@ import type { FileView } from "@/api";
  * file read never means scrolling back up to find the box. The block band above
  * it does not stick: it is read once, at the start of the block, and pinning it
  * would spend the top of the screen on prose the reader has already finished. */
-export function FileHeader({
-  file,
-  onToggleViewed,
-}: FileHeaderProps) {
+export function FileHeader({ file, open, onToggleOpen, onToggleViewed }: FileHeaderProps) {
   const { dir, name } = splitPath(file.path);
 
   return (
     <div className="filehead sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-rule bg-surface px-6 py-2.5">
       <div className="left flex min-w-0 items-center gap-3">
+        <button
+          className="fold grid size-5 shrink-0 cursor-pointer place-items-center rounded text-faint transition-colors hover:text-ink focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          aria-expanded={open}
+          aria-label={open ? "Collapse this file" : "Expand this file"}
+          title={open ? "Collapse this file" : "Expand this file"}
+          onClick={onToggleOpen}
+        >
+          {open ? (
+            <ChevronDown className="size-3.5" aria-hidden="true" />
+          ) : (
+            <ChevronRight className="size-3.5" aria-hidden="true" />
+          )}
+        </button>
+
         <button
           className="markbox grid size-5 shrink-0 cursor-pointer place-items-center rounded border border-rule-strong text-xs text-transparent transition-colors hover:border-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none aria-pressed:border-accent aria-pressed:bg-accent aria-pressed:text-surface"
           aria-pressed={file.viewed}
@@ -63,5 +75,7 @@ export function FileHeader({
 
 type FileHeaderProps = {
   file: FileView;
+  open: boolean;
+  onToggleOpen: () => void;
   onToggleViewed: () => void;
 };

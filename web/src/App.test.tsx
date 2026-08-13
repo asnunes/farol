@@ -51,14 +51,30 @@ const emptyDiff = {
   deletions: 0,
 };
 
-/** The path in the file header — the file actually being read. A bare text
- * query would also match the sidebar entry, which is a different claim. */
+/** The file the page says the reader is on. Every file is on the page now, so
+ * the first header in the document is not an answer to that question. */
 function reading(): string {
-  return document.querySelector(".filehead .path")?.textContent ?? "";
+  return document.querySelector(".pane")?.getAttribute("data-current") ?? "";
 }
 
 async function waitForReading(name: string) {
   await waitFor(() => expect(reading()).toContain(name));
+}
+
+/** Where navigation took the reader. Moving is scrolling now, so this is what
+ * a key or a click actually does. */
+const scrolls: string[] = [];
+
+async function waitForScrollTo(name: string) {
+  await waitFor(() => expect(scrolls.at(-1) ?? "").toContain(name));
+}
+
+/** One file's section, for the assertions that would otherwise match the same
+ * thing once per file on the page. */
+function section(path: string): HTMLElement {
+  const found = document.querySelector<HTMLElement>(`[data-path="${path}"]`);
+  if (!found) throw new Error(`no section for ${path}`);
+  return found;
 }
 
 /** The block band above the diff. The sidebar carries the same titles, so a
@@ -98,6 +114,13 @@ function serve(state: { review: ReviewView }) {
 }
 
 beforeEach(() => {
+  // jsdom has neither of these, and the page is built on both: it scrolls to
+  // move and watches sections to know where the reader is.
+  scrolls.length = 0;
+  Element.prototype.scrollIntoView = function (this: HTMLElement) {
+    scrolls.push(this.dataset.path ?? "");
+  };
+
   // The page subscribes on mount; without a stub jsdom throws.
   vi.stubGlobal(
     "EventSource",
@@ -114,22 +137,32 @@ afterEach(() => {
 });
 
 describe("landing", () => {
-  it("opens inside the first unread file, not on an index", async () => {
+  it("lays the whole review out in reading order, blocks and all", async () => {
+    // One page rather than one file at a time, in the order the session chose.
     serve({ review: review() });
     render(<App />);
-    // The file header carries the path being read.
     await waitForReading("a.rs");
-    expect(currentBlock()).toBe("The change itself");
+
+    const shown = [...document.querySelectorAll("[data-path]")].map(
+      (el) => (el as HTMLElement).dataset.path,
+    );
+    expect(shown).toEqual(["src/a.rs", "src/b.rs", "src/c.rs"]);
+    expect([...document.querySelectorAll(".blockbar h2")].map((h) => h.textContent)).toEqual([
+      "The change itself",
+      "The wiring",
+    ]);
   });
 
   it("resumes at the first file that has not been read", async () => {
+    // Every file is on the page, so resuming means being taken there rather
+    // than being shown it alone.
     const r = review();
     r.blocks[0].files[0].viewed = true;
     r.viewedFiles = 1;
     serve({ review: r });
 
     render(<App />);
-    await waitForReading("b.rs");
+    await waitForScrollTo("b.rs");
   });
 
   it("shows the success marker once everything is read", async () => {
@@ -150,15 +183,14 @@ describe("keyboard navigation", () => {
     await waitForReading("a.rs");
 
     fireEvent.keyDown(window, { key: "j" });
-    await waitForReading("b.rs");
+    await waitForScrollTo("b.rs");
 
     // Third file lives in the second block: order is flat across blocks.
     fireEvent.keyDown(window, { key: "j" });
-    await waitForReading("c.rs");
-    expect(currentBlock()).toBe("The wiring");
+    await waitForScrollTo("c.rs");
 
     fireEvent.keyDown(window, { key: "k" });
-    await waitForReading("b.rs");
+    await waitForScrollTo("b.rs");
   });
 
   it("the arrows walk the files the way j and k do", async () => {
@@ -169,10 +201,10 @@ describe("keyboard navigation", () => {
     await waitForReading("a.rs");
 
     fireEvent.keyDown(window, { key: "ArrowDown" });
-    await waitForReading("b.rs");
+    await waitForScrollTo("b.rs");
 
     fireEvent.keyDown(window, { key: "ArrowUp" });
-    await waitForReading("a.rs");
+    await waitForScrollTo("a.rs");
   });
 
   it("n skips to the next file that has not been read", async () => {
@@ -184,7 +216,7 @@ describe("keyboard navigation", () => {
     await waitForReading("a.rs");
 
     fireEvent.keyDown(window, { key: "n" });
-    await waitForReading("c.rs");
+    await waitForScrollTo("c.rs");
   });
 
   it("brackets move a whole block at a time", async () => {
@@ -193,10 +225,10 @@ describe("keyboard navigation", () => {
     await waitForReading("a.rs");
 
     fireEvent.keyDown(window, { key: "]" });
-    await waitForReading("c.rs");
+    await waitForScrollTo("c.rs");
 
     fireEvent.keyDown(window, { key: "[" });
-    await waitForReading("a.rs");
+    await waitForScrollTo("a.rs");
   });
 
   it("? opens the shortcut list and Escape closes it", async () => {
@@ -223,12 +255,12 @@ describe("marking read", () => {
     expect(calls[0]).toEqual({ path: "src/a.rs", viewed: true });
   });
 
-  it("Enter marks the file read, the way ; does", async () => {
+  it("Space marks the file read, the way ; does", async () => {
     const calls = serve({ review: review() });
     render(<App />);
     await waitForReading("a.rs");
 
-    fireEvent.keyDown(window, { key: "Enter" });
+    fireEvent.keyDown(window, { key: " " });
 
     await waitFor(() => expect(calls).toHaveLength(1));
     expect(calls[0]).toEqual({ path: "src/a.rs", viewed: true });
@@ -246,7 +278,8 @@ describe("marking read", () => {
     render(<App />);
     await waitForReading("a.rs");
 
-    fireEvent.click(screen.getByTitle("Mark as read — key ;"));
+    // Every file has a box now, so the click has to name which one.
+    fireEvent.click(section("src/a.rs").querySelector(".markbox")!);
     await waitFor(() => expect(calls).toHaveLength(1));
     expect(calls[0].viewed).toBe(false);
   });
@@ -323,11 +356,15 @@ describe("a file with nothing to read", () => {
 
     render(<App />);
 
-    expect(await screen.findByText(/Binary file/)).toBeTruthy();
+    // Every file on the page reports the same stubbed diff, so the claim is
+    // about the one under test rather than about the page.
+    await waitFor(() => expect(section("src/a.rs").textContent).toContain("Binary file"));
   });
 });
 
 describe("the diff itself", () => {
+  // Every file on the page is served the same stubbed diff, so each claim here
+  // is scoped to one section rather than counted across the whole page.
   /** A file whose diff has one changed line, with context around it. */
   function withDiff(diff: object, over: Partial<FileView> = {}) {
     const r = review();
@@ -371,10 +408,10 @@ describe("the diff itself", () => {
     withDiff(oneChange);
     render(<App />);
 
-    await waitFor(() => expect(document.querySelectorAll(".row").length).toBe(4));
-    expect(document.querySelectorAll(".row.add").length).toBe(1);
-    expect(document.querySelectorAll(".row.del").length).toBe(1);
-    expect(document.querySelectorAll(".row:not(.add):not(.del)").length).toBe(2);
+    await waitFor(() => expect(section("src/a.rs").querySelectorAll(".row").length).toBe(4));
+    expect(section("src/a.rs").querySelectorAll(".row.add").length).toBe(1);
+    expect(section("src/a.rs").querySelectorAll(".row.del").length).toBe(1);
+    expect(section("src/a.rs").querySelectorAll(".row:not(.add):not(.del)").length).toBe(2);
   });
 
   it("numbers a removed line by the side it still exists on", async () => {
@@ -383,8 +420,8 @@ describe("the diff itself", () => {
     withDiff(oneChange);
     render(<App />);
 
-    await waitFor(() => expect(document.querySelectorAll(".row").length).toBe(4));
-    const numbers = Array.from(document.querySelectorAll(".row .ln")).map((n) => n.textContent);
+    await waitFor(() => expect(section("src/a.rs").querySelectorAll(".row").length).toBe(4));
+    const numbers = Array.from(section("src/a.rs").querySelectorAll(".row .ln")).map((n) => n.textContent);
     expect(numbers).toEqual(["19", "20", "20", "21"]);
   });
 
@@ -392,7 +429,7 @@ describe("the diff itself", () => {
     withDiff(oneChange);
     render(<App />);
 
-    expect(await screen.findByText(/@@ -19,3 \+19,3 @@/)).toBeTruthy();
+    await waitFor(() => expect(section("src/a.rs").textContent).toContain("@@ -19,3 +19,3 @@"));
   });
 
   it("puts a line note against the line it was written about", async () => {
@@ -416,8 +453,140 @@ describe("the diff itself", () => {
     });
     render(<App />);
 
-    await waitFor(() => expect(document.querySelectorAll(".row").length).toBe(4));
-    expect(document.querySelectorAll(".note").length).toBe(0);
+    await waitFor(() => expect(section("src/a.rs").querySelectorAll(".row").length).toBe(4));
+    expect(section("src/a.rs").querySelectorAll(".note").length).toBe(0);
+  });
+});
+
+describe("open and closed", () => {
+  it("folds a file that has been read, and leaves the header", async () => {
+    // Read means done. The files still to read should not be buried under it.
+    const r = review();
+    r.blocks[0].files[0].viewed = true;
+    r.viewedFiles = 1;
+    serve({ review: r });
+
+    render(<App />);
+    await waitForReading("b.rs");
+
+    expect(section("src/a.rs").textContent).toContain("a.rs");
+    expect(section("src/a.rs").querySelector(".diff")).toBeNull();
+    expect(section("src/b.rs").querySelector(".diff")).toBeTruthy();
+  });
+
+  it("opens a folded file when the reader asks for it", async () => {
+    const r = review();
+    r.blocks[0].files[0].viewed = true;
+    r.viewedFiles = 1;
+    serve({ review: r });
+
+    render(<App />);
+    await waitForReading("b.rs");
+
+    fireEvent.click(section("src/a.rs").querySelector(".fold")!);
+
+    await waitFor(() => expect(section("src/a.rs").querySelector(".diff")).toBeTruthy());
+  });
+
+  it("opens a folded file when it is picked in the sidebar", async () => {
+    // Being taken to a file that stayed folded away would look like arriving
+    // nowhere.
+    const r = review();
+    r.blocks[0].files[0].viewed = true;
+    r.viewedFiles = 1;
+    serve({ review: r });
+
+    render(<App />);
+    await waitForReading("b.rs");
+
+    const target = Array.from(document.querySelectorAll(".fileitem")).find((b) =>
+      b.textContent?.includes("a.rs"),
+    );
+    fireEvent.click(target!);
+
+    await waitFor(() => expect(section("src/a.rs").querySelector(".diff")).toBeTruthy());
+  });
+
+  it("moves on to the next file after one is marked read", async () => {
+    // Folding the file away leaves the reader looking at whatever was under it.
+    serve({ review: review() });
+    render(<App />);
+    await waitForReading("a.rs");
+
+    fireEvent.keyDown(window, { key: " " });
+
+    await waitForScrollTo("b.rs");
+  });
+
+  it("folds a file the moment it is marked read", async () => {
+    serve({ review: review() });
+    render(<App />);
+    await waitForReading("a.rs");
+
+    fireEvent.keyDown(window, { key: ";" });
+
+    await waitFor(() => expect(section("src/a.rs").querySelector(".diff")).toBeNull());
+  });
+});
+
+describe("a long review", () => {
+  it("asks for one diff per file, and only for the files on the page", async () => {
+    // The pane is one page now. Fetching every diff up front would mean a
+    // hundred requests before a branch of a hundred files showed anything.
+    const asked: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.startsWith("/api/review")) {
+          return new Response(JSON.stringify(review()), {
+            headers: { "content-type": "application/json" },
+          });
+        }
+        asked.push(new URL(url, "http://x").searchParams.get("path") ?? "");
+        return new Response(JSON.stringify(emptyDiff), {
+          headers: { "content-type": "application/json" },
+        });
+      }),
+    );
+
+    render(<App />);
+
+    await waitFor(() => expect(asked).toHaveLength(3));
+    expect(new Set(asked).size).toBe(3);
+  });
+
+  it("holds a big file back until it is asked for", async () => {
+    // Thousands of changed lines cost everyone below them, and nobody scrolls
+    // through a generated file. The header and the prose still show.
+    const r = review();
+    r.blocks[0].files[0] = file("src/a.rs", { additions: 900, deletions: 400 });
+    const asked: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.startsWith("/api/review")) {
+          return new Response(JSON.stringify(r), {
+            headers: { "content-type": "application/json" },
+          });
+        }
+        asked.push(new URL(url, "http://x").searchParams.get("path") ?? "");
+        return new Response(JSON.stringify(emptyDiff), {
+          headers: { "content-type": "application/json" },
+        });
+      }),
+    );
+
+    render(<App />);
+    await waitFor(() => expect(asked).toContain("src/b.rs"));
+
+    expect(asked).not.toContain("src/a.rs");
+    expect(section("src/a.rs").textContent).toContain("1300 changed lines");
+
+    fireEvent.click(section("src/a.rs").querySelector(".heavy button")!);
+
+    await waitFor(() => expect(asked).toContain("src/a.rs"));
   });
 });
 
@@ -537,8 +706,8 @@ describe("the sidebar", () => {
     );
     fireEvent.click(target!);
 
-    await waitForReading("c.rs");
-    expect(currentBlock()).toBe("The wiring");
+    await waitForScrollTo("c.rs");
+    expect(reading()).toContain("c.rs");
   });
 
   it("marks the file being read so the reader can see where they are", async () => {

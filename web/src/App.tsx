@@ -1,18 +1,15 @@
-import { useState } from "react";
-import { blockOf, readingOrder } from "@/api";
+import { useCallback, useState } from "react";
+import { readingOrder } from "@/api";
 import { useDiffView } from "@/hooks/useDiffView";
+import { useOpenFiles } from "@/hooks/useOpenFiles";
 import { useReview } from "@/hooks/useReview";
-import { useFileDiff } from "@/hooks/useFileDiff";
 import { useShortcuts } from "@/hooks/useShortcuts";
-import { TopBar } from "@/review/TopBar";
-import { Sidebar } from "@/review/Sidebar";
-import { BlockBar } from "@/review/BlockBar";
-import { FileHeader } from "@/review/FileHeader";
-import { FileNote } from "@/review/FileNote";
-import { Diff } from "@/review/diff/Diff";
-import { KeyBar } from "@/review/KeyBar";
 import { HelpDialog } from "@/review/HelpDialog";
-import { Unmapped } from "@/review/Unmapped";
+import { KeyBar } from "@/review/KeyBar";
+import { scrollToFile } from "@/lib/scroll";
+import { Reading } from "@/review/Reading";
+import { Sidebar } from "@/review/Sidebar";
+import { TopBar } from "@/review/TopBar";
 
 /** Composition only: what is on screen and in what order. Everything that
  * decides how a thing looks lives in the piece that draws it. */
@@ -21,27 +18,49 @@ export default function App() {
     useReview();
   const [helpOpen, setHelpOpen] = useState(false);
   const [view, setView] = useDiffView();
+  const files = useOpenFiles();
 
   const order = review ? readingOrder(review) : [];
   const index = order.findIndex((f) => f.path === current);
-  const diff = useFileDiff(current, setError);
 
-  useShortcuts({
-    review,
-    order,
-    index,
-    current,
-    setCurrent,
-    toggleViewed,
-    setHelpOpen,
-  });
+  // Moving names the file *and* scrolls to it. Naming it only through the
+  // scroll would mean waiting for the observer to answer, and two presses in a
+  // row would both count from the file the reader had already left.
+  const goTo = useCallback(
+    (path: string) => {
+      setCurrent(path);
+      // Going to a file opens it. Being taken to one that stayed folded away
+      // because it had been read would look like arriving nowhere.
+      files.set(path, true);
+      scrollToFile(path);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [setCurrent],
+  );
+
+  // Marking a file read folds it away, and unmarking opens it again: the two
+  // states are separate and this is where they meet. One function for both
+  // ways of marking, or the keyboard and the tick box behave differently.
+  const mark = useCallback(
+    (path: string, viewed: boolean) => {
+      files.set(path, !viewed);
+      // Marking one read folds it away, which leaves the reader looking at
+      // whatever was underneath. Take them to the next file instead.
+      if (viewed) {
+        const next = order[order.findIndex((f) => f.path === path) + 1];
+        if (next) goTo(next.path);
+      }
+      return toggleViewed(path, viewed);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [order, toggleViewed],
+  );
+
+  useShortcuts({ review, order, index, current, goTo, toggleViewed: mark, setHelpOpen });
 
   const banner = "fatal p-8 font-mono text-sm text-muted whitespace-pre-wrap";
   if (error) return <div className={banner}>{error}</div>;
   if (!review) return <div className={banner}>Loading…</div>;
-
-  const file = order[index] ?? null;
-  const here = current ? blockOf(review, current) : null;
 
   return (
     <div className="app grid h-screen grid-cols-[19rem_minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)]">
@@ -52,42 +71,17 @@ export default function App() {
         stale={stale}
         onRefresh={() => void refresh()}
       />
-      <Sidebar review={review} current={current} onPick={setCurrent} />
+      <Sidebar review={review} current={current} onPick={goTo} />
 
-      <main className="pane overflow-y-auto bg-ground">
-        {here && (
-          <BlockBar block={here.block} number={here.index + 1} total={review.blocks.length} />
-        )}
-
-        {file && (
-          <>
-            <FileHeader
-              file={file}
-              onToggleViewed={() => void toggleViewed(file.path, !file.viewed)}
-            />
-
-            {file.skim && file.skimReason && (
-              <FileNote>Safe to skim — {file.skimReason}</FileNote>
-            )}
-            {file.notes.map((n, i) => (
-              <FileNote key={i}>
-                {file.tags.length > 1 && (
-                  <span className="from mr-2 font-mono text-xs text-accent">{n.block}</span>
-                )}
-                {n.text}
-              </FileNote>
-            ))}
-
-            {diff && diff.path === file.path ? (
-              <Diff diff={diff} file={file} view={view} />
-            ) : (
-              <div className="loading p-8 font-mono text-sm text-muted">Loading diff…</div>
-            )}
-          </>
-        )}
-
-        {review.unmapped.length > 0 && <Unmapped paths={review.unmapped} />}
-      </main>
+      <Reading
+        review={review}
+        view={view}
+        current={current}
+        onCurrent={setCurrent}
+        onToggleViewed={(path, viewed) => void mark(path, viewed)}
+        onError={setError}
+        files={files}
+      />
 
       <KeyBar />
       <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} />

@@ -10,7 +10,7 @@ const KEYS: [string, string][] = [
   ["↑ / ↓", "the same"],
   ["n", "jump to the next file you have not read"],
   [";", "mark the current file read"],
-  ["Enter", "the same"],
+  ["Space", "the same"],
   ["[ / ]", "previous and next block"],
   ["?", "this list"],
 ];
