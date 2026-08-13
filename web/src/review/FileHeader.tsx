@@ -1,5 +1,6 @@
 import { ChevronDown, ChevronRight, MessageSquare } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { CopyPath } from "@/review/CopyPath";
 import { commentsOn } from "@/review/diff/line";
 import { splitPath } from "@/lib/path";
@@ -18,8 +19,10 @@ export function FileHeader({ file, open, onToggleOpen, onToggleViewed, comments 
   return (
     <div className="filehead sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-rule bg-surface px-6 py-2.5">
       <div className="left flex min-w-0 items-center gap-3">
-        <button
-          className="fold grid size-5 shrink-0 cursor-pointer place-items-center rounded text-faint transition-colors hover:text-ink focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          className="fold size-5 cursor-pointer text-faint hover:bg-transparent hover:text-ink"
           aria-expanded={open}
           aria-label={open ? "Collapse this file" : "Expand this file"}
           title={open ? "Collapse this file" : "Expand this file"}
@@ -30,7 +33,7 @@ export function FileHeader({ file, open, onToggleOpen, onToggleViewed, comments 
           ) : (
             <ChevronRight className="size-3.5" aria-hidden="true" />
           )}
-        </button>
+        </Button>
 
         <button
           className="markbox grid size-5 shrink-0 cursor-pointer place-items-center rounded border border-rule-strong text-xs text-transparent transition-colors hover:border-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none aria-pressed:border-accent aria-pressed:bg-accent aria-pressed:text-surface"

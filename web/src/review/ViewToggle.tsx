@@ -1,4 +1,5 @@
 import { Columns2, Rows3 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { DiffView } from "@/hooks/useDiffView";
 
@@ -12,11 +13,15 @@ export function ViewToggle({ view, onChange }: ViewToggleProps) {
   return (
     <div className="viewtoggle flex items-center rounded border border-rule p-0.5">
       {LAYOUTS.map(({ option, Icon, says }) => (
-        <button
+        <Button
           key={option}
+          variant="ghost"
+          size="icon-xs"
           className={cn(
-            "grid size-6 cursor-pointer place-items-center rounded transition-colors",
-            view === option ? "bg-sunken text-ink" : "text-muted hover:text-ink",
+            "cursor-pointer",
+            view === option
+              ? "bg-sunken text-ink hover:bg-sunken"
+              : "text-muted hover:bg-transparent hover:text-ink",
           )}
           aria-pressed={view === option}
           aria-label={says}
@@ -24,7 +29,7 @@ export function ViewToggle({ view, onChange }: ViewToggleProps) {
           onClick={() => onChange(option)}
         >
           <Icon className="size-3.5" aria-hidden="true" />
-        </button>
+        </Button>
       ))}
     </div>
   );

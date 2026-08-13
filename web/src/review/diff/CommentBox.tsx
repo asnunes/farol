@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 
 /** Where a comment gets written: a plain box under the lines it is about.
  *
@@ -25,9 +27,9 @@ export function CommentBox({ span, onSave, onCancel }: CommentBoxProps) {
         {span.from === span.to ? span.from : `${span.from}–${span.to}`}
       </div>
 
-      <textarea
+      <Textarea
         ref={box}
-        className="w-full resize-y rounded border border-rule-strong bg-surface px-3 py-2 font-sans text-sm text-ink focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        className="resize-y border-rule-strong bg-surface font-sans text-sm text-ink"
         rows={3}
         placeholder="Markdown. ⌘↵ to save, esc to close."
         value={text}
@@ -47,17 +49,18 @@ export function CommentBox({ span, onSave, onCancel }: CommentBoxProps) {
         }}
       />
 
-      <div className="mt-2 flex gap-2 font-sans text-xs">
-        <button
-          className="cursor-pointer rounded bg-comment-ink px-3 py-1 text-surface disabled:cursor-default disabled:opacity-40"
+      <div className="mt-2 flex gap-2">
+        <Button
+          size="xs"
+          className="cursor-pointer bg-comment-ink text-surface hover:bg-comment-ink/90"
           disabled={!text.trim() || saving}
           onClick={() => void save()}
         >
           Comment
-        </button>
-        <button className="cursor-pointer rounded px-3 py-1 text-muted" onClick={onCancel}>
+        </Button>
+        <Button size="xs" variant="ghost" className="cursor-pointer text-muted" onClick={onCancel}>
           Cancel
-        </button>
+        </Button>
       </div>
     </div>
   );

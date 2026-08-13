@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
 import { Diff } from "@/review/diff/Diff";
 import { FileHeader } from "@/review/FileHeader";
 import { FileNote } from "@/review/FileNote";
@@ -77,12 +78,14 @@ export function FileSection({
           {heavy && !asked ? (
             <div className="heavy px-6 py-6 font-sans text-sm text-muted">
               {file.additions + file.deletions} changed lines.{" "}
-              <button
-                className="cursor-pointer text-accent underline underline-offset-2"
+              <Button
+                variant="link"
+                size="xs"
+                className="cursor-pointer px-0 text-accent"
                 onClick={() => setAsked(true)}
               >
                 Load the diff
-              </button>
+              </Button>
             </div>
           ) : diff ? (
             <Diff diff={diff} file={file} view={view} comments={comments} actions={commentActions} />

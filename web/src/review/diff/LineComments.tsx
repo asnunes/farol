@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, Copy } from "lucide-react";
 import Markdown from "react-markdown";
+import { Button } from "@/components/ui/button";
 import { useCopy } from "@/hooks/useCopy";
 import type { CommentActions } from "@/hooks/useComments";
 import type { CommentView } from "@/api";
@@ -71,11 +72,13 @@ function CloseComment({ comment, actions }: CloseCommentProps) {
   }
 
   return (
-    <button
+    <Button
+      variant="ghost"
+      size={armed ? "xs" : "icon-xs"}
       className={
         armed
-          ? "closer flex h-6 cursor-pointer items-center gap-1 rounded bg-comment-ink px-2 font-sans text-[0.6875rem] text-surface focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-          : "closer grid size-6 cursor-pointer place-items-center rounded text-faint transition-colors hover:bg-sunken hover:text-comment-ink focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          ? "closer cursor-pointer bg-comment-ink text-[0.6875rem] text-surface hover:bg-comment-ink/90 hover:text-surface"
+          : "closer cursor-pointer text-faint hover:bg-sunken hover:text-comment-ink"
       }
       aria-label={armed ? "Press again to close this comment" : "Close this comment"}
       title={armed ? "Press again — closing removes it" : "Close this comment"}
@@ -84,7 +87,7 @@ function CloseComment({ comment, actions }: CloseCommentProps) {
     >
       <Check className="size-3.5" aria-hidden="true" />
       {armed && "Sure?"}
-    </button>
+    </Button>
   );
 }
 
@@ -92,8 +95,10 @@ function CopyComment({ comment }: { comment: CommentView }) {
   const { copied, copy } = useCopy();
 
   return (
-    <button
-      className="grid size-6 cursor-pointer place-items-center rounded text-faint transition-colors hover:bg-sunken hover:text-comment-ink focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+    <Button
+      variant="ghost"
+      size="icon-xs"
+      className="cursor-pointer text-faint hover:bg-sunken hover:text-comment-ink"
       aria-label={copied ? "Comment copied" : "Copy this comment"}
       title="Copy this comment"
       onClick={() => void copy(quoted(comment))}
@@ -103,7 +108,7 @@ function CopyComment({ comment }: { comment: CommentView }) {
       ) : (
         <Copy className="size-3.5" aria-hidden="true" />
       )}
-    </button>
+    </Button>
   );
 }
 
