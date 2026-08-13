@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, CornerDownLeft } from "lucide-react";
+import { ArrowDown, ArrowUp, Space } from "lucide-react";
 
 /** The shortcuts, always visible, so the keyboard does not have to be
  * discovered.
@@ -35,7 +35,7 @@ function Key({ children }: KeyProps) {
 const SHORTCUTS: { keys: (string | { Icon: typeof ArrowUp })[]; what: string }[] = [
   { keys: ["j", "k", { Icon: ArrowUp }, { Icon: ArrowDown }], what: "file" },
   { keys: ["n"], what: "next unread" },
-  { keys: [";", { Icon: CornerDownLeft }], what: "mark read" },
+  { keys: [";", { Icon: Space }], what: "mark read" },
   { keys: ["[", "]"], what: "block" },
   { keys: ["?"], what: "help" },
 ];

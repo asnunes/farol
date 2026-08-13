@@ -48,7 +48,9 @@ export function useShortcuts({
           break;
         }
         case ";":
-        case "Enter": {
+        case " ": {
+          // Space scrolls by default, and it cannot do both.
+          e.preventDefault();
           const file = order[index];
           if (file) void toggleViewed(file.path, !file.viewed);
           break;

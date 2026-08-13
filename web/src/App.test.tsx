@@ -255,12 +255,12 @@ describe("marking read", () => {
     expect(calls[0]).toEqual({ path: "src/a.rs", viewed: true });
   });
 
-  it("Enter marks the file read, the way ; does", async () => {
+  it("Space marks the file read, the way ; does", async () => {
     const calls = serve({ review: review() });
     render(<App />);
     await waitForReading("a.rs");
 
-    fireEvent.keyDown(window, { key: "Enter" });
+    fireEvent.keyDown(window, { key: " " });
 
     await waitFor(() => expect(calls).toHaveLength(1));
     expect(calls[0]).toEqual({ path: "src/a.rs", viewed: true });
