@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 import { readingOrder } from "@/api";
+import { useComments } from "@/hooks/useComments";
 import { useDiffView } from "@/hooks/useDiffView";
 import { useOpenFiles } from "@/hooks/useOpenFiles";
 import { useTheme } from "@/hooks/useTheme";
@@ -21,6 +22,7 @@ export default function App() {
   const [view, setView] = useDiffView();
   const files = useOpenFiles();
   const [theme, setTheme] = useTheme();
+  const comments = useComments(setError);
 
   const order = review ? readingOrder(review) : [];
   const index = order.findIndex((f) => f.path === current);
@@ -83,6 +85,7 @@ export default function App() {
         onToggleViewed={(path, viewed) => void mark(path, viewed)}
         onError={setError}
         files={files}
+        comments={comments}
       />
 
       <KeyBar theme={theme} onTheme={setTheme} />

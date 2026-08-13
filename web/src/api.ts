@@ -4,11 +4,14 @@ export const api = {
   file: (path: string) =>
     fetch(`/api/file?path=${encodeURIComponent(path)}`).then(json<FileDiff>),
   setViewed: (path: string, viewed: boolean) =>
-    fetch("/api/viewed", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ path, viewed }),
-    }),
+    send("/api/viewed", "POST", { path, viewed }),
+
+  comments: () => fetch("/api/comments").then(json<CommentView[]>),
+  addComment: (path: string, from: number, to: number, body: string) =>
+    send("/api/comments", "POST", { path, from, to, body }),
+  resolveComment: (id: string, resolved: boolean) =>
+    send(`/api/comments/${encodeURIComponent(id)}/resolve`, "POST", { resolved }),
+  removeComment: (id: string) => send(`/api/comments/${encodeURIComponent(id)}`, "DELETE"),
 };
 
 /** Flat reading order across blocks — what j/k and "next unread" walk. */
@@ -95,6 +98,17 @@ export type DiffLine = {
   content: string;
 };
 
+/** What the reviewer wrote back, over a span of lines they were reading. */
+export type CommentView = {
+  id: string;
+  path: string;
+  from: number;
+  to: number;
+  /** Markdown, as it was typed. */
+  body: string;
+  resolved: boolean;
+};
+
 /** Where a file sits: the block it is read under and how far down the map that
  * block is, which is what the band above the diff counts off. */
 export type FileHome = { block: BlockView; index: number };
@@ -102,4 +116,17 @@ export type FileHome = { block: BlockView; index: number };
 async function json<T>(res: Response): Promise<T> {
   if (!res.ok) throw new Error(await res.text());
   return res.json() as Promise<T>;
+}
+
+/** A write. The server answers with the thing it wrote, but the callers reload
+ * rather than trust a copy, so what matters here is that a refusal is raised
+ * instead of passing for success. */
+async function send(url: string, method: string, body?: unknown) {
+  const res = await fetch(url, {
+    method,
+    ...(body === undefined
+      ? {}
+      : { headers: { "content-type": "application/json" }, body: JSON.stringify(body) }),
+  });
+  if (!res.ok) throw new Error(await res.text());
 }

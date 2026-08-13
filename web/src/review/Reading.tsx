@@ -5,6 +5,7 @@ import { useResumeAt } from "@/hooks/useResumeAt";
 import { BlockBar } from "@/review/BlockBar";
 import { FileSection } from "@/review/FileSection";
 import { Unmapped } from "@/review/Unmapped";
+import type { CommentActions } from "@/hooks/useComments";
 import type { DiffView } from "@/hooks/useDiffView";
 import type { OpenFiles } from "@/hooks/useOpenFiles";
 import type { BlockView, FileView, ReviewView } from "@/api";
@@ -23,6 +24,7 @@ export function Reading({
   onToggleViewed,
   onError,
   files,
+  comments,
 }: ReadingProps) {
   const pane = useRef<HTMLElement>(null);
   const { diffs, request } = useDiffs(onError);
@@ -50,6 +52,8 @@ export function Reading({
             onToggleOpen={() => files.set(row.file.path, !files.isOpen(row.file))}
             onReach={() => request(row.file.path)}
             onToggleViewed={() => onToggleViewed(row.file.path, !row.file.viewed)}
+            comments={comments.comments}
+            commentActions={comments}
           />
         ),
       )}
@@ -81,4 +85,5 @@ type ReadingProps = {
   onToggleViewed: (path: string, viewed: boolean) => void;
   onError: (message: string) => void;
   files: OpenFiles;
+  comments: CommentActions;
 };

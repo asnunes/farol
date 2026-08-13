@@ -1,14 +1,17 @@
 import { cn } from "@/lib/utils";
 import { Code } from "./Code";
 import { LineNotes } from "./LineNotes";
-import { marker, notedBy, notesAt } from "./line";
+import { LineNumber } from "./LineNumber";
+import { Thread } from "./Thread";
+import { commentedBy, marker, notedBy, notesAt } from "./line";
+import type { Commentary } from "./line";
 import type { Range } from "./intraline";
 import type { Token } from "@/highlight/tokens";
 import type { FileView, Hunk } from "@/api";
 
 /** One line under another, the way a diff is written down: removals first,
  * then the additions that replaced them. */
-export function UnifiedLines({ hunk, file, coloured, marks }: UnifiedLinesProps) {
+export function UnifiedLines({ hunk, file, coloured, marks, commentary }: UnifiedLinesProps) {
   return hunk.lines.map((line, i) => (
     <div key={i}>
       <div
@@ -17,11 +20,15 @@ export function UnifiedLines({ hunk, file, coloured, marks }: UnifiedLinesProps)
           line.kind === "added" && "add bg-add-bg text-add-ink",
           line.kind === "removed" && "del bg-del-bg text-del-ink",
           notedBy(file, line) && "noted",
+          commentedBy(commentary.comments, line) && "commented",
+          commentary.select.covers(line.new_number ?? -1) && "picking bg-comment-dim",
         )}
       >
-        <div className="ln shrink-0 pr-3 text-right text-faint select-none">
-          {line.new_number ?? line.old_number ?? ""}
-        </div>
+        <LineNumber
+          number={line.new_number ?? line.old_number}
+          on={line.new_number}
+          commentary={commentary}
+        />
         {/* Wraps instead of scrolling sideways: a narrow window would otherwise
             cut the line off, and reading code by dragging a horizontal bar is
             worse than reading it on two lines. */}
@@ -29,7 +36,9 @@ export function UnifiedLines({ hunk, file, coloured, marks }: UnifiedLinesProps)
           {marker(line)} <Code tokens={coloured?.[i]} plain={line.content} marks={marks[i]} />
         </div>
       </div>
+
       <LineNotes notes={notesAt(file, line)} file={file} />
+      <Thread line={line} commentary={commentary} />
     </div>
   ));
 }
@@ -39,4 +48,5 @@ type UnifiedLinesProps = {
   file: FileView;
   coloured: Token[][] | null;
   marks: (Range[] | undefined)[];
+  commentary: Commentary;
 };

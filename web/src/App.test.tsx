@@ -42,6 +42,18 @@ function review(over: Partial<ReviewView> = {}): ReviewView {
   };
 }
 
+/** The comment list, empty.
+ *
+ * Every stub answers this the same way: the tests here are about the map and
+ * the diff, and without it a request for the comments falls through to the
+ * branch that serves diffs, handing the page an object where it expects a list.
+ * A test that is about comments stubs them itself. */
+function emptyComments(url: string): Response | null {
+  return url.startsWith("/api/comments")
+    ? new Response("[]", { headers: { "content-type": "application/json" } })
+    : null;
+}
+
 const emptyDiff = {
   path: "",
   status: "modified",
@@ -91,6 +103,8 @@ function serve(state: { review: ReviewView }) {
     "fetch",
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
+      const noComments = emptyComments(url);
+      if (noComments) return noComments;
       if (url.startsWith("/api/review")) {
         return new Response(JSON.stringify(state.review), {
           headers: { "content-type": "application/json" },
@@ -126,6 +140,7 @@ beforeEach(() => {
     "EventSource",
     class {
       addEventListener() {}
+      removeEventListener() {}
       close() {}
     },
   );
@@ -343,6 +358,8 @@ describe("a file with nothing to read", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input);
+        const noComments = emptyComments(url);
+        if (noComments) return noComments;
         if (url.startsWith("/api/review")) {
           return new Response(JSON.stringify(review()), {
             headers: { "content-type": "application/json" },
@@ -373,6 +390,8 @@ describe("the diff itself", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input);
+        const noComments = emptyComments(url);
+        if (noComments) return noComments;
         if (url.startsWith("/api/review")) {
           return new Response(JSON.stringify(r), {
             headers: { "content-type": "application/json" },
@@ -552,6 +571,8 @@ describe("a long review", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input);
+        const noComments = emptyComments(url);
+        if (noComments) return noComments;
         if (url.startsWith("/api/review")) {
           return new Response(JSON.stringify(review()), {
             headers: { "content-type": "application/json" },
@@ -580,6 +601,8 @@ describe("a long review", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input);
+        const noComments = emptyComments(url);
+        if (noComments) return noComments;
         if (url.startsWith("/api/review")) {
           return new Response(JSON.stringify(r), {
             headers: { "content-type": "application/json" },
@@ -610,6 +633,8 @@ describe("when the backend fails", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input);
+        const noComments = emptyComments(url);
+        if (noComments) return noComments;
         if (url.startsWith("/api/review")) {
           return failing === "review"
             ? new Response("the store is unreadable", { status: 400 })

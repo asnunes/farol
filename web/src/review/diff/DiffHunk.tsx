@@ -4,12 +4,13 @@ import { changedRanges, type Range } from "./intraline";
 import { segments } from "./split";
 import { SplitLines } from "./SplitLines";
 import { UnifiedLines } from "./UnifiedLines";
+import type { Commentary } from "./line";
 import type { Tokenize } from "@/highlight/tokens";
 import type { DiffView } from "@/hooks/useDiffView";
 import type { FileView, Hunk } from "@/api";
 
 /** One run of changed lines, in whichever layout the reader chose. */
-export function DiffHunk({ hunk, file, tokenize, view }: DiffHunkProps) {
+export function DiffHunk({ hunk, file, tokenize, view, commentary }: DiffHunkProps) {
   // Both sides of the hunk go through the tokenizer once, not once per render:
   // navigation redraws this on every keystroke.
   const coloured = useMemo(
@@ -47,7 +48,7 @@ export function DiffHunk({ hunk, file, tokenize, view }: DiffHunkProps) {
       <div className="hunk bg-sunken px-6 py-1 text-xs text-faint">
         @@ -{hunk.old_start},{hunk.old_lines} +{hunk.new_start},{hunk.new_lines} @@
       </div>
-      <Lines hunk={hunk} file={file} coloured={coloured} marks={marks} />
+      <Lines hunk={hunk} file={file} coloured={coloured} marks={marks} commentary={commentary} />
     </div>
   );
 }
@@ -57,4 +58,5 @@ type DiffHunkProps = {
   file: FileView;
   tokenize: Tokenize | null;
   view: DiffView;
+  commentary: Commentary;
 };

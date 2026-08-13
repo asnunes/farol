@@ -145,12 +145,17 @@ async fn remove_comment(
 
 /// One-way channel: the page finds out that the repository moved without
 /// polling for it.
+///
+/// The kind travels twice, as the event name and as the data. The data is not
+/// redundant: a message whose data buffer is empty is dropped by the browser
+/// rather than dispatched, so an event sent without one reaches curl and never
+/// reaches a page.
 async fn watch(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     let mut rx = state.changes.subscribe();
     let stream = async_stream::stream! {
         loop {
             match rx.recv().await {
-                Ok(kind) => yield Ok::<_, std::convert::Infallible>(Event::default().event(kind).data("")),
+                Ok(kind) => yield Ok::<_, std::convert::Infallible>(Event::default().event(&kind).data(&kind)),
                 Err(broadcast::error::RecvError::Lagged(_)) => continue,
                 Err(_) => break,
             }

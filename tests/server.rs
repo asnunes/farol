@@ -463,6 +463,11 @@ fn writing_a_map_reaches_the_open_page_without_it_asking() {
     let body = String::from_utf8_lossy(&out.stdout);
 
     assert!(body.contains("event: map"), "{body}");
+    // The data line is what makes it an event at all. A message with an empty
+    // data buffer is dropped by the browser instead of dispatched, so without
+    // this the nudge arrives on the wire, satisfies curl, and never reaches the
+    // page — which is exactly how this went unnoticed.
+    assert!(body.contains("data: map"), "{body}");
 }
 
 // ---- the frontend ---------------------------------------------------------
