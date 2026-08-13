@@ -31,7 +31,7 @@ export function Reading({
   useResumeAt(current);
 
   return (
-    <main ref={pane} className="pane overflow-y-auto bg-ground" data-current={current ?? ""}>
+    <main ref={pane} className="pane overflow-y-auto bg-ground pb-[60vh]" data-current={current ?? ""}>
       {inReadingOrder(review).map((row) =>
         "block" in row ? (
           <BlockBar
