@@ -11,6 +11,8 @@ import type { Theme } from "@/hooks/useTheme";
 export function KeyBar({ theme, onTheme }: KeyBarProps) {
   return (
     <nav className="keybar col-span-full flex items-center justify-between border-t border-rule bg-surface px-5 py-1.5 font-sans text-xs text-muted">
+      <ThemeSwitch theme={theme} onChange={onTheme} />
+
       <div className="flex gap-5">
       {SHORTCUTS.map(({ keys, what }) => (
         // Centred rather than sitting on a baseline: a chip holding an icon
@@ -24,8 +26,6 @@ export function KeyBar({ theme, onTheme }: KeyBarProps) {
         </span>
       ))}
       </div>
-
-      <ThemeSwitch theme={theme} onChange={onTheme} />
     </nav>
   );
 }
