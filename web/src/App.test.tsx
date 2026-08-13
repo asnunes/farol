@@ -507,6 +507,17 @@ describe("open and closed", () => {
     await waitFor(() => expect(section("src/a.rs").querySelector(".diff")).toBeTruthy());
   });
 
+  it("moves on to the next file after one is marked read", async () => {
+    // Folding the file away leaves the reader looking at whatever was under it.
+    serve({ review: review() });
+    render(<App />);
+    await waitForReading("a.rs");
+
+    fireEvent.keyDown(window, { key: " " });
+
+    await waitForScrollTo("b.rs");
+  });
+
   it("folds a file the moment it is marked read", async () => {
     serve({ review: review() });
     render(<App />);

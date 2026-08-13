@@ -44,10 +44,16 @@ export default function App() {
   const mark = useCallback(
     (path: string, viewed: boolean) => {
       files.set(path, !viewed);
+      // Marking one read folds it away, which leaves the reader looking at
+      // whatever was underneath. Take them to the next file instead.
+      if (viewed) {
+        const next = order[order.findIndex((f) => f.path === path) + 1];
+        if (next) goTo(next.path);
+      }
       return toggleViewed(path, viewed);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [toggleViewed],
+    [order, toggleViewed],
   );
 
   useShortcuts({ review, order, index, current, goTo, toggleViewed: mark, setHelpOpen });
