@@ -90,10 +90,8 @@ mod tests {
         let store = Store::new(dir.path(), "feature/x");
         let source = FakeDiffSource::with_paths(&["src/a.rs"]).with_line_count("src/a.rs", 200);
         let scope = GetScope::new(ReviewScope::new(Arc::new(source)));
-        (
-            dir,
-            Comments::new(Arc::new(MarkdownComments::new(&store)), scope),
-        )
+        let comments = Comments::new(Arc::new(MarkdownComments::new(&store, dir.path())), scope);
+        (dir, comments)
     }
 
     #[test]

@@ -79,7 +79,7 @@ impl Ctx {
         let root = workspace.root();
         let branch = workspace.branch().to_string();
 
-        let comment_store = Arc::new(MarkdownComments::new(&workspace.store()));
+        let comment_store = Arc::new(MarkdownComments::new(&workspace.store(), &root));
         let maps = Arc::new(JsonMapRepository::new(workspace.store()));
         let progress_repo = Arc::new(JsonProgressRepository::new(workspace.store()));
         let source = Arc::new(GixSource::open(workspace.into_repo(), &branch, &request)?);

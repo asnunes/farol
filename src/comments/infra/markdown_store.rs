@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::comments::domain::{Comment, CommentStore, Found};
 use crate::error::{Error, Result};
@@ -12,17 +12,45 @@ use crate::shared::paths::Store;
 /// of them would need a parser that can also put it back.
 pub struct MarkdownComments {
     dir: PathBuf,
+    /// What a file that could not be read is named relative to.
+    ///
+    /// The worktree the reviewer is standing in, because the name is there to
+    /// be opened and that is where they are standing when they open it. The
+    /// absolute form would be mostly a prefix they already know, wrapped over
+    /// two lines in a terminal and squeezed into a tooltip on screen.
+    root: PathBuf,
 }
 
 impl MarkdownComments {
-    pub fn new(store: &Store) -> Self {
+    pub fn new(store: &Store, root: &Path) -> Self {
         Self {
             dir: store.comments_dir(),
+            root: root.to_path_buf(),
         }
     }
 
     fn file(&self, id: &str) -> PathBuf {
         self.dir.join(format!("{id}.md"))
+    }
+
+    /// Where the file sits, from where the reviewer is standing.
+    ///
+    /// A linked worktree keeps its git dir outside the tree it belongs to, so
+    /// this climbs through `..` rather than giving up and printing the whole
+    /// path: `../../.git/farol/…` is still something to paste, and the
+    /// absolute form is a prefix nobody needed to be told.
+    fn named(&self, file: &Path) -> String {
+        let mut here = self.root.components().peekable();
+        let mut there = file.components().peekable();
+        while here.peek().is_some() && here.peek() == there.peek() {
+            here.next();
+            there.next();
+        }
+
+        let mut out = PathBuf::new();
+        here.for_each(|_| out.push(".."));
+        there.for_each(|c| out.push(c));
+        out.display().to_string()
     }
 }
 
@@ -45,7 +73,7 @@ impl CommentStore for MarkdownComments {
 
             match read {
                 Some(comment) => found.comments.push(comment),
-                None => found.unreadable.push(file.display().to_string()),
+                None => found.unreadable.push(self.named(&file)),
             }
         }
 
@@ -123,7 +151,8 @@ mod tests {
     fn store() -> (tempfile::TempDir, MarkdownComments) {
         let dir = tempfile::tempdir().unwrap();
         let store = Store::new(dir.path(), "feature/x");
-        (dir, MarkdownComments::new(&store))
+        let comments = MarkdownComments::new(&store, dir.path());
+        (dir, comments)
     }
 
     fn comment(id: &str) -> Comment {
@@ -197,11 +226,31 @@ mod tests {
 
         let found = store.list().unwrap();
         assert_eq!(found.comments.len(), 1);
-        assert_eq!(found.unreadable.len(), 1);
-        assert!(
-            found.unreadable[0].ends_with("2.md"),
-            "{:?}",
-            found.unreadable
+        assert_eq!(
+            found.unreadable,
+            vec!["farol/feature-x/comments/2.md"],
+            "named from the root of the worktree, to be pasted into an editor"
+        );
+    }
+
+    #[test]
+    fn a_store_outside_the_worktree_climbs_out_rather_than_going_absolute() {
+        // A linked worktree keeps its git dir under the repository it was cut
+        // from, so the store is not inside the tree the reviewer is standing
+        // in. `..` from where they are still beats a path from the root of the
+        // disk.
+        let repo = tempfile::tempdir().unwrap();
+        let store = Store::new(&repo.path().join("main/.git"), "feature/x");
+        let worktree = repo.path().join("trees/feature-x");
+        let comments = MarkdownComments::new(&store, &worktree);
+        std::fs::create_dir_all(store.comments_dir()).unwrap();
+        std::fs::write(store.comments_dir().join("1.md"), "broken").unwrap();
+
+        let found = comments.list().unwrap();
+
+        assert_eq!(
+            found.unreadable,
+            vec!["../../main/.git/farol/feature-x/comments/1.md"]
         );
     }
 

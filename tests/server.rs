@@ -457,9 +457,13 @@ fn a_comment_file_edited_into_nonsense_is_reported_to_the_page() {
     assert_eq!(answer["comments"].as_array().unwrap().len(), 0);
     let unreadable = answer["unreadable"].as_array().unwrap();
     assert_eq!(unreadable.len(), 1);
-    assert!(
-        unreadable[0].as_str().unwrap().ends_with(".md"),
-        "it names the file to open: {unreadable:?}"
+    // From the root of the worktree, not from the root of the disk: the name
+    // is there to be pasted into an editor, and the absolute form is mostly a
+    // prefix the reviewer already knows.
+    assert_eq!(
+        unreadable[0].as_str().unwrap(),
+        ".git/farol/feature-x/comments/".to_string().to_owned()
+            + file.file_name().unwrap().to_str().unwrap()
     );
 }
 
