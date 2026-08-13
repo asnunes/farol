@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, type CommentView } from "@/api";
+import { api, type CommentsView } from "@/api";
 import { onNudge } from "@/lib/watch";
 
 /** What the reviewer wrote back, and keeping it current.
@@ -10,11 +10,11 @@ import { onNudge } from "@/lib/watch";
  * patching the list in place is the same choice `useReview` makes for the tick
  * boxes — the server is what decides, here as there. */
 export function useComments(onError: (message: string) => void) {
-  const [comments, setComments] = useState<CommentView[]>([]);
+  const [found, setFound] = useState<CommentsView>({ comments: [], unreadable: [] });
 
   const load = useCallback(async () => {
     try {
-      setComments(await api.comments());
+      setFound(await api.comments());
     } catch (e) {
       onError(String(e));
     }
@@ -43,7 +43,8 @@ export function useComments(onError: (message: string) => void) {
   );
 
   return {
-    comments,
+    comments: found.comments,
+    unreadable: found.unreadable,
     add: (path: string, from: number, to: number, body: string) =>
       write(api.addComment(path, from, to, body)),
     close: (id: string) => write(api.closeComment(id)),

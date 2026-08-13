@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use crate::comments::domain::{Comment, CommentStore};
+use crate::comments::domain::{Comment, CommentStore, Found};
 use crate::error::{Error, Result};
 use crate::shared::paths::Store;
 
@@ -27,23 +27,33 @@ impl MarkdownComments {
 }
 
 impl CommentStore for MarkdownComments {
-    fn list(&self) -> Result<Vec<Comment>> {
+    fn list(&self) -> Result<Found> {
         let Ok(entries) = std::fs::read_dir(&self.dir) else {
-            return Ok(Vec::new());
+            return Ok(Found::default());
         };
 
-        let mut found: Vec<Comment> = entries
+        let mut found = Found::default();
+        for file in entries
             .flatten()
-            .filter(|e| e.path().extension().is_some_and(|x| x == "md"))
-            .filter_map(|e| {
-                let id = e.path().file_stem()?.to_string_lossy().into_owned();
-                parse(&id, &std::fs::read_to_string(e.path()).ok()?)
-            })
-            .collect();
+            .map(|e| e.path())
+            .filter(|p| p.extension().is_some_and(|x| x == "md"))
+        {
+            let read = std::fs::read_to_string(&file)
+                .ok()
+                .zip(file.file_stem())
+                .and_then(|(raw, id)| parse(&id.to_string_lossy(), &raw));
 
-        // By id, which is the second it was written: the thread reads in the
-        // order it happened.
-        found.sort_by(|a, b| a.id.cmp(&b.id));
+            match read {
+                Some(comment) => found.comments.push(comment),
+                None => found.unreadable.push(file.display().to_string()),
+            }
+        }
+
+        // By id, which is the moment it was written: the thread reads in the
+        // order it happened. The unreadable ones by name, for the same reason
+        // any list of files is sorted — so it reads the same twice running.
+        found.comments.sort_by(|a, b| a.id.cmp(&b.id));
+        found.unreadable.sort();
         Ok(found)
     }
 
@@ -131,7 +141,7 @@ mod tests {
         let (_dir, store) = store();
         store.save(&comment("1")).unwrap();
 
-        assert_eq!(store.list().unwrap(), vec![comment("1")]);
+        assert_eq!(store.list().unwrap().comments, vec![comment("1")]);
     }
 
     #[test]
@@ -156,7 +166,7 @@ mod tests {
         )
         .unwrap();
 
-        let all = store.list().unwrap();
+        let all = store.list().unwrap().comments;
         assert_eq!(all.len(), 2);
         assert_eq!(all[1].body, "Why?");
     }
@@ -172,19 +182,59 @@ mod tests {
             })
             .unwrap();
 
-        assert_eq!(store.list().unwrap()[0].from, 9);
-        assert_eq!(store.list().unwrap()[0].to, 9);
+        assert_eq!(store.list().unwrap().comments[0].from, 9);
+        assert_eq!(store.list().unwrap().comments[0].to, 9);
     }
 
     #[test]
-    fn a_file_somebody_edited_into_nonsense_is_skipped_rather_than_fatal() {
+    fn a_file_somebody_edited_into_nonsense_is_skipped_and_named() {
         // These are files a person is invited to open. One of them being wrong
-        // should cost that one comment, not the review.
+        // should cost that one comment, not the review — and it has to be said
+        // out loud, or a comment they wrote is gone with no way to notice.
         let (_dir, store) = store();
         store.save(&comment("1")).unwrap();
         std::fs::write(store.file("2"), "not a comment at all").unwrap();
 
-        assert_eq!(store.list().unwrap().len(), 1);
+        let found = store.list().unwrap();
+        assert_eq!(found.comments.len(), 1);
+        assert_eq!(found.unreadable.len(), 1);
+        assert!(
+            found.unreadable[0].ends_with("2.md"),
+            "{:?}",
+            found.unreadable
+        );
+    }
+
+    #[test]
+    fn every_way_of_breaking_the_header_is_reported_rather_than_swallowed() {
+        // The four a person actually produces by editing the file: the header
+        // gone, either key gone, and a stray line with no colon in it.
+        let (_dir, store) = store();
+        let broken = [
+            ("a", "no header at all, just prose\n"),
+            ("b", "---\nlines: 1-2\n---\n\nWhy?\n"),
+            ("c", "---\npath: src/a.rs\n---\n\nWhy?\n"),
+            (
+                "d",
+                "---\npath: src/a.rs\nrascunho\nlines: 1-2\n---\n\nWhy?\n",
+            ),
+        ];
+        for (id, raw) in broken {
+            std::fs::create_dir_all(&store.dir).unwrap();
+            std::fs::write(store.file(id), raw).unwrap();
+        }
+
+        let found = store.list().unwrap();
+
+        assert!(found.comments.is_empty());
+        assert_eq!(found.unreadable.len(), 4, "{:?}", found.unreadable);
+    }
+
+    #[test]
+    fn a_store_nobody_has_written_to_yet_is_empty_rather_than_broken() {
+        let (_dir, store) = store();
+
+        assert_eq!(store.list().unwrap(), Found::default());
     }
 
     #[test]
@@ -194,7 +244,7 @@ mod tests {
 
         assert!(store.close("1").unwrap());
         assert!(!store.close("1").unwrap());
-        assert!(store.list().unwrap().is_empty());
+        assert!(store.list().unwrap().comments.is_empty());
     }
 
     #[test]
@@ -203,7 +253,13 @@ mod tests {
         store.save(&comment("2")).unwrap();
         store.save(&comment("1")).unwrap();
 
-        let ids: Vec<_> = store.list().unwrap().into_iter().map(|c| c.id).collect();
+        let ids: Vec<_> = store
+            .list()
+            .unwrap()
+            .comments
+            .into_iter()
+            .map(|c| c.id)
+            .collect();
         assert_eq!(ids, ["1", "2"]);
     }
 }

@@ -1,3 +1,4 @@
+import { TriangleAlert } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { Refresh } from "@/review/Refresh";
 import { ViewToggle } from "@/review/ViewToggle";
@@ -5,7 +6,7 @@ import type { DiffView } from "@/hooks/useDiffView";
 import type { ReviewView } from "@/api";
 
 /** Where you are and how far through you are. */
-export function TopBar({ review, view, onView, stale, onRefresh }: TopBarProps) {
+export function TopBar({ review, view, onView, stale, onRefresh, unreadable }: TopBarProps) {
   const done = review.totalFiles > 0 && review.viewedFiles === review.totalFiles;
 
   return (
@@ -17,6 +18,7 @@ export function TopBar({ review, view, onView, stale, onRefresh }: TopBarProps) 
       </div>
 
       <div className="flex items-center gap-4">
+        {unreadable.length > 0 && <Unreadable files={unreadable} />}
         {stale && <Refresh onRefresh={onRefresh} />}
         <ViewToggle view={view} onChange={onView} />
         {review.commitsBehind > 0 && (
@@ -47,10 +49,29 @@ export function TopBar({ review, view, onView, stale, onRefresh }: TopBarProps) 
   );
 }
 
+/** Comment files the store could not read.
+ *
+ * Up here rather than beside the code, because a comment whose header is broken
+ * has no line left to sit next to — that is exactly what is wrong with it. The
+ * chip names the files in its tooltip, since fixing one means opening it. */
+function Unreadable({ files }: { files: string[] }) {
+  return (
+    <div
+      className="unreadable flex items-center gap-1.5 rounded-full bg-del-bg px-2.5 py-1 font-mono text-xs text-del-ink"
+      title={`Could not be read — the header needs path: and lines: between two --- lines.\n\n${files.join("\n")}`}
+    >
+      <TriangleAlert className="size-3.5" aria-hidden="true" />
+      {files.length} comment file{files.length === 1 ? "" : "s"} unreadable
+    </div>
+  );
+}
+
 type TopBarProps = {
   review: ReviewView;
   view: DiffView;
   onView: (view: DiffView) => void;
   stale: boolean;
   onRefresh: () => void;
+  /** Paths of comment files that could not be parsed. */
+  unreadable: string[];
 };

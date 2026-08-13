@@ -6,7 +6,7 @@ export const api = {
   setViewed: (path: string, viewed: boolean) =>
     send("/api/viewed", "POST", { path, viewed }),
 
-  comments: () => fetch("/api/comments").then(json<CommentView[]>),
+  comments: () => fetch("/api/comments").then(json<CommentsView>),
   addComment: (path: string, from: number, to: number, body: string) =>
     send("/api/comments", "POST", { path, from, to, body }),
   closeComment: (id: string) => send(`/api/comments/${encodeURIComponent(id)}`, "DELETE"),
@@ -94,6 +94,17 @@ export type DiffLine = {
   old_number: number | null;
   new_number: number | null;
   content: string;
+};
+
+/** The comments, and the files the store could not read.
+ *
+ * The unreadable ones travel with the list because the page is the only place
+ * their absence shows: a comment whose markdown got broken by hand stops
+ * rendering, and silence there reads as never having written it. */
+export type CommentsView = {
+  comments: CommentView[];
+  /** Paths of the files to open and fix. */
+  unreadable: string[];
 };
 
 /** A question the reviewer left over a span of lines they were reading.

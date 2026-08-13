@@ -50,7 +50,9 @@ function review(over: Partial<ReviewView> = {}): ReviewView {
  * A test that is about comments stubs them itself. */
 function emptyComments(url: string): Response | null {
   return url.startsWith("/api/comments")
-    ? new Response("[]", { headers: { "content-type": "application/json" } })
+    ? new Response('{"comments":[],"unreadable":[]}', {
+        headers: { "content-type": "application/json" },
+      })
     : null;
 }
 
@@ -624,6 +626,42 @@ describe("a long review", () => {
     fireEvent.click(section("src/a.rs").querySelector(".heavy button")!);
 
     await waitFor(() => expect(asked).toContain("src/a.rs"));
+  });
+});
+
+describe("a comment file that cannot be read", () => {
+  it("is said out loud, because the comment stops rendering either way", async () => {
+    // Somebody opens the markdown and breaks the header. The comment vanishes
+    // from the page, and silence about it reads as never having written it.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.startsWith("/api/comments")) {
+          return new Response(
+            JSON.stringify({
+              comments: [],
+              unreadable: [".git/farol/feature-x/comments/18cb-3731.md"],
+            }),
+            { headers: { "content-type": "application/json" } },
+          );
+        }
+        if (url.startsWith("/api/review")) {
+          return new Response(JSON.stringify(review()), {
+            headers: { "content-type": "application/json" },
+          });
+        }
+        return new Response(JSON.stringify(emptyDiff), {
+          headers: { "content-type": "application/json" },
+        });
+      }),
+    );
+
+    render(<App />);
+
+    const chip = await screen.findByText(/1 comment file unreadable/);
+    // The file has to be named: fixing one means opening it.
+    expect(chip.getAttribute("title")).toContain("18cb-3731.md");
   });
 });
 

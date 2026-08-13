@@ -7,7 +7,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use crate::comments::domain::{Comment, CommentStore};
+use crate::comments::domain::{Comment, CommentStore, Found};
 use crate::diff::domain::{
     CommitHistorySource, FileChange, FileDiff, FileDiffSource, FileStatus, Hunk, Line, LineKind,
     ReviewScopeSource, Scope,
@@ -268,8 +268,11 @@ pub struct InMemoryComments {
 }
 
 impl CommentStore for InMemoryComments {
-    fn list(&self) -> Result<Vec<Comment>> {
-        Ok(self.comments.lock().unwrap().clone())
+    fn list(&self) -> Result<Found> {
+        Ok(Found {
+            comments: self.comments.lock().unwrap().clone(),
+            unreadable: Vec::new(),
+        })
     }
 
     fn save(&self, comment: &Comment) -> Result<()> {

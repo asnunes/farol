@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::comments::domain::{Comment, CommentStore};
+use crate::comments::domain::{Comment, CommentStore, Found};
 use crate::error::{Error, Result};
 use crate::map::application::GetScope;
 use crate::map::domain::LineRange;
@@ -17,7 +17,9 @@ impl Comments {
         Self { store, scope }
     }
 
-    pub fn all(&self) -> Result<Vec<Comment>> {
+    /// Everything still waiting for an answer, and the files that could not be
+    /// read at all.
+    pub fn all(&self) -> Result<Found> {
         self.store.list()
     }
 
@@ -101,7 +103,7 @@ mod tests {
             .add("src/a.rs", 82, 116, "Why this order?")
             .unwrap();
 
-        let all = comments.all().unwrap();
+        let all = comments.all().unwrap().comments;
         assert_eq!(all.len(), 1);
         assert_eq!(all[0].body, "Why this order?");
     }
@@ -111,7 +113,7 @@ mod tests {
         let (_dir, comments) = comments();
 
         assert!(comments.add("src/a.rs", 1, 1, "   \n ").is_err());
-        assert!(comments.all().unwrap().is_empty());
+        assert!(comments.all().unwrap().comments.is_empty());
     }
 
     #[test]
@@ -123,7 +125,7 @@ mod tests {
         let err = comments.add("elsewhere.rs", 1, 1, "Why?").unwrap_err();
 
         assert!(err.to_string().contains("elsewhere.rs"), "{err}");
-        assert!(comments.all().unwrap().is_empty());
+        assert!(comments.all().unwrap().comments.is_empty());
     }
 
     #[test]
@@ -134,7 +136,7 @@ mod tests {
         let err = comments.add("src/a.rs", 300, 320, "Why?").unwrap_err();
 
         assert!(err.to_string().contains("200"), "{err}");
-        assert!(comments.all().unwrap().is_empty());
+        assert!(comments.all().unwrap().comments.is_empty());
     }
 
     #[test]
@@ -146,7 +148,7 @@ mod tests {
 
         comments.close(&one.id).unwrap();
 
-        assert!(comments.all().unwrap().is_empty());
+        assert!(comments.all().unwrap().comments.is_empty());
     }
 
     #[test]
@@ -166,7 +168,7 @@ mod tests {
         comments.add("src/a.rs", 1, 1, "one").unwrap();
         comments.add("src/a.rs", 2, 2, "two").unwrap();
 
-        let all = comments.all().unwrap();
+        let all = comments.all().unwrap().comments;
         assert_ne!(all[0].id, all[1].id);
     }
 }

@@ -7,7 +7,7 @@
 
 use serde::Serialize;
 
-use crate::comments::domain::Comment;
+use crate::comments::domain::{Comment, Found};
 use crate::diff::domain::FileStatus;
 use crate::map::application::ReviewSnapshot;
 use crate::map::domain::ReviewMap;
@@ -85,6 +85,18 @@ pub struct CommentView {
     pub from: u32,
     pub to: u32,
     pub body: String,
+}
+
+/// The comment list, and what the store could not read.
+///
+/// An object rather than a bare array because the unreadable files travel with
+/// it: the page has to be able to say a comment went missing, and a list has
+/// nowhere to put that.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommentsView {
+    pub comments: Vec<CommentView>,
+    pub unreadable: Vec<String>,
 }
 
 impl ReviewView {
@@ -176,6 +188,15 @@ impl ReviewView {
             unmapped,
             total_files,
             viewed_files,
+        }
+    }
+}
+
+impl CommentsView {
+    pub fn of(found: &Found) -> Self {
+        Self {
+            comments: found.comments.iter().map(CommentView::of).collect(),
+            unreadable: found.unreadable.clone(),
         }
     }
 }

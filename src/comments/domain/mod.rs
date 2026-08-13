@@ -30,10 +30,25 @@ impl Comment {
 /// Where comments are kept. A trait for the same reason the map has one: the
 /// use cases should not know that this is a folder of files.
 pub trait CommentStore: Send + Sync {
-    fn list(&self) -> Result<Vec<Comment>>;
+    fn list(&self) -> Result<Found>;
     fn save(&self, comment: &Comment) -> Result<()>;
     /// Whether there was one to close.
     fn close(&self, id: &str) -> Result<bool>;
+}
+
+/// What a read of the store turned up.
+///
+/// The comments are only half of it. These are files a person is invited to
+/// open and edit, so one of them will eventually come back malformed — and one
+/// bad file must not cost the whole review. It gets skipped, and it gets named:
+/// skipping quietly is how a comment somebody wrote disappears without a word,
+/// which is worse than the error it was avoiding.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct Found {
+    pub comments: Vec<Comment>,
+    /// Paths of the files that could not be read, so they can be opened and
+    /// fixed rather than hunted for.
+    pub unreadable: Vec<String>,
 }
 
 #[cfg(test)]

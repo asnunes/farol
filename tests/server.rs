@@ -336,7 +336,13 @@ fn a_comment_written_from_the_page_can_be_read_and_closed() {
     // The whole life of a comment over the wire, in one go: each step is only
     // worth anything if the one before it stuck.
     let s = Serving::new();
-    assert_eq!(s.json("/api/comments").as_array().unwrap().len(), 0);
+    assert_eq!(
+        s.json("/api/comments")["comments"]
+            .as_array()
+            .unwrap()
+            .len(),
+        0
+    );
 
     let (status, body) = s.probe(
         "POST",
@@ -349,7 +355,7 @@ fn a_comment_written_from_the_page_can_be_read_and_closed() {
         .expect("the new comment comes back with the id to address it by")
         .to_string();
 
-    let all = s.json("/api/comments");
+    let all = s.json("/api/comments")["comments"].clone();
     assert_eq!(all[0]["path"], "src/a.rs");
     assert_eq!(all[0]["from"], 10);
     assert_eq!(all[0]["to"], 12);
@@ -359,7 +365,13 @@ fn a_comment_written_from_the_page_can_be_read_and_closed() {
     // back is the list of what is still waiting.
     let (status, _) = s.probe("DELETE", &format!("/api/comments/{id}"), None);
     assert_eq!(status, 204);
-    assert_eq!(s.json("/api/comments").as_array().unwrap().len(), 0);
+    assert_eq!(
+        s.json("/api/comments")["comments"]
+            .as_array()
+            .unwrap()
+            .len(),
+        0
+    );
 }
 
 #[test]
@@ -411,7 +423,44 @@ fn a_comment_the_review_cannot_hold_is_refused() {
 
     assert_eq!(outside, 400);
     assert_eq!(past_end, 400);
-    assert_eq!(s.json("/api/comments").as_array().unwrap().len(), 0);
+    assert_eq!(
+        s.json("/api/comments")["comments"]
+            .as_array()
+            .unwrap()
+            .len(),
+        0
+    );
+}
+
+#[test]
+fn a_comment_file_edited_into_nonsense_is_reported_to_the_page() {
+    // The reviewer opens the markdown, breaks the header, and the comment stops
+    // rendering. Without this the page shows nothing and says nothing, which
+    // reads as though they never wrote it.
+    let s = Serving::new();
+    s.probe(
+        "POST",
+        "/api/comments",
+        Some(r#"{"path":"src/a.rs","from":10,"to":12,"body":"Why this order?"}"#),
+    );
+    let dir = s.repo.path().join(".git/farol/feature-x/comments");
+    let file = std::fs::read_dir(&dir)
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap()
+        .path();
+    std::fs::write(&file, "somebody deleted the header\n").unwrap();
+
+    let answer = s.json("/api/comments");
+
+    assert_eq!(answer["comments"].as_array().unwrap().len(), 0);
+    let unreadable = answer["unreadable"].as_array().unwrap();
+    assert_eq!(unreadable.len(), 1);
+    assert!(
+        unreadable[0].as_str().unwrap().ends_with(".md"),
+        "it names the file to open: {unreadable:?}"
+    );
 }
 
 #[test]

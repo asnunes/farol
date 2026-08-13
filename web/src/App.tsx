@@ -74,6 +74,7 @@ export default function App() {
         onView={setView}
         stale={stale}
         onRefresh={() => void refresh()}
+        unreadable={comments.unreadable}
       />
       <Sidebar review={review} current={current} onPick={goTo} />
 

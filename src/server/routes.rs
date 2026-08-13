@@ -89,7 +89,7 @@ async fn viewed(
 /// answer: closing a comment removes it, so there is nothing here to filter.
 async fn comments(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     match state.use_cases.comments.all() {
-        Ok(all) => Json(all.iter().map(view::CommentView::of).collect::<Vec<_>>()).into_response(),
+        Ok(found) => Json(view::CommentsView::of(&found)).into_response(),
         Err(e) => fail(e),
     }
 }
