@@ -137,6 +137,18 @@ beforeEach(() => {
     scrolls.push(this.dataset.path ?? "");
   };
 
+  // Radix measures what it is about to place, and jsdom has no observer to
+  // measure with. Nothing here asserts on size, so a stub that never fires is
+  // enough to let a tooltip open.
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  );
+
   // The page subscribes on mount; without a stub jsdom throws.
   vi.stubGlobal(
     "EventSource",
@@ -668,13 +680,22 @@ describe("a comment file that cannot be read", () => {
 
     render(<App />);
 
-    const chip = await screen.findByText(/1 comment unreadable/);
-    // Known by what the reviewer wrote, since the header no longer says which
-    // file it was about — and the file to open comes with it, because that is
-    // the fix.
-    expect(chip.getAttribute("title")).toContain('"Por que essa ordem?"');
-    expect(chip.getAttribute("title")).toContain("header is gone");
-    expect(chip.getAttribute("title")).toContain("18cb-3731.md");
+    const chip = await waitFor(() => {
+      const found = document.querySelector(".unreadable");
+      expect(found).toBeTruthy();
+      return found!;
+    });
+    expect(chip.textContent).toContain("1 comment unreadable");
+
+    // The detail is a hover away. Known by what the reviewer wrote, since the
+    // header no longer says which file it was about — and the file to open
+    // comes with it, because that is the fix.
+    fireEvent.pointerEnter(chip);
+    fireEvent.focus(chip);
+    const detail = await screen.findByRole("tooltip");
+    expect(detail.textContent).toContain('"Por que essa ordem?"');
+    expect(detail.textContent).toContain("header is gone");
+    expect(detail.textContent).toContain("18cb-3731.md");
   });
 });
 
