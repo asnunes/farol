@@ -5,6 +5,7 @@ import { useResumeAt } from "@/hooks/useResumeAt";
 import { BlockBar } from "@/review/BlockBar";
 import { FileSection } from "@/review/FileSection";
 import { Unmapped } from "@/review/Unmapped";
+import type { CommentActions } from "@/hooks/useComments";
 import type { DiffView } from "@/hooks/useDiffView";
 import type { OpenFiles } from "@/hooks/useOpenFiles";
 import type { BlockView, FileView, ReviewView } from "@/api";
@@ -23,12 +24,18 @@ export function Reading({
   onToggleViewed,
   onError,
   files,
+  comments,
 }: ReadingProps) {
   const pane = useRef<HTMLElement>(null);
   const { diffs, request } = useDiffs(onError);
 
-  useCurrentFile(pane, review, onCurrent);
+  // Landing first, and the order is load-bearing: effects run in the order
+  // they are called, and naming the current file from the scroll before the
+  // page has been scrolled names whatever sits at the top of a pane nobody has
+  // moved yet. That name then outlives the landing, because the correction that
+  // follows the scroll is suppressed by the settling the scroll itself set.
   useResumeAt(current);
+  useCurrentFile(pane, review, onCurrent);
 
   return (
     <main ref={pane} className="pane overflow-y-auto bg-ground pb-[60vh]" data-current={current ?? ""}>
@@ -50,6 +57,8 @@ export function Reading({
             onToggleOpen={() => files.set(row.file.path, !files.isOpen(row.file))}
             onReach={() => request(row.file.path)}
             onToggleViewed={() => onToggleViewed(row.file.path, !row.file.viewed)}
+            comments={comments.comments}
+            commentActions={comments}
           />
         ),
       )}
@@ -81,4 +90,5 @@ type ReadingProps = {
   onToggleViewed: (path: string, viewed: boolean) => void;
   onError: (message: string) => void;
   files: OpenFiles;
+  comments: CommentActions;
 };

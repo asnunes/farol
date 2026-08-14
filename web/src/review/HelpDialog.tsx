@@ -4,6 +4,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Kbd, KbdGroup } from "@/components/ui/kbd";
 
 const KEYS: [string, string][] = [
   ["j / k", "previous and next file, in reading order"],
@@ -28,7 +29,15 @@ export function HelpDialog({
         <dl className="grid grid-cols-[5rem_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm">
           {KEYS.map(([key, what]) => (
             <div key={key} className="contents">
-              <dt className="font-mono text-ink">{key}</dt>
+              <dt className="text-ink">
+                <KbdGroup>
+                  {key.split(" / ").map((one) => (
+                    <Kbd key={one} className="border-rule-strong bg-sunken text-ink-soft">
+                      {one}
+                    </Kbd>
+                  ))}
+                </KbdGroup>
+              </dt>
               <dd className="font-serif text-ink-soft">{what}</dd>
             </div>
           ))}

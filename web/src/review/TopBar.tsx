@@ -1,11 +1,14 @@
+import { TriangleAlert } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Refresh } from "@/review/Refresh";
 import { ViewToggle } from "@/review/ViewToggle";
 import type { DiffView } from "@/hooks/useDiffView";
-import type { ReviewView } from "@/api";
+import type { ReviewView, Unreadable as UnreadableView } from "@/api";
 
 /** Where you are and how far through you are. */
-export function TopBar({ review, view, onView, stale, onRefresh }: TopBarProps) {
+export function TopBar({ review, view, onView, stale, onRefresh, unreadable }: TopBarProps) {
   const done = review.totalFiles > 0 && review.viewedFiles === review.totalFiles;
 
   return (
@@ -17,12 +20,13 @@ export function TopBar({ review, view, onView, stale, onRefresh }: TopBarProps) 
       </div>
 
       <div className="flex items-center gap-4">
+        {unreadable.length > 0 && <Unreadable broken={unreadable} />}
         {stale && <Refresh onRefresh={onRefresh} />}
         <ViewToggle view={view} onChange={onView} />
         {review.commitsBehind > 0 && (
-          <div className="stale-chip rounded-full bg-accent-dim px-2.5 py-1 font-mono text-xs text-accent">
+          <Badge className="stale-chip rounded-full border-transparent bg-accent-dim font-mono text-xs font-normal text-accent">
             map {review.commitsBehind} commit{review.commitsBehind === 1 ? "" : "s"} behind
-          </div>
+          </Badge>
         )}
         <div className="progress flex items-center gap-2 font-mono text-xs text-muted">
           {done ? (
@@ -47,10 +51,47 @@ export function TopBar({ review, view, onView, stale, onRefresh }: TopBarProps) 
   );
 }
 
+/** Comment files the store could not read.
+ *
+ * Up here rather than beside the code, because a comment whose header is broken
+ * has no line left to sit next to — that is exactly what is wrong with it. The
+ * chip names the files in its tooltip, since fixing one means opening it. */
+function Unreadable({ broken }: { broken: UnreadableView[] }) {
+  return (
+    <Tooltip delayDuration={0}>
+      <TooltipTrigger asChild>
+        <Badge className="unreadable cursor-default gap-1.5 rounded-full border-transparent bg-del-bg font-mono text-xs font-normal text-del-ink">
+          <TriangleAlert className="size-3.5" aria-hidden="true" />
+          {broken.length} comment{broken.length === 1 ? "" : "s"} unreadable
+        </Badge>
+      </TooltipTrigger>
+      {/* A real tooltip rather than `title`, and only here: this is the one
+          piece of chrome whose message is three lines per comment, which the
+          browser's own tooltip crams into a strip nobody can read. */}
+      <TooltipContent className="max-w-[36rem]">
+        {broken.map((one) => (
+          <div key={one.file} className="mb-2 last:mb-0">
+            <div className="font-sans">{headline(one)}</div>
+            <div className="font-sans opacity-80">{one.why}</div>
+            <div className="font-mono text-[0.6875rem] opacity-70">{one.file}</div>
+          </div>
+        ))}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+/** What the reviewer knows it by: the file it was about, or their own words. */
+function headline(one: UnreadableView): string {
+  return one.about ?? (one.excerpt === null ? "an empty comment" : `"${one.excerpt}"`);
+}
+
 type TopBarProps = {
   review: ReviewView;
   view: DiffView;
   onView: (view: DiffView) => void;
   stale: boolean;
   onRefresh: () => void;
+  /** Comment files that could not be parsed, in the reviewer's terms. */
+  unreadable: UnreadableView[];
 };

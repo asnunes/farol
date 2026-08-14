@@ -52,13 +52,23 @@ const QUIET: std::time::Duration = std::time::Duration::from_millis(300);
 /// What an event on the git dir means for the browser, if anything.
 ///
 /// Most of what lands in the git dir is none of the reviewer's business —
-/// objects being written, locks being taken. Only two things change what is on
-/// screen: the skill rewriting the map, and the branch moving.
+/// objects being written, locks being taken. Three things change what is on
+/// screen: a comment being written, the skill rewriting the map, and the branch
+/// moving.
 fn nudge_for(paths: &[PathBuf]) -> Option<&'static str> {
-    let touched_map = paths
+    let under_farol = |p: &PathBuf| p.to_string_lossy().contains("/farol/");
+
+    // Ahead of the map, and its own kind of news. A comment written from the
+    // page itself lands here, and calling that "the map changed" would raise
+    // the banner asking the reader to reload over something they just did.
+    let touched_comment = paths
         .iter()
-        .any(|p| p.to_string_lossy().contains("/farol/"));
-    if touched_map {
+        .any(|p| under_farol(p) && p.to_string_lossy().contains("/comments/"));
+    if touched_comment {
+        return Some("comments");
+    }
+
+    if paths.iter().any(under_farol) {
         return Some("map");
     }
     let touched_head = paths
@@ -80,6 +90,18 @@ mod tests {
         assert_eq!(
             nudge_for(&paths(&["/repo/.git/farol/feature-x/maps/abc.json"])),
             Some("map")
+        );
+    }
+
+    #[test]
+    fn a_comment_being_written_is_its_own_news() {
+        // The page writes these itself. Reported as a map change it would ask
+        // the reader to reload over their own comment.
+        assert_eq!(
+            nudge_for(&paths(&[
+                "/repo/.git/farol/feature-x/comments/18cb-3731.md"
+            ])),
+            Some("comments")
         );
     }
 

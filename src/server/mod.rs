@@ -20,6 +20,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use tokio::sync::broadcast;
+// `watch` next door is the file watcher; this one is the shutdown signal.
+use tokio::sync::watch as signal;
 
 use crate::cmd::ServerUseCases;
 use crate::error::{Error, Result};
@@ -66,14 +68,25 @@ struct AppState {
     /// into a call and back, and own no business logic of their own.
     use_cases: ServerUseCases,
     changes: broadcast::Sender<String>,
+    /// Turns true when the process has been asked to stop.
+    ///
+    /// The change stream has to know. Graceful shutdown waits for every
+    /// connection in flight to finish, and a stream that never ends is a
+    /// connection that never ends — so a browser sitting on this route was
+    /// enough to make the server ignore a `SIGTERM` for good.
+    stopping: signal::Receiver<bool>,
 }
 
 impl AppState {
-    fn new(use_cases: ServerUseCases) -> (Arc<Self>, broadcast::Sender<String>) {
+    fn new(
+        use_cases: ServerUseCases,
+        stopping: signal::Receiver<bool>,
+    ) -> (Arc<Self>, broadcast::Sender<String>) {
         let (changes, _) = broadcast::channel(16);
         let state = Arc::new(Self {
             use_cases,
             changes: changes.clone(),
+            stopping,
         });
         (state, changes)
     }
@@ -98,7 +111,8 @@ impl Server {
 
 async fn serve(config: ServeConfig) -> Result<()> {
     let registry = Registry::open()?;
-    let (state, changes) = AppState::new(config.use_cases);
+    let (stopping, stops) = signal::channel(false);
+    let (state, changes) = AppState::new(config.use_cases, stops);
 
     // One line of wiring, and the only one in this file with no test of its
     // own: `watch::spawn` is tested next door over a real directory, and the
@@ -136,7 +150,13 @@ async fn serve(config: ServeConfig) -> Result<()> {
     }
 
     let served = axum::serve(listener, app)
-        .with_graceful_shutdown(stopped())
+        .with_graceful_shutdown(async move {
+            stopped().await;
+            // Say so before the wait begins, or the wait never ends: the open
+            // change streams have to close themselves, and nothing else is
+            // going to close them.
+            let _ = stopping.send(true);
+        })
         .await
         .map_err(|e| Error::msg(e.to_string()));
 
@@ -211,7 +231,8 @@ mod tests {
     fn the_state_hands_out_the_channel_the_watcher_writes_to() {
         // The watcher and the SSE route have to meet on the same channel, or
         // the browser is told nothing and never reloads.
-        let (state, changes) = AppState::new(routes::tests::use_cases());
+        let (_dir, use_cases) = routes::tests::use_cases();
+        let (state, changes) = AppState::new(use_cases, signal::channel(false).1);
 
         let mut rx = state.changes.subscribe();
         changes.send("map".into()).unwrap();

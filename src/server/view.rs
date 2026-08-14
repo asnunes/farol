@@ -7,6 +7,8 @@
 
 use serde::Serialize;
 
+use crate::comments::domain::{Comment, Found};
+use crate::comments::presentation::says;
 use crate::diff::domain::FileStatus;
 use crate::map::application::ReviewSnapshot;
 use crate::map::domain::ReviewMap;
@@ -70,6 +72,44 @@ pub struct ReviewView {
     pub unmapped: Vec<String>,
     pub total_files: usize,
     pub viewed_files: usize,
+}
+
+/// One comment, for the wire.
+///
+/// The domain keeps its own shape: comments are stored as markdown, so serde on
+/// `Comment` would exist for nothing but this hop.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommentView {
+    pub id: String,
+    pub path: String,
+    pub from: u32,
+    pub to: u32,
+    pub body: String,
+}
+
+/// The comment list, and what the store could not read.
+///
+/// An object rather than a bare array because the unreadable files travel with
+/// it: the page has to be able to say a comment went missing, and a list has
+/// nowhere to put that.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommentsView {
+    pub comments: Vec<CommentView>,
+    pub unreadable: Vec<UnreadableView>,
+}
+
+/// A comment the store could not read, in the terms the page speaks: the file
+/// it was written about, or the start of the prose when the header no longer
+/// says which file that was.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnreadableView {
+    pub file: String,
+    pub about: Option<String>,
+    pub excerpt: Option<String>,
+    pub why: &'static str,
 }
 
 impl ReviewView {
@@ -161,6 +201,36 @@ impl ReviewView {
             unmapped,
             total_files,
             viewed_files,
+        }
+    }
+}
+
+impl CommentsView {
+    pub fn of(found: &Found) -> Self {
+        Self {
+            comments: found.comments.iter().map(CommentView::of).collect(),
+            unreadable: found
+                .unreadable
+                .iter()
+                .map(|one| UnreadableView {
+                    file: one.file.clone(),
+                    about: one.about.clone(),
+                    excerpt: one.excerpt.clone(),
+                    why: says(one.why),
+                })
+                .collect(),
+        }
+    }
+}
+
+impl CommentView {
+    pub fn of(comment: &Comment) -> Self {
+        Self {
+            id: comment.id.clone(),
+            path: comment.path.clone(),
+            from: comment.from,
+            to: comment.to,
+            body: comment.body.clone(),
         }
     }
 }

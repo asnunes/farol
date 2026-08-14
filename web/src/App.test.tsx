@@ -42,6 +42,20 @@ function review(over: Partial<ReviewView> = {}): ReviewView {
   };
 }
 
+/** The comment list, empty.
+ *
+ * Every stub answers this the same way: the tests here are about the map and
+ * the diff, and without it a request for the comments falls through to the
+ * branch that serves diffs, handing the page an object where it expects a list.
+ * A test that is about comments stubs them itself. */
+function emptyComments(url: string): Response | null {
+  return url.startsWith("/api/comments")
+    ? new Response('{"comments":[],"unreadable":[]}', {
+        headers: { "content-type": "application/json" },
+      })
+    : null;
+}
+
 const emptyDiff = {
   path: "",
   status: "modified",
@@ -91,6 +105,8 @@ function serve(state: { review: ReviewView }) {
     "fetch",
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
+      const noComments = emptyComments(url);
+      if (noComments) return noComments;
       if (url.startsWith("/api/review")) {
         return new Response(JSON.stringify(state.review), {
           headers: { "content-type": "application/json" },
@@ -121,11 +137,24 @@ beforeEach(() => {
     scrolls.push(this.dataset.path ?? "");
   };
 
+  // Radix measures what it is about to place, and jsdom has no observer to
+  // measure with. Nothing here asserts on size, so a stub that never fires is
+  // enough to let a tooltip open.
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  );
+
   // The page subscribes on mount; without a stub jsdom throws.
   vi.stubGlobal(
     "EventSource",
     class {
       addEventListener() {}
+      removeEventListener() {}
       close() {}
     },
   );
@@ -343,6 +372,8 @@ describe("a file with nothing to read", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input);
+        const noComments = emptyComments(url);
+        if (noComments) return noComments;
         if (url.startsWith("/api/review")) {
           return new Response(JSON.stringify(review()), {
             headers: { "content-type": "application/json" },
@@ -373,6 +404,8 @@ describe("the diff itself", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input);
+        const noComments = emptyComments(url);
+        if (noComments) return noComments;
         if (url.startsWith("/api/review")) {
           return new Response(JSON.stringify(r), {
             headers: { "content-type": "application/json" },
@@ -470,8 +503,10 @@ describe("open and closed", () => {
     await waitForReading("b.rs");
 
     expect(section("src/a.rs").textContent).toContain("a.rs");
+    // Waited for, not asserted on the spot: the diff arrives from a fetch, and
+    // the reading marker this test waited on says nothing about that.
+    await waitFor(() => expect(section("src/b.rs").querySelector(".diff")).toBeTruthy());
     expect(section("src/a.rs").querySelector(".diff")).toBeNull();
-    expect(section("src/b.rs").querySelector(".diff")).toBeTruthy();
   });
 
   it("opens a folded file when the reader asks for it", async () => {
@@ -552,6 +587,8 @@ describe("a long review", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input);
+        const noComments = emptyComments(url);
+        if (noComments) return noComments;
         if (url.startsWith("/api/review")) {
           return new Response(JSON.stringify(review()), {
             headers: { "content-type": "application/json" },
@@ -580,6 +617,8 @@ describe("a long review", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input);
+        const noComments = emptyComments(url);
+        if (noComments) return noComments;
         if (url.startsWith("/api/review")) {
           return new Response(JSON.stringify(r), {
             headers: { "content-type": "application/json" },
@@ -604,12 +643,70 @@ describe("a long review", () => {
   });
 });
 
+describe("a comment file that cannot be read", () => {
+  it("is said out loud, because the comment stops rendering either way", async () => {
+    // Somebody opens the markdown and breaks the header. The comment vanishes
+    // from the page, and silence about it reads as never having written it.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.startsWith("/api/comments")) {
+          return new Response(
+            JSON.stringify({
+              comments: [],
+              unreadable: [
+                {
+                  file: ".git/farol/feature-x/comments/18cb-3731.md",
+                  about: null,
+                  excerpt: "Por que essa ordem?",
+                  why: "its header is gone, so nothing says where it belongs",
+                },
+              ],
+            }),
+            { headers: { "content-type": "application/json" } },
+          );
+        }
+        if (url.startsWith("/api/review")) {
+          return new Response(JSON.stringify(review()), {
+            headers: { "content-type": "application/json" },
+          });
+        }
+        return new Response(JSON.stringify(emptyDiff), {
+          headers: { "content-type": "application/json" },
+        });
+      }),
+    );
+
+    render(<App />);
+
+    const chip = await waitFor(() => {
+      const found = document.querySelector(".unreadable");
+      expect(found).toBeTruthy();
+      return found!;
+    });
+    expect(chip.textContent).toContain("1 comment unreadable");
+
+    // The detail is a hover away. Known by what the reviewer wrote, since the
+    // header no longer says which file it was about — and the file to open
+    // comes with it, because that is the fix.
+    fireEvent.pointerEnter(chip);
+    fireEvent.focus(chip);
+    const detail = await screen.findByRole("tooltip");
+    expect(detail.textContent).toContain('"Por que essa ordem?"');
+    expect(detail.textContent).toContain("header is gone");
+    expect(detail.textContent).toContain("18cb-3731.md");
+  });
+});
+
 describe("when the backend fails", () => {
   function serveBroken(failing: "review" | "file") {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input);
+        const noComments = emptyComments(url);
+        if (noComments) return noComments;
         if (url.startsWith("/api/review")) {
           return failing === "review"
             ? new Response("the store is unreadable", { status: 400 })

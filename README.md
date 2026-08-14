@@ -61,6 +61,20 @@ farol servers stop 4600
 farol servers stop --all
 ```
 
+Comments go the other way: what the reviewer asks back, over the lines they were
+reading. They are written on the screen, or here.
+
+```bash
+farol comment add src/retry.rs 82-116 --text "Why is this ordering deliberate?"
+farol comment list          # everything still waiting for an answer
+farol comment close 18cb73437f4b6058-150e1
+```
+
+Each one is a markdown file under the branch's own store, so the session that
+wrote the code can read them, answer, and close them without leaving the
+terminal. Closing removes it: a comment lives as long as it is a question, which
+is why the list never needs a filter.
+
 `farol --help` and `farol <command> --help` list the rest.
 
 ## Reading
@@ -73,6 +87,11 @@ text came from: serif is what the session wrote for you, monospace is code.
 one, `;` marks the current file read, `[` and `]` move between blocks, and `?`
 shows the keys. The arrows and the space bar do the same, for whoever would rather not
 learn them. The page keys are left to scroll with.
+
+To comment, drag down the line numbers, or press the `+` that appears beside one.
+A comment can be copied — path, lines and text in one paste — and closed once it
+is answered. Closing asks twice, because it drops the comment and nothing here
+is in git to recover it from.
 
 ## How it behaves
 

@@ -1,5 +1,9 @@
 import { useCallback, useState } from "react";
+import { TriangleAlert } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { readingOrder } from "@/api";
+import { useComments } from "@/hooks/useComments";
 import { useDiffView } from "@/hooks/useDiffView";
 import { useOpenFiles } from "@/hooks/useOpenFiles";
 import { useTheme } from "@/hooks/useTheme";
@@ -15,12 +19,21 @@ import { TopBar } from "@/review/TopBar";
 /** Composition only: what is on screen and in what order. Everything that
  * decides how a thing looks lives in the piece that draws it. */
 export default function App() {
-  const { review, current, setCurrent, error, setError, toggleViewed, stale, refresh } =
-    useReview();
+  const {
+    review,
+    current,
+    setCurrent,
+    error,
+    setError,
+    toggleViewed,
+    stale,
+    refresh,
+  } = useReview();
   const [helpOpen, setHelpOpen] = useState(false);
   const [view, setView] = useDiffView();
   const files = useOpenFiles();
   const [theme, setTheme] = useTheme();
+  const comments = useComments(setError);
 
   const order = review ? readingOrder(review) : [];
   const index = order.findIndex((f) => f.path === current);
@@ -58,35 +71,65 @@ export default function App() {
     [order, toggleViewed],
   );
 
-  useShortcuts({ review, order, index, current, goTo, toggleViewed: mark, setHelpOpen });
+  useShortcuts({
+    review,
+    order,
+    index,
+    current,
+    goTo,
+    toggleViewed: mark,
+    setHelpOpen,
+  });
 
-  const banner = "fatal p-8 font-mono text-sm text-muted whitespace-pre-wrap";
-  if (error) return <div className={banner}>{error}</div>;
-  if (!review) return <div className={banner}>Loading…</div>;
+  if (error) {
+    return (
+      <Alert
+        variant="destructive"
+        className="fatal m-8 w-auto border-rule bg-surface"
+      >
+        <TriangleAlert />
+        <AlertTitle className="font-sans">
+          The review could not be loaded
+        </AlertTitle>
+        <AlertDescription className="font-mono text-sm whitespace-pre-wrap">
+          {error}
+        </AlertDescription>
+      </Alert>
+    );
+  }
+  if (!review) {
+    return (
+      <div className="fatal p-8 font-mono text-sm text-muted">Loading…</div>
+    );
+  }
 
   return (
-    <div className="app grid h-screen grid-cols-[19rem_minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)]">
-      <TopBar
-        review={review}
-        view={view}
-        onView={setView}
-        stale={stale}
-        onRefresh={() => void refresh()}
-      />
-      <Sidebar review={review} current={current} onPick={goTo} />
+    <TooltipProvider>
+      <div className="app grid h-screen grid-cols-[19rem_minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)]">
+        <TopBar
+          review={review}
+          view={view}
+          onView={setView}
+          stale={stale}
+          onRefresh={() => void refresh()}
+          unreadable={comments.unreadable}
+        />
+        <Sidebar review={review} current={current} onPick={goTo} />
 
-      <Reading
-        review={review}
-        view={view}
-        current={current}
-        onCurrent={setCurrent}
-        onToggleViewed={(path, viewed) => void mark(path, viewed)}
-        onError={setError}
-        files={files}
-      />
+        <Reading
+          review={review}
+          view={view}
+          current={current}
+          onCurrent={setCurrent}
+          onToggleViewed={(path, viewed) => void mark(path, viewed)}
+          onError={setError}
+          files={files}
+          comments={comments}
+        />
 
-      <KeyBar theme={theme} onTheme={setTheme} />
-      <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
-    </div>
+        <KeyBar theme={theme} onTheme={setTheme} />
+        <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
+      </div>
+    </TooltipProvider>
   );
 }

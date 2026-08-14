@@ -1,4 +1,5 @@
 import { ArrowDown, ArrowUp, Space } from "lucide-react";
+import { Kbd } from "@/components/ui/kbd";
 import { ThemeSwitch } from "@/review/ThemeSwitch";
 import type { Theme } from "@/hooks/useTheme";
 
@@ -32,9 +33,9 @@ export function KeyBar({ theme, onTheme }: KeyBarProps) {
 
 function Key({ children }: KeyProps) {
   return (
-    <kbd className="grid size-[1.35rem] shrink-0 place-items-center rounded border border-rule-strong bg-sunken font-mono text-[0.6875rem] text-ink-soft">
+    <Kbd className="size-[1.35rem] justify-center rounded border border-rule-strong bg-sunken text-[0.6875rem] text-ink-soft">
       {children}
-    </kbd>
+    </Kbd>
   );
 }
 

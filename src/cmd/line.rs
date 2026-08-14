@@ -105,8 +105,11 @@ impl Action for LineAction {
                 path,
                 old_range,
             } => {
+                // The one line command that does not resolve its path through
+                // the review: a note is discarded because the code it covered
+                // is gone, and a file that was renamed or deleted is no longer
+                // in the review to resolve against.
                 let slug = Slug::parse(&slug)?;
-                let path = ctx.scope.path(&path)?;
                 let old = LineRange::parse(&old_range)?;
                 ctx.report(
                     format!("Discarded the note that was at {path}:{old}."),

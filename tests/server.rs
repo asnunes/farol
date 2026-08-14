@@ -329,6 +329,163 @@ fn marking_a_path_outside_the_review_is_refused() {
     assert_eq!(s.json("/api/review")["viewedFiles"], 0);
 }
 
+// ---- what the reviewer writes back --------------------------------------
+
+#[test]
+fn a_comment_written_from_the_page_can_be_read_and_closed() {
+    // The whole life of a comment over the wire, in one go: each step is only
+    // worth anything if the one before it stuck.
+    let s = Serving::new();
+    assert_eq!(
+        s.json("/api/comments")["comments"]
+            .as_array()
+            .unwrap()
+            .len(),
+        0
+    );
+
+    let (status, body) = s.probe(
+        "POST",
+        "/api/comments",
+        Some(r#"{"path":"src/a.rs","from":10,"to":12,"body":"Why this order?"}"#),
+    );
+    assert_eq!(status, 200, "{body}");
+    let id = serde_json::from_str::<Value>(&body).unwrap()["id"]
+        .as_str()
+        .expect("the new comment comes back with the id to address it by")
+        .to_string();
+
+    let all = s.json("/api/comments")["comments"].clone();
+    assert_eq!(all[0]["path"], "src/a.rs");
+    assert_eq!(all[0]["from"], 10);
+    assert_eq!(all[0]["to"], 12);
+    assert_eq!(all[0]["body"], "Why this order?");
+
+    // Closing is answering, and an answered question is not kept: what comes
+    // back is the list of what is still waiting.
+    let (status, _) = s.probe("DELETE", &format!("/api/comments/{id}"), None);
+    assert_eq!(status, 204);
+    assert_eq!(
+        s.json("/api/comments")["comments"]
+            .as_array()
+            .unwrap()
+            .len(),
+        0
+    );
+}
+
+#[test]
+fn a_comment_is_written_to_the_git_dir_as_markdown() {
+    // The file is the point: it outlives the server, and it is meant to be
+    // opened in an editor.
+    let s = Serving::new();
+    s.probe(
+        "POST",
+        "/api/comments",
+        Some(r#"{"path":"src/a.rs","from":10,"to":12,"body":"Why this order?"}"#),
+    );
+
+    let dir = s.repo.path().join(".git/farol/feature-x/comments");
+    let written = std::fs::read_dir(&dir)
+        .unwrap_or_else(|e| panic!("{} should exist: {e}", dir.display()))
+        .map(|e| e.unwrap().path())
+        .collect::<Vec<_>>();
+
+    assert_eq!(written.len(), 1);
+    assert_eq!(written[0].extension().unwrap(), "md");
+    let raw = std::fs::read_to_string(&written[0]).unwrap();
+    assert!(raw.contains("path: src/a.rs"), "{raw}");
+    assert!(raw.contains("lines: 10-12"), "{raw}");
+    assert!(
+        !raw.contains("resolved"),
+        "there is no answered state to store: {raw}"
+    );
+    assert!(raw.contains("Why this order?"), "{raw}");
+}
+
+#[test]
+fn a_comment_the_review_cannot_hold_is_refused() {
+    // Both ways of asking for a line that is not there: a file outside the
+    // window, and a span past the end of one inside it. Either would render
+    // nowhere.
+    let s = Serving::new();
+
+    let (outside, _) = s.probe(
+        "POST",
+        "/api/comments",
+        Some(r#"{"path":"elsewhere.rs","from":1,"to":1,"body":"Why?"}"#),
+    );
+    let (past_end, _) = s.probe(
+        "POST",
+        "/api/comments",
+        Some(r#"{"path":"src/a.rs","from":9000,"to":9001,"body":"Why?"}"#),
+    );
+
+    assert_eq!(outside, 400);
+    assert_eq!(past_end, 400);
+    assert_eq!(
+        s.json("/api/comments")["comments"]
+            .as_array()
+            .unwrap()
+            .len(),
+        0
+    );
+}
+
+#[test]
+fn a_comment_file_edited_into_nonsense_is_reported_to_the_page() {
+    // The reviewer opens the markdown, breaks the header, and the comment stops
+    // rendering. Without this the page shows nothing and says nothing, which
+    // reads as though they never wrote it.
+    let s = Serving::new();
+    s.probe(
+        "POST",
+        "/api/comments",
+        Some(r#"{"path":"src/a.rs","from":10,"to":12,"body":"Why this order?"}"#),
+    );
+    let dir = s.repo.path().join(".git/farol/feature-x/comments");
+    let file = std::fs::read_dir(&dir)
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap()
+        .path();
+    std::fs::write(&file, "somebody deleted the header\n").unwrap();
+
+    let answer = s.json("/api/comments");
+
+    assert_eq!(answer["comments"].as_array().unwrap().len(), 0);
+    let unreadable = answer["unreadable"].as_array().unwrap();
+    assert_eq!(unreadable.len(), 1);
+    // Named the way the review is read. The header is gone here, so all that
+    // is left to know it by is what the reviewer wrote.
+    assert_eq!(unreadable[0]["excerpt"], "somebody deleted the header");
+    assert!(
+        unreadable[0]["why"]
+            .as_str()
+            .unwrap()
+            .contains("header is gone"),
+        "{unreadable:?}"
+    );
+    // And the file to open, from the root of the worktree rather than the disk.
+    assert_eq!(
+        unreadable[0]["file"].as_str().unwrap(),
+        format!(
+            ".git/farol/feature-x/comments/{}",
+            file.file_name().unwrap().to_str().unwrap()
+        )
+    );
+}
+
+#[test]
+fn closing_a_comment_that_is_not_there_is_refused_rather_than_ignored() {
+    let s = Serving::new();
+
+    let (status, _) = s.probe("DELETE", "/api/comments/nope", None);
+
+    assert_eq!(status, 400);
+}
+
 // ---- the page finding out on its own ------------------------------------
 
 #[test]
@@ -358,6 +515,11 @@ fn writing_a_map_reaches_the_open_page_without_it_asking() {
     let body = String::from_utf8_lossy(&out.stdout);
 
     assert!(body.contains("event: map"), "{body}");
+    // The data line is what makes it an event at all. A message with an empty
+    // data buffer is dropped by the browser instead of dispatched, so without
+    // this the nudge arrives on the wire, satisfies curl, and never reaches the
+    // page — which is exactly how this went unnoticed.
+    assert!(body.contains("data: map"), "{body}");
 }
 
 // ---- the frontend ---------------------------------------------------------
@@ -539,6 +701,41 @@ fn asking_for_the_same_review_twice_hands_back_the_one_already_open() {
     let again = Detached::start(&d.repo);
 
     assert_eq!(again, d.port);
+}
+
+#[test]
+fn a_page_watching_for_changes_does_not_keep_the_server_alive() {
+    // Graceful shutdown waits for every connection in flight, and the change
+    // stream is a connection that never ends on its own. Without the stream
+    // listening for the signal, a single open page made `stop` time out, and
+    // the process stayed on its port for good — invisible to the CLI, because
+    // a server that has stopped accepting no longer answers `/health`.
+    let d = Detached::new();
+    let pid = d.pid_on(d.port);
+
+    let mut watching = Command::new("curl")
+        .args([
+            "-sN",
+            "--max-time",
+            "30",
+            &format!("http://127.0.0.1:{}/api/watch", d.port),
+        ])
+        .stdout(Stdio::null())
+        .spawn()
+        .expect("curl should start");
+    // Long enough for the request to have been accepted and the handler to be
+    // sitting on the channel.
+    std::thread::sleep(Duration::from_millis(500));
+
+    let out = d.repo.ok(&["servers", "stop", &d.port.to_string()]);
+
+    assert!(out.contains("Stopped"), "{out}");
+    assert!(
+        !running(pid),
+        "the server should have stopped with a page watching"
+    );
+    let _ = watching.kill();
+    let _ = watching.wait();
 }
 
 #[test]

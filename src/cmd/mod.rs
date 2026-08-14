@@ -1,6 +1,7 @@
 use clap::{Args, Parser, Subcommand};
 
 mod block;
+mod comment;
 mod file;
 mod line;
 mod map;
@@ -11,6 +12,7 @@ mod skim;
 mod wiring;
 
 use block::BlockAction;
+use comment::CommentAction;
 use file::FileAction;
 use line::LineAction;
 use map::MapAction;
@@ -156,6 +158,13 @@ enum Command {
         #[command(subcommand)]
         action: LineAction,
     },
+    /// What the reviewer wrote back.
+    Comment {
+        #[command(flatten)]
+        scope: ScopeArgs,
+        #[command(subcommand)]
+        action: CommentAction,
+    },
     /// Files the reviewer may read diagonally.
     Skim {
         #[command(flatten)]
@@ -187,6 +196,7 @@ impl Command {
             Command::File { scope, action } => action.run(&scope.open()?),
             Command::Line { scope, action } => action.run(&scope.open()?),
             Command::Skim { scope, action } => action.run(&scope.open()?),
+            Command::Comment { scope, action } => action.run(&scope.open()?),
         }
     }
 }

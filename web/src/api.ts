@@ -4,11 +4,12 @@ export const api = {
   file: (path: string) =>
     fetch(`/api/file?path=${encodeURIComponent(path)}`).then(json<FileDiff>),
   setViewed: (path: string, viewed: boolean) =>
-    fetch("/api/viewed", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ path, viewed }),
-    }),
+    send("/api/viewed", "POST", { path, viewed }),
+
+  comments: () => fetch("/api/comments").then(json<CommentsView>),
+  addComment: (path: string, from: number, to: number, body: string) =>
+    send("/api/comments", "POST", { path, from, to, body }),
+  closeComment: (id: string) => send(`/api/comments/${encodeURIComponent(id)}`, "DELETE"),
 };
 
 /** Flat reading order across blocks — what j/k and "next unread" walk. */
@@ -95,6 +96,42 @@ export type DiffLine = {
   content: string;
 };
 
+/** The comments, and the files the store could not read.
+ *
+ * The unreadable ones travel with the list because the page is the only place
+ * their absence shows: a comment whose markdown got broken by hand stops
+ * rendering, and silence there reads as never having written it. */
+export type CommentsView = {
+  comments: CommentView[];
+  unreadable: Unreadable[];
+};
+
+/** A comment the store could not read.
+ *
+ * What broke is the header, which is the part saying where the comment belongs
+ * — so `about` is there only when the header still names a file. When it does
+ * not, `excerpt` is what the reviewer recognises it by. */
+export type Unreadable = {
+  /** The file to open to fix it, from the root of the worktree. */
+  file: string;
+  about: string | null;
+  excerpt: string | null;
+  why: string;
+};
+
+/** A question the reviewer left over a span of lines they were reading.
+ *
+ * There is no answered state: closing one removes it, so every comment the
+ * page holds is still waiting. */
+export type CommentView = {
+  id: string;
+  path: string;
+  from: number;
+  to: number;
+  /** Markdown, as it was typed. */
+  body: string;
+};
+
 /** Where a file sits: the block it is read under and how far down the map that
  * block is, which is what the band above the diff counts off. */
 export type FileHome = { block: BlockView; index: number };
@@ -102,4 +139,17 @@ export type FileHome = { block: BlockView; index: number };
 async function json<T>(res: Response): Promise<T> {
   if (!res.ok) throw new Error(await res.text());
   return res.json() as Promise<T>;
+}
+
+/** A write. The server answers with the thing it wrote, but the callers reload
+ * rather than trust a copy, so what matters here is that a refusal is raised
+ * instead of passing for success. */
+async function send(url: string, method: string, body?: unknown) {
+  const res = await fetch(url, {
+    method,
+    ...(body === undefined
+      ? {}
+      : { headers: { "content-type": "application/json" }, body: JSON.stringify(body) }),
+  });
+  if (!res.ok) throw new Error(await res.text());
 }

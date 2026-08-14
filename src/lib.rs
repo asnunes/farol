@@ -1,4 +1,5 @@
 pub mod cmd;
+pub mod comments;
 pub mod diff;
 /// What farol reports when it cannot do what was asked. Above the layers,
 /// not beneath them — see the module docs.

@@ -1,5 +1,5 @@
 import { Columns2, Rows3 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { DiffView } from "@/hooks/useDiffView";
 
 /** Choose how the diff is laid out.
@@ -10,23 +10,28 @@ import type { DiffView } from "@/hooks/useDiffView";
  * screen reader announces and in the tooltip. */
 export function ViewToggle({ view, onChange }: ViewToggleProps) {
   return (
-    <div className="viewtoggle flex items-center rounded border border-rule p-0.5">
+    <ToggleGroup
+      type="single"
+      value={view}
+      // A group of one choice, so letting go of the pressed one would leave the
+      // diff with no layout at all. Pressing the current one again does
+      // nothing, which is what the reader expects from a segmented control.
+      onValueChange={(next) => next && onChange(next as DiffView)}
+      className="viewtoggle rounded border border-rule p-0.5"
+    >
       {LAYOUTS.map(({ option, Icon, says }) => (
-        <button
+        <ToggleGroupItem
           key={option}
-          className={cn(
-            "grid size-6 cursor-pointer place-items-center rounded transition-colors",
-            view === option ? "bg-sunken text-ink" : "text-muted hover:text-ink",
-          )}
-          aria-pressed={view === option}
+          value={option}
+          size="sm"
           aria-label={says}
           title={says}
-          onClick={() => onChange(option)}
+          className="size-6 min-w-0 cursor-pointer text-muted hover:text-ink data-[state=on]:bg-sunken data-[state=on]:text-ink"
         >
           <Icon className="size-3.5" aria-hidden="true" />
-        </button>
+        </ToggleGroupItem>
       ))}
-    </div>
+    </ToggleGroup>
   );
 }
 

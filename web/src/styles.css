@@ -33,6 +33,10 @@
   --color-del-ink: var(--farol-del-ink);
   --color-note-bg: var(--farol-note-bg);
   --color-note-rule: var(--farol-note-rule);
+  --color-comment-bg: var(--farol-comment-bg);
+  --color-comment-rule: var(--farol-comment-rule);
+  --color-comment-ink: var(--farol-comment-ink);
+  --color-comment-dim: var(--farol-comment-dim);
 }
 
 /* Prefixed because shadcn's components define `--muted` and `--accent` for
@@ -65,6 +69,14 @@
   --farol-del-ink: light-dark(#9b2f2f, #e38b8b);
   --farol-note-bg: light-dark(#faf4e6, #241e12);
   --farol-note-rule: light-dark(#dcc48a, #574521);
+  /* Cold against the amber of a note, because the two are different voices: the
+     note is the author explaining, the comment is the reader asking back. */
+  --farol-comment-bg: light-dark(#eef3fa, #141d29);
+  --farol-comment-rule: light-dark(#9cb8dc, #2f4a6b);
+  --farol-comment-ink: light-dark(#2f5d94, #7fa9db);
+  /* The wash under the lines being picked, deeper than the comment's own so a
+     drag reads as a choice being made rather than a comment already there. */
+  --farol-comment-dim: light-dark(#d5e4f6, #1c2f47);
 }
 
 /* The reader's choice, when they have made one. Nothing else in the sheet
@@ -165,6 +177,19 @@
    itself so the span and its prose read as one thing. */
 .noted {
   box-shadow: inset 3px 0 0 var(--farol-note-rule);
+}
+
+/* The lines a comment is about, the same rail in the reader's own colour. A
+   line that carries both keeps the note's rail on the outside: the note was
+   there first, and the comment is an answer to it. */
+.commented {
+  box-shadow: inset 3px 0 0 var(--farol-comment-rule);
+}
+
+.noted.commented {
+  box-shadow:
+    inset 3px 0 0 var(--farol-note-rule),
+    inset 6px 0 0 -3px var(--farol-comment-rule);
 }
 
 /* What changed inside a line, when a removal and an addition are the same line

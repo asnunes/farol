@@ -115,6 +115,11 @@ impl Store {
         self.maps_dir().join(format!("{sha}.json"))
     }
 
+    /// Where the reviewer's own comments live, one markdown file each.
+    pub fn comments_dir(&self) -> PathBuf {
+        self.root.join("comments")
+    }
+
     pub fn state_file(&self) -> PathBuf {
         self.root.join("state.json")
     }

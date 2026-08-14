@@ -1,4 +1,3 @@
-use crate::diff::domain::ReviewPath;
 use crate::error::Result;
 use crate::map::application::MapEditor;
 use crate::map::domain::{LineRange, ReviewMap, Slug};
@@ -14,9 +13,16 @@ impl DiscardNote {
         Self { maps }
     }
 
-    pub fn execute(&self, slug: &Slug, path: &ReviewPath, old: LineRange) -> Result<ReviewMap> {
+    /// The path is a key into the map, not a file to be found.
+    ///
+    /// Deliberately a plain string: what is being discarded is a note about
+    /// code that is gone, and the commonest way for code to be gone is for the
+    /// file to have been renamed or deleted. Proving the path against the
+    /// review first would refuse exactly the orphans that most need settling,
+    /// and `map check` would stay red with no way to clear it.
+    pub fn execute(&self, slug: &Slug, path: &str, old: LineRange) -> Result<ReviewMap> {
         self.maps
-            .edit(|map| map.take_orphan(slug, path.as_str(), old).map(|_| ()))
+            .edit(|map| map.take_orphan(slug, path, old).map(|_| ()))
     }
 }
 
@@ -27,11 +33,11 @@ mod tests {
 
     #[test]
     fn discarding_drops_the_orphan_without_writing_a_note() {
-        let (svc, scope) = with_block(&["a.rs"]);
+        let (svc, _scope) = with_block(&["a.rs"]);
         orphaned(&svc.editor, range(10, 12), "gone for good");
 
         let map = DiscardNote::new(svc.editor)
-            .execute(&slug("core"), &scope.path("a.rs").unwrap(), range(10, 12))
+            .execute(&slug("core"), "a.rs", range(10, 12))
             .unwrap();
 
         assert!(map.orphans().is_empty());
@@ -40,11 +46,11 @@ mod tests {
 
     #[test]
     fn discarding_something_that_was_never_orphaned_is_refused() {
-        let (svc, scope) = with_block(&["a.rs"]);
+        let (svc, _scope) = with_block(&["a.rs"]);
 
         assert!(
             DiscardNote::new(svc.editor)
-                .execute(&slug("core"), &scope.path("a.rs").unwrap(), range(10, 12))
+                .execute(&slug("core"), "a.rs", range(10, 12))
                 .is_err()
         );
     }

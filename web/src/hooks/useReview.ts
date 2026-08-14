@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, readingOrder, type ReviewView } from "@/api";
+import { onNudge } from "@/lib/watch";
 
 /** The map, and keeping it current.
  *
@@ -35,11 +36,9 @@ export function useReview() {
   // halfway through a file would move the blocks and the file they are on; the
   // reader decides when to take it.
   useEffect(() => {
-    const es = new EventSource("/api/watch");
     const announce = () => setStale(true);
-    es.addEventListener("map", announce);
-    es.addEventListener("head", announce);
-    return () => es.close();
+    const off = [onNudge("map", announce), onNudge("head", announce)];
+    return () => off.forEach((stop) => stop());
   }, []);
 
   const toggleViewed = useCallback(
