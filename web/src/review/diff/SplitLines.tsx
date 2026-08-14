@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 import { Code } from "./Code";
 import { LineNotes } from "./LineNotes";
 import { LineNumber } from "./LineNumber";
-import { Thread } from "./comment/Thread";
+import { AtLine } from "./comment/AtLine";
 import { commentedBy, marker, notedBy, notesAt } from "./line";
 import { splitRows } from "./split";
 import type { Commentary } from "./line";
@@ -45,7 +45,7 @@ export function SplitLines({ hunk, file, coloured, marks, commentary }: SplitLin
         {line && (
           <>
             <LineNotes notes={notesAt(file, line)} file={file} />
-            <Thread line={line} commentary={commentary} />
+            <AtLine line={line} commentary={commentary} />
           </>
         )}
       </div>

@@ -47,9 +47,9 @@ export function commentedBy(comments: CommentView[], line: DiffLine): boolean {
   );
 }
 
-/** The comments that belong under this line, oldest first — a thread reads in
- * the order it was written. Ids carry the clock, so sorting by id is sorting by
- * when. */
+/** The comments that belong under this line, oldest first — questions read in
+ * the order they were asked. Ids carry the clock, so sorting by id is sorting
+ * by when. */
 export function commentsAt(comments: CommentView[], line: DiffLine): CommentView[] {
   return comments
     .filter((c) => line.new_number !== null && c.to === line.new_number)

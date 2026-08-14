@@ -76,9 +76,10 @@ impl CommentStore for MarkdownComments {
             }
         }
 
-        // By id, which is the moment it was written: the thread reads in the
-        // order it happened. The unreadable ones by name, for the same reason
-        // any list of files is sorted — so it reads the same twice running.
+        // By id, which is the moment it was written: the questions read in the
+        // order they were asked. The unreadable ones by name, for the same
+        // reason any list of files is sorted — so it reads the same twice
+        // running.
         found.comments.sort_by(|a, b| a.id.cmp(&b.id));
         found.unreadable.sort_by(|a, b| a.file.cmp(&b.file));
         Ok(found)

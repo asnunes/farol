@@ -7,9 +7,14 @@ import type { DiffLine } from "@/api";
 /** Everything hanging off one line: what has already been asked there, and the
  * box if the reader is asking now.
  *
+ * Not a thread — there are no replies to hang in one. A comment is a body and
+ * nothing else, and two of them on the same line are two questions rather than
+ * a conversation. What this gathers is what is attached to a line, which is why
+ * the empty box belongs in it too.
+ *
  * Both layouts show the same thing under the same line, so both draw it from
  * here rather than each assembling it from the parts. */
-export function Thread({ line, commentary }: ThreadProps) {
+export function AtLine({ line, commentary }: AtLineProps) {
   const { path, comments, actions, select } = commentary;
   const here = commentsAt(comments, line);
 
@@ -39,4 +44,4 @@ export function Thread({ line, commentary }: ThreadProps) {
   );
 }
 
-type ThreadProps = { line: DiffLine; commentary: Commentary };
+type AtLineProps = { line: DiffLine; commentary: Commentary };
