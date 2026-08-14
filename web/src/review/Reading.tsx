@@ -29,8 +29,13 @@ export function Reading({
   const pane = useRef<HTMLElement>(null);
   const { diffs, request } = useDiffs(onError);
 
-  useCurrentFile(pane, review, onCurrent);
+  // Landing first, and the order is load-bearing: effects run in the order
+  // they are called, and naming the current file from the scroll before the
+  // page has been scrolled names whatever sits at the top of a pane nobody has
+  // moved yet. That name then outlives the landing, because the correction that
+  // follows the scroll is suppressed by the settling the scroll itself set.
   useResumeAt(current);
+  useCurrentFile(pane, review, onCurrent);
 
   return (
     <main ref={pane} className="pane overflow-y-auto bg-ground pb-[60vh]" data-current={current ?? ""}>
