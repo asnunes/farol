@@ -558,6 +558,54 @@ fn a_note_whose_code_was_rewritten_is_deactivated_with_its_prose_intact() {
 }
 
 #[test]
+fn a_note_can_be_discarded_after_its_file_was_renamed_away() {
+    // The commonest way for covered code to be gone is for the file to have
+    // moved. Resolving the path against the review first refused exactly those
+    // orphans, and `map check` stayed red with no way to clear it.
+    let repo = Repo::new();
+    repo.feature();
+    repo.derive();
+    repo.ok(&[
+        "block",
+        "add",
+        "core",
+        "--title",
+        "t",
+        "--context",
+        "c",
+        "src/a.rs",
+    ]);
+    repo.ok(&[
+        "line",
+        "add",
+        "core",
+        "src/a.rs",
+        "40-45",
+        "--note",
+        "expensive prose",
+    ]);
+
+    repo.git(&["mv", "src/a.rs", "src/moved.rs"]);
+    repo.commit("move it out of the way");
+
+    let derived = repo.derive();
+    assert!(derived.contains("deactivated"), "{derived}");
+    // The file under its new name still has to be read, so it joins the block;
+    // what is left blocking `check` is the orphan alone.
+    repo.ok(&["file", "add", "core", "src/moved.rs"]);
+    assert!(
+        !repo.farol(&["map", "check"]).status.success(),
+        "check must block while the orphan is undecided"
+    );
+
+    // Named by the path it was written against, which is the only name the map
+    // has for it — that path is not in the review any more.
+    repo.ok(&["line", "discard", "core", "src/a.rs", "40-45"]);
+
+    assert!(repo.ok(&["map", "check"]).contains("Map is complete."));
+}
+
+#[test]
 fn restoring_a_deactivated_note_brings_the_original_text_back() {
     let repo = Repo::new();
     repo.feature();
