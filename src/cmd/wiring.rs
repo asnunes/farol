@@ -15,7 +15,7 @@ use crate::error::Result;
 use crate::map::application::{
     AddBlock, AddFile, AddLineNote, AddSkim, CheckMap, DeriveMap, DiscardNote, GetFileDiff,
     GetReview, GetScope, MapDerivation, MapEditor, MapReconciler, MapVersions, MoveBlock,
-    RemoveBlock, RemoveFile, RemoveLineNote, RemoveSkim, ResetMap, RestoreNote, ShowMap,
+    RemoveBlock, RemoveFile, RemoveLineNote, RemoveSkim, ResetMap, RestoreNote, ShareMap, ShowMap,
     UpdateBlock, UpdateFile, UpdateLineNote,
 };
 use crate::map::infra::JsonMapRepository;
@@ -51,6 +51,7 @@ pub struct Ctx {
     pub show_map: ShowMap,
     pub check_map: CheckMap,
     pub reset_map: ResetMap,
+    pub share_map: ShareMap,
     pub scope: GetScope,
 
     pub comments: Comments,
@@ -87,6 +88,7 @@ impl Ctx {
         let scope = ReviewScope::new(source.clone());
         let diffs = FileDiffs::new(source.clone());
         let history = CommitHistory::new(source);
+        let sharing = (history.clone(), maps.clone());
 
         let comments = Comments::new(comment_store, GetScope::new(scope.clone()));
         let reconciler = MapReconciler::new(scope.clone(), diffs.clone());
@@ -119,6 +121,7 @@ impl Ctx {
             show_map: ShowMap::new(versions.clone()),
             check_map: CheckMap::new(versions.clone(), scope.clone()),
             reset_map: ResetMap::new(editor),
+            share_map: ShareMap::new(versions.clone(), scope.clone(), sharing.0, sharing.1),
             scope: GetScope::new(scope.clone()),
 
             comments: comments.clone(),

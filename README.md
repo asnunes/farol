@@ -75,6 +75,26 @@ wrote the code can read them, answer, and close them without leaving the
 terminal. Closing removes it: a comment lives as long as it is a question, which
 is why the list never needs a filter.
 
+A review can be handed to somebody else. `map export` writes the map to one
+file — the reading order, the blocks, every note — and `map import` stores it as
+a version on their machine.
+
+```bash
+farol map export                      # writes review.farol.json
+farol map import review.farol.json    # on the other side, on the same branch
+```
+
+The map is all that travels, and who writes it is the reason. The file is made
+by the person asking for the review, and the map is the whole of what they have
+to say. Comments are the answer coming back, from whoever is reviewing, and they
+belong on the pull request rather than in this file.
+
+The code does not travel either — the receiver pulls it from git, so the branch
+has to be fetched first — and neither does what you have read, which would
+strike half a review through for somebody who has opened none of it. The name
+ends in `.json` because a pull request refuses an attachment whose extension it
+does not know.
+
 `farol --help` and `farol <command> --help` list the rest.
 
 ## Reading

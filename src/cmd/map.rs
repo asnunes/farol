@@ -17,11 +17,46 @@ pub(super) enum MapAction {
     Check,
     /// Delete the newest version and fall back to the one before it.
     Reset,
+    /// Write the map to one file, to hand to somebody else.
+    Export {
+        /// Where to write it. The name ends in .json so it can be attached to
+        /// a pull request, which refuses extensions it does not know.
+        #[arg(long, default_value = "review.farol.json")]
+        out: String,
+    },
+    /// Take a map somebody exported and store it as a version here.
+    Import {
+        file: String,
+        /// Replace a map already stored at that commit.
+        #[arg(long)]
+        over: bool,
+    },
 }
 
 impl Action for MapAction {
     fn run(self, ctx: &Ctx) -> Result<()> {
         match self {
+            MapAction::Export { out } => {
+                let bundle = ctx.share_map.export()?;
+                std::fs::write(&out, &bundle)?;
+                println!("Wrote {out} ({} bytes).", bundle.len());
+                println!(
+                    "It carries the map only — the code comes from git, and what you have read stays here."
+                );
+                Ok(())
+            }
+            MapAction::Import { file, over } => {
+                let raw = std::fs::read_to_string(&file)
+                    .map_err(|e| crate::error::Error::msg(format!("cannot read {file}: {e}")))?;
+                let map = ctx.share_map.import(&raw, over)?;
+                println!(
+                    "Imported the map for {} on {}.",
+                    short(&map.generated_at),
+                    map.branch
+                );
+                print!("{}", MapSummary(&map));
+                Ok(())
+            }
             MapAction::Derive => {
                 let derived = ctx.derive_map.execute()?;
                 let map = &derived.map;
