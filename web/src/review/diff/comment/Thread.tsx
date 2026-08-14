@@ -1,7 +1,7 @@
-import { CommentBox } from "./CommentBox";
-import { LineComments } from "./LineComments";
-import { commentsAt } from "./line";
-import type { Commentary } from "./line";
+import { Box } from "./Box";
+import { Comment } from "./Comment";
+import { commentsAt } from "../line";
+import type { Commentary } from "../line";
 import type { DiffLine } from "@/api";
 
 /** Everything hanging off one line: what has already been asked there, and the
@@ -22,9 +22,11 @@ export function Thread({ line, commentary }: ThreadProps) {
 
   return (
     <>
-      <LineComments comments={here} actions={actions} />
+      {here.map((comment) => (
+        <Comment key={comment.id} comment={comment} actions={actions} />
+      ))}
       {writing && (
-        <CommentBox
+        <Box
           span={span}
           onSave={async (body) => {
             await actions.add(path, span.from, span.to, body);

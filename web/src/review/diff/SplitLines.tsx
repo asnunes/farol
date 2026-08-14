@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 import { Code } from "./Code";
 import { LineNotes } from "./LineNotes";
 import { LineNumber } from "./LineNumber";
-import { Thread } from "./Thread";
+import { Thread } from "./comment/Thread";
 import { commentedBy, marker, notedBy, notesAt } from "./line";
 import { splitRows } from "./split";
 import type { Commentary } from "./line";

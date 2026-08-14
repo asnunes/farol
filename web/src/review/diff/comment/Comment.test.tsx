@@ -1,7 +1,8 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { LineComments, quoted } from "./LineComments";
-import { comment, noComments } from "./testing";
+import { Comment } from "./Comment";
+import { quoted } from "./quoted";
+import { comment, noComments } from "../testing";
 
 describe("a comment on the page", () => {
   it("renders the markdown it was written in", () => {
@@ -9,10 +10,7 @@ describe("a comment on the page", () => {
     // readable. `**` on screen would mean the file is the only place it reads
     // properly.
     const { container } = render(
-      <LineComments
-        comments={[comment({ body: "Not **here** — see `foo()`." })]}
-        actions={noComments()}
-      />,
+      <Comment comment={comment({ body: "Not **here** — see `foo()`." })} actions={noComments()} />,
     );
 
     expect(container.querySelector("strong")?.textContent).toBe("here");
@@ -20,7 +18,7 @@ describe("a comment on the page", () => {
   });
 
   it("says which lines it is about", () => {
-    render(<LineComments comments={[comment({ from: 82, to: 116 })]} actions={noComments()} />);
+    render(<Comment comment={comment({ from: 82, to: 116 })} actions={noComments()} />);
 
     expect(screen.getByText("82–116")).toBeTruthy();
   });
@@ -29,7 +27,7 @@ describe("a comment on the page", () => {
     // The file is deleted and it was never in git. One press arms, the second
     // one does it — and the button that copies is a few pixels away.
     const actions = noComments();
-    render(<LineComments comments={[comment()]} actions={actions} />);
+    render(<Comment comment={comment()} actions={actions} />);
 
     fireEvent.click(screen.getByLabelText("Close this comment"));
 
@@ -39,7 +37,7 @@ describe("a comment on the page", () => {
 
   it("closes on the second press", () => {
     const actions = noComments();
-    render(<LineComments comments={[comment()]} actions={actions} />);
+    render(<Comment comment={comment()} actions={actions} />);
 
     fireEvent.click(screen.getByLabelText("Close this comment"));
     fireEvent.click(screen.getByLabelText("Press again to close this comment"));
@@ -57,7 +55,7 @@ describe("a comment on the page", () => {
   it("puts it on the clipboard when the button is pressed", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal("navigator", { clipboard: { writeText } });
-    render(<LineComments comments={[comment({ from: 82, to: 116 })]} actions={noComments()} />);
+    render(<Comment comment={comment({ from: 82, to: 116 })} actions={noComments()} />);
 
     fireEvent.click(screen.getByLabelText("Copy this comment"));
 
