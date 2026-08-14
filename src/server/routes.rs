@@ -212,9 +212,29 @@ pub(super) mod tests {
 
     /// The use cases over fakes, shared with the tests that start a real
     /// listener next door.
-    pub(in crate::server) fn use_cases() -> ServerUseCases {
+    /// Comments over a real store in a folder that goes away with the test.
+    ///
+    /// The real one rather than a stand-in: a folder of markdown files is
+    /// microseconds to write and it puts the header parser in the path, which
+    /// is the fragile part. The directory comes back with it because it has to
+    /// outlive what is built on top of it.
+    fn comments(paths: &[&str]) -> (tempfile::TempDir, Comments) {
+        use crate::comments::infra::MarkdownComments;
+        use crate::diff::application::ReviewScope;
+        use crate::map::application::GetScope;
+
+        let dir = tempfile::tempdir().unwrap();
+        let store = crate::shared::paths::Store::new(dir.path(), "feature/x");
+        let scope = GetScope::new(ReviewScope::new(Arc::new(FakeDiffSource::with_paths(
+            paths,
+        ))));
+        let comments = Comments::new(Arc::new(MarkdownComments::new(&store, dir.path())), scope);
+        (dir, comments)
+    }
+
+    pub(in crate::server) fn use_cases() -> (tempfile::TempDir, ServerUseCases) {
         use crate::diff::application::{FileDiffs, ReviewScope};
-        use crate::map::application::{GetFileDiff, GetReview, GetScope};
+        use crate::map::application::{GetFileDiff, GetReview};
         use crate::progress::application::{MarkViewed, UnmarkViewed};
 
         let paths = ["a.rs", "b.rs", "Cargo.lock"];
@@ -228,18 +248,17 @@ pub(super) mod tests {
             Arc::new(InMemoryProgressRepository::default()),
             diffs.clone(),
         );
-        ServerUseCases {
-            review: GetReview::new(maps.versions, scope, progress.clone()),
-            file_diff: GetFileDiff::new(diffs),
-            mark_viewed: MarkViewed::new(progress.clone()),
-            unmark_viewed: UnmarkViewed::new(progress),
-            comments: Comments::new(
-                Arc::new(crate::testing::InMemoryComments::default()),
-                GetScope::new(ReviewScope::new(Arc::new(FakeDiffSource::with_paths(
-                    &paths,
-                )))),
-            ),
-        }
+        let (dir, comments) = comments(&paths);
+        (
+            dir,
+            ServerUseCases {
+                review: GetReview::new(maps.versions, scope, progress.clone()),
+                file_diff: GetFileDiff::new(diffs),
+                mark_viewed: MarkViewed::new(progress.clone()),
+                unmark_viewed: UnmarkViewed::new(progress),
+                comments,
+            },
+        )
     }
 
     #[tokio::test]
@@ -247,7 +266,7 @@ pub(super) mod tests {
         // If the progress store is unreadable the screen must say so rather
         // than render as though nothing had been read.
         use crate::diff::application::{FileDiffs, ReviewScope};
-        use crate::map::application::{GetFileDiff, GetReview, GetScope};
+        use crate::map::application::{GetFileDiff, GetReview};
         use crate::progress::application::{MarkViewed, ProgressStore, UnmarkViewed};
 
         let paths = ["a.rs"];
@@ -265,6 +284,7 @@ pub(super) mod tests {
             Arc::new(crate::testing::BrokenProgressRepository),
             diffs.clone(),
         );
+        let (_dir, comments) = comments(&paths);
         let use_cases = ServerUseCases {
             review: GetReview::new(
                 maps.versions,
@@ -274,12 +294,7 @@ pub(super) mod tests {
             file_diff: GetFileDiff::new(diffs),
             mark_viewed: MarkViewed::new(broken.clone()),
             unmark_viewed: UnmarkViewed::new(broken),
-            comments: Comments::new(
-                Arc::new(crate::testing::InMemoryComments::default()),
-                GetScope::new(ReviewScope::new(Arc::new(FakeDiffSource::with_paths(
-                    &paths,
-                )))),
-            ),
+            comments,
         };
         let (state, _) = AppState::new(use_cases, tokio::sync::watch::channel(false).1);
 

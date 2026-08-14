@@ -231,7 +231,8 @@ mod tests {
     fn the_state_hands_out_the_channel_the_watcher_writes_to() {
         // The watcher and the SSE route have to meet on the same channel, or
         // the browser is told nothing and never reloads.
-        let (state, changes) = AppState::new(routes::tests::use_cases(), signal::channel(false).1);
+        let (_dir, use_cases) = routes::tests::use_cases();
+        let (state, changes) = AppState::new(use_cases, signal::channel(false).1);
 
         let mut rx = state.changes.subscribe();
         changes.send("map".into()).unwrap();
