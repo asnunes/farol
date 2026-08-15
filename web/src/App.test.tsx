@@ -76,7 +76,8 @@ async function waitForReading(name: string) {
 }
 
 /** Where navigation took the reader. Moving is scrolling now, so this is what
- * a key or a click actually does. */
+ * a key or a click actually does. A file that opens a block reports the block,
+ * because that is where the reader is put down. */
 const scrolls: string[] = [];
 
 async function waitForScrollTo(name: string) {
@@ -134,7 +135,7 @@ beforeEach(() => {
   // move and watches sections to know where the reader is.
   scrolls.length = 0;
   Element.prototype.scrollIntoView = function (this: HTMLElement) {
-    scrolls.push(this.dataset.path ?? "");
+    scrolls.push(this.dataset.path ?? this.dataset.block ?? "");
   };
 
   // Radix measures what it is about to place, and jsdom has no observer to
@@ -214,9 +215,11 @@ describe("keyboard navigation", () => {
     fireEvent.keyDown(window, { key: "j" });
     await waitForScrollTo("b.rs");
 
-    // Third file lives in the second block: order is flat across blocks.
+    // Third file lives in the second block: order is flat across blocks. It
+    // opens that block, so the reader is put down on the band above it.
     fireEvent.keyDown(window, { key: "j" });
-    await waitForScrollTo("c.rs");
+    await waitForScrollTo("second");
+    expect(reading()).toContain("c.rs");
 
     fireEvent.keyDown(window, { key: "k" });
     await waitForScrollTo("b.rs");
@@ -233,7 +236,8 @@ describe("keyboard navigation", () => {
     await waitForScrollTo("b.rs");
 
     fireEvent.keyDown(window, { key: "ArrowUp" });
-    await waitForScrollTo("a.rs");
+    await waitForScrollTo("first");
+    expect(reading()).toContain("a.rs");
   });
 
   it("n skips to the next file that has not been read", async () => {
@@ -245,7 +249,24 @@ describe("keyboard navigation", () => {
     await waitForReading("a.rs");
 
     fireEvent.keyDown(window, { key: "n" });
-    await waitForScrollTo("c.rs");
+    await waitForScrollTo("second");
+    expect(reading()).toContain("c.rs");
+  });
+
+  it("puts the reader on the block when the file opens one", async () => {
+    // The band carries the title and the paragraph saying what the next few
+    // files are for, written to be read before them. Landing on the file
+    // scrolls straight past it, and the reader only meets it by going back up.
+    serve({ review: review() });
+    render(<App />);
+    await waitForReading("a.rs");
+
+    fireEvent.keyDown(window, { key: "j" }); // b.rs — inside a block, not first
+    await waitForScrollTo("b.rs");
+
+    fireEvent.keyDown(window, { key: "j" }); // c.rs — opens the second block
+    await waitForScrollTo("second");
+    expect(reading()).toContain("c.rs");
   });
 
   it("brackets move a whole block at a time", async () => {
@@ -253,11 +274,13 @@ describe("keyboard navigation", () => {
     render(<App />);
     await waitForReading("a.rs");
 
+    // Both ends of a bracket move are the first file of a block, so both land
+    // on the band: moving by block and reading its context are the same act.
     fireEvent.keyDown(window, { key: "]" });
-    await waitForScrollTo("c.rs");
+    await waitForScrollTo("second");
 
     fireEvent.keyDown(window, { key: "[" });
-    await waitForScrollTo("a.rs");
+    await waitForScrollTo("first");
   });
 
   it("? opens the shortcut list and Escape closes it", async () => {
@@ -492,6 +515,21 @@ describe("the diff itself", () => {
 });
 
 describe("open and closed", () => {
+  it("lands on the next block when marking read carries the reader into one", async () => {
+    // Ticking the last file of a block moves to the first of the next, which
+    // is exactly where the band is. This is where a reader meets most of them.
+    const r = review();
+    r.blocks[0].files[0].viewed = true; // a.rs read, so b.rs is the one left
+    serve({ review: r });
+    render(<App />);
+    await waitForReading("b.rs");
+
+    fireEvent.keyDown(window, { key: ";" });
+
+    await waitForScrollTo("second");
+    expect(reading()).toContain("c.rs");
+  });
+
   it("folds a file that has been read, and leaves the header", async () => {
     // Read means done. The files still to read should not be buried under it.
     const r = review();
@@ -817,7 +855,7 @@ describe("the sidebar", () => {
     );
     fireEvent.click(target!);
 
-    await waitForScrollTo("c.rs");
+    await waitForScrollTo("second");
     expect(reading()).toContain("c.rs");
   });
 
