@@ -13,10 +13,10 @@ use crate::diff::application::{CommitHistory, FileDiffs, ReviewScope};
 use crate::diff::infra::{GixSource, ScopeRequest};
 use crate::error::Result;
 use crate::map::application::{
-    AddBlock, AddFile, AddLineNote, AddSkim, CheckMap, DeriveMap, DiscardNote, GetFileDiff,
-    GetReview, GetScope, MapDerivation, MapEditor, MapReconciler, MapVersions, MoveBlock,
-    RemoveBlock, RemoveFile, RemoveLineNote, RemoveSkim, ResetMap, RestoreNote, ShareMap, ShowMap,
-    UpdateBlock, UpdateFile, UpdateLineNote,
+    AddBlock, AddFile, AddLineNote, AddSkim, CheckMap, DeriveMap, DiscardNote, ExportMap,
+    GetFileDiff, GetReview, GetScope, ImportMap, MapDerivation, MapEditor, MapReconciler,
+    MapVersions, MoveBlock, RemoveBlock, RemoveFile, RemoveLineNote, RemoveSkim, ResetMap,
+    RestoreNote, ShowMap, UpdateBlock, UpdateFile, UpdateLineNote,
 };
 use crate::map::infra::JsonMapRepository;
 use crate::progress::application::{MarkViewed, ProgressStore, UnmarkViewed};
@@ -51,7 +51,8 @@ pub struct Ctx {
     pub show_map: ShowMap,
     pub check_map: CheckMap,
     pub reset_map: ResetMap,
-    pub share_map: ShareMap,
+    pub export_map: ExportMap,
+    pub import_map: ImportMap,
     pub scope: GetScope,
 
     pub comments: Comments,
@@ -123,7 +124,8 @@ impl Ctx {
             show_map: ShowMap::new(versions.clone()),
             check_map: CheckMap::new(versions.clone(), scope.clone()),
             reset_map: ResetMap::new(editor),
-            share_map: ShareMap::new(versions.clone(), scope.clone(), maps_for_sharing, name),
+            export_map: ExportMap::new(versions.clone(), scope.clone(), name),
+            import_map: ImportMap::new(scope.clone(), maps_for_sharing),
             scope: GetScope::new(scope.clone()),
 
             comments: comments.clone(),

@@ -31,7 +31,7 @@ impl Action for MapAction {
     fn run(self, ctx: &Ctx) -> Result<()> {
         match self {
             MapAction::Export { out } => {
-                let export = ctx.share_map.export()?;
+                let export = ctx.export_map.execute()?;
                 let path = out.unwrap_or(export.file);
                 std::fs::write(&path, &export.body)?;
 
@@ -44,7 +44,7 @@ impl Action for MapAction {
             MapAction::Import { file } => {
                 let raw = std::fs::read_to_string(&file)
                     .map_err(|e| crate::error::Error::msg(format!("cannot read {file}: {e}")))?;
-                let landed = ctx.share_map.import(&raw)?;
+                let landed = ctx.import_map.execute(&raw)?;
 
                 println!(
                     "Imported the map for {} on {}.",
