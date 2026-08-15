@@ -17,11 +17,52 @@ pub(super) enum MapAction {
     Check,
     /// Delete the newest version and fall back to the one before it.
     Reset,
+    /// Write the map to one file, to hand to whoever is going to review.
+    Export {
+        /// Where to write it. Defaults to map-<commit>.farol.json here.
+        #[arg(long)]
+        out: Option<String>,
+    },
+    /// Store a map somebody exported as a version here.
+    Import { file: String },
 }
 
 impl Action for MapAction {
     fn run(self, ctx: &Ctx) -> Result<()> {
         match self {
+            MapAction::Export { out } => {
+                let export = ctx.share_map.export()?;
+                let path = out.unwrap_or(export.file);
+                std::fs::write(&path, &export.body)?;
+
+                println!("Wrote {path} ({} bytes).", export.body.len());
+                println!(
+                    "The map only. The code comes from git, and what you have read stays here."
+                );
+                Ok(())
+            }
+            MapAction::Import { file } => {
+                let raw = std::fs::read_to_string(&file)
+                    .map_err(|e| crate::error::Error::msg(format!("cannot read {file}: {e}")))?;
+                let landed = ctx.share_map.import(&raw)?;
+
+                println!(
+                    "Imported the map for {} on {}.",
+                    short(&landed.map.generated_at),
+                    landed.map.branch
+                );
+                // Said out loud rather than refused: a review is normally read
+                // from a few commits ahead of the map that describes it.
+                if let Some((written_at, here)) = landed.behind {
+                    println!(
+                        "It was written at {}, and you are on {} — the screen will say how far.",
+                        short(&written_at),
+                        short(&here)
+                    );
+                }
+                print!("{}", MapSummary(&landed.map));
+                Ok(())
+            }
             MapAction::Derive => {
                 let derived = ctx.derive_map.execute()?;
                 let map = &derived.map;

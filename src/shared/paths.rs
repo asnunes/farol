@@ -53,6 +53,40 @@ impl Workspace {
         self.repo.workdir().unwrap_or(&self.git_dir).to_path_buf()
     }
 
+    /// What to call this repository when handing a map to somebody else.
+    ///
+    /// A label, never a check: two clones are the same repository when they
+    /// share a commit, and the export already carries the base sha for that.
+    /// This is here so a person opening the file knows where it came from, and
+    /// it is allowed to go stale when a remote is renamed.
+    ///
+    /// Taken from the remote's path so that `git@github.com:asnunes/farol.git`
+    /// and `https://github.com/asnunes/farol.git` come out the same, and from
+    /// the directory when there is no remote to ask.
+    pub fn name(&self) -> String {
+        self.remote_path().unwrap_or_else(|| {
+            self.root()
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .into_owned()
+        })
+    }
+
+    fn remote_path(&self) -> Option<String> {
+        let remote = self
+            .repo
+            .find_default_remote(gix::remote::Direction::Fetch)?
+            .ok()?;
+        let url = remote.url(gix::remote::Direction::Fetch)?;
+        let path = url.path.to_string();
+        let named = path.trim_start_matches('/').trim_end_matches(".git");
+        match named.is_empty() {
+            true => None,
+            false => Some(named.to_string()),
+        }
+    }
+
     /// Where farol keeps everything for this branch.
     pub fn store(&self) -> Store {
         Store::new(&self.git_dir, &self.branch)

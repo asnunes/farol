@@ -11,3 +11,8 @@ web/tsconfig.tsbuildinfo
 # Coverage reports are generated on demand and never read from the repo.
 /web/coverage
 /llvm-cov
+
+# Exported maps. They are made to be handed to somebody, not committed: the map
+# already lives under the git dir, and a copy in the tree goes stale the moment
+# the branch moves.
+*.farol.json

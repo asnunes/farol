@@ -15,7 +15,7 @@ use crate::error::Result;
 use crate::map::application::{
     AddBlock, AddFile, AddLineNote, AddSkim, CheckMap, DeriveMap, DiscardNote, GetFileDiff,
     GetReview, GetScope, MapDerivation, MapEditor, MapReconciler, MapVersions, MoveBlock,
-    RemoveBlock, RemoveFile, RemoveLineNote, RemoveSkim, ResetMap, RestoreNote, ShowMap,
+    RemoveBlock, RemoveFile, RemoveLineNote, RemoveSkim, ResetMap, RestoreNote, ShareMap, ShowMap,
     UpdateBlock, UpdateFile, UpdateLineNote,
 };
 use crate::map::infra::JsonMapRepository;
@@ -51,6 +51,7 @@ pub struct Ctx {
     pub show_map: ShowMap,
     pub check_map: CheckMap,
     pub reset_map: ResetMap,
+    pub share_map: ShareMap,
     pub scope: GetScope,
 
     pub comments: Comments,
@@ -78,9 +79,12 @@ impl Ctx {
         let git_dir = workspace.git_dir().to_path_buf();
         let root = workspace.root();
         let branch = workspace.branch().to_string();
+        // Read before the repository is handed to the diff source, which consumes it.
+        let name = workspace.name();
 
         let comment_store = Arc::new(MarkdownComments::new(&workspace.store(), &root));
         let maps = Arc::new(JsonMapRepository::new(workspace.store()));
+        let maps_for_sharing = maps.clone();
         let progress_repo = Arc::new(JsonProgressRepository::new(workspace.store()));
         let source = Arc::new(GixSource::open(workspace.into_repo(), &branch, &request)?);
 
@@ -119,6 +123,7 @@ impl Ctx {
             show_map: ShowMap::new(versions.clone()),
             check_map: CheckMap::new(versions.clone(), scope.clone()),
             reset_map: ResetMap::new(editor),
+            share_map: ShareMap::new(versions.clone(), scope.clone(), maps_for_sharing, name),
             scope: GetScope::new(scope.clone()),
 
             comments: comments.clone(),
