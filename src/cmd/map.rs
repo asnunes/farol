@@ -33,7 +33,12 @@ impl Action for MapAction {
             MapAction::Export { out } => {
                 let export = ctx.export_map.execute()?;
                 let path = out.unwrap_or(export.file);
-                std::fs::write(&path, &export.body)?;
+                std::fs::write(&path, &export.body).map_err(|source| {
+                    crate::error::Error::CannotWrite {
+                        path: path.clone(),
+                        source,
+                    }
+                })?;
 
                 println!("Wrote {path} ({} bytes).", export.body.len());
                 println!(
@@ -42,8 +47,12 @@ impl Action for MapAction {
                 Ok(())
             }
             MapAction::Import { file } => {
-                let raw = std::fs::read_to_string(&file)
-                    .map_err(|e| crate::error::Error::msg(format!("cannot read {file}: {e}")))?;
+                let raw = std::fs::read_to_string(&file).map_err(|source| {
+                    crate::error::Error::CannotRead {
+                        path: file.clone(),
+                        source,
+                    }
+                })?;
                 let landed = ctx.import_map.execute(&raw)?;
 
                 println!(
