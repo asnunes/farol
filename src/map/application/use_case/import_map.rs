@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
 use crate::diff::application::ReviewScope;
-use crate::error::{Error, Result};
+use crate::error::Result;
 use crate::map::application::Bundle;
-use crate::map::domain::{MapRepository, ReviewMap};
+use crate::map::domain::{MapError, MapRepository, ReviewMap};
 use crate::map::presentation::short;
 
 /// Store a map somebody else exported as a version here.
@@ -25,16 +25,16 @@ impl ImportMap {
     }
 
     pub fn execute(&self, raw: &str) -> Result<Import> {
-        let bundle: Bundle = serde_json::from_str(raw)
-            .map_err(|e| Error::msg(format!("this is not a farol export: {e}")))?;
+        let bundle: Bundle =
+            serde_json::from_str(raw).map_err(|e| MapError::NotAnExport { why: e.to_string() })?;
 
         let here = self.scope.get()?;
         if bundle.base != here.base_sha {
-            return Err(Error::msg(format!(
-                "this map was written against base {}, and here the base is {} — it belongs to another repository",
-                short(&bundle.base),
-                short(&here.base_sha)
-            )));
+            return Err(MapError::ForeignBase {
+                theirs: short(&bundle.base).to_string(),
+                ours: short(&here.base_sha).to_string(),
+            }
+            .into());
         }
 
         let behind = match bundle.head == here.head_sha {

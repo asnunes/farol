@@ -1,7 +1,7 @@
 use crate::diff::application::ReviewScope;
-use crate::error::{Error, Result};
+use crate::error::Result;
 use crate::map::application::{Bundle, MapVersions};
-use crate::map::domain::WORKING;
+use crate::map::domain::{MapError, WORKING};
 use crate::map::presentation::short;
 
 /// Write the map out for another machine to read.
@@ -35,9 +35,7 @@ impl ExportMap {
         // A map keyed to uncommitted work names a commit nobody else has, and
         // would import as a review of code the other machine cannot fetch.
         if map.generated_at == WORKING {
-            return Err(Error::msg(
-                "this map was derived against uncommitted work — commit, run `farol map derive`, and export that",
-            ));
+            return Err(MapError::ExportsUncommitted.into());
         }
 
         // A deactivated note is a decision waiting for whoever wrote it. Sent
