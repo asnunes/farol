@@ -85,6 +85,12 @@ impl FakeDiffSource {
         self
     }
 
+    /// The commit the review is measured from. What an export is matched by.
+    pub fn from_base(mut self, sha: &str) -> Self {
+        self.scope.base_sha = sha.into();
+        self
+    }
+
     pub fn on_commit(mut self, sha: &str) -> Self {
         self.scope.head_sha = sha.into();
         self

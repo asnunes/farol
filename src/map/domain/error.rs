@@ -71,6 +71,19 @@ pub enum MapError {
         path: String,
         range: LineRange,
     },
+
+    #[error(
+        "this map was derived against uncommitted work\nCommit, run `farol map derive`, and export that — the other machine cannot fetch what is not a commit."
+    )]
+    ExportsUncommitted,
+
+    #[error("this is not a farol export: {why}")]
+    NotAnExport { why: String },
+
+    #[error(
+        "this map was written against base {theirs}, and here the base is {ours}\nIt belongs to another repository."
+    )]
+    ForeignBase { theirs: String, ours: String },
 }
 
 /// Renders a list inline, or says there are none. An empty list would read as a
@@ -101,6 +114,29 @@ mod tests {
         let msg = e.to_string();
         assert!(msg.contains("nope"), "{msg}");
         assert!(msg.contains("core, wiring"), "{msg}");
+    }
+
+    #[test]
+    fn what_sharing_refuses_says_which_way_out_there_is() {
+        // Each of these is read by somebody holding a file and no idea why it
+        // was turned away, so naming the cause is half the message.
+        let uncommitted = MapError::ExportsUncommitted.to_string();
+        assert!(uncommitted.contains("farol map derive"), "{uncommitted}");
+
+        let foreign = MapError::ForeignBase {
+            theirs: "abc1234".into(),
+            ours: "def5678".into(),
+        }
+        .to_string();
+        assert!(foreign.contains("abc1234"), "{foreign}");
+        assert!(foreign.contains("def5678"), "{foreign}");
+        assert!(foreign.contains("another repository"), "{foreign}");
+
+        let garbage = MapError::NotAnExport {
+            why: "missing field `map`".into(),
+        }
+        .to_string();
+        assert!(garbage.contains("missing field `map`"), "{garbage}");
     }
 
     #[test]

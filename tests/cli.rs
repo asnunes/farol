@@ -240,6 +240,98 @@ fn scope_is_listed_in_path_order() {
     assert!(order.windows(2).all(|w| w[0] < w[1]), "{out}");
 }
 
+// ---- handing a review over ----------------------------------------------
+
+/// The other machine: a clone of the same repository, on the same branch.
+///
+/// A clone shares every commit, and the base is what an import matches on, so
+/// this is the real thing rather than a stand-in. It also needs `main` as a
+/// local branch — cloning leaves it as `origin/main` alone, and farol looks the
+/// base up by name. Whoever receives a review hits this too.
+fn cloned(repo: &Repo) -> std::path::PathBuf {
+    let there = repo.path().join("elsewhere");
+    repo.git(&[
+        "clone",
+        "-q",
+        repo.path().to_str().unwrap(),
+        there.to_str().unwrap(),
+    ]);
+    repo.git_in(&there, &["branch", "main", "origin/main"]);
+    repo.git_in(&there, &["checkout", "-q", "feature/x"]);
+    there
+}
+
+#[test]
+fn a_map_can_be_handed_to_another_machine() {
+    let repo = Repo::new();
+    repo.feature();
+    repo.derive();
+    repo.core_block(&["src/a.rs"]);
+    repo.ok(&["file", "update", "core", "src/a.rs", "--note", "start here"]);
+
+    let head = String::from_utf8_lossy(&repo.git(&["rev-parse", "--short=7", "HEAD"]).stdout)
+        .trim()
+        .to_string();
+    let said = repo.ok(&["map", "export"]);
+    let file = repo.path().join(format!("map-{head}.farol.json"));
+
+    assert!(said.contains(&format!("map-{head}.farol.json")), "{said}");
+    assert!(file.exists(), "expected the export at {}", file.display());
+
+    // On the other side: nothing of its own, then the map arrives.
+    let there = cloned(&repo);
+    let empty =
+        String::from_utf8_lossy(&repo.farol_in(&there, &["map", "show"]).stdout).into_owned();
+    assert!(empty.contains("No map for this branch"), "{empty}");
+
+    let out = repo.farol_in(&there, &["map", "import", file.to_str().unwrap()]);
+    let landed = String::from_utf8_lossy(&out.stdout).into_owned();
+    assert!(
+        landed.contains("Imported the map"),
+        "stdout: {landed}\nstderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+
+    let check = repo.farol_in(&there, &["map", "check"]);
+    assert!(
+        check.status.success(),
+        "{}",
+        String::from_utf8_lossy(&check.stdout)
+    );
+    assert!(
+        String::from_utf8_lossy(&repo.farol_in(&there, &["map", "show"]).stdout)
+            .contains("start here"),
+        "the prose is what was worth sending"
+    );
+}
+
+#[test]
+fn a_map_from_another_repository_is_refused() {
+    // Nothing but the base commit stands between a map and the wrong tree.
+    let repo = Repo::new();
+    repo.feature();
+    repo.derive();
+    repo.core_block(&["src/a.rs"]);
+    repo.ok(&["map", "export"]);
+    let export = std::fs::read_dir(repo.path())
+        .unwrap()
+        .flatten()
+        .map(|e| e.path())
+        .find(|p| p.to_string_lossy().ends_with(".farol.json"))
+        .expect("the export should be here");
+
+    let stranger = Repo::new();
+    stranger.feature();
+    let out = stranger.farol(&["map", "import", export.to_str().unwrap()]);
+
+    assert!(!out.status.success());
+    assert!(
+        String::from_utf8_lossy(&out.stderr).contains("another repository"),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
 // ---- worktrees ----------------------------------------------------------
 
 #[test]

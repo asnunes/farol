@@ -42,6 +42,21 @@ pub enum Error {
     #[error("{0}")]
     Message(String),
 
+    /// A file farol was told to use by name. Worth its own variants because
+    /// the operating system says "No such file or directory" and stops, while
+    /// the one thing worth knowing — which file — is the part farol has.
+    #[error("cannot read {path}: {source}")]
+    CannotRead {
+        path: String,
+        source: std::io::Error,
+    },
+
+    #[error("cannot write {path}: {source}")]
+    CannotWrite {
+        path: String,
+        source: std::io::Error,
+    },
+
     #[error(transparent)]
     Io(#[from] std::io::Error),
 
@@ -102,6 +117,14 @@ mod tests {
             Error::DetachedHead,
             Error::NoBaseBranch,
             Error::msg("cannot resolve 'nope'"),
+            Error::CannotRead {
+                path: "map-abc.farol.json".into(),
+                source: std::io::Error::from(std::io::ErrorKind::NotFound),
+            },
+            Error::CannotWrite {
+                path: "map-abc.farol.json".into(),
+                source: std::io::Error::from(std::io::ErrorKind::PermissionDenied),
+            },
         ] {
             assert!(!e.to_string().trim().is_empty(), "{e:?}");
         }
