@@ -5,6 +5,7 @@ import type { BlockView } from "@/api";
 export function BlockBar({ block, number, total }: BlockBarProps) {
   return (
     <div
+      data-block={block.slug}
       className={cn(
         "blockbar border-y border-rule bg-surface px-6 py-4",
         // Air between blocks, so one does not run into the file list of the
