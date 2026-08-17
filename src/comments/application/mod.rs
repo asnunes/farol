@@ -110,32 +110,30 @@ mod tests {
     /// Comments over a real folder, because the store is half of what `add`
     /// does, and over a review that holds one 200-line file.
     fn comments() -> (tempfile::TempDir, Comments) {
-        let dir = tempfile::tempdir().unwrap();
-        let store = Store::new(dir.path(), "feature/x");
-        let source =
-            Arc::new(FakeDiffSource::with_paths(&["src/a.rs"]).with_line_count("src/a.rs", 200));
-        let scope = GetScope::new(ReviewScope::new(source.clone()));
-        let comments = Comments::new(
-            Arc::new(MarkdownComments::new(&store, dir.path())),
-            scope,
-            FileDiffs::new(source),
-        );
-        (dir, comments)
+        over(a_file())
     }
 
     /// The same review, but with the diff reaching only where the test says.
+    /// Undeclared, the fake prints the whole file, which is what every test
+    /// that is not about the diff's reach wants.
     fn comments_showing(hunks: Vec<Hunk>) -> (tempfile::TempDir, Comments) {
+        over(a_file().showing("src/a.rs", hunks))
+    }
+
+    /// The one review the tests are written against.
+    fn a_file() -> FakeDiffSource {
+        FakeDiffSource::with_paths(&["src/a.rs"]).with_line_count("src/a.rs", 200)
+    }
+
+    /// The wiring, which is the same either way: the store on disk, and the
+    /// scope and the diffs coming off the one source.
+    fn over(source: FakeDiffSource) -> (tempfile::TempDir, Comments) {
         let dir = tempfile::tempdir().unwrap();
         let store = Store::new(dir.path(), "feature/x");
-        let source = Arc::new(
-            FakeDiffSource::with_paths(&["src/a.rs"])
-                .with_line_count("src/a.rs", 200)
-                .showing("src/a.rs", hunks),
-        );
-        let scope = GetScope::new(ReviewScope::new(source.clone()));
+        let source = Arc::new(source);
         let comments = Comments::new(
             Arc::new(MarkdownComments::new(&store, dir.path())),
-            scope,
+            GetScope::new(ReviewScope::new(source.clone())),
             FileDiffs::new(source),
         );
         (dir, comments)
