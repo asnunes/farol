@@ -1,4 +1,4 @@
-import Markdown from "react-markdown";
+import { Prose } from "@/review/Prose";
 import { Close } from "./Close";
 import { Copy } from "./Copy";
 import { Published } from "./Published";
@@ -18,12 +18,9 @@ export function Comment({ comment, actions }: CommentProps) {
         {span(comment, "–")}
       </span>
 
-      {/* `prose` is not in play here: the body is a sentence or two, and a
-          typography reset would give a lone paragraph margins it does not
-          need. Only the marks that actually turn up in a review are styled. */}
-      <div className="body min-w-0 flex-1 font-sans text-sm leading-relaxed text-ink-soft [&_a]:text-accent [&_a]:underline [&_code]:rounded [&_code]:bg-sunken [&_code]:px-1 [&_code]:font-mono [&_code]:text-[0.8125rem] [&_li]:ml-4 [&_li]:list-disc [&_p+p]:mt-2 [&_pre]:mt-2 [&_pre]:overflow-x-auto [&_pre]:rounded [&_pre]:bg-sunken [&_pre]:p-2 [&_pre_code]:bg-transparent [&_pre_code]:p-0">
-        <Markdown>{comment.body}</Markdown>
-      </div>
+      <Prose className="body min-w-0 flex-1 font-sans text-sm leading-relaxed text-ink-soft">
+        {comment.body}
+      </Prose>
 
       <div className="acts flex shrink-0 items-center gap-0.5">
         <Published comment={comment} />

@@ -190,6 +190,25 @@ describe("landing", () => {
     ]);
   });
 
+  it("renders the session's prose as the markdown it was written in", async () => {
+    // Block context and file notes are written by hand, and they name code:
+    // backticks are how that is spelled. Showing them raw makes the page look
+    // like it lost a step.
+    const r = review();
+    r.blocks[0].context = "The `Hunk` already carried `new_start`.";
+    r.blocks[0].files[0].notes = [{ block: "first", text: "Reuse `FileDiff` here." }];
+    serve({ review: r });
+    render(<App />);
+    await waitForReading("a.rs");
+
+    const band = document.querySelector(".blockbar");
+    expect(band?.querySelector("code")?.textContent).toBe("Hunk");
+    expect(band?.textContent).not.toContain("`");
+
+    const note = document.querySelector(".filenote");
+    expect(note?.querySelector("code")?.textContent).toBe("FileDiff");
+  });
+
   it("resumes at the first file that has not been read", async () => {
     // Every file is on the page, so resuming means being taken there rather
     // than being shown it alone.

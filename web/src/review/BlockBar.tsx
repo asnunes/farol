@@ -1,3 +1,4 @@
+import { Prose } from "@/review/Prose";
 import { cn } from "@/lib/utils";
 import type { BlockView } from "@/api";
 
@@ -18,9 +19,9 @@ export function BlockBar({ block, number, total }: BlockBarProps) {
       </div>
       <h2 className="mt-1 font-sans text-lg font-semibold text-ink">{block.title}</h2>
       {block.context && (
-        <p className="mt-2 max-w-[68ch] font-serif text-[0.9375rem] leading-relaxed text-ink-soft">
+        <Prose className="mt-2 max-w-[68ch] font-serif text-[0.9375rem] leading-relaxed text-ink-soft">
           {block.context}
-        </p>
+        </Prose>
       )}
     </div>
   );
