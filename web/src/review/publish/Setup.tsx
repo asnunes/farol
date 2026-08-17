@@ -176,7 +176,11 @@ function Open({ at }: { at: string }) {
 
 /** Where the token goes in. A textarea and not an input: a fine-grained token
  * runs to ninety characters, and a single line hides all but the tail of it
- * exactly when the reader wants to check they pasted the whole thing. */
+ * exactly when the reader wants to check they pasted the whole thing.
+ *
+ * `break-all` is what makes that true. A token has no spaces in it, so soft
+ * wrapping treats the whole thing as one word and runs it off the side, which
+ * is the very problem the textarea was chosen to avoid. */
 function Token({ onToken }: { onToken: (token: string) => Promise<void> }) {
   const [token, setToken] = useState("");
   const [saving, setSaving] = useState(false);
@@ -197,8 +201,8 @@ function Token({ onToken }: { onToken: (token: string) => Promise<void> }) {
   return (
     <div className="token">
       <Textarea
-        className="resize-none border-rule-strong bg-surface font-mono text-xs text-ink"
-        rows={2}
+        className="resize-none break-all border-rule-strong bg-surface font-mono text-xs text-ink"
+        rows={3}
         placeholder="github_pat_…"
         autoComplete="off"
         spellCheck={false}
