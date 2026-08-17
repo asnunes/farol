@@ -10,7 +10,7 @@ use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::response::sse::{Event, Sse};
-use axum::routing::{delete, get, post};
+use axum::routing::{delete, get, post, put};
 use axum::{Json, Router};
 use serde::Deserialize;
 
@@ -18,6 +18,7 @@ use tokio::sync::broadcast;
 
 use super::registry::ServerEntry;
 use super::{AppState, assets, view};
+use crate::comments::domain::Verdict;
 use crate::error::Error;
 
 /// The whole HTTP surface. Everything it serves arrives injected, so the routes
@@ -29,6 +30,8 @@ pub(super) fn router(state: Arc<AppState>, identity: ServerEntry) -> Router {
         .route("/api/viewed", post(viewed))
         .route("/api/comments", get(comments).post(write_comment))
         .route("/api/comments/{id}", delete(close_comment))
+        .route("/api/publish", get(readiness).post(publish))
+        .route("/api/token", put(save_token))
         .route("/api/watch", get(watch))
         .route("/health", get(move || health(identity.clone())))
         .fallback(assets::handler)
@@ -126,6 +129,91 @@ async fn close_comment(
     }
 }
 
+/// Whether the review can be sent, and what is in the way when it cannot.
+///
+/// The page asks this on load and keeps asking while the answer is no, because
+/// the answer changes elsewhere: a token pasted into a file, a branch pushed
+/// from a terminal, a pull request opened in a browser.
+async fn readiness(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    let readiness = state.use_cases.readiness.clone();
+    match away(move || readiness.execute()).await {
+        Ok(standing) => Json(view::ReadinessView::of(
+            &standing.readiness,
+            &standing.branch,
+        ))
+        .into_response(),
+        Err(e) => fail(e),
+    }
+}
+
+#[derive(Deserialize)]
+struct ReviewToSend {
+    verdict: String,
+    summary: String,
+}
+
+/// Send it. The one irreversible thing farol does, which is why every reason it
+/// should not happen is decided in the use case rather than here.
+async fn publish(
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<ReviewToSend>,
+) -> impl IntoResponse {
+    let Some(verdict) = verdict(&body.verdict) else {
+        return fail(Error::msg(format!("unknown verdict '{}'", body.verdict)));
+    };
+    let publish = state.use_cases.publish_review.clone();
+    match away(move || publish.execute(verdict, &body.summary)).await {
+        Ok(sent) => Json(view::SentView {
+            url: sent.url,
+            comments: sent.comments,
+        })
+        .into_response(),
+        Err(e) => fail(e),
+    }
+}
+
+#[derive(Deserialize)]
+struct NewToken {
+    token: String,
+}
+
+/// Take the token and say nothing back.
+///
+/// No route ever answers with it and nothing logs it: a credential that can be
+/// read back out of the thing holding it is a credential with two homes.
+async fn save_token(
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<NewToken>,
+) -> impl IntoResponse {
+    match state.use_cases.save_token.execute(&body.token) {
+        Ok(()) => StatusCode::NO_CONTENT.into_response(),
+        Err(e) => fail(e),
+    }
+}
+
+fn verdict(name: &str) -> Option<Verdict> {
+    match name {
+        "comment" => Some(Verdict::Comment),
+        "requestChanges" => Some(Verdict::RequestChanges),
+        "approve" => Some(Verdict::Approve),
+        _ => None,
+    }
+}
+
+/// Run something that talks to the network off the runtime's own threads.
+///
+/// Publishing is blocking HTTP inside an async server. Left where it is, one
+/// slow call to GitHub holds a worker thread that every other request on this
+/// port is queued behind.
+async fn away<T: Send + 'static>(
+    work: impl FnOnce() -> Result<T, Error> + Send + 'static,
+) -> Result<T, Error> {
+    match tokio::task::spawn_blocking(work).await {
+        Ok(result) => result,
+        Err(e) => Err(Error::msg(format!("the request could not be run: {e}"))),
+    }
+}
+
 /// One-way channel: the page finds out that the repository moved without
 /// polling for it.
 ///
@@ -191,8 +279,13 @@ pub(super) mod tests {
     use super::*;
     use crate::cmd::ServerUseCases;
     use crate::comments::application::Comments;
+    use crate::comments::application::{PublishReview, ReviewReadiness, SaveToken};
+    use crate::comments::domain::Readiness;
     use crate::progress::application::ProgressStore;
-    use crate::testing::{FakeDiffSource, InMemoryProgressRepository};
+    use crate::testing::{
+        FakeCredentials, FakeDiffSource, FakePublisher, InMemoryComments,
+        InMemoryProgressRepository,
+    };
     use axum::body::Body;
     use axum::http::Request;
     use std::sync::Arc;
@@ -235,6 +328,35 @@ pub(super) mod tests {
         (dir, comments)
     }
 
+    /// The three publishing use cases over a publisher that answers whatever
+    /// the test needs and keeps what it was handed instead of sending it.
+    fn publishing(
+        paths: &[&str],
+        readiness: Readiness,
+    ) -> (
+        ReviewReadiness,
+        Arc<PublishReview>,
+        Arc<SaveToken>,
+        Arc<FakePublisher>,
+    ) {
+        use crate::diff::application::{CommitHistory, FileDiffs, ReviewScope};
+
+        let source = Arc::new(FakeDiffSource::with_paths(paths));
+        let publisher = Arc::new(FakePublisher::blocked(readiness));
+        (
+            ReviewReadiness::new(publisher.clone(), ReviewScope::new(source.clone())),
+            Arc::new(PublishReview::new(
+                Arc::new(InMemoryComments::default()),
+                publisher.clone(),
+                ReviewScope::new(source.clone()),
+                FileDiffs::new(source.clone()),
+                CommitHistory::new(source),
+            )),
+            Arc::new(SaveToken::new(Arc::new(FakeCredentials::default()))),
+            publisher,
+        )
+    }
+
     pub(in crate::server) fn use_cases() -> (tempfile::TempDir, ServerUseCases) {
         use crate::diff::application::{FileDiffs, ReviewScope};
         use crate::map::application::{GetFileDiff, GetReview};
@@ -252,6 +374,13 @@ pub(super) mod tests {
             diffs.clone(),
         );
         let (dir, comments) = comments(&paths);
+        let (readiness, publish_review, save_token, _) = publishing(
+            &paths,
+            Readiness::Ready {
+                pull_request: 12,
+                head: "head".into(),
+            },
+        );
         (
             dir,
             ServerUseCases {
@@ -260,6 +389,9 @@ pub(super) mod tests {
                 mark_viewed: MarkViewed::new(progress.clone()),
                 unmark_viewed: UnmarkViewed::new(progress),
                 comments,
+                readiness,
+                publish_review,
+                save_token,
             },
         )
     }
@@ -288,6 +420,7 @@ pub(super) mod tests {
             diffs.clone(),
         );
         let (_dir, comments) = comments(&paths);
+        let (readiness, publish_review, save_token, _) = publishing(&paths, Readiness::NoToken);
         let use_cases = ServerUseCases {
             review: GetReview::new(
                 maps.versions,
@@ -298,6 +431,9 @@ pub(super) mod tests {
             mark_viewed: MarkViewed::new(broken.clone()),
             unmark_viewed: UnmarkViewed::new(broken),
             comments,
+            readiness,
+            publish_review,
+            save_token,
         };
         let (state, _) = AppState::new(use_cases, tokio::sync::watch::channel(false).1);
 
@@ -312,5 +448,126 @@ pub(super) mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn the_state_of_publishing_is_answered_as_a_reason_and_not_as_a_flag() {
+        // Each of these sends the reader somewhere different. A boolean would
+        // send them to the token they already have.
+        for (readiness, state) in [
+            (Readiness::NoToken, "noToken"),
+            (Readiness::TokenRefused, "tokenRefused"),
+            (Readiness::BranchNotPushed, "branchNotPushed"),
+            (
+                Readiness::NoPullRequest {
+                    open_at: "https://example.test/compare".into(),
+                },
+                "noPullRequest",
+            ),
+        ] {
+            let body = ask(readiness).await;
+
+            assert_eq!(body["state"], state);
+            assert_eq!(
+                body["branch"], "feature/x",
+                "the panel spells commands with it"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn a_pull_request_that_is_there_comes_back_with_its_number() {
+        let body = ask(Readiness::Ready {
+            pull_request: 12,
+            head: "head".into(),
+        })
+        .await;
+
+        assert_eq!(body["state"], "ready");
+        assert_eq!(body["pullRequest"], 12);
+    }
+
+    #[tokio::test]
+    async fn nowhere_to_open_a_pull_request_means_no_link_to_offer() {
+        // The link is the whole of what that state offers, and a state that has
+        // none must not hand the page an empty string to render as a button.
+        let body = ask(Readiness::BranchNotPushed).await;
+
+        assert!(body.get("openAt").is_none(), "{body}");
+        assert!(body.get("pullRequest").is_none(), "{body}");
+    }
+
+    #[tokio::test]
+    async fn a_verdict_the_api_does_not_have_is_refused_before_anything_is_sent() {
+        let (_dir, use_cases) = use_cases();
+        let (state, _) = AppState::new(use_cases, tokio::sync::watch::channel(false).1);
+
+        let response = router(state, identity())
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/publish")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"verdict":"lgtm","summary":"Reads well."}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn the_token_route_answers_with_nothing_at_all() {
+        // Not even an echo. A route that hands the token back is a second place
+        // it can be read from.
+        let (_dir, use_cases) = use_cases();
+        let (state, _) = AppState::new(use_cases, tokio::sync::watch::channel(false).1);
+
+        let response = router(state, identity())
+            .oneshot(
+                Request::builder()
+                    .method("PUT")
+                    .uri("/api/token")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"token":"ghp_abc123"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+        assert!(read(response).await.is_empty());
+    }
+
+    /// Ask `/api/publish` over a publisher parked in one state.
+    async fn ask(readiness: Readiness) -> serde_json::Value {
+        let (_dir, mut use_cases) = use_cases();
+        let (asked, publish_review, save_token, _) = publishing(&["a.rs"], readiness);
+        use_cases.readiness = asked;
+        use_cases.publish_review = publish_review;
+        use_cases.save_token = save_token;
+        let (state, _) = AppState::new(use_cases, tokio::sync::watch::channel(false).1);
+
+        let response = router(state, identity())
+            .oneshot(
+                Request::builder()
+                    .uri("/api/publish")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        serde_json::from_str(&read(response).await).unwrap()
+    }
+
+    async fn read(response: axum::response::Response) -> String {
+        let body = http_body_util::BodyExt::collect(response.into_body())
+            .await
+            .unwrap()
+            .to_bytes();
+        String::from_utf8(body.to_vec()).unwrap()
     }
 }

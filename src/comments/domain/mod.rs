@@ -1,6 +1,8 @@
 mod error;
+mod publishing;
 
 pub use error::*;
+pub use publishing::*;
 
 use crate::error::Result;
 
@@ -29,11 +31,15 @@ impl Comment {
     /// What lands on the clipboard: enough for the answer to be read somewhere
     /// else without the file open.
     pub fn quoted(&self) -> String {
-        let lines = match self.from == self.to {
-            true => format!("{}", self.from),
-            false => format!("{}-{}", self.from, self.to),
-        };
-        format!("{}:{}\n\n{}", self.path, lines, self.body.trim())
+        format!("{}\n\n{}", self.at(), self.body.trim())
+    }
+
+    /// Where it sits, the way a person would type it to go there.
+    pub fn at(&self) -> String {
+        match self.from == self.to {
+            true => format!("{}:{}", self.path, self.from),
+            false => format!("{}:{}-{}", self.path, self.from, self.to),
+        }
     }
 }
 

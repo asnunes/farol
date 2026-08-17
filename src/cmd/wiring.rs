@@ -7,8 +7,9 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use crate::comments::application::Comments;
-use crate::comments::infra::MarkdownComments;
+use crate::comments::application::{Comments, PublishReview, ReviewReadiness, SaveToken};
+use crate::comments::domain::ReviewPublisher;
+use crate::comments::infra::{GitHub, MarkdownComments, TokenFile, Unhosted};
 use crate::diff::application::{CommitHistory, FileDiffs, ReviewScope};
 use crate::diff::infra::{GixSource, ScopeRequest};
 use crate::error::Result;
@@ -71,6 +72,9 @@ pub struct ServerUseCases {
     pub mark_viewed: MarkViewed,
     pub unmark_viewed: UnmarkViewed,
     pub comments: Comments,
+    pub readiness: ReviewReadiness,
+    pub publish_review: Arc<PublishReview>,
+    pub save_token: Arc<SaveToken>,
 }
 
 impl Ctx {
@@ -80,8 +84,10 @@ impl Ctx {
         let git_dir = workspace.git_dir().to_path_buf();
         let root = workspace.root();
         let branch = workspace.branch().to_string();
-        // Read before the repository is handed to the diff source, which consumes it.
+        // Both read before the repository is handed to the diff source, which
+        // consumes it.
         let name = workspace.name();
+        let remote = workspace.remote();
 
         let comment_store = Arc::new(MarkdownComments::new(&workspace.store(), &root));
         let maps = Arc::new(JsonMapRepository::new(workspace.store()));
@@ -93,13 +99,25 @@ impl Ctx {
         let diffs = FileDiffs::new(source.clone());
         let history = CommitHistory::new(source);
 
-        let comments = Comments::new(comment_store, GetScope::new(scope.clone()), diffs.clone());
+        let credentials = Arc::new(TokenFile::here()?);
+        let publisher: Arc<dyn ReviewPublisher> = match remote {
+            Some(remote) => Arc::new(GitHub::new(remote, credentials.clone())),
+            None => Arc::new(Unhosted),
+        };
+
+        let comments = Comments::new(
+            comment_store.clone(),
+            GetScope::new(scope.clone()),
+            diffs.clone(),
+        );
         let reconciler = MapReconciler::new(scope.clone(), diffs.clone());
-        let versions = MapVersions::new(scope.clone(), history, maps.clone());
+        let versions = MapVersions::new(scope.clone(), history.clone(), maps.clone());
         let derivation =
             MapDerivation::new(versions.clone(), scope.clone(), reconciler, maps.clone());
         let editor = MapEditor::new(derivation.clone(), versions.clone(), maps);
         let progress = ProgressStore::new(progress_repo, diffs.clone());
+        let scope_for_publishing = scope.clone();
+        let diffs_for_publishing = diffs.clone();
 
         Ok(Self {
             add_block: AddBlock::new(editor.clone()),
@@ -136,6 +154,15 @@ impl Ctx {
                 mark_viewed: MarkViewed::new(progress.clone()),
                 unmark_viewed: UnmarkViewed::new(progress),
                 comments,
+                readiness: ReviewReadiness::new(publisher.clone(), scope_for_publishing.clone()),
+                publish_review: Arc::new(PublishReview::new(
+                    comment_store,
+                    publisher,
+                    scope_for_publishing,
+                    diffs_for_publishing,
+                    history,
+                )),
+                save_token: Arc::new(SaveToken::new(credentials)),
             },
             git_dir,
             root,

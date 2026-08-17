@@ -24,8 +24,19 @@ pub enum CommentError {
     )]
     NoLongerInDiff { comments: Vec<String> },
 
+    #[error("this repository has no remote, so there is no pull request to publish to")]
+    NoRemote,
+
     #[error("farol has no token for GitHub yet")]
     NoToken,
+
+    #[error("a review that asks for something has to say what — write the summary first")]
+    NoSummary,
+
+    #[error(
+        "this review covers uncommitted work, and a pull request can only be reviewed at a commit\nCommit the change and derive the map again."
+    )]
+    Uncommitted,
 
     #[error(
         "GitHub refused the token — it may have expired, or it may not carry Pull requests: write"
@@ -48,6 +59,9 @@ pub enum CommentError {
         /// Whether the missing commits are ours to push or theirs to pull.
         behind: bool,
     },
+
+    #[error("cannot reach {host}: {why}")]
+    Unreachable { host: String, why: String },
 
     #[error("GitHub refused the review: {what}")]
     Refused { what: String },

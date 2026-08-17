@@ -490,3 +490,95 @@ pub fn orphaned(
         })
         .expect("seeding an orphan cannot fail");
 }
+
+/// A publisher that keeps what it was handed instead of sending it.
+///
+/// How the assembled review is asserted without a network — and, in the server
+/// tests, how a route reaches every state of readiness without one either.
+pub struct FakePublisher {
+    readiness: crate::comments::domain::Readiness,
+    sent: Mutex<Option<crate::comments::domain::Review>>,
+}
+
+impl FakePublisher {
+    pub fn ready_at(head: &str) -> Self {
+        Self::blocked(crate::comments::domain::Readiness::Ready {
+            pull_request: 12,
+            head: head.into(),
+        })
+    }
+
+    pub fn blocked(readiness: crate::comments::domain::Readiness) -> Self {
+        Self {
+            readiness,
+            sent: Mutex::new(None),
+        }
+    }
+
+    pub fn sent(&self) -> crate::comments::domain::Review {
+        self.sent.lock().unwrap().clone().expect("nothing was sent")
+    }
+
+    pub fn nothing_sent(&self) -> bool {
+        self.sent.lock().unwrap().is_none()
+    }
+}
+
+impl crate::comments::domain::ReviewPublisher for FakePublisher {
+    fn readiness(&self, _branch: &str) -> Result<crate::comments::domain::Readiness> {
+        Ok(self.readiness.clone())
+    }
+
+    fn publish(&self, review: &crate::comments::domain::Review) -> Result<String> {
+        *self.sent.lock().unwrap() = Some(review.clone());
+        Ok("https://example.test/r1".into())
+    }
+}
+
+/// A token that never touches the disk, so a test cannot read the real one.
+#[derive(Default)]
+pub struct FakeCredentials {
+    token: Mutex<Option<String>>,
+}
+
+impl crate::comments::domain::Credentials for FakeCredentials {
+    fn token(&self) -> Result<Option<String>> {
+        Ok(self.token.lock().unwrap().clone())
+    }
+
+    fn set(&self, token: &str) -> Result<()> {
+        *self.token.lock().unwrap() = Some(token.to_string());
+        Ok(())
+    }
+}
+
+/// Comments in memory, for the use cases that only care what is in the store.
+#[derive(Default)]
+pub struct InMemoryComments {
+    comments: Mutex<Vec<crate::comments::domain::Comment>>,
+}
+
+impl crate::comments::domain::CommentStore for InMemoryComments {
+    fn list(&self) -> Result<crate::comments::domain::Found> {
+        Ok(crate::comments::domain::Found {
+            comments: self.comments.lock().unwrap().clone(),
+            unreadable: vec![],
+        })
+    }
+
+    fn save(&self, comment: &crate::comments::domain::Comment) -> Result<()> {
+        let mut all = self.comments.lock().unwrap();
+        match all.iter().position(|c| c.id == comment.id) {
+            Some(at) => all[at] = comment.clone(),
+            None => all.push(comment.clone()),
+        }
+        Ok(())
+    }
+
+    fn close(&self, id: &str) -> Result<bool> {
+        let mut all = self.comments.lock().unwrap();
+        let before = all.len();
+        all.retain(|c| c.id != id);
+        Ok(all.len() != before)
+    }
+}

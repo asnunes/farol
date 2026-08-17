@@ -1,3 +1,7 @@
+mod use_case;
+
+pub use use_case::*;
+
 use std::sync::Arc;
 
 use crate::comments::domain::{Comment, CommentError, CommentStore, Found};
