@@ -57,7 +57,7 @@ export function Setup({ open, onOpenChange, readiness, onCheck, onToken }: Setup
               className="cursor-pointer"
               onClick={() => void onCheck()}
             >
-              I have done that — check again
+              Check again
             </Button>
           </DialogFooter>
         )}
@@ -83,7 +83,7 @@ const SAYS: Record<ReadinessView["state"], Said> = {
     body: () =>
       "There is nowhere to send a review to.\n\n" +
       "farol still reads the change here, and your comments still live under " +
-      "the branch's own store — they just have no pull request to go to.",
+      "the branch's own store. They just have no pull request to go to.",
   },
 
   noToken: {
@@ -112,10 +112,10 @@ const SAYS: Record<ReadinessView["state"], Said> = {
   branchNotPushed: {
     title: "The branch is not on GitHub yet",
     body: (branch) =>
-      `A review is posted onto a pull request, and \`${branch}\` has none — ` +
+      `A review is posted onto a pull request, and \`${branch}\` has none: ` +
       "GitHub has never seen the branch. Two steps, in this order:\n\n" +
       "- **Push it**, with the command below.\n" +
-      "- **Open a pull request for it** — yourself on GitHub, or through the " +
+      "- **Open a pull request for it**, yourself on GitHub or through the " +
       "session that wrote the code.",
     command: (branch) => `git push -u origin ${branch}`,
     after: "Press the button below once both are done.",
@@ -128,7 +128,7 @@ const SAYS: Record<ReadinessView["state"], Said> = {
       `\`${branch}\` is on GitHub with nothing open on it, and a review is ` +
       "posted onto a pull request.\n\n" +
       "- Open one yourself, with the link below.\n" +
-      "- Or ask the session that wrote the code — it knows what the change " +
+      "- Or ask the session that wrote the code. It knows what the change " +
       "was for, which is most of a description.",
     check: true,
   },
