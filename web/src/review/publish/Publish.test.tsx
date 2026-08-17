@@ -61,7 +61,7 @@ describe("the panel that says what is missing", () => {
     open(at("branchNotPushed", { branch: "feat/x" }));
 
     expect(screen.getByText("git push -u origin feat/x")).toBeTruthy();
-    expect(screen.getByText(/open a pull request for it/i)).toBeTruthy();
+    expect(screen.getByRole("dialog").textContent).toMatch(/open a pull request for it/i);
   });
 
   it("offers the pull request form once the branch is there", () => {

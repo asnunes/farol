@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useCopy } from "@/hooks/useCopy";
+import { Prose } from "@/review/Prose";
 import type { ReadinessView } from "@/api";
 
 /** What is missing, and the place to fix it.
@@ -32,14 +33,18 @@ export function Setup({ open, onOpenChange, readiness, onCheck, onToken }: Setup
       <DialogContent className="setup-card border-rule bg-surface sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="font-sans text-base text-ink">{said.title}</DialogTitle>
-          <DialogDescription className="font-serif leading-relaxed whitespace-pre-line text-ink-soft">
-            {said.body(readiness.branch)}
+          {/* `asChild` because the copy is a list as often as a sentence, and a
+              list inside the paragraph Radix draws is not valid markup. */}
+          <DialogDescription asChild>
+            <Prose className="font-serif leading-relaxed text-ink-soft">
+              {said.body(readiness.branch)}
+            </Prose>
           </DialogDescription>
         </DialogHeader>
 
         {said.command && <Command line={said.command(readiness.branch)} />}
         {said.after && (
-          <p className="font-serif leading-relaxed text-ink-soft">{said.after}</p>
+          <Prose className="font-serif leading-relaxed text-ink-soft">{said.after}</Prose>
         )}
         {readiness.openAt && <Open at={readiness.openAt} />}
         {said.token && <Token onToken={onToken} />}
@@ -61,8 +66,12 @@ export function Setup({ open, onOpenChange, readiness, onCheck, onToken }: Setup
   );
 }
 
-/** What the panel says, per state. Prose and not a table of parts: the reason
- * each state is separate is that each needs different words. */
+/** What the panel says, per state: one line of why, then the steps as a list.
+ *
+ * Markdown, because somebody standing in front of a blocked button is looking
+ * for what to do rather than reading — a paragraph makes them find the steps
+ * inside it, and a list hands them over. The why still comes first: a step
+ * nobody understands is a step done wrong. */
 const SAYS: Record<ReadinessView["state"], Said> = {
   ready: {
     title: "Ready to send",
@@ -72,29 +81,31 @@ const SAYS: Record<ReadinessView["state"], Said> = {
   noRemote: {
     title: "This repository has no remote",
     body: () =>
-      "There is nowhere to send a review to. farol still reads the change " +
-      "here, and your comments still live under the branch's own store — " +
-      "they just have no pull request to go to.",
+      "There is nowhere to send a review to.\n\n" +
+      "farol still reads the change here, and your comments still live under " +
+      "the branch's own store — they just have no pull request to go to.",
   },
 
   noToken: {
     title: "farol needs a token of your own",
     body: () =>
-      "This is the one step here that nobody else can do for you: a " +
-      "credential handed to an agent is a credential the agent has.\n\n" +
-      "Create a fine-grained personal access token carrying Pull requests: " +
-      "Read and write on this repository, then paste it below. farol keeps " +
-      "it under ~/.config/farol, readable by nobody else, and never shows " +
-      "it back to you.",
+      "Nobody else can do this one for you: a credential handed to an agent " +
+      "is a credential the agent has.\n\n" +
+      "- Create a **fine-grained personal access token** on GitHub.\n" +
+      "- Give it **Pull requests: Read and write** on this repository.\n" +
+      "- Paste it below.\n\n" +
+      "farol keeps it in `~/.config/farol`, readable by nobody else, and " +
+      "never shows it back to you.",
     token: true,
   },
 
   tokenRefused: {
     title: "GitHub would not take the token",
     body: () =>
-      "It may have expired, or it may not carry Pull requests: Read and " +
-      "write on this repository — that permission is what posting a review " +
-      "needs.\n\n" +
+      "One of two things:\n\n" +
+      "- It expired.\n" +
+      "- It does not carry **Pull requests: Read and write** on this " +
+      "repository, which is what posting a review needs.\n\n" +
       "Create a new one and paste it below. It replaces the one farol has.",
     token: true,
   },
@@ -102,25 +113,24 @@ const SAYS: Record<ReadinessView["state"], Said> = {
   branchNotPushed: {
     title: "The branch is not on GitHub yet",
     body: (branch) =>
-      "A review is posted onto a pull request, and there is no pull request " +
-      `for ${branch} because GitHub has never seen the branch. Two things ` +
-      "have to happen, and in this order.\n\n" +
-      "First, push it:",
+      `A review is posted onto a pull request, and \`${branch}\` has none — ` +
+      "GitHub has never seen the branch. Two steps, in this order:\n\n" +
+      "- **Push it**, with the command below.\n" +
+      "- **Open a pull request for it** — yourself on GitHub, or through the " +
+      "session that wrote the code.",
     command: (branch) => `git push -u origin ${branch}`,
-    after:
-      "Then open a pull request for it — yourself on GitHub, or ask the " +
-      "session that wrote the code to do it. Come back and press the button " +
-      "below once both are done.",
+    after: "Press the button below once both are done.",
     check: true,
   },
 
   noPullRequest: {
     title: "The branch has no pull request",
     body: (branch) =>
-      `${branch} is on GitHub, and nothing is open on it. A review is posted ` +
-      "onto a pull request, so that is the piece that is missing.\n\n" +
-      "Open it yourself, or ask the session that wrote the code to — it " +
-      "knows what the change was for, which is most of what a description is.",
+      `\`${branch}\` is on GitHub with nothing open on it, and a review is ` +
+      "posted onto a pull request.\n\n" +
+      "- Open one yourself, with the link below.\n" +
+      "- Or ask the session that wrote the code — it knows what the change " +
+      "was for, which is most of a description.",
     check: true,
   },
 };
