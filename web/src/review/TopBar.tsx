@@ -34,7 +34,6 @@ export function TopBar({
       <div className="flex items-center gap-4">
         {unreadable.length > 0 && <Unreadable broken={unreadable} />}
         {stale && <Refresh onRefresh={onRefresh} />}
-        <Publish publishing={publishing} comments={comments} onError={onError} />
         <ViewToggle view={view} onChange={onView} />
         {review.commitsBehind > 0 && (
           <Badge className="stale-chip rounded-full border-transparent bg-accent-dim font-mono text-xs font-normal text-accent">
@@ -59,6 +58,9 @@ export function TopBar({
             aria-label={`${review.viewedFiles} of ${review.totalFiles} read`}
           />
         </div>
+        {/* Last on the bar, because it is the last thing done: everything to
+            its left is the reading, and this is what closes it. */}
+        <Publish publishing={publishing} comments={comments} onError={onError} />
       </div>
     </header>
   );
