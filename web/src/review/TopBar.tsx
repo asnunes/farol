@@ -29,17 +29,19 @@ export function TopBar({
         <span className="head font-semibold">{review.branch}</span>
         <span className="text-rule-strong">→</span>
         <span className="base text-muted">{review.base}</span>
+        {/* Beside the refs it qualifies: what is behind is this branch's map,
+            not anything on the right-hand side of the bar. */}
+        {review.commitsBehind > 0 && (
+          <Badge className="stale-chip rounded-full border-transparent bg-accent-dim font-mono text-xs font-normal text-accent">
+            map {review.commitsBehind} commit{review.commitsBehind === 1 ? "" : "s"} behind
+          </Badge>
+        )}
       </div>
 
       <div className="flex items-center gap-4">
         {unreadable.length > 0 && <Unreadable broken={unreadable} />}
         {stale && <Refresh onRefresh={onRefresh} />}
         <ViewToggle view={view} onChange={onView} />
-        {review.commitsBehind > 0 && (
-          <Badge className="stale-chip rounded-full border-transparent bg-accent-dim font-mono text-xs font-normal text-accent">
-            map {review.commitsBehind} commit{review.commitsBehind === 1 ? "" : "s"} behind
-          </Badge>
-        )}
         <div className="progress flex items-center gap-2 font-mono text-xs text-muted">
           {done ? (
             // The only celebration in the app, and only once there is nothing
