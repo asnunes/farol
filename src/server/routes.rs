@@ -220,15 +220,18 @@ pub(super) mod tests {
     /// outlive what is built on top of it.
     fn comments(paths: &[&str]) -> (tempfile::TempDir, Comments) {
         use crate::comments::infra::MarkdownComments;
-        use crate::diff::application::ReviewScope;
+        use crate::diff::application::{FileDiffs, ReviewScope};
         use crate::map::application::GetScope;
 
         let dir = tempfile::tempdir().unwrap();
         let store = crate::shared::paths::Store::new(dir.path(), "feature/x");
-        let scope = GetScope::new(ReviewScope::new(Arc::new(FakeDiffSource::with_paths(
-            paths,
-        ))));
-        let comments = Comments::new(Arc::new(MarkdownComments::new(&store, dir.path())), scope);
+        let source = Arc::new(FakeDiffSource::with_paths(paths));
+        let scope = GetScope::new(ReviewScope::new(source.clone()));
+        let comments = Comments::new(
+            Arc::new(MarkdownComments::new(&store, dir.path())),
+            scope,
+            FileDiffs::new(source),
+        );
         (dir, comments)
     }
 

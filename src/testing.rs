@@ -21,6 +21,8 @@ pub struct FakeDiffSource {
     /// (from, to, path) -> the diff between those two commits.
     between: Vec<((String, String, String), FileDiff)>,
     line_counts: Vec<(String, u32)>,
+    /// path -> the hunks its diff prints, when a test cares which.
+    shown: Vec<(String, Vec<Hunk>)>,
     ancestors: Vec<String>,
     distances: Vec<(String, u32)>,
 }
@@ -40,6 +42,7 @@ impl FakeDiffSource {
             },
             between: Vec::new(),
             line_counts: Vec::new(),
+            shown: Vec::new(),
             ancestors: Vec::new(),
             distances: Vec::new(),
         }
@@ -67,6 +70,13 @@ impl FakeDiffSource {
     /// As if `--dirty` were given, so the working-tree marker is the target.
     pub fn dirty(mut self) -> Self {
         self.scope.dirty = true;
+        self
+    }
+
+    /// Declare which hunks the file's diff prints, for a test about what the
+    /// diff reaches rather than about what the file contains.
+    pub fn showing(mut self, path: &str, hunks: Vec<Hunk>) -> Self {
+        self.shown.push((path.into(), hunks));
         self
     }
 
@@ -110,6 +120,25 @@ fn change(path: &str) -> FileChange {
     }
 }
 
+impl FakeDiffSource {
+    /// What the file's diff prints. Undeclared, it prints the whole file —
+    /// generous like `file_line_count` is, so a test only says where the diff
+    /// reaches when that is the thing under test.
+    fn hunks_of(&self, path: &str) -> Result<Vec<Hunk>> {
+        if let Some((_, hunks)) = self.shown.iter().find(|(p, _)| p == path) {
+            return Ok(hunks.clone());
+        }
+        let lines = self.file_line_count(path)?;
+        Ok(vec![Hunk {
+            old_start: 1,
+            old_lines: lines,
+            new_start: 1,
+            new_lines: lines,
+            lines: vec![],
+        }])
+    }
+}
+
 impl ReviewScopeSource for FakeDiffSource {
     fn scope(&self) -> Result<&Scope> {
         Ok(&self.scope)
@@ -141,7 +170,7 @@ impl FileDiffSource for FakeDiffSource {
             path: path.to_string(),
             old_path: None,
             status: FileStatus::Modified,
-            hunks: vec![],
+            hunks: self.hunks_of(path)?,
             binary: false,
             additions: 3,
             deletions: 1,

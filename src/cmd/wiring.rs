@@ -93,7 +93,7 @@ impl Ctx {
         let diffs = FileDiffs::new(source.clone());
         let history = CommitHistory::new(source);
 
-        let comments = Comments::new(comment_store, GetScope::new(scope.clone()));
+        let comments = Comments::new(comment_store, GetScope::new(scope.clone()), diffs.clone());
         let reconciler = MapReconciler::new(scope.clone(), diffs.clone());
         let versions = MapVersions::new(scope.clone(), history, maps.clone());
         let derivation =

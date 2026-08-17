@@ -66,6 +66,15 @@ impl Hunk {
     pub fn delta(&self) -> i64 {
         self.new_lines as i64 - self.old_lines as i64
     }
+
+    /// Whether this hunk shows the given line of the file as it now reads.
+    ///
+    /// Context counts. A hunk prints the lines around what changed, and those
+    /// are as much a part of the diff as the changed ones — they are exactly
+    /// where a reader asks why the change was needed.
+    pub fn shows(&self, line: u32) -> bool {
+        line >= self.new_start && line < self.new_start + self.new_lines
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -84,6 +93,21 @@ pub struct FileDiff {
     /// keys on this and not on the diff text, so a rebase that only shifts
     /// context does not reopen the whole branch.
     pub new_content_hash: String,
+}
+
+impl FileDiff {
+    /// Whether every line of a span appears in the diff.
+    ///
+    /// A comment can only be left where the diff reaches. GitHub refuses a
+    /// review comment on a line it is not showing, and farol has to refuse it
+    /// first — otherwise the comment is written, kept, and rejected later by a
+    /// machine that cannot explain itself.
+    ///
+    /// The whole span, not just its ends: a range that starts in one hunk and
+    /// finishes in the next spans a gap the diff never printed.
+    pub fn shows(&self, from: u32, to: u32) -> bool {
+        (from..=to).all(|line| self.hunks.iter().any(|hunk| hunk.shows(line)))
+    }
 }
 
 /// The resolved review window plus the files inside it.
@@ -144,6 +168,73 @@ impl Scope {
 
 #[cfg(test)]
 mod tests {
+    /// A diff that shows lines 10 to 14 and lines 40 to 42, and nothing else.
+    fn two_hunks() -> FileDiff {
+        FileDiff {
+            path: "a.rs".into(),
+            old_path: None,
+            status: FileStatus::Modified,
+            hunks: vec![
+                Hunk {
+                    old_start: 10,
+                    old_lines: 5,
+                    new_start: 10,
+                    new_lines: 5,
+                    lines: vec![],
+                },
+                Hunk {
+                    old_start: 40,
+                    old_lines: 3,
+                    new_start: 40,
+                    new_lines: 3,
+                    lines: vec![],
+                },
+            ],
+            binary: false,
+            additions: 0,
+            deletions: 0,
+            new_content_hash: String::new(),
+        }
+    }
+
+    #[test]
+    fn a_span_inside_one_hunk_is_shown() {
+        assert!(two_hunks().shows(11, 13));
+    }
+
+    #[test]
+    fn the_first_and_last_lines_of_a_hunk_count() {
+        // Off by one here is the difference between a comment landing and being
+        // refused by GitHub after the reviewer already wrote it.
+        let diff = two_hunks();
+        assert!(diff.shows(10, 10), "the first line the hunk prints");
+        assert!(diff.shows(14, 14), "the last one");
+        assert!(!diff.shows(9, 9), "one above");
+        assert!(!diff.shows(15, 15), "one below");
+    }
+
+    #[test]
+    fn a_line_between_two_hunks_is_not_shown() {
+        // The diff jumps from 14 to 40. Nothing printed line 27.
+        assert!(!two_hunks().shows(27, 27));
+    }
+
+    #[test]
+    fn a_span_that_reaches_across_the_gap_is_not_shown() {
+        // Both ends are in the diff and the middle is not, so a comment on it
+        // would cover code the reader never saw.
+        assert!(!two_hunks().shows(14, 40));
+    }
+
+    #[test]
+    fn a_binary_file_shows_nothing() {
+        let mut diff = two_hunks();
+        diff.hunks.clear();
+        diff.binary = true;
+
+        assert!(!diff.shows(1, 1));
+    }
+
     use super::*;
 
     fn scope_over(paths: &[&str]) -> Scope {

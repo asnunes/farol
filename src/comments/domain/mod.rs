@@ -1,3 +1,7 @@
+mod error;
+
+pub use error::*;
+
 use crate::error::Result;
 
 /// Something the reviewer wrote about a span of lines.
@@ -13,6 +17,12 @@ pub struct Comment {
     pub to: u32,
     /// Markdown, kept as written.
     pub body: String,
+    /// Where it lives on the pull request, once it has been published.
+    ///
+    /// Published is not closed. The question is still open — it just has a
+    /// second home now, and the answer will come back there. Closing still
+    /// removes the comment; this only records that it left.
+    pub published: Option<String>,
 }
 
 impl Comment {
@@ -91,6 +101,7 @@ mod tests {
             from,
             to,
             body: "  Why this order?  ".into(),
+            published: None,
         }
     }
 
