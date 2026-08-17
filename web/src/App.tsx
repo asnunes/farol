@@ -6,6 +6,7 @@ import { readingOrder } from "@/api";
 import { useComments } from "@/hooks/useComments";
 import { useDiffView } from "@/hooks/useDiffView";
 import { useOpenFiles } from "@/hooks/useOpenFiles";
+import { usePublishing } from "@/hooks/usePublishing";
 import { useTheme } from "@/hooks/useTheme";
 import { useReview } from "@/hooks/useReview";
 import { useShortcuts } from "@/hooks/useShortcuts";
@@ -34,6 +35,7 @@ export default function App() {
   const files = useOpenFiles();
   const [theme, setTheme] = useTheme();
   const comments = useComments(setError);
+  const publishing = usePublishing();
 
   const order = review ? readingOrder(review) : [];
   const index = order.findIndex((f) => f.path === current);
@@ -113,6 +115,9 @@ export default function App() {
           stale={stale}
           onRefresh={() => void refresh()}
           unreadable={comments.unreadable}
+          publishing={publishing}
+          comments={comments.comments}
+          onError={setError}
         />
         <Sidebar review={review} current={current} onPick={goTo} />
 

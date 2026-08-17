@@ -1,6 +1,7 @@
 import Markdown from "react-markdown";
 import { Close } from "./Close";
 import { Copy } from "./Copy";
+import { Published } from "./Published";
 import { span } from "./quoted";
 import type { CommentActions } from "@/hooks/useComments";
 import type { CommentView } from "@/api";
@@ -25,6 +26,7 @@ export function Comment({ comment, actions }: CommentProps) {
       </div>
 
       <div className="acts flex shrink-0 items-center gap-0.5">
+        <Published comment={comment} />
         <Copy comment={comment} />
         <Close comment={comment} actions={actions} />
       </div>

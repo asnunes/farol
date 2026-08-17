@@ -42,18 +42,25 @@ function review(over: Partial<ReviewView> = {}): ReviewView {
   };
 }
 
-/** The comment list, empty.
+/** The two things the page asks for that these tests are not about: the
+ * comment list and whether the review can be published.
  *
- * Every stub answers this the same way: the tests here are about the map and
- * the diff, and without it a request for the comments falls through to the
- * branch that serves diffs, handing the page an object where it expects a list.
- * A test that is about comments stubs them itself. */
-function emptyComments(url: string): Response | null {
-  return url.startsWith("/api/comments")
-    ? new Response('{"comments":[],"unreadable":[]}', {
-        headers: { "content-type": "application/json" },
-      })
-    : null;
+ * Every stub answers them the same way, because without it either request
+ * falls through to the branch that serves diffs and hands the page an object
+ * where it expects something else. A test that is about comments, or about
+ * publishing, stubs that one itself. */
+function aside(url: string): Response | null {
+  if (url.startsWith("/api/comments")) {
+    return new Response('{"comments":[],"unreadable":[]}', {
+      headers: { "content-type": "application/json" },
+    });
+  }
+  if (url.startsWith("/api/publish")) {
+    return new Response('{"state":"noToken","branch":"feature/x"}', {
+      headers: { "content-type": "application/json" },
+    });
+  }
+  return null;
 }
 
 const emptyDiff = {
@@ -106,7 +113,7 @@ function serve(state: { review: ReviewView }) {
     "fetch",
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
-      const noComments = emptyComments(url);
+      const noComments = aside(url);
       if (noComments) return noComments;
       if (url.startsWith("/api/review")) {
         return new Response(JSON.stringify(state.review), {
@@ -395,7 +402,7 @@ describe("a file with nothing to read", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input);
-        const noComments = emptyComments(url);
+        const noComments = aside(url);
         if (noComments) return noComments;
         if (url.startsWith("/api/review")) {
           return new Response(JSON.stringify(review()), {
@@ -427,7 +434,7 @@ describe("the diff itself", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input);
-        const noComments = emptyComments(url);
+        const noComments = aside(url);
         if (noComments) return noComments;
         if (url.startsWith("/api/review")) {
           return new Response(JSON.stringify(r), {
@@ -625,7 +632,7 @@ describe("a long review", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input);
-        const noComments = emptyComments(url);
+        const noComments = aside(url);
         if (noComments) return noComments;
         if (url.startsWith("/api/review")) {
           return new Response(JSON.stringify(review()), {
@@ -655,7 +662,7 @@ describe("a long review", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input);
-        const noComments = emptyComments(url);
+        const noComments = aside(url);
         if (noComments) return noComments;
         if (url.startsWith("/api/review")) {
           return new Response(JSON.stringify(r), {
@@ -743,7 +750,7 @@ describe("when the backend fails", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input);
-        const noComments = emptyComments(url);
+        const noComments = aside(url);
         if (noComments) return noComments;
         if (url.startsWith("/api/review")) {
           return failing === "review"

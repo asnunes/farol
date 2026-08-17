@@ -3,12 +3,24 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Refresh } from "@/review/Refresh";
+import { Publish } from "@/review/publish/Publish";
 import { ViewToggle } from "@/review/ViewToggle";
 import type { DiffView } from "@/hooks/useDiffView";
-import type { ReviewView, Unreadable as UnreadableView } from "@/api";
+import type { Publishing } from "@/hooks/usePublishing";
+import type { CommentView, ReviewView, Unreadable as UnreadableView } from "@/api";
 
 /** Where you are and how far through you are. */
-export function TopBar({ review, view, onView, stale, onRefresh, unreadable }: TopBarProps) {
+export function TopBar({
+  review,
+  view,
+  onView,
+  stale,
+  onRefresh,
+  unreadable,
+  publishing,
+  comments,
+  onError,
+}: TopBarProps) {
   const done = review.totalFiles > 0 && review.viewedFiles === review.totalFiles;
 
   return (
@@ -22,6 +34,7 @@ export function TopBar({ review, view, onView, stale, onRefresh, unreadable }: T
       <div className="flex items-center gap-4">
         {unreadable.length > 0 && <Unreadable broken={unreadable} />}
         {stale && <Refresh onRefresh={onRefresh} />}
+        <Publish publishing={publishing} comments={comments} onError={onError} />
         <ViewToggle view={view} onChange={onView} />
         {review.commitsBehind > 0 && (
           <Badge className="stale-chip rounded-full border-transparent bg-accent-dim font-mono text-xs font-normal text-accent">
@@ -94,4 +107,7 @@ type TopBarProps = {
   onRefresh: () => void;
   /** Comment files that could not be parsed, in the reviewer's terms. */
   unreadable: UnreadableView[];
+  publishing: Publishing;
+  comments: CommentView[];
+  onError: (message: string) => void;
 };
