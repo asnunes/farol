@@ -89,13 +89,12 @@ const SAYS: Record<ReadinessView["state"], Said> = {
   noToken: {
     title: "farol needs a token of your own",
     body: () =>
-      "Nobody else can do this one for you: a credential handed to an agent " +
-      "is a credential the agent has.\n\n" +
+      "The comments you left here go up as a review on this branch's pull " +
+      "request — the same lines, the same words. To post them, farol needs a " +
+      "token of your own.\n\n" +
       "- Create a **fine-grained personal access token** on GitHub.\n" +
       "- Give it **Pull requests: Read and write** on this repository.\n" +
-      "- Paste it below.\n\n" +
-      "farol keeps it in `~/.config/farol`, readable by nobody else, and " +
-      "never shows it back to you.",
+      "- Paste it below.",
     token: true,
   },
 
