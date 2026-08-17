@@ -121,6 +121,21 @@
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
   }
+
+  /* Anything that can be pressed says so.
+   *
+   * Tailwind's reset sets `cursor: default` on buttons, where the browser has
+   * always said `pointer`. Put back per component it is a thing to remember,
+   * and what gets remembered is the button somebody was looking at while they
+   * wrote it — the sidebar, which is the most-clicked surface in the app, went
+   * without. A rule here cannot be forgotten.
+   *
+   * Disabled is left alone on purpose: a control that will not respond should
+   * not invite the press. */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]) {
+    cursor: pointer;
+  }
 }
 
 @theme inline {

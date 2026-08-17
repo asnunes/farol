@@ -31,7 +31,10 @@ export function Publish({ publishing, comments, onError }: PublishProps) {
       <Button
         size="xs"
         variant="ghost"
-        className="cursor-pointer gap-1.5 font-mono text-xs text-muted hover:bg-sunken hover:text-ink disabled:cursor-default disabled:opacity-50"
+        // No `disabled:cursor-*` here: the base variant takes pointer events
+        // off a disabled button entirely, so the cursor over it comes from the
+        // page and any rule written for that state never fires.
+        className="cursor-pointer gap-1.5 font-mono text-xs text-muted hover:bg-sunken hover:text-ink disabled:opacity-50"
         disabled={!ready}
         title={
           ready ? `Send this review to pull request #${readiness.pullRequest}` : undefined
