@@ -124,8 +124,6 @@ export default function App() {
           comments={comments.comments}
           onError={setFailed}
         />
-        {failed && <Failed what={failed} onClose={() => setFailed(null)} />}
-
         <Sidebar review={review} current={current} onPick={goTo} />
 
         <Reading
@@ -141,20 +139,24 @@ export default function App() {
 
         <KeyBar theme={theme} onTheme={setTheme} />
         <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
+        {failed && <Failed what={failed} onClose={() => setFailed(null)} />}
       </div>
     </TooltipProvider>
   );
 }
 
-/** Something the reader tried that did not happen, said across the top without
- * taking the review away. It stays until they dismiss it: a message that fades
- * on its own is one they can miss while looking at the code they were reading
- * when it appeared. */
+/** Something the reader tried that did not happen.
+ *
+ * Over the review rather than in it: the page keeps its shape, nothing below
+ * jumps, and what they were reading when it failed is still where they left it.
+ * It sits above the key bar and waits to be dismissed, because a message that
+ * fades on its own is one they can miss while looking at the code. */
 function Failed({ what, onClose }: { what: string; onClose: () => void }) {
   return (
     <Alert
       variant="destructive"
-      className="failed col-span-full flex items-start gap-3 rounded-none border-x-0 border-t-0 border-rule bg-surface"
+      role="alert"
+      className="failed fixed right-4 bottom-14 z-50 flex w-auto max-w-[34rem] items-start gap-3 border-rule bg-surface shadow-lg"
     >
       <TriangleAlert />
       <AlertDescription className="min-w-0 flex-1 font-mono text-sm whitespace-pre-wrap">
