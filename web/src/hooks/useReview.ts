@@ -49,5 +49,5 @@ export function useReview() {
     [load],
   );
 
-  return { review, current, setCurrent, error, setError, toggleViewed, stale, refresh: load };
+  return { review, current, setCurrent, error, toggleViewed, stale, refresh: load };
 }

@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
-import { TriangleAlert } from "lucide-react";
+import { TriangleAlert, X } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { readingOrder } from "@/api";
 import { useComments } from "@/hooks/useComments";
@@ -25,16 +26,20 @@ export default function App() {
     current,
     setCurrent,
     error,
-    setError,
     toggleViewed,
     stale,
     refresh,
   } = useReview();
   const [helpOpen, setHelpOpen] = useState(false);
+  // What the reader just tried and did not get: a comment that would not save,
+  // a review the host turned down. Apart from the load failure above, because
+  // the review is still on the screen and still worth reading, and blanking it
+  // would take away the very thing the message is about.
+  const [failed, setFailed] = useState<string | null>(null);
   const [view, setView] = useDiffView();
   const files = useOpenFiles();
   const [theme, setTheme] = useTheme();
-  const comments = useComments(setError);
+  const comments = useComments(setFailed);
   const publishing = usePublishing();
 
   const order = review ? readingOrder(review) : [];
@@ -117,8 +122,10 @@ export default function App() {
           unreadable={comments.unreadable}
           publishing={publishing}
           comments={comments.comments}
-          onError={setError}
+          onError={setFailed}
         />
+        {failed && <Failed what={failed} onClose={() => setFailed(null)} />}
+
         <Sidebar review={review} current={current} onPick={goTo} />
 
         <Reading
@@ -127,7 +134,7 @@ export default function App() {
           current={current}
           onCurrent={setCurrent}
           onToggleViewed={(path, viewed) => void mark(path, viewed)}
-          onError={setError}
+          onError={setFailed}
           files={files}
           comments={comments}
         />
@@ -136,5 +143,32 @@ export default function App() {
         <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
       </div>
     </TooltipProvider>
+  );
+}
+
+/** Something the reader tried that did not happen, said across the top without
+ * taking the review away. It stays until they dismiss it: a message that fades
+ * on its own is one they can miss while looking at the code they were reading
+ * when it appeared. */
+function Failed({ what, onClose }: { what: string; onClose: () => void }) {
+  return (
+    <Alert
+      variant="destructive"
+      className="failed col-span-full flex items-start gap-3 rounded-none border-x-0 border-t-0 border-rule bg-surface"
+    >
+      <TriangleAlert />
+      <AlertDescription className="min-w-0 flex-1 font-mono text-sm whitespace-pre-wrap">
+        {what}
+      </AlertDescription>
+      <Button
+        size="icon-xs"
+        variant="ghost"
+        className="cursor-pointer text-faint hover:text-ink"
+        aria-label="Dismiss"
+        onClick={onClose}
+      >
+        <X className="size-3.5" aria-hidden="true" />
+      </Button>
+    </Alert>
   );
 }

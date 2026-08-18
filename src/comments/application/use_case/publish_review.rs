@@ -170,14 +170,26 @@ mod tests {
 
     #[test]
     fn asking_for_something_without_saying_what_is_refused_before_anything_is_sent() {
-        // GitHub refuses this too, but the round trip would be spent to be told
-        // so — and the reviewer would have to write it again.
+        // Refused here rather than at the far end, where the round trip would
+        // be spent to be told so and the reviewer would have to write it again.
         let (publisher, publish) = published();
 
-        for verdict in [Verdict::Comment, Verdict::RequestChanges] {
-            assert!(publish.execute(verdict, "  \n ").is_err());
-        }
+        assert!(publish.execute(Verdict::RequestChanges, "  \n ").is_err());
         assert!(publisher.nothing_sent());
+    }
+
+    #[test]
+    fn a_comment_verdict_goes_out_on_the_comments_alone() {
+        // The line comments are the review. farol drafts them and submits the
+        // verdict at the draft, which is the road that lets the summary be
+        // empty; demanding one here would be farol's own rule and not the
+        // host's.
+        let (publisher, publish) = published();
+        publish.store.save(&comment("1", 10, 12)).unwrap();
+
+        publish.execute(Verdict::Comment, "").unwrap();
+
+        assert_eq!(publisher.sent().comments.len(), 1);
     }
 
     #[test]

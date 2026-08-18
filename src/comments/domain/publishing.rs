@@ -71,11 +71,15 @@ pub enum Verdict {
 }
 
 impl Verdict {
-    /// Whether the summary is required. Approving needs no words — the other
-    /// two are somebody being asked to do something, and "why" is the whole of
-    /// it.
+    /// Whether the summary is required.
+    ///
+    /// Only of the one that asks for work. Commenting and approving are
+    /// carried by whatever goes with them, and the comments are sent as a
+    /// draft first precisely so that the host asks for no summary either.
+    /// Asking for changes is a demand, and a demand with no words leaves the
+    /// author reading line notes to work out what would satisfy it.
     pub fn needs_summary(&self) -> bool {
-        !matches!(self, Verdict::Approve)
+        matches!(self, Verdict::RequestChanges)
     }
 }
 
@@ -94,9 +98,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn only_approving_can_go_out_without_a_word() {
-        assert!(!Verdict::Approve.needs_summary());
-        assert!(Verdict::Comment.needs_summary());
+    fn only_asking_for_changes_needs_a_word_of_its_own() {
         assert!(Verdict::RequestChanges.needs_summary());
+        assert!(!Verdict::Approve.needs_summary());
+        // The comments are the review. Sent as a draft and submitted after,
+        // GitHub does not ask for a summary here either.
+        assert!(!Verdict::Comment.needs_summary());
     }
 }
