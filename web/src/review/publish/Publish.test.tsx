@@ -35,12 +35,15 @@ describe("the send button", () => {
     expect(button().textContent).toContain("1");
   });
 
-  it("draws nothing at all until the first answer arrives", () => {
-    // A button that flips from enabled to disabled a moment after the page
-    // loads reads as broken.
-    const { container } = render(<Publish {...props(null)} />);
+  it("waits for the first answer with a spinner, not with a reason", () => {
+    // The answer comes from GitHub, so there is a moment with no reason to
+    // give. The button is drawn and cannot be pressed, and the (i) stays away
+    // until there is something behind it.
+    render(<Publish {...props(null)} />);
 
-    expect(container.querySelector(".publish")).toBeNull();
+    expect(button().hasAttribute("disabled")).toBe(true);
+    expect(screen.getByLabelText("Checking whether this review can be sent")).toBeTruthy();
+    expect(screen.queryByLabelText("Why this review cannot be sent yet")).toBeNull();
   });
 });
 
