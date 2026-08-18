@@ -30,7 +30,7 @@ export function Sidebar({
             >
               ~
             </div>
-            <div className="blk-title loose truncate font-sans text-[0.8125rem] text-muted italic">
+            <div className="blk-title loose truncate font-sans text-[0.8125rem] text-ink-muted italic">
               No block · safe to skim
             </div>
           </div>
@@ -67,7 +67,7 @@ function Block({
             "num grid size-5 shrink-0 place-items-center rounded-full font-mono text-[0.6875rem]",
             state === "done" && "bg-add-bg text-add-ink",
             state === "current" && "bg-accent text-surface",
-            state === "todo" && "bg-sunken text-muted",
+            state === "todo" && "bg-sunken text-ink-muted",
           )}
         >
           {state === "done" ? "✓" : number}
@@ -75,7 +75,7 @@ function Block({
         <div
           className={cn(
             "blk-title truncate font-sans text-[0.8125rem] font-semibold text-ink",
-            state === "done" && "text-muted",
+            state === "done" && "text-ink-muted",
           )}
         >
           {block.title}

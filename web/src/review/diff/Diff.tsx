@@ -19,7 +19,7 @@ export function Diff({ diff, file, view, comments, actions }: DiffProps) {
     // Nothing to read line by line, so say that rather than show an empty pane
     // the reviewer would take for a loading failure.
     return (
-      <div className="diff nodiff px-6 py-6 font-sans text-sm text-muted">
+      <div className="diff nodiff px-6 py-6 font-sans text-sm text-ink-muted">
         Binary file — not shown
       </div>
     );

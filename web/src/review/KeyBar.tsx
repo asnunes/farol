@@ -11,7 +11,7 @@ import type { Theme } from "@/hooks/useTheme";
  * as two indistinguishable ticks at this size. */
 export function KeyBar({ theme, onTheme }: KeyBarProps) {
   return (
-    <nav className="keybar col-span-full flex items-center justify-between border-t border-rule bg-surface px-5 py-1.5 font-sans text-xs text-muted">
+    <nav className="keybar col-span-full flex items-center justify-between border-t border-rule bg-surface px-5 py-1.5 font-sans text-xs text-ink-muted">
       <ThemeSwitch theme={theme} onChange={onTheme} />
 
       <div className="flex gap-5">

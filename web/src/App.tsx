@@ -106,7 +106,7 @@ export default function App() {
   }
   if (!review) {
     return (
-      <div className="fatal p-8 font-mono text-sm text-muted">Loading…</div>
+      <div className="fatal p-8 font-mono text-sm text-ink-muted">Loading…</div>
     );
   }
 

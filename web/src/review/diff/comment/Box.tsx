@@ -59,7 +59,7 @@ export function Box({ span: lines, onSave, onCancel }: BoxProps) {
         >
           Comment
         </Button>
-        <Button size="xs" variant="ghost" className="cursor-pointer text-muted" onClick={onCancel}>
+        <Button size="xs" variant="ghost" className="cursor-pointer text-ink-muted" onClick={onCancel}>
           Cancel
         </Button>
       </div>

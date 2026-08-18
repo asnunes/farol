@@ -19,9 +19,6 @@ export function Verdicts({ value, onChange, approveOnly }: VerdictsProps) {
           key={verdict}
           value={verdict}
           title={why}
-          // The hover has to be written here: `muted` names farol's muted ink
-          // and shadcn's muted surface at once, so the inherited
-          // `hover:bg-muted` paints the button in the colour of its own text.
           className="cursor-pointer rounded border border-rule px-3 font-sans text-xs text-ink-soft hover:bg-sunken hover:text-ink data-[state=on]:bg-accent-dim data-[state=on]:text-accent"
         >
           {label}

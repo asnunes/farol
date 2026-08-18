@@ -63,7 +63,7 @@ export function FileHeader({ file, open, onToggleOpen, onToggleViewed, comments 
               <Badge
                 key={t}
                 variant="secondary"
-                className="tag border-transparent bg-sunken font-mono text-[0.6875rem] font-normal text-muted"
+                className="tag border-transparent bg-sunken font-mono text-[0.6875rem] font-normal text-ink-muted"
               >
                 {t}
               </Badge>

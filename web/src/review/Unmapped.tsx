@@ -12,7 +12,7 @@ export function Unmapped({ paths }: UnmappedProps) {
       </AlertTitle>
       <AlertDescription className="text-ink-soft">
         <p className="font-serif text-sm">Run the farol skill again to fold them in.</p>
-        <ul className="font-mono text-xs text-muted">
+        <ul className="font-mono text-xs text-ink-muted">
           {paths.map((p) => (
             <li key={p}>{p}</li>
           ))}

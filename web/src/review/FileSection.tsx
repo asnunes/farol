@@ -79,7 +79,7 @@ export function FileSection({
           ))}
 
           {heavy && !asked ? (
-            <div className="heavy px-6 py-6 font-sans text-sm text-muted">
+            <div className="heavy px-6 py-6 font-sans text-sm text-ink-muted">
               {file.additions + file.deletions} changed lines.{" "}
               <Button
                 variant="link"

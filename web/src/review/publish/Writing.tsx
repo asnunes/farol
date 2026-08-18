@@ -72,7 +72,7 @@ export function Writing({
       <Verdicts value={verdict} onChange={setVerdict} approveOnly={alone} />
 
       <DialogFooter>
-        <Button size="sm" variant="ghost" className="cursor-pointer text-muted" onClick={onCancel}>
+        <Button size="sm" variant="ghost" className="cursor-pointer text-ink-muted" onClick={onCancel}>
           Cancel
         </Button>
         <Button
