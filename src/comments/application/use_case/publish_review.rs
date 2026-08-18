@@ -259,7 +259,7 @@ mod tests {
 
         assert!(err.contains("older9"), "{err}");
         assert!(err.contains("head"), "{err}");
-        assert!(err.contains("Push first."), "{err}");
+        assert!(err.starts_with("Push first"), "{err}");
         assert!(publisher.nothing_sent());
     }
 
@@ -275,7 +275,7 @@ mod tests {
             .unwrap_err()
             .to_string();
 
-        assert!(err.contains("Pull first."), "{err}");
+        assert!(err.starts_with("Pull first"), "{err}");
     }
 
     #[test]

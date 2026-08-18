@@ -49,10 +49,12 @@ pub enum CommentError {
     #[error("'{branch}' has no pull request yet, and a review is posted onto one")]
     NoPullRequest { branch: String },
 
-    #[error(
-        "the pull request is at {theirs} and you are at {ours}\nComments anchor to line numbers, so posting them against another commit would land them on code you did not read. {}",
-        Fix(*.behind)
-    )]
+    /// Why this is refused rather than sent: a comment anchors to a line
+    /// number, and against another commit it lands on code nobody read. The
+    /// message says none of that. Somebody reading it is standing in front of a
+    /// review that will not go, and what they need is the one word that moves
+    /// them on.
+    #[error("{}: the pull request is at {theirs}, you are at {ours}", Fix(*.behind))]
     HeadMoved {
         theirs: String,
         ours: String,
@@ -86,8 +88,8 @@ struct Fix(bool);
 impl std::fmt::Display for Fix {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.0 {
-            true => write!(f, "Pull first."),
-            false => write!(f, "Push first."),
+            true => write!(f, "Pull first"),
+            false => write!(f, "Push first"),
         }
     }
 }
@@ -129,13 +131,17 @@ mod tests {
             ours: "def5678".into(),
             behind: false,
         };
-        assert!(ours.to_string().contains("Push first."), "{ours}");
+        assert!(ours.to_string().starts_with("Push first"), "{ours}");
 
         let theirs = CommentError::HeadMoved {
             theirs: "abc1234".into(),
             ours: "def5678".into(),
             behind: true,
         };
-        assert!(theirs.to_string().contains("Pull first."), "{theirs}");
+        assert!(theirs.to_string().starts_with("Pull first"), "{theirs}");
+        // Both shas stay: which one is which is the only thing the reader
+        // cannot work out for themselves.
+        assert!(theirs.to_string().contains("abc1234"), "{theirs}");
+        assert!(theirs.to_string().contains("def5678"), "{theirs}");
     }
 }
