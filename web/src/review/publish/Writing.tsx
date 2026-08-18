@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Verdicts } from "./Verdicts";
 import type { SentView, Verdict } from "@/api";
+import { said } from "@/lib/utils";
 
 /** Writing the review: what goes with it, the summary, and the verdict.
  *
@@ -42,7 +43,7 @@ export function Writing({
     try {
       onSent(await publish(verdict, summary));
     } catch (e) {
-      onError(String(e));
+      onError(said(e));
     } finally {
       setSending(false);
     }

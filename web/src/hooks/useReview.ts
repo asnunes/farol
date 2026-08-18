@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, readingOrder, type ReviewView } from "@/api";
 import { onNudge } from "@/lib/watch";
+import { said } from "@/lib/utils";
 
 /** The map, and keeping it current.
  *
@@ -24,7 +25,7 @@ export function useReview() {
         return first?.path ?? null;
       });
     } catch (e) {
-      setError(String(e));
+      setError(said(e));
     }
   }, []);
 

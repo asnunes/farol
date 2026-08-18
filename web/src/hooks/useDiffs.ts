@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { api, type FileDiff } from "@/api";
+import { said } from "@/lib/utils";
 
 /** The diffs the reader has reached, fetched once each and kept.
  *
@@ -22,7 +23,7 @@ export function useDiffs(onError: (message: string) => void) {
         .catch((e) => {
           // Let it be asked for again: the reader will scroll past it twice.
           asked.current.delete(path);
-          onError(String(e));
+          onError(said(e));
         });
     },
     [onError],
