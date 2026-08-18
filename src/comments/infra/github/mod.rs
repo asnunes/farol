@@ -18,7 +18,7 @@ use serde::Serialize;
 use crate::comments::domain::{CommentError, Credentials, Readiness, Review, ReviewPublisher};
 use crate::error::Result;
 use crate::shared::paths::Remote;
-use http::{Http, encoded};
+use http::{Answer, Http, encoded};
 
 /// A pull request host, addressed by where the repository actually lives.
 pub struct GitHub {
@@ -84,15 +84,58 @@ impl ReviewPublisher for GitHub {
         })
     }
 
+    /// In two calls when there are comments to carry, and in one when there are
+    /// not.
+    ///
+    /// Posting the verdict and the comments together makes the summary
+    /// mandatory: the API asks for a body whenever the event is COMMENT or
+    /// REQUEST_CHANGES. Left as a draft first and submitted after, which is the
+    /// path GitHub's own pages take, the body is optional and the comments are
+    /// allowed to be the whole of what the review says.
+    ///
+    /// With nothing to carry there is nothing to draft, and an empty draft is
+    /// refused at submission anyway, so that case goes straight out.
     fn publish(&self, review: &Review) -> Result<String> {
         let Some(token) = self.credentials.token()? else {
             return Err(CommentError::NoToken.into());
         };
 
-        let url = format!("{}/pulls/{}/reviews", self.repo(), review.pull_request);
-        let body = serde_json::to_string(&Posted::from(review))?;
-        let answer = self.http.post(&token, &url, body)?;
+        let reviews = format!("{}/pulls/{}/reviews", self.repo(), review.pull_request);
+        if review.comments.is_empty() {
+            let alone = serde_json::to_string(&Alone::from(review))?;
+            return where_it_landed(self.read(self.http.post(&token, &reviews, alone)?)?);
+        }
 
+        let drafted = serde_json::to_string(&Drafted::from(review))?;
+        let draft = self.read(self.http.post(&token, &reviews, drafted)?)?;
+        let Some(id) = draft.get("id").and_then(|id| id.as_u64()) else {
+            return Err(CommentError::Refused {
+                what: "the comments were drafted but the host did not name the draft".into(),
+            }
+            .into());
+        };
+
+        let submitted = serde_json::to_string(&Submitted::from(review))?;
+        match self.read(
+            self.http
+                .post(&token, &format!("{reviews}/{id}/events"), submitted)?,
+        ) {
+            Ok(sent) => where_it_landed(sent),
+            // The draft is already on the pull request and nobody submitted it,
+            // so it would sit there waiting for a reviewer who thinks they sent
+            // it. Taking it back costs one call and leaves the failure looking
+            // like what it is: nothing happened.
+            Err(e) => {
+                let _ = self.http.delete(&token, &format!("{reviews}/{id}"));
+                Err(e)
+            }
+        }
+    }
+}
+
+impl GitHub {
+    /// What the host said, as JSON, or the refusal in farol's own words.
+    fn read(&self, answer: Answer) -> Result<serde_json::Value> {
         if answer.refused() {
             return Err(CommentError::TokenRefused.into());
         }
@@ -102,22 +145,9 @@ impl ReviewPublisher for GitHub {
             }
             .into());
         }
-        answer
-            .json()?
-            .as_ref()
-            .and_then(|body| body.get("html_url"))
-            .and_then(|url| url.as_str())
-            .map(str::to_string)
-            .ok_or_else(|| {
-                CommentError::Refused {
-                    what: "the review was posted but the host did not say where".into(),
-                }
-                .into()
-            })
+        Ok(answer.json()?.unwrap_or(serde_json::Value::Null))
     }
-}
 
-impl GitHub {
     /// The API root. GitHub Enterprise serves it under `/api/v3` on the same
     /// host as the pages; github.com serves it from a host of its own.
     fn api(&self) -> String {
@@ -151,28 +181,77 @@ fn first_pull(body: serde_json::Value) -> Option<Readiness> {
     })
 }
 
-/// The review as the API takes it.
+/// Where the review can now be read, off whatever the host answered with.
+fn where_it_landed(answer: serde_json::Value) -> Result<String> {
+    answer
+        .get("html_url")
+        .and_then(|url| url.as_str())
+        .map(str::to_string)
+        .ok_or_else(|| {
+            CommentError::Refused {
+                what: "the review was posted but the host did not say where".into(),
+            }
+            .into()
+        })
+}
+
+/// The comments, as a review nobody has submitted yet. No event: that is what
+/// leaves it pending, and pending is what makes the summary optional.
 #[derive(Serialize)]
-struct Posted<'a> {
+struct Drafted<'a> {
     commit_id: &'a str,
-    body: &'a str,
-    event: &'static str,
     comments: Vec<AtLines<'a>>,
 }
 
-impl<'a> From<&'a Review> for Posted<'a> {
+impl<'a> From<&'a Review> for Drafted<'a> {
     fn from(review: &'a Review) -> Self {
-        use crate::comments::domain::Verdict;
         Self {
             commit_id: &review.head,
-            body: &review.summary,
-            event: match review.verdict {
-                Verdict::Comment => "COMMENT",
-                Verdict::RequestChanges => "REQUEST_CHANGES",
-                Verdict::Approve => "APPROVE",
-            },
             comments: review.comments.iter().map(AtLines::from).collect(),
         }
+    }
+}
+
+/// The verdict, sent at the draft once it is written.
+#[derive(Serialize)]
+struct Submitted<'a> {
+    event: &'static str,
+    body: &'a str,
+}
+
+impl<'a> From<&'a Review> for Submitted<'a> {
+    fn from(review: &'a Review) -> Self {
+        Self {
+            event: event(review),
+            body: &review.summary,
+        }
+    }
+}
+
+/// A verdict with no comments under it, which needs no draft to sit on.
+#[derive(Serialize)]
+struct Alone<'a> {
+    commit_id: &'a str,
+    event: &'static str,
+    body: &'a str,
+}
+
+impl<'a> From<&'a Review> for Alone<'a> {
+    fn from(review: &'a Review) -> Self {
+        Self {
+            commit_id: &review.head,
+            event: event(review),
+            body: &review.summary,
+        }
+    }
+}
+
+fn event(review: &Review) -> &'static str {
+    use crate::comments::domain::Verdict;
+    match review.verdict {
+        Verdict::Comment => "COMMENT",
+        Verdict::RequestChanges => "REQUEST_CHANGES",
+        Verdict::Approve => "APPROVE",
     }
 }
 
@@ -236,9 +315,11 @@ mod tests {
     fn a_span_is_sent_as_a_range_and_a_single_line_is_not() {
         // `start_line` equal to `line` is a validation error at the far end,
         // not a range of one.
-        let body =
-            serde_json::to_value(Posted::from(&review(vec![comment(82, 116), comment(9, 9)])))
-                .unwrap();
+        let body = serde_json::to_value(Drafted::from(&review(vec![
+            comment(82, 116),
+            comment(9, 9),
+        ])))
+        .unwrap();
 
         let span = &body["comments"][0];
         assert_eq!(span["line"], 116);
@@ -258,15 +339,49 @@ mod tests {
             (Verdict::RequestChanges, "REQUEST_CHANGES"),
             (Verdict::Approve, "APPROVE"),
         ] {
-            let body = serde_json::to_value(Posted::from(&Review {
+            let with_comments = serde_json::to_value(Submitted::from(&Review {
+                verdict,
+                ..review(vec![comment(9, 9)])
+            }))
+            .unwrap();
+            let alone = serde_json::to_value(Alone::from(&Review {
                 verdict,
                 ..review(vec![])
             }))
             .unwrap();
 
-            assert_eq!(body["event"], event);
-            assert_eq!(body["commit_id"], "abc1234");
+            assert_eq!(with_comments["event"], event);
+            assert_eq!(alone["event"], event);
+            assert_eq!(alone["commit_id"], "abc1234");
         }
+    }
+
+    #[test]
+    fn the_draft_carries_no_verdict_and_no_summary() {
+        // Those are what a draft is missing, and missing them is what keeps it
+        // pending: submitted in one call, the API would demand a summary for
+        // every verdict except approve.
+        let body = serde_json::to_value(Drafted::from(&review(vec![comment(9, 9)]))).unwrap();
+
+        assert!(body.get("event").is_none(), "{body}");
+        assert!(body.get("body").is_none(), "{body}");
+        assert_eq!(body["commit_id"], "abc1234");
+    }
+
+    #[test]
+    fn a_review_with_nothing_under_it_goes_out_whole() {
+        // An empty draft is refused at submission, so a verdict with no
+        // comments takes the one-call road, where an empty summary is allowed.
+        let body = serde_json::to_value(Alone::from(&Review {
+            verdict: Verdict::Approve,
+            summary: String::new(),
+            ..review(vec![])
+        }))
+        .unwrap();
+
+        assert_eq!(body["event"], "APPROVE");
+        assert_eq!(body["body"], "");
+        assert!(body.get("comments").is_none(), "{body}");
     }
 
     #[test]

@@ -54,6 +54,21 @@ impl Http {
         self.read(answer)
     }
 
+    /// Taking something back. The one call farol makes whose answer it does not
+    /// read: it runs after a failure, and a failure to undo is not news the
+    /// reader can act on.
+    pub fn delete(&self, token: &str, url: &str) -> Result<Answer> {
+        let answer = self
+            .agent
+            .delete(url)
+            .header("authorization", &format!("Bearer {token}"))
+            .header("accept", ACCEPT)
+            .header("x-github-api-version", VERSION)
+            .header("user-agent", AGENT)
+            .call();
+        self.read(answer)
+    }
+
     fn read(
         &self,
         answer: std::result::Result<ureq::http::Response<ureq::Body>, ureq::Error>,

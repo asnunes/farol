@@ -31,10 +31,10 @@ export function Writing({
   const [summary, setSummary] = useState("");
   const [sending, setSending] = useState(false);
 
-  // GitHub's rule, and a fair one: approving needs no words, and the other two
-  // are somebody being asked to do something, where "why" is the whole of it.
-  const needsSummary = verdict !== "approve";
-  const short = needsSummary && !summary.trim();
+  // Only the verdict that asks for work needs words of its own. Comment and
+  // approve are carried by whatever is going with them, and farol sends the
+  // comments as a draft first so that the host asks for no summary either.
+  const short = verdict === "requestChanges" && !summary.trim();
 
   async function send() {
     if (short || sending) return;
@@ -63,11 +63,7 @@ export function Writing({
       <Textarea
         className="resize-y border-rule-strong bg-surface font-sans text-sm text-ink"
         rows={5}
-        placeholder={
-          needsSummary
-            ? "What the change does well, and what it still needs. Markdown."
-            : "Anything to add. Optional when approving."
-        }
+        placeholder={ASKS[verdict]}
         value={summary}
         disabled={sending}
         onChange={(e) => setSummary(e.target.value)}
@@ -92,6 +88,13 @@ export function Writing({
     </>
   );
 }
+
+/** What the box is for, which is a different thing under each verdict. */
+const ASKS: Record<Verdict, string> = {
+  requestChanges: "What has to change before this can be merged. Markdown.",
+  comment: "Anything to say on top of the comments. Optional.",
+  approve: "Anything to add. Optional when approving.",
+};
 
 type WritingProps = {
   /** Comments that have not gone yet, which is what is about to be sent. */
