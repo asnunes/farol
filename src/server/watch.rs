@@ -56,19 +56,23 @@ const QUIET: std::time::Duration = std::time::Duration::from_millis(300);
 /// screen: a comment being written, the skill rewriting the map, and the branch
 /// moving.
 fn nudge_for(paths: &[PathBuf]) -> Option<&'static str> {
-    let under_farol = |p: &PathBuf| p.to_string_lossy().contains("/farol/");
+    let under = |p: &PathBuf, dir: &str| {
+        let path = p.to_string_lossy();
+        path.contains("/farol/") && path.contains(dir)
+    };
 
     // Ahead of the map, and its own kind of news. A comment written from the
     // page itself lands here, and calling that "the map changed" would raise
     // the banner asking the reader to reload over something they just did.
-    let touched_comment = paths
-        .iter()
-        .any(|p| under_farol(p) && p.to_string_lossy().contains("/comments/"));
-    if touched_comment {
+    if paths.iter().any(|p| under(p, "/comments/")) {
         return Some("comments");
     }
 
-    if paths.iter().any(under_farol) {
+    // Only the maps folder is the map. The store also holds `state.json`, which
+    // is what the reader has marked as read, and that is written by the page on
+    // every checkbox: reported as news it would raise the reload banner over
+    // the reader's own click and then take it away again.
+    if paths.iter().any(|p| under(p, "/maps/")) {
         return Some("map");
     }
     let touched_head = paths
@@ -102,6 +106,17 @@ mod tests {
                 "/repo/.git/farol/feature-x/comments/18cb-3731.md"
             ])),
             Some("comments")
+        );
+    }
+
+    #[test]
+    fn what_the_reader_has_read_is_not_news_to_them() {
+        // `state.json` is written by the page itself on every checkbox. Called
+        // a map change, it raised the reload banner over the reader's own click
+        // and dropped it a moment later, which read as a flicker.
+        assert_eq!(
+            nudge_for(&paths(&["/repo/.git/farol/feature-x/state.json"])),
+            None
         );
     }
 
