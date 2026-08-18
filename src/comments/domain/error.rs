@@ -39,7 +39,7 @@ pub enum CommentError {
     Uncommitted,
 
     #[error(
-        "GitHub refused the token — it may have expired, or it may not carry Pull requests: write"
+        "GitHub would not answer with this token: it may have expired, or it may be missing one of the two permissions farol needs on this repository, Pull requests: Read and write and Contents: Read"
     )]
     TokenRefused,
 

@@ -271,7 +271,7 @@ mod tests {
         for (readiness, expected) in [
             (Readiness::NoRemote, "no remote"),
             (Readiness::NoToken, "no token"),
-            (Readiness::TokenRefused, "refused the token"),
+            (Readiness::TokenRefused, "would not answer with this token"),
             (Readiness::BranchNotPushed, "not on GitHub yet"),
             (
                 Readiness::NoPullRequest {

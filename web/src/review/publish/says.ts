@@ -27,19 +27,25 @@ export const SAYS: Record<ReadinessView["state"], Said> = {
       "request, on the same lines and in the same words. To post them, farol " +
       "needs a token of your own.\n\n" +
       "- Create a **fine-grained personal access token** on GitHub.\n" +
-      "- Give it **Pull requests: Read and write** on this repository.\n" +
+      "- Give it **Pull requests: Read and write** on this repository, which " +
+      "is what posting the review uses.\n" +
+      "- Give it **Contents: Read** as well, which is how farol sees whether " +
+      "the branch is on GitHub yet.\n" +
       "- Paste it below.",
     token: true,
   },
 
   tokenRefused: {
-    title: "GitHub would not take the token",
+    title: "GitHub would not answer with this token",
     body: () =>
-      "One of two things:\n\n" +
+      "One of three things:\n\n" +
       "- It expired.\n" +
-      "- It does not carry **Pull requests: Read and write** on this " +
-      "repository, which is what posting a review needs.\n\n" +
-      "Create a new one and paste it below. It replaces the one farol has.",
+      "- It is missing **Pull requests: Read and write** on this repository.\n" +
+      "- It is missing **Contents: Read**, which farol uses to check whether " +
+      "the branch is on GitHub.\n\n" +
+      "A token can be refused outright or accepted and then turned down on one " +
+      "call, and both land here. Create a new one carrying both permissions " +
+      "and paste it below. It replaces the one farol has.",
     token: true,
   },
 
