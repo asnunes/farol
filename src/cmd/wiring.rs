@@ -57,6 +57,8 @@ pub struct Ctx {
     pub scope: GetScope,
 
     pub comments: Comments,
+    pub readiness: ReviewReadiness,
+    pub publish_review: Arc<PublishReview>,
 
     server: ServerUseCases,
     git_dir: PathBuf,
@@ -119,6 +121,15 @@ impl Ctx {
         let scope_for_publishing = scope.clone();
         let diffs_for_publishing = diffs.clone();
 
+        let readiness = ReviewReadiness::new(publisher.clone(), scope_for_publishing.clone());
+        let publish_review = Arc::new(PublishReview::new(
+            comment_store,
+            publisher,
+            scope_for_publishing,
+            diffs_for_publishing,
+            history,
+        ));
+
         Ok(Self {
             add_block: AddBlock::new(editor.clone()),
             update_block: UpdateBlock::new(editor.clone()),
@@ -148,20 +159,20 @@ impl Ctx {
 
             comments: comments.clone(),
 
+            // Built once and shared: the terminal and the browser ask the same
+            // two questions of the same host, and a second instance would be a
+            // second agent and a second connection pool for no reason.
+            readiness: readiness.clone(),
+            publish_review: publish_review.clone(),
+
             server: ServerUseCases {
                 review: GetReview::new(versions, scope, progress.clone()),
                 file_diff: GetFileDiff::new(diffs),
                 mark_viewed: MarkViewed::new(progress.clone()),
                 unmark_viewed: UnmarkViewed::new(progress),
                 comments,
-                readiness: ReviewReadiness::new(publisher.clone(), scope_for_publishing.clone()),
-                publish_review: Arc::new(PublishReview::new(
-                    comment_store,
-                    publisher,
-                    scope_for_publishing,
-                    diffs_for_publishing,
-                    history,
-                )),
+                readiness,
+                publish_review,
                 save_token: Arc::new(SaveToken::new(credentials)),
             },
             git_dir,

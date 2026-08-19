@@ -70,6 +70,15 @@ pub enum Verdict {
     Approve,
 }
 
+impl Readiness {
+    /// Whether the review can go. The one question with a yes or no answer, and
+    /// it is asked of the state rather than instead of it: every caller that
+    /// hears no goes on to say which no it was.
+    pub fn can_send(&self) -> bool {
+        matches!(self, Readiness::Ready { .. })
+    }
+}
+
 impl Verdict {
     /// Whether the summary is required.
     ///

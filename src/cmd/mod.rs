@@ -3,6 +3,7 @@ use clap::{Args, Parser, Subcommand};
 mod block;
 mod comment;
 mod file;
+mod github;
 mod line;
 mod map;
 mod scope;
@@ -14,6 +15,7 @@ mod wiring;
 use block::BlockAction;
 use comment::CommentAction;
 use file::FileAction;
+use github::GithubAction;
 use line::LineAction;
 use map::MapAction;
 use scope::ShowScope;
@@ -165,6 +167,13 @@ enum Command {
         #[command(subcommand)]
         action: CommentAction,
     },
+    /// Sending the review to the pull request.
+    Github {
+        #[command(flatten)]
+        scope: ScopeArgs,
+        #[command(subcommand)]
+        action: GithubAction,
+    },
     /// Files the reviewer may read diagonally.
     Skim {
         #[command(flatten)]
@@ -197,6 +206,7 @@ impl Command {
             Command::Line { scope, action } => action.run(&scope.open()?),
             Command::Skim { scope, action } => action.run(&scope.open()?),
             Command::Comment { scope, action } => action.run(&scope.open()?),
+            Command::Github { scope, action } => action.run(&scope.open()?),
         }
     }
 }
