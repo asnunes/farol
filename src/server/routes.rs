@@ -27,6 +27,7 @@ pub(super) fn router(state: Arc<AppState>, identity: ServerEntry) -> Router {
     Router::new()
         .route("/api/review", get(review))
         .route("/api/file", get(file))
+        .route("/api/lines", get(lines))
         .route("/api/viewed", post(viewed))
         .route("/api/comments", get(comments).post(write_comment))
         .route("/api/comments/{id}", delete(close_comment))
@@ -63,6 +64,27 @@ struct PathQuery {
 async fn file(State(state): State<Arc<AppState>>, Query(q): Query<PathQuery>) -> impl IntoResponse {
     match state.use_cases.file_diff.execute(&q.path) {
         Ok(diff) => Json(diff).into_response(),
+        Err(e) => fail(e),
+    }
+}
+
+#[derive(Deserialize)]
+struct RangeQuery {
+    path: String,
+    from: u32,
+    to: u32,
+}
+
+/// A stretch of the file the diff never printed, for the reader opening a gap.
+///
+/// Text and nothing else: which line each string is, and which line it was
+/// before the change, the page works out from the hunks it already has.
+async fn lines(
+    State(state): State<Arc<AppState>>,
+    Query(q): Query<RangeQuery>,
+) -> impl IntoResponse {
+    match state.use_cases.file_lines.execute(&q.path, q.from, q.to) {
+        Ok(lines) => Json(serde_json::json!({ "lines": lines })).into_response(),
         Err(e) => fail(e),
     }
 }
@@ -359,7 +381,7 @@ pub(super) mod tests {
 
     pub(in crate::server) fn use_cases() -> (tempfile::TempDir, ServerUseCases) {
         use crate::diff::application::{FileDiffs, ReviewScope};
-        use crate::map::application::{GetFileDiff, GetReview};
+        use crate::map::application::{GetFileDiff, GetFileLines, GetReview};
         use crate::progress::application::{MarkViewed, UnmarkViewed};
 
         let paths = ["a.rs", "b.rs", "Cargo.lock"];
@@ -386,6 +408,9 @@ pub(super) mod tests {
             ServerUseCases {
                 review: GetReview::new(maps.versions, scope, progress.clone()),
                 file_diff: GetFileDiff::new(diffs),
+                file_lines: GetFileLines::new(ReviewScope::new(Arc::new(
+                    FakeDiffSource::with_paths(&paths),
+                ))),
                 mark_viewed: MarkViewed::new(progress.clone()),
                 unmark_viewed: UnmarkViewed::new(progress),
                 comments,
@@ -401,7 +426,7 @@ pub(super) mod tests {
         // If the progress store is unreadable the screen must say so rather
         // than render as though nothing had been read.
         use crate::diff::application::{FileDiffs, ReviewScope};
-        use crate::map::application::{GetFileDiff, GetReview};
+        use crate::map::application::{GetFileDiff, GetFileLines, GetReview};
         use crate::progress::application::{MarkViewed, ProgressStore, UnmarkViewed};
 
         let paths = ["a.rs"];
@@ -428,6 +453,9 @@ pub(super) mod tests {
                 broken.clone(),
             ),
             file_diff: GetFileDiff::new(diffs),
+            file_lines: GetFileLines::new(ReviewScope::new(Arc::new(FakeDiffSource::with_paths(
+                &paths,
+            )))),
             mark_viewed: MarkViewed::new(broken.clone()),
             unmark_viewed: UnmarkViewed::new(broken),
             comments,

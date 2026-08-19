@@ -15,9 +15,9 @@ use crate::diff::infra::{GixSource, ScopeRequest};
 use crate::error::Result;
 use crate::map::application::{
     AddBlock, AddFile, AddLineNote, AddSkim, CheckMap, DeriveMap, DiscardNote, ExportMap,
-    GetFileDiff, GetReview, GetScope, ImportMap, MapDerivation, MapEditor, MapReconciler,
-    MapVersions, MoveBlock, RemoveBlock, RemoveFile, RemoveLineNote, RemoveSkim, ResetMap,
-    RestoreNote, ShowMap, UpdateBlock, UpdateFile, UpdateLineNote,
+    GetFileDiff, GetFileLines, GetReview, GetScope, ImportMap, MapDerivation, MapEditor,
+    MapReconciler, MapVersions, MoveBlock, RemoveBlock, RemoveFile, RemoveLineNote, RemoveSkim,
+    ResetMap, RestoreNote, ShowMap, UpdateBlock, UpdateFile, UpdateLineNote,
 };
 use crate::map::infra::JsonMapRepository;
 use crate::progress::application::{MarkViewed, ProgressStore, UnmarkViewed};
@@ -71,6 +71,7 @@ pub struct Ctx {
 pub struct ServerUseCases {
     pub review: GetReview,
     pub file_diff: GetFileDiff,
+    pub file_lines: GetFileLines,
     pub mark_viewed: MarkViewed,
     pub unmark_viewed: UnmarkViewed,
     pub comments: Comments,
@@ -119,6 +120,7 @@ impl Ctx {
         let editor = MapEditor::new(derivation.clone(), versions.clone(), maps);
         let progress = ProgressStore::new(progress_repo, diffs.clone());
         let scope_for_publishing = scope.clone();
+        let scope_for_lines = scope.clone();
         let diffs_for_publishing = diffs.clone();
 
         let readiness = ReviewReadiness::new(publisher.clone(), scope_for_publishing.clone());
@@ -168,6 +170,7 @@ impl Ctx {
             server: ServerUseCases {
                 review: GetReview::new(versions, scope, progress.clone()),
                 file_diff: GetFileDiff::new(diffs),
+                file_lines: GetFileLines::new(scope_for_lines),
                 mark_viewed: MarkViewed::new(progress.clone()),
                 unmark_viewed: UnmarkViewed::new(progress),
                 comments,

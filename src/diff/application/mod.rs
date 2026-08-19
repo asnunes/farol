@@ -32,6 +32,12 @@ impl ReviewScope {
         self.source.review_path(raw)
     }
 
+    /// A stretch of the file as it now reads, proven to be under review first.
+    pub fn lines(&self, raw: &str, from: u32, to: u32) -> Result<Vec<String>> {
+        let path = self.path(raw)?;
+        self.source.file_lines(path.as_str(), from, to)
+    }
+
     /// Resolve several at once, failing on the first that is not under review.
     pub fn paths(&self, raw: &[String]) -> Result<Vec<ReviewPath>> {
         raw.iter().map(|p| self.path(p)).collect()

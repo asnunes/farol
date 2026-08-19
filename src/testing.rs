@@ -61,6 +61,7 @@ impl FakeDiffSource {
                 binary: false,
                 additions: 0,
                 deletions: 0,
+                line_count: 0,
                 new_content_hash: format!("hash-of-{path}-at-{to}"),
             },
         ));
@@ -157,6 +158,14 @@ impl ReviewScopeSource for FakeDiffSource {
             .map(|(_, n)| *n)
             .unwrap_or(10_000))
     }
+
+    /// The line at `n` says which line it is, so a test that opens a range can
+    /// assert it got that range and not one beside it.
+    fn file_lines(&self, path: &str, from: u32, to: u32) -> Result<Vec<String>> {
+        let count = self.file_line_count(path)?;
+        let last = to.min(count);
+        Ok((from.max(1)..=last).map(|n| format!("line {n}")).collect())
+    }
 }
 
 impl FileDiffSource for FakeDiffSource {
@@ -172,6 +181,7 @@ impl FileDiffSource for FakeDiffSource {
             status: FileStatus::Modified,
             hunks: self.hunks_of(path)?,
             binary: false,
+            line_count: self.file_line_count(path)?,
             additions: 3,
             deletions: 1,
             new_content_hash: format!("hash-of-{path}"),
