@@ -6,6 +6,12 @@ export const api = {
   setViewed: (path: string, viewed: boolean) =>
     send("/api/viewed", "POST", { path, viewed }),
 
+  /** A stretch of the file the diff did not print, for a reader opening a gap. */
+  lines: (path: string, from: number, to: number) =>
+    fetch(`/api/lines?path=${encodeURIComponent(path)}&from=${from}&to=${to}`)
+      .then(json<{ lines: string[] }>)
+      .then((answer) => answer.lines),
+
   comments: () => fetch("/api/comments").then(json<CommentsView>),
   addComment: (path: string, from: number, to: number, body: string) =>
     send("/api/comments", "POST", { path, from, to, body }),
@@ -85,6 +91,8 @@ export type FileDiff = {
   binary: boolean;
   additions: number;
   deletions: number;
+  /** How long the file is after the change, which is where the last gap ends. */
+  line_count: number;
 };
 
 export type Hunk = {
