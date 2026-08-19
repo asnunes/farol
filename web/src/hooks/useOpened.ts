@@ -11,15 +11,14 @@ export function useOpened(path: string) {
   const [opened, setOpened] = useState<Opened[]>([]);
 
   const open = useCallback(
-    (range: Range) => {
+    (range: Range) =>
       // The range is recorded as asked for, not as answered. The file can end
-      // inside it, and then fewer lines come back and fewer rows are drawn —
-      // but the gap is closed either way, or the control would sit there
-      // offering to fetch the same nothing again.
-      void api
+      // inside it, and then fewer lines come back and fewer rows are drawn,
+      // but the gap closes either way, or the control would sit there offering
+      // to fetch the same nothing again.
+      api
         .lines(path, range.from, range.to)
-        .then((lines) => setOpened((was) => [...was, { ...range, lines }]));
-    },
+        .then((lines) => setOpened((was) => [...was, { ...range, lines }])),
     [path],
   );
 

@@ -73,5 +73,5 @@ type DiffHunkProps = {
   commentary: Commentary;
   /** The lines above this hunk that nobody has opened yet, when there are any
    * and they reach down to it. */
-  gap?: { gap: GapRange; onOpen: (range: LineRange) => void };
+  gap?: { gap: GapRange; onOpen: (range: LineRange) => Promise<void> };
 };
