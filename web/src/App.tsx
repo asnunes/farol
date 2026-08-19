@@ -1,11 +1,13 @@
 import { useCallback, useState } from "react";
-import { TriangleAlert } from "lucide-react";
+import { TriangleAlert, X } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { readingOrder } from "@/api";
 import { useComments } from "@/hooks/useComments";
 import { useDiffView } from "@/hooks/useDiffView";
 import { useOpenFiles } from "@/hooks/useOpenFiles";
+import { usePublishing } from "@/hooks/usePublishing";
 import { useTheme } from "@/hooks/useTheme";
 import { useReview } from "@/hooks/useReview";
 import { useShortcuts } from "@/hooks/useShortcuts";
@@ -24,16 +26,21 @@ export default function App() {
     current,
     setCurrent,
     error,
-    setError,
     toggleViewed,
     stale,
     refresh,
   } = useReview();
   const [helpOpen, setHelpOpen] = useState(false);
+  // What the reader just tried and did not get: a comment that would not save,
+  // a review the host turned down. Apart from the load failure above, because
+  // the review is still on the screen and still worth reading, and blanking it
+  // would take away the very thing the message is about.
+  const [failed, setFailed] = useState<string | null>(null);
   const [view, setView] = useDiffView();
   const files = useOpenFiles();
   const [theme, setTheme] = useTheme();
-  const comments = useComments(setError);
+  const comments = useComments(setFailed);
+  const publishing = usePublishing();
 
   const order = review ? readingOrder(review) : [];
   const index = order.findIndex((f) => f.path === current);
@@ -99,7 +106,7 @@ export default function App() {
   }
   if (!review) {
     return (
-      <div className="fatal p-8 font-mono text-sm text-muted">Loading…</div>
+      <div className="fatal p-8 font-mono text-sm text-ink-muted">Loading…</div>
     );
   }
 
@@ -113,6 +120,9 @@ export default function App() {
           stale={stale}
           onRefresh={() => void refresh()}
           unreadable={comments.unreadable}
+          publishing={publishing}
+          comments={comments.comments}
+          onError={setFailed}
         />
         <Sidebar review={review} current={current} onPick={goTo} />
 
@@ -122,14 +132,45 @@ export default function App() {
           current={current}
           onCurrent={setCurrent}
           onToggleViewed={(path, viewed) => void mark(path, viewed)}
-          onError={setError}
+          onError={setFailed}
           files={files}
           comments={comments}
         />
 
         <KeyBar theme={theme} onTheme={setTheme} />
         <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
+        {failed && <Failed what={failed} onClose={() => setFailed(null)} />}
       </div>
     </TooltipProvider>
+  );
+}
+
+/** Something the reader tried that did not happen.
+ *
+ * Over the review rather than in it: the page keeps its shape, nothing below
+ * jumps, and what they were reading when it failed is still where they left it.
+ * It sits above the key bar and waits to be dismissed, because a message that
+ * fades on its own is one they can miss while looking at the code. */
+function Failed({ what, onClose }: { what: string; onClose: () => void }) {
+  return (
+    <Alert
+      variant="destructive"
+      role="alert"
+      className="failed fixed right-4 bottom-14 z-50 flex w-auto max-w-[34rem] items-start gap-3 border-rule bg-surface shadow-lg"
+    >
+      <TriangleAlert />
+      <AlertDescription className="min-w-0 flex-1 font-mono text-sm whitespace-pre-wrap">
+        {what}
+      </AlertDescription>
+      <Button
+        size="icon-xs"
+        variant="ghost"
+        className="cursor-pointer text-faint hover:text-ink"
+        aria-label="Dismiss"
+        onClick={onClose}
+      >
+        <X className="size-3.5" aria-hidden="true" />
+      </Button>
+    </Alert>
   );
 }

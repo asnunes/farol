@@ -10,6 +10,12 @@ export const api = {
   addComment: (path: string, from: number, to: number, body: string) =>
     send("/api/comments", "POST", { path, from, to, body }),
   closeComment: (id: string) => send(`/api/comments/${encodeURIComponent(id)}`, "DELETE"),
+
+  readiness: () => fetch("/api/publish").then(json<ReadinessView>),
+  publish: (verdict: Verdict, summary: string) =>
+    write<SentView>("/api/publish", "POST", { verdict, summary }),
+  /** One way. Nothing reads it back, here or on the server. */
+  saveToken: (token: string) => send("/api/token", "PUT", { token }),
 };
 
 /** Flat reading order across blocks — what j/k and "next unread" walk. */
@@ -130,13 +136,53 @@ export type CommentView = {
   to: number;
   /** Markdown, as it was typed. */
   body: string;
+  /** Where it can be read on the pull request, once it has gone. Publishing is
+   * not answering: a published comment is still waiting for one. */
+  published: string | null;
 };
+
+/** Whether the review can be sent, and when it cannot, what is in the way.
+ *
+ * A reason rather than a flag: each state is a different thing for the reader
+ * to go and do, and the panel that explains it is written per state. */
+export type ReadinessView = {
+  state:
+    | "ready"
+    | "noRemote"
+    | "noToken"
+    | "tokenRefused"
+    | "branchNotPushed"
+    | "noPullRequest";
+  branch: string;
+  pullRequest?: number;
+  /** The page that opens a pull request, on the one state that has one. */
+  openAt?: string;
+};
+
+/** What the review says about the change as a whole. */
+export type Verdict = "comment" | "requestChanges" | "approve";
+
+/** What a sent review left behind. */
+export type SentView = { url: string; comments: number };
 
 /** Where a file sits: the block it is read under and how far down the map that
  * block is, which is what the band above the diff counts off. */
 export type FileHome = { block: BlockView; index: number };
 
 async function json<T>(res: Response): Promise<T> {
+  if (!res.ok) throw new Error(await res.text());
+  return res.json() as Promise<T>;
+}
+
+/** A write whose answer matters. Publishing is the only one: what comes back
+ * is where the review can now be read, which the page has no way to work out
+ * for itself. */
+async function write<T>(url: string, method: string, body: unknown): Promise<T> {
+  const res = await fetch(url, {
+    method,
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
   if (!res.ok) throw new Error(await res.text());
   return res.json() as Promise<T>;
 }

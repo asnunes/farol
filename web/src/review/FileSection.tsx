@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Diff } from "@/review/diff/Diff";
 import { FileHeader } from "@/review/FileHeader";
 import { FileNote } from "@/review/FileNote";
+import { Prose } from "@/review/Prose";
 import type { CommentActions } from "@/hooks/useComments";
 import type { DiffView } from "@/hooks/useDiffView";
 import type { CommentView, FileDiff, FileView } from "@/api";
@@ -69,14 +70,16 @@ export function FileSection({
               {/* Which block the note came from, and only when the file is read
                   under more than one. */}
               {file.tags.length > 1 && (
-                <span className="from mr-2 font-mono text-xs text-accent">{note.block}</span>
+                <span className="from mt-1 shrink-0 font-mono text-xs text-accent">
+                  {note.block}
+                </span>
               )}
-              {note.text}
+              <Prose className="min-w-0 flex-1">{note.text}</Prose>
             </FileNote>
           ))}
 
           {heavy && !asked ? (
-            <div className="heavy px-6 py-6 font-sans text-sm text-muted">
+            <div className="heavy px-6 py-6 font-sans text-sm text-ink-muted">
               {file.additions + file.deletions} changed lines.{" "}
               <Button
                 variant="link"

@@ -1,3 +1,9 @@
+mod error;
+mod publishing;
+
+pub use error::*;
+pub use publishing::*;
+
 use crate::error::Result;
 
 /// Something the reviewer wrote about a span of lines.
@@ -13,17 +19,27 @@ pub struct Comment {
     pub to: u32,
     /// Markdown, kept as written.
     pub body: String,
+    /// Where it lives on the pull request, once it has been published.
+    ///
+    /// Published is not closed. The question is still open — it just has a
+    /// second home now, and the answer will come back there. Closing still
+    /// removes the comment; this only records that it left.
+    pub published: Option<String>,
 }
 
 impl Comment {
     /// What lands on the clipboard: enough for the answer to be read somewhere
     /// else without the file open.
     pub fn quoted(&self) -> String {
-        let lines = match self.from == self.to {
-            true => format!("{}", self.from),
-            false => format!("{}-{}", self.from, self.to),
-        };
-        format!("{}:{}\n\n{}", self.path, lines, self.body.trim())
+        format!("{}\n\n{}", self.at(), self.body.trim())
+    }
+
+    /// Where it sits, the way a person would type it to go there.
+    pub fn at(&self) -> String {
+        match self.from == self.to {
+            true => format!("{}:{}", self.path, self.from),
+            false => format!("{}:{}-{}", self.path, self.from, self.to),
+        }
     }
 }
 
@@ -91,6 +107,7 @@ mod tests {
             from,
             to,
             body: "  Why this order?  ".into(),
+            published: None,
         }
     }
 

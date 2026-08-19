@@ -1311,3 +1311,61 @@ fn showing_the_map_admits_there_is_a_decision_waiting() {
     assert!(show.contains("1 line note is deactivated"), "{show}");
     assert!(show.contains("farol map derive"), "{show}");
 }
+
+// ---- sending the review ---------------------------------------------------
+
+#[test]
+fn github_status_says_a_repository_with_no_remote_has_nowhere_to_send() {
+    // The one state a test can reach without a network: no remote at all.
+    // Reported as a state of its own rather than as an error, because it is
+    // not a step on the way to being ready.
+    let repo = Repo::new();
+    repo.feature();
+
+    let out = repo.farol(&["github", "status"]);
+
+    assert!(
+        String::from_utf8_lossy(&out.stdout).starts_with("no remote:"),
+        "{}",
+        String::from_utf8_lossy(&out.stdout)
+    );
+}
+
+#[test]
+fn github_status_exits_non_zero_while_the_review_cannot_go() {
+    // The whole point of the command for a session: branch on the code, read
+    // the words only to say what happened.
+    let repo = Repo::new();
+    repo.feature();
+
+    let out = repo.farol(&["github", "status"]);
+
+    assert!(
+        !out.status.success(),
+        "a review that cannot go exits non-zero"
+    );
+}
+
+#[test]
+fn github_review_needs_a_verdict_and_takes_only_one() {
+    // The verdict is the decision the review is, so there is no default, and
+    // two of them is a contradiction rather than a preference.
+    let repo = Repo::new();
+    repo.feature();
+
+    let none = repo.fails(&["github", "review"]);
+    let both = repo.fails(&["github", "review", "--approve", "--comment"]);
+
+    assert!(none.contains("--comment"), "{none}");
+    assert!(both.contains("cannot be used with"), "{both}");
+}
+
+#[test]
+fn github_review_refuses_where_there_is_nowhere_to_send() {
+    let repo = Repo::new();
+    repo.feature();
+
+    let err = repo.fails(&["github", "review", "--approve"]);
+
+    assert!(err.contains("no remote"), "{err}");
+}

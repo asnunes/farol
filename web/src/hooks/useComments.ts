@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, type CommentsView } from "@/api";
 import { onNudge } from "@/lib/watch";
+import { said } from "@/lib/utils";
 
 /** What the reviewer wrote back, and keeping it current.
  *
@@ -16,7 +17,7 @@ export function useComments(onError: (message: string) => void) {
     try {
       setFound(await api.comments());
     } catch (e) {
-      onError(String(e));
+      onError(said(e));
     }
   }, [onError]);
 
@@ -34,7 +35,7 @@ export function useComments(onError: (message: string) => void) {
       try {
         await job;
       } catch (e) {
-        onError(String(e));
+        onError(said(e));
         return;
       }
       await load();

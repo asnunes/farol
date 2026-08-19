@@ -101,8 +101,12 @@ impl CommentStore for MarkdownComments {
 }
 
 fn render(comment: &Comment) -> String {
+    let published = match &comment.published {
+        Some(url) => format!("published: {url}\n"),
+        None => String::new(),
+    };
     format!(
-        "---\npath: {}\nlines: {}-{}\n---\n\n{}\n",
+        "---\npath: {}\nlines: {}-{}\n{published}---\n\n{}\n",
         comment.path,
         comment.from,
         comment.to,
@@ -137,10 +141,14 @@ fn parse(id: &str, file: String, raw: &str) -> std::result::Result<Comment, Unre
 
     let mut path = None;
     let mut lines = None;
+    let mut published = None;
     for (key, value) in head.lines().filter_map(|line| line.split_once(':')) {
         match key.trim() {
             "path" => path = Some(value.trim().to_string()),
             "lines" => lines = Some(value.trim().to_string()),
+            // The url has its own colons, so the key is split off and the rest
+            // is taken whole rather than split again.
+            "published" => published = Some(value.trim().to_string()),
             _ => {}
         }
     }
@@ -162,6 +170,7 @@ fn parse(id: &str, file: String, raw: &str) -> std::result::Result<Comment, Unre
         from,
         to,
         body: body.trim().to_string(),
+        published,
     })
 }
 
@@ -199,6 +208,7 @@ mod tests {
             from: 82,
             to: 116,
             body: "Why **this** order?".into(),
+            published: None,
         }
     }
 
@@ -218,6 +228,39 @@ mod tests {
         let raw = std::fs::read_to_string(store.file("1")).unwrap();
         assert!(raw.ends_with("Why **this** order?\n"), "{raw}");
         assert!(raw.starts_with("---\npath: src/a.rs\n"), "{raw}");
+    }
+
+    #[test]
+    fn where_a_comment_was_published_comes_back_with_it() {
+        let (_dir, store) = store();
+        store
+            .save(&Comment {
+                published: Some("https://github.com/asnunes/farol/pull/12#discussion_r1".into()),
+                ..comment("1")
+            })
+            .unwrap();
+
+        let all = store.list().unwrap().comments;
+        assert_eq!(
+            all[0].published.as_deref(),
+            Some("https://github.com/asnunes/farol/pull/12#discussion_r1")
+        );
+    }
+
+    #[test]
+    fn a_file_written_before_publishing_existed_reads_as_unpublished() {
+        // The reviewer's comments outlive the version of farol that wrote them,
+        // and a missing key is not a broken file — it is a comment that has not
+        // left yet.
+        let (_dir, store) = store();
+        std::fs::create_dir_all(store.file("1").parent().unwrap()).unwrap();
+        std::fs::write(
+            store.file("1"),
+            "---\npath: src/a.rs\nlines: 82-116\n---\n\nWhy **this** order?\n",
+        )
+        .unwrap();
+
+        assert_eq!(store.list().unwrap().comments, vec![comment("1")]);
     }
 
     #[test]

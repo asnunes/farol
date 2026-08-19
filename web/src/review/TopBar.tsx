@@ -3,12 +3,24 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Refresh } from "@/review/Refresh";
+import { Publish } from "@/review/publish/Publish";
 import { ViewToggle } from "@/review/ViewToggle";
 import type { DiffView } from "@/hooks/useDiffView";
-import type { ReviewView, Unreadable as UnreadableView } from "@/api";
+import type { Publishing } from "@/hooks/usePublishing";
+import type { CommentView, ReviewView, Unreadable as UnreadableView } from "@/api";
 
 /** Where you are and how far through you are. */
-export function TopBar({ review, view, onView, stale, onRefresh, unreadable }: TopBarProps) {
+export function TopBar({
+  review,
+  view,
+  onView,
+  stale,
+  onRefresh,
+  unreadable,
+  publishing,
+  comments,
+  onError,
+}: TopBarProps) {
   const done = review.totalFiles > 0 && review.viewedFiles === review.totalFiles;
 
   return (
@@ -16,19 +28,21 @@ export function TopBar({ review, view, onView, stale, onRefresh, unreadable }: T
       <div className="refs flex items-baseline gap-2 font-mono text-[0.8125rem]">
         <span className="head font-semibold">{review.branch}</span>
         <span className="text-rule-strong">→</span>
-        <span className="base text-muted">{review.base}</span>
+        <span className="base text-ink-muted">{review.base}</span>
+        {/* Beside the refs it qualifies: what is behind is this branch's map,
+            not anything on the right-hand side of the bar. */}
+        {review.commitsBehind > 0 && (
+          <Badge className="stale-chip rounded-full border-transparent bg-accent-dim font-mono text-xs font-normal text-accent">
+            map {review.commitsBehind} commit{review.commitsBehind === 1 ? "" : "s"} behind
+          </Badge>
+        )}
       </div>
 
       <div className="flex items-center gap-4">
         {unreadable.length > 0 && <Unreadable broken={unreadable} />}
         {stale && <Refresh onRefresh={onRefresh} />}
         <ViewToggle view={view} onChange={onView} />
-        {review.commitsBehind > 0 && (
-          <Badge className="stale-chip rounded-full border-transparent bg-accent-dim font-mono text-xs font-normal text-accent">
-            map {review.commitsBehind} commit{review.commitsBehind === 1 ? "" : "s"} behind
-          </Badge>
-        )}
-        <div className="progress flex items-center gap-2 font-mono text-xs text-muted">
+        <div className="progress flex items-center gap-2 font-mono text-xs text-ink-muted">
           {done ? (
             // The only celebration in the app, and only once there is nothing
             // left to read.
@@ -46,6 +60,9 @@ export function TopBar({ review, view, onView, stale, onRefresh, unreadable }: T
             aria-label={`${review.viewedFiles} of ${review.totalFiles} read`}
           />
         </div>
+        {/* Last on the bar, because it is the last thing done: everything to
+            its left is the reading, and this is what closes it. */}
+        <Publish publishing={publishing} comments={comments} onError={onError} />
       </div>
     </header>
   );
@@ -94,4 +111,7 @@ type TopBarProps = {
   onRefresh: () => void;
   /** Comment files that could not be parsed, in the reviewer's terms. */
   unreadable: UnreadableView[];
+  publishing: Publishing;
+  comments: CommentView[];
+  onError: (message: string) => void;
 };

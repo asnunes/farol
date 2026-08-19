@@ -20,6 +20,7 @@ export function comment(over: Partial<CommentView> = {}): CommentView {
     from: 1,
     to: 1,
     body: "Why this order?",
+    published: null,
     ...over,
   };
 }

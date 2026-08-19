@@ -1,7 +1,12 @@
+mod use_case;
+
+pub use use_case::*;
+
 use std::sync::Arc;
 
-use crate::comments::domain::{Comment, CommentStore, Found};
-use crate::error::{Error, Result};
+use crate::comments::domain::{Comment, CommentError, CommentStore, Found};
+use crate::diff::application::FileDiffs;
+use crate::error::Result;
 use crate::map::application::GetScope;
 use crate::map::domain::LineRange;
 
@@ -10,11 +15,16 @@ use crate::map::domain::LineRange;
 pub struct Comments {
     store: Arc<dyn CommentStore>,
     scope: GetScope,
+    diffs: FileDiffs,
 }
 
 impl Comments {
-    pub fn new(store: Arc<dyn CommentStore>, scope: GetScope) -> Self {
-        Self { store, scope }
+    pub fn new(store: Arc<dyn CommentStore>, scope: GetScope, diffs: FileDiffs) -> Self {
+        Self {
+            store,
+            scope,
+            diffs,
+        }
     }
 
     /// Everything still waiting for an answer, and the files that could not be
@@ -24,16 +34,30 @@ impl Comments {
     }
 
     /// Written against the review, not against a path someone typed: a file
-    /// outside the window and a span past the end of the file are both refused
-    /// here rather than in each caller. The CLI and the browser reach this by
-    /// different roads and the rule has to be the same on both.
+    /// outside the window, a span past the end of the file and a span the diff
+    /// never printed are all refused here rather than in each caller. The CLI
+    /// and the browser reach this by different roads and the rule has to be the
+    /// same on both.
+    ///
+    /// The last of the three is GitHub's rule, applied early: a review comment
+    /// can only sit on a line the diff reaches. Refusing at writing time costs
+    /// the reviewer one attempt; letting it through costs them the comment,
+    /// discovered at the moment they meant to send the review.
     pub fn add(&self, path: &str, from: u32, to: u32, body: &str) -> Result<Comment> {
         if body.trim().is_empty() {
-            return Err(Error::msg("a comment with no text says nothing"));
+            return Err(CommentError::Empty.into());
         }
 
         let path = self.scope.path(path)?;
         LineRange::new(from, to)?.require_within(&path)?;
+        if !self.diffs.of(path.as_str())?.shows(from, to) {
+            return Err(CommentError::OutsideDiff {
+                path: path.as_str().to_string(),
+                from,
+                to,
+            }
+            .into());
+        }
 
         let comment = Comment {
             id: fresh_id(),
@@ -41,6 +65,7 @@ impl Comments {
             from,
             to,
             body: body.trim().to_string(),
+            published: None,
         };
         self.store.save(&comment)?;
         Ok(comment)
@@ -54,9 +79,7 @@ impl Comments {
     pub fn close(&self, id: &str) -> Result<()> {
         match self.store.close(id)? {
             true => Ok(()),
-            false => Err(Error::msg(format!(
-                "no comment with id {id} — `farol comment list` shows them"
-            ))),
+            false => Err(CommentError::Unknown { id: id.into() }.into()),
         }
     }
 }
@@ -80,18 +103,50 @@ mod tests {
     use super::*;
     use crate::comments::infra::MarkdownComments;
     use crate::diff::application::ReviewScope;
+    use crate::diff::domain::Hunk;
     use crate::shared::paths::Store;
     use crate::testing::FakeDiffSource;
 
     /// Comments over a real folder, because the store is half of what `add`
     /// does, and over a review that holds one 200-line file.
     fn comments() -> (tempfile::TempDir, Comments) {
+        over(a_file())
+    }
+
+    /// The same review, but with the diff reaching only where the test says.
+    /// Undeclared, the fake prints the whole file, which is what every test
+    /// that is not about the diff's reach wants.
+    fn comments_showing(hunks: Vec<Hunk>) -> (tempfile::TempDir, Comments) {
+        over(a_file().showing("src/a.rs", hunks))
+    }
+
+    /// The one review the tests are written against.
+    fn a_file() -> FakeDiffSource {
+        FakeDiffSource::with_paths(&["src/a.rs"]).with_line_count("src/a.rs", 200)
+    }
+
+    /// The wiring, which is the same either way: the store on disk, and the
+    /// scope and the diffs coming off the one source.
+    fn over(source: FakeDiffSource) -> (tempfile::TempDir, Comments) {
         let dir = tempfile::tempdir().unwrap();
         let store = Store::new(dir.path(), "feature/x");
-        let source = FakeDiffSource::with_paths(&["src/a.rs"]).with_line_count("src/a.rs", 200);
-        let scope = GetScope::new(ReviewScope::new(Arc::new(source)));
-        let comments = Comments::new(Arc::new(MarkdownComments::new(&store, dir.path())), scope);
+        let source = Arc::new(source);
+        let comments = Comments::new(
+            Arc::new(MarkdownComments::new(&store, dir.path())),
+            GetScope::new(ReviewScope::new(source.clone())),
+            FileDiffs::new(source),
+        );
         (dir, comments)
+    }
+
+    fn hunk(start: u32, lines: u32) -> Hunk {
+        Hunk {
+            old_start: start,
+            old_lines: lines,
+            new_start: start,
+            new_lines: lines,
+            lines: vec![],
+        }
     }
 
     #[test]
@@ -135,6 +190,32 @@ mod tests {
 
         assert!(err.to_string().contains("200"), "{err}");
         assert!(comments.all().unwrap().comments.is_empty());
+    }
+
+    #[test]
+    fn a_comment_on_a_line_the_diff_never_printed_is_refused() {
+        // GitHub's rule, applied at writing time: a review comment can only sit
+        // where the diff reaches. Caught here it costs one attempt; caught at
+        // publishing it costs the comment.
+        let (_dir, comments) = comments_showing(vec![hunk(10, 5), hunk(40, 3)]);
+
+        let err = comments.add("src/a.rs", 30, 30, "Why?").unwrap_err();
+
+        let msg = err.to_string();
+        assert!(msg.contains("30-30"), "{msg}");
+        assert!(msg.contains("not in the diff"), "{msg}");
+        assert!(comments.all().unwrap().comments.is_empty());
+    }
+
+    #[test]
+    fn a_comment_spanning_the_gap_between_two_hunks_is_refused() {
+        // Both ends land in the diff and the middle does not, which is the case
+        // a check on the ends alone would wave through.
+        let (_dir, comments) = comments_showing(vec![hunk(10, 5), hunk(40, 3)]);
+
+        assert!(comments.add("src/a.rs", 12, 41, "Why?").is_err());
+        // And the span that stays inside one hunk goes in.
+        assert!(comments.add("src/a.rs", 12, 14, "Why?").is_ok());
     }
 
     #[test]

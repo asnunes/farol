@@ -21,7 +21,7 @@
   --color-sunken: var(--farol-sunken);
   --color-ink: var(--farol-ink);
   --color-ink-soft: var(--farol-ink-soft);
-  --color-muted: var(--farol-muted);
+  --color-ink-muted: var(--farol-muted);
   --color-faint: var(--farol-faint);
   --color-rule: var(--farol-rule);
   --color-rule-strong: var(--farol-rule-strong);
@@ -42,6 +42,13 @@
 /* Prefixed because shadcn's components define `--muted` and `--accent` for
    their own semantics; without the prefix the bridge below would refer to
    itself and the two would resolve to each other.
+
+   The utility names have to stay out of each other's way too, and one name
+   cannot hold both meanings: Tailwind reads `bg-muted` and `text-muted` off the
+   same `--color-muted`, so while that pointed at farol's muted ink, every
+   shadcn component that hovers to `bg-muted` painted itself in the colour of
+   its own text. The ink is `ink-muted` here, and `muted` is the surface shadcn
+   means by it.
 
    Both palettes are written once, side by side, and `color-scheme` picks the
    half that applies. Two blocks under a media query would mean maintaining the
@@ -121,6 +128,21 @@
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
   }
+
+  /* Anything that can be pressed says so.
+   *
+   * Tailwind's reset sets `cursor: default` on buttons, where the browser has
+   * always said `pointer`. Put back per component it is a thing to remember,
+   * and what gets remembered is the button somebody was looking at while they
+   * wrote it — the sidebar, which is the most-clicked surface in the app, went
+   * without. A rule here cannot be forgotten.
+   *
+   * Disabled is left alone on purpose: a control that will not respond should
+   * not invite the press. */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]) {
+    cursor: pointer;
+  }
 }
 
 @theme inline {
@@ -134,6 +156,7 @@
   --color-primary-foreground: var(--primary-foreground);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);

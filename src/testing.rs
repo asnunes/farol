@@ -21,6 +21,8 @@ pub struct FakeDiffSource {
     /// (from, to, path) -> the diff between those two commits.
     between: Vec<((String, String, String), FileDiff)>,
     line_counts: Vec<(String, u32)>,
+    /// path -> the hunks its diff prints, when a test cares which.
+    shown: Vec<(String, Vec<Hunk>)>,
     ancestors: Vec<String>,
     distances: Vec<(String, u32)>,
 }
@@ -40,6 +42,7 @@ impl FakeDiffSource {
             },
             between: Vec::new(),
             line_counts: Vec::new(),
+            shown: Vec::new(),
             ancestors: Vec::new(),
             distances: Vec::new(),
         }
@@ -67,6 +70,13 @@ impl FakeDiffSource {
     /// As if `--dirty` were given, so the working-tree marker is the target.
     pub fn dirty(mut self) -> Self {
         self.scope.dirty = true;
+        self
+    }
+
+    /// Declare which hunks the file's diff prints, for a test about what the
+    /// diff reaches rather than about what the file contains.
+    pub fn showing(mut self, path: &str, hunks: Vec<Hunk>) -> Self {
+        self.shown.push((path.into(), hunks));
         self
     }
 
@@ -110,6 +120,25 @@ fn change(path: &str) -> FileChange {
     }
 }
 
+impl FakeDiffSource {
+    /// What the file's diff prints. Undeclared, it prints the whole file —
+    /// generous like `file_line_count` is, so a test only says where the diff
+    /// reaches when that is the thing under test.
+    fn hunks_of(&self, path: &str) -> Result<Vec<Hunk>> {
+        if let Some((_, hunks)) = self.shown.iter().find(|(p, _)| p == path) {
+            return Ok(hunks.clone());
+        }
+        let lines = self.file_line_count(path)?;
+        Ok(vec![Hunk {
+            old_start: 1,
+            old_lines: lines,
+            new_start: 1,
+            new_lines: lines,
+            lines: vec![],
+        }])
+    }
+}
+
 impl ReviewScopeSource for FakeDiffSource {
     fn scope(&self) -> Result<&Scope> {
         Ok(&self.scope)
@@ -141,7 +170,7 @@ impl FileDiffSource for FakeDiffSource {
             path: path.to_string(),
             old_path: None,
             status: FileStatus::Modified,
-            hunks: vec![],
+            hunks: self.hunks_of(path)?,
             binary: false,
             additions: 3,
             deletions: 1,
@@ -460,4 +489,96 @@ pub fn orphaned(
             })
         })
         .expect("seeding an orphan cannot fail");
+}
+
+/// A publisher that keeps what it was handed instead of sending it.
+///
+/// How the assembled review is asserted without a network — and, in the server
+/// tests, how a route reaches every state of readiness without one either.
+pub struct FakePublisher {
+    readiness: crate::comments::domain::Readiness,
+    sent: Mutex<Option<crate::comments::domain::Review>>,
+}
+
+impl FakePublisher {
+    pub fn ready_at(head: &str) -> Self {
+        Self::blocked(crate::comments::domain::Readiness::Ready {
+            pull_request: 12,
+            head: head.into(),
+        })
+    }
+
+    pub fn blocked(readiness: crate::comments::domain::Readiness) -> Self {
+        Self {
+            readiness,
+            sent: Mutex::new(None),
+        }
+    }
+
+    pub fn sent(&self) -> crate::comments::domain::Review {
+        self.sent.lock().unwrap().clone().expect("nothing was sent")
+    }
+
+    pub fn nothing_sent(&self) -> bool {
+        self.sent.lock().unwrap().is_none()
+    }
+}
+
+impl crate::comments::domain::ReviewPublisher for FakePublisher {
+    fn readiness(&self, _branch: &str) -> Result<crate::comments::domain::Readiness> {
+        Ok(self.readiness.clone())
+    }
+
+    fn publish(&self, review: &crate::comments::domain::Review) -> Result<String> {
+        *self.sent.lock().unwrap() = Some(review.clone());
+        Ok("https://example.test/r1".into())
+    }
+}
+
+/// A token that never touches the disk, so a test cannot read the real one.
+#[derive(Default)]
+pub struct FakeCredentials {
+    token: Mutex<Option<String>>,
+}
+
+impl crate::comments::domain::Credentials for FakeCredentials {
+    fn token(&self) -> Result<Option<String>> {
+        Ok(self.token.lock().unwrap().clone())
+    }
+
+    fn set(&self, token: &str) -> Result<()> {
+        *self.token.lock().unwrap() = Some(token.to_string());
+        Ok(())
+    }
+}
+
+/// Comments in memory, for the use cases that only care what is in the store.
+#[derive(Default)]
+pub struct InMemoryComments {
+    comments: Mutex<Vec<crate::comments::domain::Comment>>,
+}
+
+impl crate::comments::domain::CommentStore for InMemoryComments {
+    fn list(&self) -> Result<crate::comments::domain::Found> {
+        Ok(crate::comments::domain::Found {
+            comments: self.comments.lock().unwrap().clone(),
+            unreadable: vec![],
+        })
+    }
+
+    fn save(&self, comment: &crate::comments::domain::Comment) -> Result<()> {
+        let mut all = self.comments.lock().unwrap();
+        match all.iter().position(|c| c.id == comment.id) {
+            Some(at) => all[at] = comment.clone(),
+            None => all.push(comment.clone()),
+        }
+        Ok(())
+    }
+
+    fn close(&self, id: &str) -> Result<bool> {
+        let mut all = self.comments.lock().unwrap();
+        let before = all.len();
+        all.retain(|c| c.id != id);
+        Ok(all.len() != before)
+    }
 }

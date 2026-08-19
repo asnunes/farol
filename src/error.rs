@@ -1,7 +1,8 @@
 //! What farol reports when it cannot do what was asked.
 //!
 //! The layers below own their refusals — [`MapError`] for the map, [`ScopeError`]
-//! for the review window — because those are the things they decide. What is
+//! for the review window, [`CommentError`] for what the reviewer writes back —
+//! because those are the things they decide. What is
 //! left here belongs to no single layer: the repository not being in a state
 //! farol can work with, and the world failing underneath.
 //!
@@ -10,6 +11,7 @@
 //! a dependency running the wrong way, in the module whose whole job is to be
 //! depended on.
 
+use crate::comments::domain::CommentError;
 use crate::diff::domain::ScopeError;
 use crate::map::domain::MapError;
 
@@ -35,6 +37,9 @@ pub enum Error {
 
     #[error(transparent)]
     Scope(#[from] ScopeError),
+
+    #[error(transparent)]
+    Comment(#[from] CommentError),
 
     // ---- the world failing underneath -----------------------------------
     /// git failing, mostly. There is nothing farol can add to what the library

@@ -64,7 +64,7 @@ impl Workspace {
     /// and `https://github.com/asnunes/farol.git` come out the same, and from
     /// the directory when there is no remote to ask.
     pub fn name(&self) -> String {
-        self.remote_path().unwrap_or_else(|| {
+        self.remote().map(|remote| remote.slug).unwrap_or_else(|| {
             self.root()
                 .file_name()
                 .unwrap_or_default()
@@ -73,17 +73,26 @@ impl Workspace {
         })
     }
 
-    fn remote_path(&self) -> Option<String> {
+    /// Where this repository is hosted, when it is hosted anywhere.
+    ///
+    /// Both halves matter and for different reasons: the slug addresses the
+    /// repository, and the host decides who is being spoken to at all. Reading
+    /// the host from the remote instead of assuming `github.com` is what lets a
+    /// company's own GitHub work.
+    pub fn remote(&self) -> Option<Remote> {
         let remote = self
             .repo
             .find_default_remote(gix::remote::Direction::Fetch)?
             .ok()?;
         let url = remote.url(gix::remote::Direction::Fetch)?;
         let path = url.path.to_string();
-        let named = path.trim_start_matches('/').trim_end_matches(".git");
-        match named.is_empty() {
+        let slug = path.trim_start_matches('/').trim_end_matches(".git");
+        match slug.is_empty() {
             true => None,
-            false => Some(named.to_string()),
+            false => Some(Remote {
+                host: url.host().unwrap_or_default().to_string(),
+                slug: slug.to_string(),
+            }),
         }
     }
 
@@ -103,6 +112,34 @@ impl Workspace {
             None => Err(Error::DetachedHead),
         }
     }
+}
+
+/// The repository as the host knows it.
+///
+/// Normalised, so that `git@github.com:asnunes/farol.git` and
+/// `https://github.com/asnunes/farol.git` come out the same — the two ways of
+/// writing the same address should not be two different repositories.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Remote {
+    /// `github.com`, or a company's own.
+    pub host: String,
+    /// `asnunes/farol`.
+    pub slug: String,
+}
+
+/// Where farol keeps what belongs to the person rather than to a repository.
+///
+/// `$XDG_CONFIG_HOME/farol`, or where that variable defaults to — the same
+/// shape the registry uses for state, one directory over. Config and not state,
+/// because this is something a person put here on purpose and it should outlive
+/// a cleanup of caches.
+pub fn config_dir() -> Result<PathBuf> {
+    if let Some(config) = std::env::var_os("XDG_CONFIG_HOME") {
+        return Ok(PathBuf::from(config).join("farol"));
+    }
+    let home = std::env::var_os("HOME")
+        .ok_or_else(|| Error::msg("no HOME to keep farol's configuration under"))?;
+    Ok(PathBuf::from(home).join(".config/farol"))
 }
 
 /// Serialise and write so that a crash never leaves half a file behind.

@@ -7,7 +7,7 @@
 
 use serde::Serialize;
 
-use crate::comments::domain::{Comment, Found};
+use crate::comments::domain::{Comment, Found, Readiness};
 use crate::comments::presentation::says;
 use crate::diff::domain::FileStatus;
 use crate::map::application::ReviewSnapshot;
@@ -86,6 +86,9 @@ pub struct CommentView {
     pub from: u32,
     pub to: u32,
     pub body: String,
+    /// Where it can be read on the pull request, once it has gone. The screen
+    /// marks those rather than hiding them: publishing is not answering.
+    pub published: Option<String>,
 }
 
 /// The comment list, and what the store could not read.
@@ -98,6 +101,58 @@ pub struct CommentView {
 pub struct CommentsView {
     pub comments: Vec<CommentView>,
     pub unreadable: Vec<UnreadableView>,
+}
+
+/// Whether the review can be sent, and when it cannot, what is in the way.
+///
+/// One object with a `state` the page switches on, because the difference
+/// between the states is the whole content of the panel: each is a different
+/// thing for the reader to go and do. `openAt` rides along on the one state
+/// that has somewhere to send them.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReadinessView {
+    pub state: &'static str,
+    /// The branch, in every state: the panel spells out commands with it in
+    /// them, and it should not have to go and ask a second route for the name.
+    pub branch: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pull_request: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub open_at: Option<String>,
+}
+
+impl ReadinessView {
+    pub fn of(readiness: &Readiness, branch: &str) -> Self {
+        let mut view = Self {
+            state: match readiness {
+                Readiness::Ready { .. } => "ready",
+                Readiness::NoRemote => "noRemote",
+                Readiness::NoToken => "noToken",
+                Readiness::TokenRefused => "tokenRefused",
+                Readiness::BranchNotPushed => "branchNotPushed",
+                Readiness::NoPullRequest { .. } => "noPullRequest",
+            },
+            branch: branch.to_string(),
+            pull_request: None,
+            open_at: None,
+        };
+        match readiness {
+            Readiness::Ready { pull_request, .. } => view.pull_request = Some(*pull_request),
+            Readiness::NoPullRequest { open_at } => view.open_at = Some(open_at.clone()),
+            _ => {}
+        }
+        view
+    }
+}
+
+/// What a published review left behind: where it can be read, and how many
+/// comments went with it.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SentView {
+    pub url: String,
+    pub comments: usize,
 }
 
 /// A comment the store could not read, in the terms the page speaks: the file
@@ -231,6 +286,7 @@ impl CommentView {
             from: comment.from,
             to: comment.to,
             body: comment.body.clone(),
+            published: comment.published.clone(),
         }
     }
 }

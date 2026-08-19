@@ -1,0 +1,127 @@
+use std::fmt::{self, Display};
+
+use crate::comments::application::Standing;
+use crate::comments::domain::Readiness;
+
+/// Whether the review can go, for the terminal.
+///
+/// One line, opening with the state as a word, because the first reader of this
+/// is a session deciding what to do next and the second is a person who wants
+/// to know what is in the way. Both read the beginning of the line.
+pub struct Where<'a>(pub &'a Standing);
+
+impl Display for Where<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let branch = &self.0.branch;
+        match &self.0.readiness {
+            Readiness::Ready { pull_request, head } => writeln!(
+                f,
+                "ready: pull request #{pull_request}, showing {}",
+                short(head)
+            ),
+            Readiness::NoRemote => writeln!(
+                f,
+                "no remote: this repository has nowhere to send a review to"
+            ),
+            Readiness::NoToken => writeln!(f, "no token: farol has no token for GitHub yet"),
+            Readiness::TokenRefused => writeln!(
+                f,
+                "token refused: it expired, or it is missing Pull requests: Read and write or Contents: Read on this repository"
+            ),
+            Readiness::BranchNotPushed => {
+                writeln!(f, "branch not pushed: '{branch}' is not on GitHub yet")
+            }
+            Readiness::NoPullRequest { open_at } => writeln!(
+                f,
+                "no pull request: '{branch}' is on GitHub with nothing open on it\n{open_at}"
+            ),
+        }
+    }
+}
+
+/// Shas are compared in full and shown short: nobody reads forty characters,
+/// and seven is what every other tool prints.
+fn short(sha: &str) -> String {
+    sha.chars().take(7).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn at(readiness: Readiness) -> Standing {
+        Standing {
+            branch: "feat/x".into(),
+            readiness,
+        }
+    }
+
+    #[test]
+    fn every_state_opens_on_the_word_a_caller_branches_on() {
+        // A session reads the first word and decides; a person reads the rest.
+        // Neither should have to look past the start of the line to tell the
+        // states apart.
+        for (readiness, opening) in [
+            (
+                Readiness::Ready {
+                    pull_request: 12,
+                    head: "abc1234def".into(),
+                },
+                "ready:",
+            ),
+            (Readiness::NoRemote, "no remote:"),
+            (Readiness::NoToken, "no token:"),
+            (Readiness::TokenRefused, "token refused:"),
+            (Readiness::BranchNotPushed, "branch not pushed:"),
+            (
+                Readiness::NoPullRequest {
+                    open_at: "https://example.test/compare".into(),
+                },
+                "no pull request:",
+            ),
+        ] {
+            let said = Where(&at(readiness)).to_string();
+            assert!(said.starts_with(opening), "{said}");
+        }
+    }
+
+    #[test]
+    fn the_commit_the_pull_request_shows_is_named_short() {
+        // It is the sha a refused publish will compare against, so it belongs
+        // in the answer, at the length every other tool prints.
+        let said = Where(&at(Readiness::Ready {
+            pull_request: 12,
+            head: "abc1234def5678".into(),
+        }))
+        .to_string();
+
+        assert!(said.contains("#12"), "{said}");
+        assert!(said.contains("abc1234"), "{said}");
+        assert!(!said.contains("def5678"), "{said}");
+    }
+
+    #[test]
+    fn the_branch_is_named_where_the_reader_has_to_act_on_it() {
+        // 'push it' and 'open one for it' are both instructions about a branch,
+        // and farol is often looking at a different one than the reader is.
+        for readiness in [
+            Readiness::BranchNotPushed,
+            Readiness::NoPullRequest {
+                open_at: "https://example.test/compare".into(),
+            },
+        ] {
+            let said = Where(&at(readiness)).to_string();
+            assert!(said.contains("feat/x"), "{said}");
+        }
+    }
+
+    #[test]
+    fn the_page_that_opens_a_pull_request_travels_with_the_state_that_has_one() {
+        let said = Where(&at(Readiness::NoPullRequest {
+            open_at: "https://example.test/compare".into(),
+        }))
+        .to_string();
+
+        assert!(said.contains("https://example.test/compare"), "{said}");
+    }
+}
