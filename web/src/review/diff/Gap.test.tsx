@@ -26,10 +26,21 @@ describe("opening what the diff did not print", () => {
     expect(within(gapAt(container, 1)).getAllByRole("button")).toHaveLength(3);
   });
 
+  it("leaves out the direction with no hunk to walk away from", () => {
+    // The gap after the last hunk has nothing below it, so opening from the
+    // bottom would be walking away from nowhere. Same at the top of the file,
+    // the other way round.
+    const { container } = render(<Diff {...props(twoHunks(100))} />);
+    const tail = gapAt(container, 2);
+
+    expect(within(tail).getByLabelText("Open twenty lines from the top")).toBeTruthy();
+    expect(within(tail).queryByLabelText("Open twenty lines from the bottom")).toBeNull();
+  });
+
   it("opens twenty lines under the hunk above, and asks for exactly those", async () => {
     const { container } = render(<Diff {...props(twoHunks(100))} />);
 
-    pull(container, "Open the lines under the hunk above");
+    pull(container, "Open twenty lines from the top");
 
     await waitFor(() => expect(lines).toHaveBeenCalledWith("src/a.rs", 11, 30));
     expect(await screen.findByText("line 11")).toBeTruthy();
@@ -38,7 +49,7 @@ describe("opening what the diff did not print", () => {
   it("opens the last twenty of the gap when pulled from below", async () => {
     const { container } = render(<Diff {...props(twoHunks(100))} />);
 
-    pull(container, "Open the lines over the hunk below");
+    pull(container, "Open twenty lines from the bottom");
 
     await waitFor(() => expect(lines).toHaveBeenCalledWith("src/a.rs", 40, 59));
   });
@@ -48,7 +59,7 @@ describe("opening what the diff did not print", () => {
     // comparing against another checkout needs the number that side uses.
     const { container } = render(<Diff {...props(twoHunks(100), "split")} />);
 
-    pull(container, "Open the lines under the hunk above");
+    pull(container, "Open twenty lines from the top");
 
     // Twice over, because a context line is the same on both sides. Which is
     // the point of the test: the two numbers beside it are not.
@@ -66,7 +77,7 @@ describe("opening what the diff did not print", () => {
     // definition of where it does not.
     const { container } = render(<Diff {...props(twoHunks(100))} />);
 
-    pull(container, "Open the lines under the hunk above");
+    pull(container, "Open twenty lines from the top");
     await screen.findByText("line 11");
 
     const row = [...container.querySelectorAll(".diff-row")].find((r) =>
@@ -84,7 +95,7 @@ describe("opening what the diff did not print", () => {
     const { container } = render(<Diff {...props(twoHunks(100), "unified", hidden)} />);
     expect(screen.queryByText("vale ler junto")).toBeNull();
 
-    pull(container, "Open the lines under the hunk above");
+    pull(container, "Open twenty lines from the top");
 
     expect(await screen.findByText("vale ler junto")).toBeTruthy();
   });

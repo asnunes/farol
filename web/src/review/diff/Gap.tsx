@@ -9,12 +9,14 @@ import type { Gap as Stretch, Range } from "./gaps";
  *
  * It sits where the `@@` band sits, because that is the seam: the band already
  * announces that the file jumps here, and this turns the announcement into
- * something the reader can do. Three gestures, in the order the hand reaches
- * for them: pull down from the hunk above, pull up from the hunk below, or take
- * the whole thing.
+ * something the reader can do. Twenty lines from the top, twenty from the
+ * bottom, or the whole thing.
  *
- * A gap shorter than one step gets one control. Three buttons that all do the
- * same thing is three ways to wonder which one is different. */
+ * At the ends of a file one of the two directions has no hunk to walk away
+ * from, and it is left out: the gap before the first hunk opens upward from
+ * what follows it, the gap after the last opens downward from what precedes
+ * it. A gap shorter than one step gets one control, since three buttons that
+ * all do the same thing are three ways to wonder which one is different. */
 export function Gap({ gap, onOpen, children }: GapProps) {
   const band = useRef<HTMLDivElement>(null);
   const whole = { from: gap.from, to: gap.to };
@@ -50,12 +52,16 @@ export function Gap({ gap, onOpen, children }: GapProps) {
         </Pull>
       ) : (
         <>
-          <Pull label="Open the lines under the hunk above" onPull={() => pull(fromAbove(gap))}>
-            <ChevronDown className="size-3.5" aria-hidden="true" />
-          </Pull>
-          <Pull label="Open the lines over the hunk below" onPull={() => pull(fromBelow(gap))}>
-            <ChevronUp className="size-3.5" aria-hidden="true" />
-          </Pull>
+          {gap.under && (
+            <Pull label="Open twenty lines from the top" onPull={() => pull(fromAbove(gap))}>
+              <ChevronDown className="size-3.5" aria-hidden="true" />
+            </Pull>
+          )}
+          {gap.over && (
+            <Pull label="Open twenty lines from the bottom" onPull={() => pull(fromBelow(gap))}>
+              <ChevronUp className="size-3.5" aria-hidden="true" />
+            </Pull>
+          )}
           <Pull
             label={`Open all ${gap.to - gap.from + 1} lines hidden here`}
             onPull={() => pull(whole)}

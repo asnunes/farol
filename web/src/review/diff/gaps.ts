@@ -11,6 +11,11 @@ export type Gap = {
   to: number;
   /** Old number minus new number, constant across the gap. */
   shift: number;
+  /** Whether there is a hunk on each side of it. The gap before the first hunk
+   * has nothing above it and the one after the last has nothing below, which is
+   * what decides how many ways in it can offer. */
+  under: boolean;
+  over: boolean;
 };
 
 /** Every gap in a file, in reading order, including the ones at the ends.
@@ -23,19 +28,31 @@ export function gapsOf(diff: FileDiff): Gap[] {
   const gaps: Gap[] = [];
   const first = diff.hunks[0];
   if (first.new_start > 1) {
-    gaps.push({ from: 1, to: first.new_start - 1, shift: first.old_start - first.new_start });
+    gaps.push({
+      from: 1,
+      to: first.new_start - 1,
+      shift: first.old_start - first.new_start,
+      under: false,
+      over: true,
+    });
   }
 
   for (let i = 0; i < diff.hunks.length - 1; i++) {
     const [above, below] = [diff.hunks[i], diff.hunks[i + 1]];
     const from = ends(above);
     const to = below.new_start - 1;
-    if (from <= to) gaps.push({ from, to, shift: shiftAfter(above) });
+    if (from <= to) gaps.push({ from, to, shift: shiftAfter(above), under: true, over: true });
   }
 
   const last = diff.hunks[diff.hunks.length - 1];
   if (ends(last) <= diff.line_count) {
-    gaps.push({ from: ends(last), to: diff.line_count, shift: shiftAfter(last) });
+    gaps.push({
+      from: ends(last),
+      to: diff.line_count,
+      shift: shiftAfter(last),
+      under: true,
+      over: false,
+    });
   }
 
   return gaps;
