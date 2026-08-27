@@ -20,4 +20,3 @@ pub use map_report::*;
 pub use map_summary::*;
 pub use orphan_report::*;
 pub use scope_report::*;
-pub use text::short;

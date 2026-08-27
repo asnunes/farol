@@ -2,6 +2,7 @@ use std::fmt::{self, Display};
 
 use crate::comments::application::Standing;
 use crate::comments::domain::Readiness;
+use crate::shared::short;
 
 /// Whether the review can go, for the terminal.
 ///
@@ -37,12 +38,6 @@ impl Display for Where<'_> {
             ),
         }
     }
-}
-
-/// Shas are compared in full and shown short: nobody reads forty characters,
-/// and seven is what every other tool prints.
-fn short(sha: &str) -> String {
-    sha.chars().take(7).collect()
 }
 
 #[cfg(test)]

@@ -5,6 +5,7 @@ use crate::comments::domain::{
 };
 use crate::diff::application::{CommitHistory, FileDiffs, ReviewScope};
 use crate::error::Result;
+use crate::shared::short;
 
 /// Send the review to the pull request: the summary, the verdict, and every
 /// comment that has not gone yet.
@@ -139,12 +140,6 @@ impl PublishReview {
 pub struct Sent {
     pub url: String,
     pub comments: usize,
-}
-
-/// Shas are compared in full and shown short: nobody reads forty characters,
-/// and seven is what every other tool prints.
-fn short(sha: &str) -> String {
-    sha.chars().take(7).collect()
 }
 
 #[cfg(test)]
