@@ -1,5 +1,6 @@
 //! Telling the browser the map changed, without it having to ask.
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 use tokio::sync::broadcast;
@@ -24,29 +25,34 @@ pub(super) fn spawn(git_dir: PathBuf, tx: broadcast::Sender<String>) {
             return;
         }
 
-        // `None`, not "now": nothing has been sent yet, so the first change
-        // must get through. Starting the clock at startup swallowed it if it
-        // landed within the quiet period — which is exactly what happens when
-        // the skill finishes writing the map as the server comes up.
-        let mut last: Option<std::time::Instant> = None;
+        // Empty, not "everything just now": nothing has been sent yet, so the
+        // first change of each kind must get through. Starting the clock at
+        // startup swallowed it if it landed within the quiet period, which is
+        // exactly what happens when the skill finishes writing the map as the
+        // server comes up.
+        let mut last: HashMap<&'static str, std::time::Instant> = HashMap::new();
         for event in raw_rx {
             let Ok(event) = event else { continue };
             let Some(kind) = nudge_for(&event.paths) else {
                 continue;
             };
             // Git rewrites several files per operation; one nudge is enough.
-            if last.is_some_and(|t| t.elapsed() < QUIET) {
+            // Per kind, though: `map derive` right after a commit writes the
+            // map within milliseconds of the ref, and one quiet window for
+            // both would let the commit swallow the map.
+            if last.get(kind).is_some_and(|t| t.elapsed() < QUIET) {
                 continue;
             }
-            last = Some(std::time::Instant::now());
+            last.insert(kind, std::time::Instant::now());
             let _ = tx.send(kind.to_string());
         }
     });
 }
 
-/// How long to ignore further events after nudging. A commit rewrites `HEAD`,
-/// a ref and the index in quick succession; the browser needs one reload, not
-/// three.
+/// How long to ignore further events of the same kind after nudging. A commit
+/// rewrites `HEAD`, a ref and the index in quick succession; the browser needs
+/// one reload, not three. Of the same kind only: different news is different
+/// news however close together it lands.
 const QUIET: std::time::Duration = std::time::Duration::from_millis(300);
 
 /// What an event on the git dir means for the browser, if anything.
@@ -193,6 +199,37 @@ mod tests {
         let kind = nudged_by(|| std::fs::write(&file, "{}").unwrap(), &mut rx);
 
         assert_eq!(kind.as_deref(), Some("map"));
+    }
+
+    #[test]
+    fn news_of_one_kind_does_not_swallow_news_of_another() {
+        // `map derive` right after a commit is the documented flow, and the
+        // two writes land milliseconds apart. One quiet window for both let
+        // the ref silence the map, so the page heard that the branch moved and
+        // never that the map it is showing had been rewritten.
+        let dir = tempfile::tempdir().unwrap();
+        let maps = dir.path().join("farol").join("x").join("maps");
+        std::fs::create_dir_all(&maps).unwrap();
+
+        let (tx, mut rx) = broadcast::channel(16);
+        spawn(dir.path().to_path_buf(), tx);
+
+        let head = dir.path().join("HEAD");
+        assert_eq!(
+            nudged_by(
+                || std::fs::write(&head, "ref: refs/heads/x\n").unwrap(),
+                &mut rx
+            )
+            .as_deref(),
+            Some("head"),
+            "the watcher has to be awake, or the map below proves nothing"
+        );
+
+        let map = maps.join("abc123.json");
+        assert_eq!(
+            nudged_by(|| std::fs::write(&map, "{}").unwrap(), &mut rx).as_deref(),
+            Some("map")
+        );
     }
 
     #[test]
