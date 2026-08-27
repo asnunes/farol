@@ -9,14 +9,14 @@ const numbering = (code: string): Token[][] =>
 
 function hunk(...lines: [DiffLine["kind"], string][]): Hunk {
   return {
-    old_start: 1,
-    old_lines: lines.length,
-    new_start: 1,
-    new_lines: lines.length,
+    oldStart: 1,
+    oldLines: lines.length,
+    newStart: 1,
+    newLines: lines.length,
     lines: lines.map(([kind, content]) => ({
       kind,
-      old_number: null,
-      new_number: null,
+      oldNumber: null,
+      newNumber: null,
       content,
     })),
   };

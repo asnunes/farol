@@ -5,8 +5,8 @@ import type { DiffLine } from "@/api";
 function lines(...kinds: [DiffLine["kind"], string][]): DiffLine[] {
   return kinds.map(([kind, content]) => ({
     kind,
-    old_number: null,
-    new_number: null,
+    oldNumber: null,
+    newNumber: null,
     content,
   }));
 }

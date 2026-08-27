@@ -63,7 +63,7 @@ struct PathQuery {
 
 async fn file(State(state): State<Arc<AppState>>, Query(q): Query<PathQuery>) -> impl IntoResponse {
     match state.use_cases.file_diff.execute(&q.path) {
-        Ok(diff) => Json(diff).into_response(),
+        Ok(diff) => Json(view::FileDiffView::of(&diff)).into_response(),
         Err(e) => fail(e),
     }
 }
@@ -84,7 +84,7 @@ async fn lines(
     Query(q): Query<RangeQuery>,
 ) -> impl IntoResponse {
     match state.use_cases.file_lines.execute(&q.path, q.from, q.to) {
-        Ok(lines) => Json(serde_json::json!({ "lines": lines })).into_response(),
+        Ok(lines) => Json(view::LinesView { lines }).into_response(),
         Err(e) => fail(e),
     }
 }

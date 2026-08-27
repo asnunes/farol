@@ -46,7 +46,7 @@ export function Diff({ diff, file, view, comments, actions }: DiffProps) {
 
   const gaps = gapsOf(diff);
   const last = diff.hunks.at(-1);
-  const below = last && gaps.find((g) => g.from === last.new_start + last.new_lines);
+  const below = last && gaps.find((g) => g.from === last.newStart + last.newLines);
 
   const stretch = (range: OpenedRange, gap: GapRange) => (
     <Opened
@@ -67,7 +67,7 @@ export function Diff({ diff, file, view, comments, actions }: DiffProps) {
       {diff.hunks.map((hunk, i) => {
         // The gap above this hunk: the leading one for the first hunk, and the
         // one between neighbours after that.
-        const gap = gaps.find((g) => g.to === hunk.new_start - 1);
+        const gap = gaps.find((g) => g.to === hunk.newStart - 1);
         const { above, closed } = gap ? opening(gap, opened) : empty;
 
         // Still closed and reaching down to this hunk, so its controls belong

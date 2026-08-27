@@ -27,11 +27,11 @@ export function gapsOf(diff: FileDiff): Gap[] {
 
   const gaps: Gap[] = [];
   const first = diff.hunks[0];
-  if (first.new_start > 1) {
+  if (first.newStart > 1) {
     gaps.push({
       from: 1,
-      to: first.new_start - 1,
-      shift: first.old_start - first.new_start,
+      to: first.newStart - 1,
+      shift: first.oldStart - first.newStart,
       under: false,
       over: true,
     });
@@ -40,15 +40,15 @@ export function gapsOf(diff: FileDiff): Gap[] {
   for (let i = 0; i < diff.hunks.length - 1; i++) {
     const [above, below] = [diff.hunks[i], diff.hunks[i + 1]];
     const from = ends(above);
-    const to = below.new_start - 1;
+    const to = below.newStart - 1;
     if (from <= to) gaps.push({ from, to, shift: shiftAfter(above), under: true, over: true });
   }
 
   const last = diff.hunks[diff.hunks.length - 1];
-  if (ends(last) <= diff.line_count) {
+  if (ends(last) <= diff.lineCount) {
     gaps.push({
       from: ends(last),
-      to: diff.line_count,
+      to: diff.lineCount,
       shift: shiftAfter(last),
       under: true,
       over: false,
@@ -98,11 +98,11 @@ export function fitsInOneStep(gap: Gap): boolean {
 }
 
 function ends(hunk: Hunk): number {
-  return hunk.new_start + hunk.new_lines;
+  return hunk.newStart + hunk.newLines;
 }
 
 function shiftAfter(hunk: Hunk): number {
-  return hunk.old_start + hunk.old_lines - (hunk.new_start + hunk.new_lines);
+  return hunk.oldStart + hunk.oldLines - (hunk.newStart + hunk.newLines);
 }
 
 /** A gap as it stands after some of it has been opened: the stretches that are

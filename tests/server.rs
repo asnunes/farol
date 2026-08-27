@@ -243,9 +243,24 @@ fn the_diff_of_a_file_comes_back_with_the_line_numbers_the_notes_anchor_to() {
     assert_eq!(diff["binary"], false);
     let lines = diff["hunks"][0]["lines"].as_array().unwrap();
     assert!(
-        lines.iter().any(|l| l["new_number"] == 10),
+        lines.iter().any(|l| l["newNumber"] == 10),
         "the line the note points at has to be in the diff"
     );
+}
+
+#[test]
+fn what_the_screen_reads_is_named_the_way_the_screen_names_things() {
+    // Every other answer is built in `view.rs` and comes out in one
+    // convention. The diff used to be the stored type serialised whole, so it
+    // arrived in another, and carried two fields the screen has no use for.
+    let s = Serving::new();
+
+    let diff = s.json("/api/file?path=src/a.rs");
+
+    assert!(diff["hunks"][0]["newStart"].is_number(), "{diff}");
+    assert!(diff["lineCount"].is_number(), "{diff}");
+    assert!(diff.get("old_path").is_none(), "{diff}");
+    assert!(diff.get("new_content_hash").is_none(), "{diff}");
 }
 
 #[test]

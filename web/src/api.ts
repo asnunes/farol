@@ -92,21 +92,21 @@ export type FileDiff = {
   additions: number;
   deletions: number;
   /** How long the file is after the change, which is where the last gap ends. */
-  line_count: number;
+  lineCount: number;
 };
 
 export type Hunk = {
-  old_start: number;
-  old_lines: number;
-  new_start: number;
-  new_lines: number;
+  oldStart: number;
+  oldLines: number;
+  newStart: number;
+  newLines: number;
   lines: DiffLine[];
 };
 
 export type DiffLine = {
   kind: "context" | "added" | "removed";
-  old_number: number | null;
-  new_number: number | null;
+  oldNumber: number | null;
+  newNumber: number | null;
   content: string;
 };
 

@@ -28,7 +28,7 @@ export function SplitLines({ hunk, file, coloured, marks, commentary }: SplitLin
             "row split-row",
             line && notedBy(file, line) && "noted",
             line && commentedBy(commentary.comments, line) && "commented",
-            line && commentary.select.covers(line.new_number ?? -1) && "picking bg-comment-dim",
+            line && commentary.select.covers(line.newNumber ?? -1) && "picking bg-comment-dim",
           )}
         >
           <Side index={row.left} hunk={hunk} coloured={coloured} marks={marks} side="old" />
@@ -81,8 +81,8 @@ function Side({ index, hunk, coloured, marks, side, commentary }: SideProps) {
   return (
     <>
       <LineNumber
-        number={side === "old" ? line.old_number : line.new_number}
-        on={side === "new" ? line.new_number : null}
+        number={side === "old" ? line.oldNumber : line.newNumber}
+        on={side === "new" ? line.newNumber : null}
         tint={tint}
         commentary={commentary}
       />

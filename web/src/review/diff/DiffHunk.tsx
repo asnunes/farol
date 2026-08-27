@@ -54,7 +54,7 @@ export function DiffHunk({ hunk, file, tokenize, view, commentary, gap }: DiffHu
           announcement, since the two are one thing. */}
       {gap && (
         <Gap gap={gap.gap} onOpen={gap.onOpen}>
-          {`@@ -${hunk.old_start},${hunk.old_lines} +${hunk.new_start},${hunk.new_lines} @@`}
+          {`@@ -${hunk.oldStart},${hunk.oldLines} +${hunk.newStart},${hunk.newLines} @@`}
         </Gap>
       )}
       <Lines hunk={hunk} file={file} coloured={coloured} marks={marks} commentary={commentary} />

@@ -19,16 +19,16 @@ function diff(): FileDiff {
     binary: false,
     additions: 1,
     deletions: 0,
-    line_count: 2,
+    lineCount: 2,
     hunks: [
       {
-        old_start: 1,
-        old_lines: 1,
-        new_start: 1,
-        new_lines: 2,
+        oldStart: 1,
+        oldLines: 1,
+        newStart: 1,
+        newLines: 2,
         lines: [
-          { kind: "context", old_number: 1, new_number: 1, content: "fn main() {}" },
-          { kind: "added", old_number: null, new_number: 2, content: "// nota" },
+          { kind: "context", oldNumber: 1, newNumber: 1, content: "fn main() {}" },
+          { kind: "added", oldNumber: null, newNumber: 2, content: "// nota" },
         ],
       },
     ],
@@ -170,8 +170,8 @@ describe("commenting on the diff", () => {
     const withRemoval = diff();
     withRemoval.hunks[0].lines.unshift({
       kind: "removed",
-      old_number: 1,
-      new_number: null,
+      oldNumber: 1,
+      newNumber: null,
       content: "fn main() { }",
     });
 

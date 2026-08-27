@@ -27,7 +27,7 @@ export function marker(line: DiffLine) {
  * line numbers to find them. */
 export function notedBy(file: FileView, line: DiffLine): boolean {
   return file.lineNotes.some(
-    (n) => line.new_number !== null && n.from <= line.new_number && line.new_number <= n.to,
+    (n) => line.newNumber !== null && n.from <= line.newNumber && line.newNumber <= n.to,
   );
 }
 
@@ -36,14 +36,14 @@ export function notedBy(file: FileView, line: DiffLine): boolean {
  * A note is anchored to the last line of its span, which is where the reader
  * has finished reading the thing it is about. */
 export function notesAt(file: FileView, line: DiffLine): TaggedLineNote[] {
-  return file.lineNotes.filter((n) => line.new_number !== null && n.to === line.new_number);
+  return file.lineNotes.filter((n) => line.newNumber !== null && n.to === line.newNumber);
 }
 
 /** Whether a comment covers this line. The reviewer's writing gets the same
  * treatment as the session's: the span is marked, and the prose sits under it. */
 export function commentedBy(comments: CommentView[], line: DiffLine): boolean {
   return comments.some(
-    (c) => line.new_number !== null && c.from <= line.new_number && line.new_number <= c.to,
+    (c) => line.newNumber !== null && c.from <= line.newNumber && line.newNumber <= c.to,
   );
 }
 
@@ -52,7 +52,7 @@ export function commentedBy(comments: CommentView[], line: DiffLine): boolean {
  * by when. */
 export function commentsAt(comments: CommentView[], line: DiffLine): CommentView[] {
   return comments
-    .filter((c) => line.new_number !== null && c.to === line.new_number)
+    .filter((c) => line.newNumber !== null && c.to === line.newNumber)
     .sort((a, b) => a.id.localeCompare(b.id));
 }
 
