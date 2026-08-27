@@ -17,7 +17,7 @@ export function FileRow({
         className={cn(
           "fileitem h-auto w-full justify-start gap-2 px-2 py-1 font-mono text-[0.8125rem] font-normal text-ink-soft",
           "hover:bg-sunken hover:text-ink-soft",
-          "aria-[current=true]:bg-accent-dim aria-[current=true]:text-ink",
+          "aria-[current=true]:bg-highlight-dim aria-[current=true]:text-ink",
           file.skim && "skim text-faint",
         )}
         data-seen={file.viewed ? "true" : undefined}
@@ -46,7 +46,7 @@ export function FileRow({
         ) : (
           file.lineNotes.length > 0 && (
             <span
-              className="dot ml-auto shrink-0 text-accent"
+              className="dot ml-auto shrink-0 text-highlight"
               title={`${file.lineNotes.length} note(s)`}
             >
               {"•".repeat(Math.min(3, file.lineNotes.length))}

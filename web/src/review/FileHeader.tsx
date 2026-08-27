@@ -39,7 +39,7 @@ export function FileHeader({ file, open, onToggleOpen, onToggleViewed, comments 
         {/* A checkbox, and built as one: it was a button pretending, with
             `aria-pressed` where a screen reader expects a checked state. */}
         <Checkbox
-          className="markbox size-5 border-rule-strong hover:border-accent data-[state=checked]:border-accent data-[state=checked]:bg-accent data-[state=checked]:text-surface"
+          className="markbox size-5 border-rule-strong hover:border-highlight data-[state=checked]:border-highlight data-[state=checked]:bg-highlight data-[state=checked]:text-surface"
           checked={file.viewed}
           onCheckedChange={onToggleViewed}
           aria-label="Mark as read"

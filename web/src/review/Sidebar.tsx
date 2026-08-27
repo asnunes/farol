@@ -66,7 +66,7 @@ function Block({
           className={cn(
             "num grid size-5 shrink-0 place-items-center rounded-full font-mono text-[0.6875rem]",
             state === "done" && "bg-add-bg text-add-ink",
-            state === "current" && "bg-accent text-surface",
+            state === "current" && "bg-highlight text-surface",
             state === "todo" && "bg-sunken text-ink-muted",
           )}
         >

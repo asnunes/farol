@@ -94,7 +94,7 @@ function Command({ line }: { line: string }) {
 function Open({ at }: { at: string }) {
   return (
     <a
-      className="flex items-center gap-1.5 font-sans text-sm text-accent underline"
+      className="flex items-center gap-1.5 font-sans text-sm text-highlight underline"
       href={at}
       target="_blank"
       rel="noreferrer"

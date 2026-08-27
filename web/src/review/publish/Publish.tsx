@@ -38,7 +38,7 @@ export function Publish({ publishing, comments, onError }: PublishProps) {
       >
         <Send className="size-3.5" aria-hidden="true" />
         Send review
-        {waiting.length > 0 && <span className="text-accent">({waiting.length})</span>}
+        {waiting.length > 0 && <span className="text-highlight">({waiting.length})</span>}
       </Button>
 
       {/* The first answer comes from GitHub, so it takes a moment. Until it

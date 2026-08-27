@@ -9,7 +9,7 @@ export function Refresh({ onRefresh }: RefreshProps) {
     <Button
       variant="ghost"
       size="xs"
-      className="refresh rounded-full bg-accent-dim font-mono text-accent hover:bg-accent-dim hover:opacity-80"
+      className="refresh rounded-full bg-highlight-dim font-mono text-highlight hover:bg-highlight-dim hover:opacity-80"
       onClick={onRefresh}
       title="A newer map was written. Click to read it."
     >

@@ -20,7 +20,7 @@ export function Sent({ sent, onDone }: SentProps) {
       </DialogHeader>
 
       <a
-        className="font-mono text-sm break-all text-accent underline"
+        className="font-mono text-sm break-all text-highlight underline"
         href={sent.url}
         target="_blank"
         rel="noreferrer"

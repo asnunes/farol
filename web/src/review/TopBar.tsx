@@ -32,7 +32,7 @@ export function TopBar({
         {/* Beside the refs it qualifies: what is behind is this branch's map,
             not anything on the right-hand side of the bar. */}
         {review.commitsBehind > 0 && (
-          <Badge className="stale-chip rounded-full border-transparent bg-accent-dim font-mono text-xs font-normal text-accent">
+          <Badge className="stale-chip rounded-full border-transparent bg-highlight-dim font-mono text-xs font-normal text-highlight">
             map {review.commitsBehind} commit{review.commitsBehind === 1 ? "" : "s"} behind
           </Badge>
         )}

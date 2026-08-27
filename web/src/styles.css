@@ -25,8 +25,8 @@
   --color-faint: var(--farol-faint);
   --color-rule: var(--farol-rule);
   --color-rule-strong: var(--farol-rule-strong);
-  --color-accent: var(--farol-accent);
-  --color-accent-dim: var(--farol-accent-dim);
+  --color-highlight: var(--farol-accent);
+  --color-highlight-dim: var(--farol-accent-dim);
   --color-add-bg: var(--farol-add-bg);
   --color-add-ink: var(--farol-add-ink);
   --color-del-bg: var(--farol-del-bg);
@@ -49,6 +49,11 @@
    shadcn component that hovers to `bg-muted` painted itself in the colour of
    its own text. The ink is `ink-muted` here, and `muted` is the surface shadcn
    means by it.
+
+   `accent` was the same collision, one step further along: farol's amber is a
+   colour to notice, shadcn's accent is a quiet surface to hover onto, and the
+   app was leaning on the first while the components leant on the second. The
+   amber is `highlight` now.
 
    Both palettes are written once, side by side, and `color-scheme` picks the
    half that applies. Two blocks under a media query would mean maintaining the
@@ -158,6 +163,7 @@
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-border: var(--border);
