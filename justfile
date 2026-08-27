@@ -80,11 +80,31 @@ layers:
     fi
     echo "layers ok"
 
+# Split in two because the two halves have nothing to say to each other, and CI
+# runs them side by side. Locally you want both, which is what `check` is.
+#
+# What has to pass before a commit.
+check: check-rust check-web
+
+# Everything the Rust side has to satisfy.
+check-rust: layers
+    cargo test
+    cargo clippy --all-targets -- -D warnings
+    cargo fmt --check
+
 # `tsc` is here and not in `npm test` because vitest does not typecheck: a test
 # can pass while naming a field that does not exist.
 #
-# What has to pass before a commit.
-check: layers test
-    cargo clippy --all-targets -- -D warnings
-    cargo fmt --check
+# Everything the web side has to satisfy.
+check-web:
+    cd web && npm test
     cd web && npx tsc -b
+
+# Without it `tests/server.rs` still passes, by taking the branch that asserts
+# farol says what to build. So a CI that skips this leaves the page itself
+# covered by nothing.
+#
+# The frontend the binary embeds, which the integration tests serve.
+web-dist:
+    cd web && npm ci
+    cd web && npm run build
