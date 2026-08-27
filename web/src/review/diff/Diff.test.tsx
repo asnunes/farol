@@ -33,6 +33,7 @@ function diff(): FileDiff {
     binary: false,
     additions: 1,
     deletions: 0,
+    line_count: 2,
     hunks: [
       {
         old_start: 1,

@@ -17,6 +17,15 @@ pub trait ReviewScopeSource: Send + Sync {
     /// needs it to reject a note pointing past the end of the file.
     fn file_line_count(&self, path: &str) -> Result<u32>;
 
+    /// The file as it stands after the change, from `from` to `to` inclusive,
+    /// one string per line.
+    ///
+    /// Beside the count rather than with the diff because it answers about the
+    /// file and not about the change: the screen asks for it to show what the
+    /// diff never printed. A range past the end is trimmed to what is there,
+    /// since the caller is a reader scrolling, not a caller making a claim.
+    fn file_lines(&self, path: &str, from: u32, to: u32) -> Result<Vec<String>>;
+
     /// Turn a raw path into one proven to be under review. This is the only
     /// constructor of [`ReviewPath`], so anything downstream that takes one is
     /// guaranteed the check happened.

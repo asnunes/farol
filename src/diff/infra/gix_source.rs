@@ -103,15 +103,20 @@ impl ReviewScopeSource for GixSource {
     }
 
     fn file_line_count(&self, path: &str) -> Result<u32> {
-        match self.head_blobs.get(path) {
-            Some(blob) => Ok(String::from_utf8_lossy(&blob.data).lines().count() as u32),
-            // A deleted file is under review but has no head side to measure.
-            // Zero, not a rejection: it belongs in a block or in the skim list
-            // like any other change, and only a line note is impossible — which
-            // the range check then says in its own words.
-            None if self.scope.contains(path) => Ok(0),
-            None => Err(Error::from(self.scope.reject(path))),
-        }
+        Ok(self.new_text(path)?.len() as u32)
+    }
+
+    fn file_lines(&self, path: &str, from: u32, to: u32) -> Result<Vec<String>> {
+        let all = self.new_text(path)?;
+        // Trimmed rather than refused. The caller is a reader opening what the
+        // diff did not print, and asking past the last line is what happens
+        // when the last thing in the file is a hunk.
+        let first = from.max(1) as usize;
+        let last = (to as usize).min(all.len());
+        Ok(match first > last {
+            true => Vec::new(),
+            false => all[first - 1..last].to_vec(),
+        })
     }
 }
 
@@ -139,6 +144,7 @@ impl FileDiffSource for GixSource {
             change.old_path.clone(),
             change.status,
             new.map(Blob::hash).unwrap_or_default(),
+            new.map(|blob| lines_of(blob).len() as u32).unwrap_or(0),
             diffed,
         ))
     }
@@ -188,12 +194,29 @@ impl FileDiffSource for GixSource {
             None,
             FileStatus::Modified,
             new.as_ref().map(Blob::hash).unwrap_or_default(),
+            new.as_ref()
+                .map(|blob| lines_of(blob).len() as u32)
+                .unwrap_or(0),
             diffed,
         )))
     }
 }
 
 impl GixSource {
+    /// The file as it stands after the change, line by line.
+    ///
+    /// A deleted file is under review but has no side to read: it comes back
+    /// empty, not as a rejection, the way it belongs in a block or in the skim
+    /// list like any other change. What is genuinely outside the window is
+    /// refused, in the scope's own words.
+    fn new_text(&self, path: &str) -> Result<Vec<String>> {
+        match self.head_blobs.get(path) {
+            Some(blob) => Ok(lines_of(blob)),
+            None if self.scope.contains(path) => Ok(Vec::new()),
+            None => Err(Error::from(self.scope.reject(path))),
+        }
+    }
+
     fn new_side<'a>(&self, path: &str, blob: Option<&'a Blob>) -> Side<'a> {
         match blob {
             None => Side::Absent,
@@ -207,6 +230,7 @@ impl GixSource {
         old_path: Option<String>,
         status: FileStatus,
         new_content_hash: String,
+        line_count: u32,
         diffed: Diffed,
     ) -> FileDiff {
         let (binary, hunks, additions, deletions) = match diffed {
@@ -221,9 +245,20 @@ impl GixSource {
             binary,
             additions,
             deletions,
+            line_count,
             new_content_hash,
         }
     }
+}
+
+/// A blob as text, line by line. Lossy on purpose: a file git will diff is text
+/// as far as the reviewer is concerned, and refusing to show a stray byte would
+/// hide the line it sits on.
+fn lines_of(blob: &Blob) -> Vec<String> {
+    String::from_utf8_lossy(&blob.data)
+        .lines()
+        .map(str::to_string)
+        .collect()
 }
 
 impl CommitHistorySource for GixSource {

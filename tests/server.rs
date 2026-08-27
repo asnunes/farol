@@ -249,6 +249,47 @@ fn the_diff_of_a_file_comes_back_with_the_line_numbers_the_notes_anchor_to() {
 }
 
 #[test]
+fn the_lines_around_a_hunk_come_back_when_the_reader_opens_the_gap() {
+    // What the diff never printed, read off the file itself. The numbers are
+    // the page's job: it has the hunks and works out what each line is called
+    // on both sides.
+    let s = Serving::new();
+
+    let opened = s.json("/api/lines?path=src/a.rs&from=40&to=43");
+
+    assert_eq!(
+        opened["lines"].as_array().unwrap(),
+        &vec!["line 40", "line 41", "line 42", "line 43"]
+    );
+}
+
+#[test]
+fn opening_past_the_end_of_the_file_stops_at_the_end() {
+    // The last gap is asked for in twenty-line steps like any other, and the
+    // file ends where it ends. Trimmed rather than refused: the reader asked
+    // to see what is there.
+    let s = Serving::new();
+
+    let opened = s.json("/api/lines?path=src/a.rs&from=58&to=78");
+
+    let lines = opened["lines"].as_array().unwrap();
+    assert_eq!(lines.len(), 3, "{lines:?}");
+    assert_eq!(lines[2], "line 60");
+}
+
+#[test]
+fn a_path_outside_the_review_cannot_be_read_a_line_at_a_time_either() {
+    // The same door as the diff route, which is the one that matters: reading
+    // arbitrary lines of arbitrary files is the worse of the two holes.
+    let s = Serving::new();
+
+    let (status, body) = s.probe("GET", "/api/lines?path=../../etc/passwd&from=1&to=20", None);
+
+    assert_eq!(status, 400);
+    assert!(body.contains("passwd"), "{body}");
+}
+
+#[test]
 fn a_path_outside_the_review_is_refused_rather_than_served() {
     // The pane is driven by the path in the query; without this a crafted
     // request would read any file in the repository.

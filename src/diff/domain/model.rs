@@ -89,6 +89,9 @@ pub struct FileDiff {
     pub binary: bool,
     pub additions: u32,
     pub deletions: u32,
+    /// How long the file is after the change. The screen needs it to know
+    /// whether there is anything left below the last hunk to open.
+    pub line_count: u32,
     /// Hash of the file contents *after* the change. Viewed-state invalidation
     /// keys on this and not on the diff text, so a rebase that only shifts
     /// context does not reopen the whole branch.
@@ -174,6 +177,7 @@ mod tests {
             path: "a.rs".into(),
             old_path: None,
             status: FileStatus::Modified,
+            line_count: 100,
             hunks: vec![
                 Hunk {
                     old_start: 10,
