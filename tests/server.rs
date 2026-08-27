@@ -542,6 +542,43 @@ fn closing_a_comment_that_is_not_there_is_refused_rather_than_ignored() {
     assert_eq!(status, 400);
 }
 
+// ---- sending the review -------------------------------------------------
+
+#[test]
+fn the_page_is_told_why_a_review_cannot_be_sent_from_a_repository_with_no_remote() {
+    // The one publishing state a test can reach without a network, and the
+    // one that proves the route answers with a reason rather than a flag: a
+    // repository with nowhere to send to is not a step on the way to being
+    // ready, it is a different situation.
+    let s = Serving::new();
+
+    let standing = s.json("/api/publish");
+
+    assert_eq!(standing["state"], "noRemote");
+    assert_eq!(standing["branch"], "feature/x");
+    // Nothing to offer, so nothing is offered: a state with no link must not
+    // hand the screen an empty string to draw as a button.
+    assert!(standing.get("openAt").is_none(), "{standing}");
+    assert!(standing.get("pullRequest").is_none(), "{standing}");
+}
+
+#[test]
+fn the_token_route_answers_with_nothing_and_keeps_it_that_way() {
+    // A route that hands the token back is a second place it can be read
+    // from. Driven over the wire here, where the whole composition is in
+    // play, rather than against the handler alone.
+    let s = Serving::new();
+
+    let (status, body) = s.probe(
+        "PUT",
+        "/api/token",
+        Some(r#"{"token":"github_pat_written_by_a_test"}"#),
+    );
+
+    assert_eq!(status, 204);
+    assert!(body.trim().is_empty(), "{body}");
+}
+
 // ---- the page finding out on its own ------------------------------------
 
 #[test]

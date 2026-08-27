@@ -102,12 +102,18 @@ impl Repo {
             .expect("farol should run")
     }
 
-    /// `farol`, pointed at this repository's own state.
+    /// `farol`, pointed at this repository's own state and its own config.
+    ///
+    /// Both, and for the same reason: a test that reached the real ones would
+    /// stop the servers of whoever is running it, and overwrite the token they
+    /// publish reviews with. The second one is not hypothetical. It happened
+    /// while this test suite was being written.
     pub fn command(&self, args: &[&str]) -> Command {
         let mut cmd = Command::new(BIN);
         cmd.args(args)
             .current_dir(self.path())
-            .env("FAROL_STATE_DIR", self.state_dir());
+            .env("FAROL_STATE_DIR", self.state_dir())
+            .env("XDG_CONFIG_HOME", self.path().join(".farol-config"));
         cmd
     }
 

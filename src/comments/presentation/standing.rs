@@ -4,14 +4,18 @@ use crate::comments::application::Standing;
 use crate::comments::domain::Readiness;
 use crate::shared::short;
 
-/// Whether the review can go, for the terminal.
+/// Where the review stands, for the terminal.
 ///
 /// One line, opening with the state as a word, because the first reader of this
 /// is a session deciding what to do next and the second is a person who wants
 /// to know what is in the way. Both read the beginning of the line.
-pub struct Where<'a>(pub &'a Standing);
+///
+/// Named after what it prints rather than after the question it answers: this
+/// is the third name the same idea already carries, after the domain's
+/// `Readiness` and the application's `Standing`.
+pub struct StandingLine<'a>(pub &'a Standing);
 
-impl Display for Where<'_> {
+impl Display for StandingLine<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let branch = &self.0.branch;
         match &self.0.readiness {
@@ -75,7 +79,7 @@ mod tests {
                 "no pull request:",
             ),
         ] {
-            let said = Where(&at(readiness)).to_string();
+            let said = StandingLine(&at(readiness)).to_string();
             assert!(said.starts_with(opening), "{said}");
         }
     }
@@ -84,7 +88,7 @@ mod tests {
     fn the_commit_the_pull_request_shows_is_named_short() {
         // It is the sha a refused publish will compare against, so it belongs
         // in the answer, at the length every other tool prints.
-        let said = Where(&at(Readiness::Ready {
+        let said = StandingLine(&at(Readiness::Ready {
             pull_request: 12,
             head: "abc1234def5678".into(),
         }))
@@ -105,14 +109,14 @@ mod tests {
                 open_at: "https://example.test/compare".into(),
             },
         ] {
-            let said = Where(&at(readiness)).to_string();
+            let said = StandingLine(&at(readiness)).to_string();
             assert!(said.contains("feat/x"), "{said}");
         }
     }
 
     #[test]
     fn the_page_that_opens_a_pull_request_travels_with_the_state_that_has_one() {
-        let said = Where(&at(Readiness::NoPullRequest {
+        let said = StandingLine(&at(Readiness::NoPullRequest {
             open_at: "https://example.test/compare".into(),
         }))
         .to_string();
