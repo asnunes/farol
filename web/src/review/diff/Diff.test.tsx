@@ -1,8 +1,8 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { comment, noComments } from "./testing";
+import { comment, file, noComments } from "./testing";
 import type { Token, Tokenize } from "@/highlight/tokens";
-import type { FileDiff, FileView } from "@/api";
+import type { FileDiff } from "@/api";
 
 /** The grammar is fetched over the network and this is about what reaches the
  * screen, so the tokenizer is stood in for. */
@@ -11,20 +11,6 @@ vi.mock("@/hooks/useHighlight", () => ({ useHighlight: () => tokenizer }));
 
 const { Diff } = await import("./Diff");
 
-function file(): FileView {
-  return {
-    path: "src/a.rs",
-    status: "modified",
-    additions: 1,
-    deletions: 0,
-    viewed: false,
-    notes: [],
-    lineNotes: [],
-    tags: [],
-    skim: false,
-    skimReason: null,
-  };
-}
 
 function diff(): FileDiff {
   return {

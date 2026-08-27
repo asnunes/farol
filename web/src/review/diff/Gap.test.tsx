@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { noComments } from "./testing";
-import type { CommentView, FileDiff, FileView } from "@/api";
+import { file, noComments } from "./testing";
+import type { CommentView, FileDiff } from "@/api";
 
 vi.mock("@/hooks/useHighlight", () => ({ useHighlight: () => null }));
 
@@ -177,17 +177,3 @@ function twoHunks(count: number, secondAt = 60): FileDiff {
   };
 }
 
-function file(): FileView {
-  return {
-    path: "src/a.rs",
-    status: "modified",
-    additions: 2,
-    deletions: 0,
-    viewed: false,
-    notes: [],
-    lineNotes: [],
-    tags: [],
-    skim: false,
-    skimReason: null,
-  };
-}
