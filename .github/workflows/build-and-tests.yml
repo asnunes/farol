@@ -7,7 +7,7 @@
 # Each job runs a recipe from the justfile rather than listing its own steps.
 # Written out here, the file would become a second definition of what "green"
 # means, and the two would part ways on the first step somebody adds locally.
-name: check
+name: build & tests
 
 on:
   pull_request:
