@@ -26,7 +26,12 @@ impl Repo {
         repo.git(&["init", "-q", "--initial-branch", branch]);
         repo.git(&["config", "user.email", "test@farol"]);
         repo.git(&["config", "user.name", "farol test"]);
-        repo.write("README.md", "start\n");
+        // Seeded with the directory it lives in, so two repositories built in
+        // the same second are not the same repository. Everything else about
+        // them is identical — same file, same author, same message — and git
+        // hashes the timestamp only to the second, so without this they share
+        // a base commit and a test about telling them apart cannot.
+        repo.write("README.md", &format!("start\n{}\n", repo.path().display()));
         repo.git(&["add", "."]);
         repo.commit("initial");
         repo
