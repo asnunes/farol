@@ -89,6 +89,19 @@ describe("opening what the diff did not print", () => {
     expect(await screen.findByText("vale ler junto")).toBeTruthy();
   });
 
+  it("drops the band once the code above runs into the hunk", async () => {
+    // The band announces that the file jumps here. Opened, it does not jump,
+    // and announcing a jump that is not there sends the reader looking for a
+    // discontinuity nobody made.
+    const { container } = render(<Diff {...props(twoHunks(100))} />);
+    expect(container.textContent).toContain("@@ -58,2 +60,2 @@");
+
+    fireEvent.click(screen.getByLabelText("Open all 49 lines hidden here"));
+
+    await screen.findByText("line 11");
+    expect(container.textContent).not.toContain("@@ -58,2 +60,2 @@");
+  });
+
   it("takes the whole gap in one press, and the band goes with it", async () => {
     const { container } = render(<Diff {...props(twoHunks(100))} />);
 

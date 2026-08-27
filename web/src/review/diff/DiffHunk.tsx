@@ -45,20 +45,17 @@ export function DiffHunk({ hunk, file, tokenize, view, commentary, gap }: DiffHu
 
   const Lines = view === "split" ? SplitLines : UnifiedLines;
 
-  const header = `@@ -${hunk.old_start},${hunk.old_lines} +${hunk.new_start},${hunk.new_lines} @@`;
-
   return (
     <div>
-      {/* The band the file jumps at. When what it jumps over is still closed,
-          the controls that open it live in the same band: the announcement and
-          the way to act on it are one thing, and two stacked bands would say it
-          twice. */}
-      {gap ? (
+      {/* The band says the file jumps here, so it is drawn only when it does:
+          when lines above this hunk are still closed. Opened, the code above
+          runs straight into this hunk and a band would announce a jump that is
+          no longer there. The controls live in the same band as the
+          announcement, since the two are one thing. */}
+      {gap && (
         <Gap gap={gap.gap} onOpen={gap.onOpen}>
-          {header}
+          {`@@ -${hunk.old_start},${hunk.old_lines} +${hunk.new_start},${hunk.new_lines} @@`}
         </Gap>
-      ) : (
-        <div className="hunk bg-sunken px-6 py-1 text-xs text-faint">{header}</div>
       )}
       <Lines hunk={hunk} file={file} coloured={coloured} marks={marks} commentary={commentary} />
     </div>
