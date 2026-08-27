@@ -39,7 +39,12 @@ jobs:
         with:
           components: clippy, rustfmt
 
+      # Saved on a red run too. Without this a branch that fails three times
+      # compiles gix and tokio from scratch three times, which is how the first
+      # runs of this workflow took three and a half minutes each.
       - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
 
       - uses: extractions/setup-just@v2
 
