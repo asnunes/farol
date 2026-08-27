@@ -37,8 +37,8 @@ export function Close({ comment, actions }: CloseProps) {
       size={armed ? "xs" : "icon-xs"}
       className={
         armed
-          ? "closer cursor-pointer bg-comment-ink text-[0.6875rem] text-surface hover:bg-comment-ink/90 hover:text-surface"
-          : "closer cursor-pointer text-faint hover:bg-sunken hover:text-comment-ink"
+          ? "closer bg-comment-ink text-[0.6875rem] text-surface hover:bg-comment-ink/90 hover:text-surface"
+          : "closer text-faint hover:bg-sunken hover:text-comment-ink"
       }
       aria-label={armed ? "Press again to close this comment" : "Close this comment"}
       title={armed ? "Press again — closing removes it" : "Close this comment"}

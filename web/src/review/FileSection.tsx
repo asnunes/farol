@@ -84,7 +84,7 @@ export function FileSection({
               <Button
                 variant="link"
                 size="xs"
-                className="cursor-pointer px-0 text-accent"
+                className="px-0 text-accent"
                 onClick={() => setAsked(true)}
               >
                 Load the diff

@@ -29,7 +29,7 @@ export function Sent({ sent, onDone }: SentProps) {
       </a>
 
       <DialogFooter>
-        <Button size="sm" className="cursor-pointer" onClick={onDone}>
+        <Button size="sm" onClick={onDone}>
           Done
         </Button>
       </DialogFooter>

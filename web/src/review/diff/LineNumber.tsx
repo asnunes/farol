@@ -35,7 +35,7 @@ export function LineNumber({ number, on, tint, commentary }: LineNumberProps) {
         <Button
           variant="ghost"
           size="icon-xs"
-          className="absolute top-1/2 left-1 size-4 -translate-y-1/2 cursor-pointer rounded bg-comment-ink text-surface opacity-0 group-hover/ln:opacity-100 hover:bg-comment-ink/90 hover:text-surface focus-visible:opacity-100"
+          className="absolute top-1/2 left-1 size-4 -translate-y-1/2 rounded bg-comment-ink text-surface opacity-0 group-hover/ln:opacity-100 hover:bg-comment-ink/90 hover:text-surface focus-visible:opacity-100"
           aria-label={`Comment on line ${on}`}
           title="Comment on this line"
           onClick={() => commentary.select.open(on)}

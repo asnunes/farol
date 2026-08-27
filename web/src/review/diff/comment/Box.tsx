@@ -53,13 +53,13 @@ export function Box({ span: lines, onSave, onCancel }: BoxProps) {
       <div className="mt-2 flex gap-2">
         <Button
           size="xs"
-          className="cursor-pointer bg-comment-ink text-surface hover:bg-comment-ink/90"
+          className="bg-comment-ink text-surface hover:bg-comment-ink/90"
           disabled={!text.trim() || saving}
           onClick={() => void save()}
         >
           Comment
         </Button>
-        <Button size="xs" variant="ghost" className="cursor-pointer text-ink-muted" onClick={onCancel}>
+        <Button size="xs" variant="ghost" className="text-ink-muted" onClick={onCancel}>
           Cancel
         </Button>
       </div>

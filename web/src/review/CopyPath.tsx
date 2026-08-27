@@ -10,7 +10,7 @@ export function CopyPath({ path }: CopyPathProps) {
     <Button
       variant="ghost"
       size="icon-xs"
-      className="copypath cursor-pointer text-faint hover:bg-sunken hover:text-accent"
+      className="copypath text-faint hover:bg-sunken hover:text-accent"
       onClick={() => void copy(path)}
       aria-label={copied ? "Path copied" : "Copy path"}
       title="Copy path"

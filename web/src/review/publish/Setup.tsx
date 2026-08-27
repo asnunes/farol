@@ -54,7 +54,6 @@ export function Setup({ open, onOpenChange, readiness, onCheck, onToken }: Setup
             <Button
               size="sm"
               variant="outline"
-              className="cursor-pointer"
               onClick={() => void onCheck()}
             >
               Check again
@@ -77,7 +76,7 @@ function Command({ line }: { line: string }) {
       <Button
         size="icon-xs"
         variant="ghost"
-        className="cursor-pointer text-faint hover:text-ink"
+        className="text-faint hover:text-ink"
         aria-label="Copy this command"
         onClick={() => void copy(line)}
       >

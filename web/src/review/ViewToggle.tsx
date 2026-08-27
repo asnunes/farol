@@ -26,7 +26,7 @@ export function ViewToggle({ view, onChange }: ViewToggleProps) {
           size="sm"
           aria-label={says}
           title={says}
-          className="size-6 min-w-0 cursor-pointer text-ink-muted hover:text-ink data-[state=on]:bg-sunken data-[state=on]:text-ink"
+          className="size-6 min-w-0 text-ink-muted hover:text-ink data-[state=on]:bg-sunken data-[state=on]:text-ink"
         >
           <Icon className="size-3.5" aria-hidden="true" />
         </ToggleGroupItem>
