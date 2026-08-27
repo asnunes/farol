@@ -1,0 +1,70 @@
+# What has to pass before anything is merged.
+#
+# Two jobs rather than one, because the halves have nothing to say to each
+# other: the Rust side and the web side start together and the pull request
+# waits for the slower one instead of for their sum.
+#
+# Each job runs a recipe from the justfile rather than listing its own steps.
+# Written out here, the file would become a second definition of what "green"
+# means, and the two would part ways on the first step somebody adds locally.
+name: build & tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A second push to the same branch makes the first run pointless. Cancelling it
+# frees the runner instead of paying for an answer nobody will read.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The frontend first. `tests/server.rs` serves the page over a real
+      # socket, and without `web/dist` that test passes by taking the branch
+      # for an unbuilt checkout, which asserts nothing about the page.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      # Saved on a red run too. Without this a branch that fails three times
+      # compiles gix and tokio from scratch three times, which is how the first
+      # runs of this workflow took three and a half minutes each.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+
+      - uses: extractions/setup-just@v2
+
+      - run: just web-dist
+      - run: just check-rust
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - uses: extractions/setup-just@v2
+
+      - run: npm ci
+        working-directory: web
+
+      - run: just check-web
