@@ -75,6 +75,20 @@ wrote the code can read them, answer, and close them without leaving the
 terminal. Closing removes it: a comment lives as long as it is a question, which
 is why the list never needs a filter.
 
+When the review is finished, it goes to the pull request as a real GitHub
+review: the same files, the same line ranges, the same words, with a summary and
+a verdict. From the screen, or from here.
+
+```bash
+farol github status         # whether it can be sent, and what is missing
+farol github review --comment
+farol github review --request-changes --summary "The retry window needs a bound."
+```
+
+`status` exits non-zero while the review cannot go, so a session can branch on
+it. The token is the one step that is not delegated: farol keeps it under
+`~/.config/farol`, and only the screen asks for it.
+
 `farol --help` and `farol <command> --help` list the rest.
 
 ## Reading
@@ -92,6 +106,11 @@ To comment, drag down the line numbers, or press the `+` that appears beside one
 A comment can be copied — path, lines and text in one paste — and closed once it
 is answered. Closing asks twice, because it drops the comment and nothing here
 is in git to recover it from.
+
+Anything the diff did not print is a keystroke away: the band between two hunks
+opens twenty lines at a time, from either end, or the whole gap at once. Opened
+lines take no comment, because GitHub only accepts one on a line the diff
+reaches.
 
 ## How it behaves
 
@@ -142,6 +161,9 @@ just test
 just check     # layers, tests, clippy, fmt
 ```
 
+`check` is `check-rust` plus `check-web`, and CI runs one in each of two
+parallel jobs, on every pull request.
+
 The frontend is embedded in the binary, so a release is one file. `just layers`
 enforces the one architectural rule worth machine-checking: HTTP lives in
 `src/server/` and nothing else knows it exists.
@@ -155,6 +177,7 @@ src/
 ├── shared/      errors, git dir and store paths
 ├── diff/        derived from git, never persisted
 ├── map/         blocks, order, notes, written by the session
+├── comments/    what the reviewer asks back, and sending it to GitHub
 └── progress/    what you have read, written by the server
 web/             vite + react
 ```
