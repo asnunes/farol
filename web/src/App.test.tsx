@@ -195,7 +195,7 @@ describe("landing", () => {
     // backticks are how that is spelled. Showing them raw makes the page look
     // like it lost a step.
     const r = review();
-    r.blocks[0].context = "The `Hunk` already carried `new_start`.";
+    r.blocks[0].context = "The `Hunk` already carried `newStart`.";
     r.blocks[0].files[0].notes = [{ block: "first", text: "Reuse `FileDiff` here." }];
     serve({ review: r });
     render(<App />);
@@ -470,15 +470,15 @@ describe("the diff itself", () => {
   const oneChange = {
     hunks: [
       {
-        old_start: 19,
-        old_lines: 3,
-        new_start: 19,
-        new_lines: 3,
+        oldStart: 19,
+        oldLines: 3,
+        newStart: 19,
+        newLines: 3,
         lines: [
-          { kind: "context", old_number: 19, new_number: 19, content: "line 19" },
-          { kind: "removed", old_number: 20, new_number: null, content: "line 20" },
-          { kind: "added", old_number: null, new_number: 20, content: "CHANGED" },
-          { kind: "context", old_number: 21, new_number: 21, content: "line 21" },
+          { kind: "context", oldNumber: 19, newNumber: 19, content: "line 19" },
+          { kind: "removed", oldNumber: 20, newNumber: null, content: "line 20" },
+          { kind: "added", oldNumber: null, newNumber: 20, content: "CHANGED" },
+          { kind: "context", oldNumber: 21, newNumber: 21, content: "line 21" },
         ],
       },
     ],

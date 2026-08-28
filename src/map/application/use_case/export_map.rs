@@ -2,7 +2,7 @@ use crate::diff::application::ReviewScope;
 use crate::error::Result;
 use crate::map::application::{Bundle, MapVersions};
 use crate::map::domain::{MapError, WORKING};
-use crate::map::presentation::short;
+use crate::shared::short;
 
 /// Write the map out for another machine to read.
 ///

@@ -40,7 +40,7 @@ export function Token({ onToken }: { onToken: (token: string) => Promise<void> }
       />
       <Button
         size="sm"
-        className="mt-2 cursor-pointer"
+        className="mt-2"
         disabled={!token.trim() || saving}
         onClick={() => void save()}
       >

@@ -73,12 +73,11 @@ export function Writing({
       <Verdicts value={verdict} onChange={setVerdict} approveOnly={alone} />
 
       <DialogFooter>
-        <Button size="sm" variant="ghost" className="cursor-pointer text-ink-muted" onClick={onCancel}>
+        <Button size="sm" variant="ghost" className="text-ink-muted" onClick={onCancel}>
           Cancel
         </Button>
         <Button
           size="sm"
-          className="cursor-pointer"
           disabled={short || sending}
           title={short ? "A review that asks for something has to say what" : undefined}
           onClick={() => void send()}

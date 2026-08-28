@@ -33,21 +33,21 @@ export function Opened({ range, file, tokenize, view, shift }: OpenedProps) {
     const marked = notedBy(file, line) && "noted";
 
     return (
-      <div key={line.new_number}>
+      <div key={line.newNumber}>
         {view === "split" ? (
           <div className={cn("row split-row bg-surface", marked)}>
-            <LineNumber number={line.old_number} on={null} />
+            <LineNumber number={line.oldNumber} on={null} />
             <div className="code break-words whitespace-pre-wrap">
               <Code tokens={coloured?.[i]} plain={content} />
             </div>
-            <LineNumber number={line.new_number} on={null} />
+            <LineNumber number={line.newNumber} on={null} />
             <div className="code break-words whitespace-pre-wrap">
               <Code tokens={coloured?.[i]} plain={content} />
             </div>
           </div>
         ) : (
           <div className={cn("row diff-row bg-surface", marked)}>
-            <LineNumber number={line.new_number} on={null} />
+            <LineNumber number={line.newNumber} on={null} />
             <div className="code break-words whitespace-pre-wrap">
               {"  "}
               <Code tokens={coloured?.[i]} plain={content} />
@@ -67,8 +67,8 @@ export function Opened({ range, file, tokenize, view, shift }: OpenedProps) {
 function at(number: number, shift: number, content: string): DiffLine {
   return {
     kind: "context",
-    old_number: number + shift,
-    new_number: number,
+    oldNumber: number + shift,
+    newNumber: number,
     content,
   };
 }

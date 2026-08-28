@@ -10,7 +10,7 @@ export function ThemeSwitch({ theme, onChange }: ThemeSwitchProps) {
     <Button
       variant="ghost"
       size="icon-xs"
-      className="themeswitch cursor-pointer text-ink-muted hover:bg-transparent hover:text-ink"
+      className="themeswitch text-ink-muted hover:bg-transparent hover:text-ink"
       onClick={() => onChange(next)}
       aria-label={`Switch to the ${next} theme`}
       title={`Switch to the ${next} theme`}

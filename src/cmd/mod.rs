@@ -1,3 +1,5 @@
+//! The command line, and the one place a command becomes a use case.
+
 use clap::{Args, Parser, Subcommand};
 
 mod block;

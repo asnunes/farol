@@ -54,7 +54,6 @@ export function Setup({ open, onOpenChange, readiness, onCheck, onToken }: Setup
             <Button
               size="sm"
               variant="outline"
-              className="cursor-pointer"
               onClick={() => void onCheck()}
             >
               Check again
@@ -77,7 +76,7 @@ function Command({ line }: { line: string }) {
       <Button
         size="icon-xs"
         variant="ghost"
-        className="cursor-pointer text-faint hover:text-ink"
+        className="text-faint hover:text-ink"
         aria-label="Copy this command"
         onClick={() => void copy(line)}
       >
@@ -95,7 +94,7 @@ function Command({ line }: { line: string }) {
 function Open({ at }: { at: string }) {
   return (
     <a
-      className="flex items-center gap-1.5 font-sans text-sm text-accent underline"
+      className="flex items-center gap-1.5 font-sans text-sm text-highlight underline"
       href={at}
       target="_blank"
       rel="noreferrer"

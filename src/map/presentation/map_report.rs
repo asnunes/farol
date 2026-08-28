@@ -2,8 +2,9 @@
 
 use std::fmt::{self, Display};
 
-use super::text::{indent_rest, short};
+use super::text::indent_rest;
 use crate::map::domain::{ReviewMap, WORKING};
+use crate::shared::short;
 
 /// The map itself. Deliberately without the deactivated notes: this stays a
 /// picture of the map rather than a picture of the map plus a work queue.

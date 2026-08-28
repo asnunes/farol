@@ -21,7 +21,7 @@ export function AtLine({ line, commentary }: AtLineProps) {
   // The box sits where the finished comment will: under the last line of the
   // span, which is where the reader stopped reading to write it.
   const span = select.composing;
-  const writing = span !== null && line.new_number !== null && span.to === line.new_number;
+  const writing = span !== null && line.newNumber !== null && span.to === line.newNumber;
 
   if (here.length === 0 && !writing) return null;
 

@@ -4,7 +4,7 @@ use crate::diff::application::ReviewScope;
 use crate::error::Result;
 use crate::map::application::Bundle;
 use crate::map::domain::{MapError, MapRepository, ReviewMap};
-use crate::map::presentation::short;
+use crate::shared::short;
 
 /// Store a map somebody else exported as a version here.
 ///

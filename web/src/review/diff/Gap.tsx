@@ -80,7 +80,7 @@ function Pull({ label, onPull, children }: PullProps) {
     <Button
       size="icon-xs"
       variant="ghost"
-      className="cursor-pointer text-faint hover:bg-surface hover:text-ink"
+      className="text-faint hover:bg-surface hover:text-ink"
       aria-label={label}
       title={label}
       onClick={() => void onPull()}

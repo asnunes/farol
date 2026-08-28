@@ -1,8 +1,8 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { comment, noComments } from "./testing";
+import { comment, file, noComments } from "./testing";
 import type { Token, Tokenize } from "@/highlight/tokens";
-import type { FileDiff, FileView } from "@/api";
+import type { FileDiff } from "@/api";
 
 /** The grammar is fetched over the network and this is about what reaches the
  * screen, so the tokenizer is stood in for. */
@@ -11,20 +11,6 @@ vi.mock("@/hooks/useHighlight", () => ({ useHighlight: () => tokenizer }));
 
 const { Diff } = await import("./Diff");
 
-function file(): FileView {
-  return {
-    path: "src/a.rs",
-    status: "modified",
-    additions: 1,
-    deletions: 0,
-    viewed: false,
-    notes: [],
-    lineNotes: [],
-    tags: [],
-    skim: false,
-    skimReason: null,
-  };
-}
 
 function diff(): FileDiff {
   return {
@@ -33,16 +19,16 @@ function diff(): FileDiff {
     binary: false,
     additions: 1,
     deletions: 0,
-    line_count: 2,
+    lineCount: 2,
     hunks: [
       {
-        old_start: 1,
-        old_lines: 1,
-        new_start: 1,
-        new_lines: 2,
+        oldStart: 1,
+        oldLines: 1,
+        newStart: 1,
+        newLines: 2,
         lines: [
-          { kind: "context", old_number: 1, new_number: 1, content: "fn main() {}" },
-          { kind: "added", old_number: null, new_number: 2, content: "// nota" },
+          { kind: "context", oldNumber: 1, newNumber: 1, content: "fn main() {}" },
+          { kind: "added", oldNumber: null, newNumber: 2, content: "// nota" },
         ],
       },
     ],
@@ -184,8 +170,8 @@ describe("commenting on the diff", () => {
     const withRemoval = diff();
     withRemoval.hunks[0].lines.unshift({
       kind: "removed",
-      old_number: 1,
-      new_number: null,
+      oldNumber: 1,
+      newNumber: null,
       content: "fn main() { }",
     });
 

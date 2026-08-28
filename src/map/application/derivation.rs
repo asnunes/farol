@@ -92,18 +92,10 @@ mod tests {
     use super::*;
     use crate::map::domain::MapError;
     use crate::map::domain::{LineRange, NoteFate, OrphanReason, Position};
-    use crate::testing::{FakeDiffSource, InMemoryMapRepository, hunk, services, slug};
+    use crate::testing::{
+        FakeDiffSource, InMemoryMapRepository, hunk, map_with_note, services, slug,
+    };
     use std::sync::Arc;
-
-    fn mapped(sha: &str, range: LineRange, text: &str) -> ReviewMap {
-        let mut map = ReviewMap::new("feature/x", "main", sha);
-        map.add_block(&slug("core"), "Core", "why", Position::End)
-            .unwrap();
-        map.add_file(&slug("core"), "a.rs", None, None).unwrap();
-        map.add_line_note(&slug("core"), "a.rs", range, text)
-            .unwrap();
-        map
-    }
 
     #[test]
     fn deriving_twice_on_the_same_commit_returns_the_existing_version() {
@@ -128,7 +120,11 @@ mod tests {
             .changed_between("old", "new", "a.rs", vec![hunk(1, 0, 5)]);
 
         let repo = Arc::new(InMemoryMapRepository::new());
-        repo.seed(mapped("old", LineRange::new(40, 45).unwrap(), "still true"));
+        repo.seed(map_with_note(
+            "old",
+            LineRange::new(40, 45).unwrap(),
+            "still true",
+        ));
 
         let map = services(source, repo).derivation.derive().unwrap().map;
         let notes = &map
@@ -152,7 +148,7 @@ mod tests {
             .with_ancestors(&["old"])
             .at_distance("old", 1);
         let repo = Arc::new(InMemoryMapRepository::new());
-        repo.seed(mapped("old", LineRange::new(1, 2).unwrap(), "x"));
+        repo.seed(map_with_note("old", LineRange::new(1, 2).unwrap(), "x"));
 
         let map = services(source, repo).derivation.derive().unwrap().map;
 
@@ -168,7 +164,7 @@ mod tests {
             .at_distance("new", 1);
 
         let repo = Arc::new(InMemoryMapRepository::new());
-        let mut stale = mapped("new", LineRange::new(1, 2).unwrap(), "x");
+        let mut stale = map_with_note("new", LineRange::new(1, 2).unwrap(), "x");
         // Deactivate it the way a derivation would, so the next one inherits a
         // map with an undecided orphan on it.
         stale

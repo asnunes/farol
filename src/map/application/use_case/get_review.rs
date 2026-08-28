@@ -54,17 +54,11 @@ mod tests {
     use super::*;
     use crate::map::domain::MapError;
     use crate::progress::application::MarkViewed;
-    use crate::testing::{
-        FakeDiffSource, InMemoryMapRepository, InMemoryProgressRepository, services, slug,
-    };
+    use crate::testing::{FakeDiffSource, InMemoryProgressRepository, slug, use_case_setup};
     use std::sync::Arc;
 
     fn on(paths: &[&str]) -> (GetReview, ProgressStore, crate::map::application::MapEditor) {
-        let svc = services(
-            FakeDiffSource::with_paths(paths).on_commit("head"),
-            Arc::new(InMemoryMapRepository::new()),
-        );
-        let scope = ReviewScope::new(Arc::new(FakeDiffSource::with_paths(paths)));
+        let (svc, scope) = use_case_setup(paths);
         let progress = ProgressStore::new(
             Arc::new(InMemoryProgressRepository::default()),
             crate::diff::application::FileDiffs::new(Arc::new(FakeDiffSource::with_paths(paths))),

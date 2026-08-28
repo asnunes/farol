@@ -6,7 +6,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 export function Unmapped({ paths }: UnmappedProps) {
   return (
     <Alert className="unmapped m-6 w-auto border-note-rule bg-note-bg">
-      <TriangleAlert className="text-accent" />
+      <TriangleAlert className="text-highlight" />
       <AlertTitle className="font-sans text-ink">
         {paths.length} file(s) changed after this map was made
       </AlertTitle>

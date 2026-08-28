@@ -54,17 +54,12 @@ impl CheckMap {
 mod tests {
     use super::*;
     use crate::map::domain::MapError;
-    use crate::testing::{FakeDiffSource, InMemoryMapRepository, services, slug};
-    use std::sync::Arc;
+    use crate::testing::{slug, use_case_setup};
 
     #[test]
     fn check_fails_on_a_file_nobody_assigned() {
         let paths = ["a.rs", "forgotten.rs"];
-        let svc = services(
-            FakeDiffSource::with_paths(&paths).on_commit("head"),
-            Arc::new(InMemoryMapRepository::new()),
-        );
-        let scope = ReviewScope::new(Arc::new(FakeDiffSource::with_paths(&paths)));
+        let (svc, scope) = use_case_setup(&paths);
         svc.editor
             .edit(|map| {
                 map.add_block(&slug("core"), "t", "c", crate::map::domain::Position::End)?;
@@ -81,11 +76,7 @@ mod tests {
     #[test]
     fn a_map_that_covers_every_file_and_leaves_no_orphan_passes() {
         let paths = ["a.rs", "b.rs"];
-        let svc = services(
-            FakeDiffSource::with_paths(&paths).on_commit("head"),
-            Arc::new(InMemoryMapRepository::new()),
-        );
-        let scope = ReviewScope::new(Arc::new(FakeDiffSource::with_paths(&paths)));
+        let (svc, scope) = use_case_setup(&paths);
         svc.editor
             .edit(|map| {
                 map.add_block(&slug("core"), "t", "c", crate::map::domain::Position::End)?;
@@ -106,11 +97,7 @@ mod tests {
         // Saying "read this diagonally" is a decision about the file, not a
         // failure to decide.
         let paths = ["a.rs", "Cargo.lock"];
-        let svc = services(
-            FakeDiffSource::with_paths(&paths).on_commit("head"),
-            Arc::new(InMemoryMapRepository::new()),
-        );
-        let scope = ReviewScope::new(Arc::new(FakeDiffSource::with_paths(&paths)));
+        let (svc, scope) = use_case_setup(&paths);
         svc.editor
             .edit(|map| {
                 map.add_block(&slug("core"), "t", "c", crate::map::domain::Position::End)?;
@@ -129,11 +116,7 @@ mod tests {
 
     #[test]
     fn an_orphan_nobody_decided_about_holds_the_check_open() {
-        let svc = services(
-            FakeDiffSource::with_paths(&["a.rs"]).on_commit("head"),
-            Arc::new(InMemoryMapRepository::new()),
-        );
-        let scope = ReviewScope::new(Arc::new(FakeDiffSource::with_paths(&["a.rs"])));
+        let (svc, scope) = use_case_setup(&["a.rs"]);
         svc.editor
             .edit(|map| {
                 map.add_block(&slug("core"), "t", "c", crate::map::domain::Position::End)?;

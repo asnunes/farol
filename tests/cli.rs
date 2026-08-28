@@ -395,15 +395,7 @@ fn a_full_cycle_ends_with_check_passing_and_show_reflecting_it() {
         "--note",
         "Not an additional change.",
     ]);
-    repo.ok(&[
-        "line",
-        "add",
-        "core",
-        "src/a.rs",
-        "10-20",
-        "--note",
-        "This ordering is deliberate.",
-    ]);
+    repo.core_note("src/a.rs", "10-20", "This ordering is deliberate.");
 
     let check = repo.ok(&["map", "check"]);
     assert!(check.contains("Map is complete."), "{check}");
@@ -429,16 +421,7 @@ fn check_fails_while_a_file_belongs_to_nobody() {
     repo.commit("second file");
 
     repo.derive();
-    repo.ok(&[
-        "block",
-        "add",
-        "core",
-        "--title",
-        "t",
-        "--context",
-        "c",
-        "src/a.rs",
-    ]);
+    repo.core_block(&["src/a.rs"]);
 
     let out = repo.farol(&["map", "check"]);
     assert!(!out.status.success(), "check should fail with a loose file");
@@ -457,16 +440,7 @@ fn deriving_twice_on_the_same_commit_returns_the_same_version() {
     repo.feature();
 
     repo.derive();
-    repo.ok(&[
-        "block",
-        "add",
-        "core",
-        "--title",
-        "t",
-        "--context",
-        "c",
-        "src/a.rs",
-    ]);
+    repo.core_block(&["src/a.rs"]);
 
     let second = repo.derive();
     assert!(second.contains("already exists"), "{second}");
@@ -482,30 +456,12 @@ fn reset_drops_the_newest_version_and_the_previous_one_takes_over() {
     repo.feature();
 
     repo.derive();
-    repo.ok(&[
-        "block",
-        "add",
-        "first",
-        "--title",
-        "t",
-        "--context",
-        "c",
-        "src/a.rs",
-    ]);
+    repo.block("first", &["src/a.rs"]);
 
     repo.write("src/b.rs", "second file\n");
     repo.commit("more work");
     repo.derive();
-    repo.ok(&[
-        "block",
-        "add",
-        "second",
-        "--title",
-        "t",
-        "--context",
-        "c",
-        "src/b.rs",
-    ]);
+    repo.block("second", &["src/b.rs"]);
     assert!(repo.ok(&["map", "show"]).contains("second"));
 
     let reset = repo.ok(&["map", "reset"]);
@@ -559,25 +515,8 @@ fn a_note_survives_a_change_far_above_it_by_moving() {
     let repo = Repo::new();
     repo.feature();
     repo.derive();
-    repo.ok(&[
-        "block",
-        "add",
-        "core",
-        "--title",
-        "t",
-        "--context",
-        "c",
-        "src/a.rs",
-    ]);
-    repo.ok(&[
-        "line",
-        "add",
-        "core",
-        "src/a.rs",
-        "40-45",
-        "--note",
-        "still true",
-    ]);
+    repo.core_block(&["src/a.rs"]);
+    repo.core_note("src/a.rs", "40-45", "still true");
 
     // Insert five lines at the very top: nothing the note described changed.
     let mut lines: Vec<String> = (1..=5).map(|i| format!("header {i}\n")).collect();
@@ -598,25 +537,8 @@ fn a_note_whose_code_was_rewritten_is_deactivated_with_its_prose_intact() {
     let repo = Repo::new();
     repo.feature();
     repo.derive();
-    repo.ok(&[
-        "block",
-        "add",
-        "core",
-        "--title",
-        "t",
-        "--context",
-        "c",
-        "src/a.rs",
-    ]);
-    repo.ok(&[
-        "line",
-        "add",
-        "core",
-        "src/a.rs",
-        "40-45",
-        "--note",
-        "expensive prose",
-    ]);
+    repo.core_block(&["src/a.rs"]);
+    repo.core_note("src/a.rs", "40-45", "expensive prose");
 
     // Rewrite exactly the lines the note covered.
     let mut lines: Vec<String> = (1..=39).map(|i| format!("line {i}\n")).collect();
@@ -657,25 +579,8 @@ fn a_note_can_be_discarded_after_its_file_was_renamed_away() {
     let repo = Repo::new();
     repo.feature();
     repo.derive();
-    repo.ok(&[
-        "block",
-        "add",
-        "core",
-        "--title",
-        "t",
-        "--context",
-        "c",
-        "src/a.rs",
-    ]);
-    repo.ok(&[
-        "line",
-        "add",
-        "core",
-        "src/a.rs",
-        "40-45",
-        "--note",
-        "expensive prose",
-    ]);
+    repo.core_block(&["src/a.rs"]);
+    repo.core_note("src/a.rs", "40-45", "expensive prose");
 
     repo.git(&["mv", "src/a.rs", "src/moved.rs"]);
     repo.commit("move it out of the way");
@@ -702,25 +607,8 @@ fn restoring_a_deactivated_note_brings_the_original_text_back() {
     let repo = Repo::new();
     repo.feature();
     repo.derive();
-    repo.ok(&[
-        "block",
-        "add",
-        "core",
-        "--title",
-        "t",
-        "--context",
-        "c",
-        "src/a.rs",
-    ]);
-    repo.ok(&[
-        "line",
-        "add",
-        "core",
-        "src/a.rs",
-        "40-45",
-        "--note",
-        "worth keeping",
-    ]);
+    repo.core_block(&["src/a.rs"]);
+    repo.core_note("src/a.rs", "40-45", "worth keeping");
 
     let mut lines: Vec<String> = (1..=39).map(|i| format!("line {i}\n")).collect();
     lines.push("rewritten\n".to_string());
@@ -760,16 +648,7 @@ fn a_range_past_the_end_of_the_file_is_rejected() {
     let repo = Repo::new();
     repo.feature();
     repo.derive();
-    repo.ok(&[
-        "block",
-        "add",
-        "core",
-        "--title",
-        "t",
-        "--context",
-        "c",
-        "src/a.rs",
-    ]);
+    repo.core_block(&["src/a.rs"]);
 
     let err = repo.fails(&["line", "add", "core", "src/a.rs", "500-520", "--note", "x"]);
     assert!(err.contains("outside"), "{err}");
@@ -854,16 +733,7 @@ fn malformed_ranges_are_rejected_with_the_expected_shape() {
     let repo = Repo::new();
     repo.feature();
     repo.derive();
-    repo.ok(&[
-        "block",
-        "add",
-        "core",
-        "--title",
-        "t",
-        "--context",
-        "c",
-        "src/a.rs",
-    ]);
+    repo.core_block(&["src/a.rs"]);
 
     for bad in ["40", "40-10", "abc"] {
         let err = repo.fails(&["line", "add", "core", "src/a.rs", bad, "--note", "x"]);
@@ -922,16 +792,7 @@ fn a_truncated_map_file_is_discarded_instead_of_crashing() {
     let repo = Repo::new();
     repo.feature();
     repo.derive();
-    repo.ok(&[
-        "block",
-        "add",
-        "core",
-        "--title",
-        "t",
-        "--context",
-        "c",
-        "src/a.rs",
-    ]);
+    repo.core_block(&["src/a.rs"]);
 
     let maps = repo.path().join(".git/farol/feature-x/maps");
     let file = std::fs::read_dir(&maps)
@@ -991,15 +852,7 @@ fn removing_a_block_keeps_the_prose_that_was_written_inside_it() {
     repo.feature();
     repo.derive();
     repo.core_block(&["src/a.rs"]);
-    repo.ok(&[
-        "line",
-        "add",
-        "core",
-        "src/a.rs",
-        "10-12",
-        "--note",
-        "worth moving",
-    ]);
+    repo.core_note("src/a.rs", "10-12", "worth moving");
 
     repo.ok(&["block", "remove", "core"]);
 
@@ -1017,15 +870,7 @@ fn removing_a_file_keeps_its_notes_the_same_way_removing_a_block_does() {
     repo.feature();
     repo.derive();
     repo.core_block(&["src/a.rs"]);
-    repo.ok(&[
-        "line",
-        "add",
-        "core",
-        "src/a.rs",
-        "10-12",
-        "--note",
-        "still true",
-    ]);
+    repo.core_note("src/a.rs", "10-12", "still true");
 
     repo.ok(&["file", "remove", "core", "src/a.rs"]);
 
@@ -1047,15 +892,7 @@ fn notes_can_be_rewritten_and_withdrawn() {
         "--note",
         "first thought",
     ]);
-    repo.ok(&[
-        "line",
-        "add",
-        "core",
-        "src/a.rs",
-        "10-12",
-        "--note",
-        "first thought",
-    ]);
+    repo.core_note("src/a.rs", "10-12", "first thought");
 
     repo.ok(&[
         "file",
@@ -1290,15 +1127,7 @@ fn showing_the_map_admits_there_is_a_decision_waiting() {
     repo.feature();
     repo.derive();
     repo.core_block(&["src/a.rs"]);
-    repo.ok(&[
-        "line",
-        "add",
-        "core",
-        "src/a.rs",
-        "10-12",
-        "--note",
-        "worth keeping",
-    ]);
+    repo.core_note("src/a.rs", "10-12", "worth keeping");
 
     // Rewrite exactly under the note.
     let rewritten = numbered(40).replace("line 11\n", "REWRITTEN\n");

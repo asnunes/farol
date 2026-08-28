@@ -29,7 +29,7 @@ export function Publish({ publishing, comments, onError }: PublishProps) {
         // No `disabled:cursor-*` here: the base variant takes pointer events
         // off a disabled button entirely, so the cursor over it comes from the
         // page and any rule written for that state never fires.
-        className="cursor-pointer gap-1.5 font-mono text-xs text-ink-muted hover:bg-sunken hover:text-ink disabled:opacity-50"
+        className="gap-1.5 font-mono text-xs text-ink-muted hover:bg-sunken hover:text-ink disabled:opacity-50"
         disabled={!ready}
         title={
           ready ? `Send this review to pull request #${readiness?.pullRequest}` : undefined
@@ -38,7 +38,7 @@ export function Publish({ publishing, comments, onError }: PublishProps) {
       >
         <Send className="size-3.5" aria-hidden="true" />
         Send review
-        {waiting.length > 0 && <span className="text-accent">({waiting.length})</span>}
+        {waiting.length > 0 && <span className="text-highlight">({waiting.length})</span>}
       </Button>
 
       {/* The first answer comes from GitHub, so it takes a moment. Until it
@@ -55,7 +55,7 @@ export function Publish({ publishing, comments, onError }: PublishProps) {
           <Button
             size="icon-xs"
             variant="ghost"
-            className="cursor-pointer text-faint hover:bg-sunken hover:text-ink"
+            className="text-faint hover:bg-sunken hover:text-ink"
             aria-label="Why this review cannot be sent yet"
             onClick={() => setExplaining(true)}
           >

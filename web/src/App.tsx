@@ -165,7 +165,7 @@ function Failed({ what, onClose }: { what: string; onClose: () => void }) {
       <Button
         size="icon-xs"
         variant="ghost"
-        className="cursor-pointer text-faint hover:text-ink"
+        className="text-faint hover:text-ink"
         aria-label="Dismiss"
         onClick={onClose}
       >

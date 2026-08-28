@@ -5,16 +5,6 @@
 
 use std::fmt::Write as _;
 
-use crate::map::domain::WORKING;
-
-pub fn short(sha: &str) -> String {
-    if sha == WORKING {
-        sha.to_string()
-    } else {
-        sha.chars().take(7).collect()
-    }
-}
-
 /// Keep wrapped prose lined up under its label instead of falling back to
 /// column zero, where it would read as a new field.
 pub(super) fn indent_rest(text: &str, spaces: usize) -> String {
@@ -32,22 +22,6 @@ pub(super) fn indent_rest(text: &str, spaces: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn a_sha_is_shortened_to_what_a_reader_can_hold() {
-        assert_eq!(short("a3f1e9c1234567890"), "a3f1e9c");
-    }
-
-    #[test]
-    fn a_sha_shorter_than_the_cut_is_left_alone() {
-        assert_eq!(short("abc"), "abc");
-    }
-
-    #[test]
-    fn the_working_tree_marker_is_printed_whole() {
-        // Cutting it to seven characters would turn a word into gibberish.
-        assert_eq!(short(WORKING), WORKING);
-    }
 
     #[test]
     fn a_single_line_of_prose_is_returned_as_it_stands() {

@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { noComments } from "./testing";
-import type { CommentView, FileDiff, FileView } from "@/api";
+import { file, noComments } from "./testing";
+import type { CommentView, FileDiff } from "@/api";
 
 vi.mock("@/hooks/useHighlight", () => ({ useHighlight: () => null }));
 
@@ -150,44 +150,30 @@ function twoHunks(count: number, secondAt = 60): FileDiff {
     binary: false,
     additions: 2,
     deletions: 0,
-    line_count: count,
+    lineCount: count,
     hunks: [
       {
-        old_start: 8,
-        old_lines: 1,
-        new_start: 8,
-        new_lines: 3,
+        oldStart: 8,
+        oldLines: 1,
+        newStart: 8,
+        newLines: 3,
         lines: [
-          { kind: "context", old_number: 8, new_number: 8, content: "fn main() {}" },
-          { kind: "added", old_number: null, new_number: 9, content: "// um" },
-          { kind: "added", old_number: null, new_number: 10, content: "// dois" },
+          { kind: "context", oldNumber: 8, newNumber: 8, content: "fn main() {}" },
+          { kind: "added", oldNumber: null, newNumber: 9, content: "// um" },
+          { kind: "added", oldNumber: null, newNumber: 10, content: "// dois" },
         ],
       },
       {
-        old_start: secondAt - 2,
-        old_lines: 2,
-        new_start: secondAt,
-        new_lines: 2,
+        oldStart: secondAt - 2,
+        oldLines: 2,
+        newStart: secondAt,
+        newLines: 2,
         lines: [
-          { kind: "context", old_number: secondAt - 2, new_number: secondAt, content: "fim" },
-          { kind: "context", old_number: secondAt - 1, new_number: secondAt + 1, content: "}" },
+          { kind: "context", oldNumber: secondAt - 2, newNumber: secondAt, content: "fim" },
+          { kind: "context", oldNumber: secondAt - 1, newNumber: secondAt + 1, content: "}" },
         ],
       },
     ],
   };
 }
 
-function file(): FileView {
-  return {
-    path: "src/a.rs",
-    status: "modified",
-    additions: 2,
-    deletions: 0,
-    viewed: false,
-    notes: [],
-    lineNotes: [],
-    tags: [],
-    skim: false,
-    skimReason: null,
-  };
-}

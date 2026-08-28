@@ -19,7 +19,7 @@ export function Verdicts({ value, onChange, approveOnly }: VerdictsProps) {
           key={verdict}
           value={verdict}
           title={why}
-          className="cursor-pointer rounded border border-rule px-3 font-sans text-xs text-ink-soft hover:bg-sunken hover:text-ink data-[state=on]:bg-accent-dim data-[state=on]:text-accent"
+          className="rounded border border-rule px-3 font-sans text-xs text-ink-soft hover:bg-sunken hover:text-ink data-[state=on]:bg-highlight-dim data-[state=on]:text-highlight"
         >
           {label}
         </ToggleGroupItem>

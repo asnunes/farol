@@ -70,7 +70,7 @@ export function FileSection({
               {/* Which block the note came from, and only when the file is read
                   under more than one. */}
               {file.tags.length > 1 && (
-                <span className="from mt-1 shrink-0 font-mono text-xs text-accent">
+                <span className="from mt-1 shrink-0 font-mono text-xs text-highlight">
                   {note.block}
                 </span>
               )}
@@ -84,7 +84,7 @@ export function FileSection({
               <Button
                 variant="link"
                 size="xs"
-                className="cursor-pointer px-0 text-accent"
+                className="px-0 text-highlight"
                 onClick={() => setAsked(true)}
               >
                 Load the diff

@@ -21,12 +21,12 @@ export function UnifiedLines({ hunk, file, coloured, marks, commentary }: Unifie
           line.kind === "removed" && "del bg-del-bg text-del-ink",
           notedBy(file, line) && "noted",
           commentedBy(commentary.comments, line) && "commented",
-          commentary.select.covers(line.new_number ?? -1) && "picking bg-comment-dim",
+          commentary.select.covers(line.newNumber ?? -1) && "picking bg-comment-dim",
         )}
       >
         <LineNumber
-          number={line.new_number ?? line.old_number}
-          on={line.new_number}
+          number={line.newNumber ?? line.oldNumber}
+          on={line.newNumber}
           commentary={commentary}
         />
         {/* Wraps instead of scrolling sideways: a narrow window would otherwise
