@@ -388,6 +388,19 @@ pub fn reconciler(source: FakeDiffSource) -> crate::map::application::MapReconci
     )
 }
 
+/// A map holding one empty block per slug, in the order given.
+///
+/// The fixture the map's own tests are written against: five of them had
+/// written it out, identically, before it moved here.
+pub fn map_with(slugs: &[&str]) -> crate::map::domain::ReviewMap {
+    use crate::map::domain::{Position, ReviewMap};
+    let mut map = ReviewMap::new("feature/x", "main", "abc123");
+    for s in slugs {
+        map.add_block(&slug(s), "t", "c", Position::End).unwrap();
+    }
+    map
+}
+
 /// A map with one block, one file and one note on it.
 pub fn map_with_note(
     sha: &str,

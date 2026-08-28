@@ -147,15 +147,7 @@ impl ReviewMap {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::testing::slug;
-
-    fn map_with(slugs: &[&str]) -> ReviewMap {
-        let mut map = ReviewMap::new("feature/x", "main", "abc123");
-        for s in slugs {
-            map.add_block(&slug(s), "t", "c", Position::End).unwrap();
-        }
-        map
-    }
+    use crate::testing::{map_with, slug};
 
     #[test]
     fn a_file_in_two_blocks_reads_in_the_earlier_one() {

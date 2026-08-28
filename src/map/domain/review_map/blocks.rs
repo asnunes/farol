@@ -112,15 +112,7 @@ impl ReviewMap {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::testing::slug;
-
-    fn map_with(slugs: &[&str]) -> ReviewMap {
-        let mut m = ReviewMap::new("feature/x", "main", "abc123");
-        for s in slugs {
-            m.add_block(&slug(s), "t", "c", Position::End).unwrap();
-        }
-        m
-    }
+    use crate::testing::{map_with, slug};
 
     #[test]
     fn blocks_keep_insertion_order() {

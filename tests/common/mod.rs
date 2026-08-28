@@ -145,10 +145,26 @@ impl Repo {
     }
 
     /// The block most tests need: one block holding the given files.
-    pub fn core_block(&self, paths: &[&str]) {
-        let mut args = vec!["block", "add", "core", "--title", "t", "--context", "c"];
+    /// A block holding the given paths, titled with a placeholder.
+    ///
+    /// Almost every test needs a block before it can do anything, and almost
+    /// none of them cares what it is called: writing the nine array elements
+    /// out puts the arrangement in the way of what the test is about.
+    pub fn block(&self, slug: &str, paths: &[&str]) {
+        let mut args = vec!["block", "add", slug, "--title", "t", "--context", "c"];
         args.extend_from_slice(paths);
         self.ok(&args);
+    }
+
+    /// The same, under the name most tests use.
+    pub fn core_block(&self, paths: &[&str]) {
+        self.block("core", paths);
+    }
+
+    /// A note pinned to a range of one file in the `core` block, which is the
+    /// other arrangement tests need before they can assert anything.
+    pub fn core_note(&self, path: &str, range: &str, note: &str) {
+        self.ok(&["line", "add", "core", path, range, "--note", note]);
     }
 
     /// A branch off main with one file changed, ready to review.
