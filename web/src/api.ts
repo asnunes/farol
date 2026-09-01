@@ -171,7 +171,15 @@ export type ReadinessView = {
 export type Verdict = "comment" | "requestChanges" | "approve";
 
 /** What a sent review left behind. */
-export type SentView = { url: string; comments: number };
+export type SentView = {
+  url: string;
+  comments: number;
+  /** Files ticked as read on the pull request, so a second round shows what
+   * changed rather than everything. */
+  read: number;
+  /** What stopped the ticks, when something did. The review went either way. */
+  readFailed: string | null;
+};
 
 /** Where a file sits: the block it is read under and how far down the map that
  * block is, which is what the band above the diff counts off. */

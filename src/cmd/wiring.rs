@@ -130,6 +130,7 @@ impl Ctx {
             scope_for_publishing,
             diffs_for_publishing,
             history,
+            progress.clone(),
         ));
 
         Ok(Self {

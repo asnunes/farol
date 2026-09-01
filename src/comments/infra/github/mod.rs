@@ -131,6 +131,32 @@ impl ReviewPublisher for GitHub {
             }
         }
     }
+
+    /// One request, however many files.
+    ///
+    /// The REST API has no word for this: whether a file is marked as read is
+    /// per person, and only the GraphQL schema exposes it. So this is the one
+    /// call that speaks the other language, and it aliases a mutation per path
+    /// rather than sending a request each.
+    ///
+    /// The paths travel as variables and never inside the query text. A path
+    /// with a quote in it would otherwise end the string and the rest would be
+    /// read as GraphQL.
+    fn mark_read(&self, pull: &str, paths: &[String]) -> Result<usize> {
+        if paths.is_empty() {
+            return Ok(0);
+        }
+        let Some(token) = self.credentials.token()? else {
+            return Err(CommentError::NoToken.into());
+        };
+
+        let answer = self.read(self.http.post(
+            &token,
+            &self.graphql(),
+            serde_json::to_string(&Mutations::over(pull, paths))?,
+        )?)?;
+        Ok(took(&answer))
+    }
 }
 
 impl GitHub {
@@ -161,6 +187,15 @@ impl GitHub {
         format!("{}/repos/{}", self.api(), self.remote.slug)
     }
 
+    /// Where the other language is served. Enterprise puts it beside the REST
+    /// root rather than under it: `/api/graphql`, not `/api/v3/graphql`.
+    fn graphql(&self) -> String {
+        match self.remote.host.as_str() {
+            "github.com" | "www.github.com" => "https://api.github.com/graphql".into(),
+            other => format!("https://{other}/api/graphql"),
+        }
+    }
+
     /// Whose fork the branch is on. The same repository the review is posted
     /// to, which is the only arrangement farol claims to handle.
     fn owner(&self) -> &str {
@@ -177,6 +212,7 @@ fn first_pull(body: serde_json::Value) -> Option<Readiness> {
     let pull = body.as_array()?.first()?;
     Some(Readiness::Ready {
         pull_request: pull.get("number")?.as_u64()? as u32,
+        id: pull.get("node_id")?.as_str()?.to_string(),
         head: pull.get("head")?.get("sha")?.as_str()?.to_string(),
     })
 }
@@ -193,6 +229,59 @@ fn where_it_landed(answer: serde_json::Value) -> Result<String> {
             }
             .into()
         })
+}
+
+/// A mutation per path, aliased so one request carries them all.
+///
+/// Written out as text because a GraphQL document is text; what must never be
+/// text is the data, which rides in `variables`.
+#[derive(Serialize)]
+struct Mutations {
+    query: String,
+    variables: serde_json::Value,
+}
+
+impl Mutations {
+    fn over(pull: &str, paths: &[String]) -> Self {
+        let args = (0..paths.len())
+            .map(|i| format!("$p{i}: String!"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let calls = (0..paths.len())
+            .map(|i| {
+                format!(
+                    "m{i}: markFileAsViewed(input: {{pullRequestId: $id, path: $p{i}}}) \
+                     {{ clientMutationId }}"
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(" ");
+
+        let mut variables = serde_json::Map::new();
+        variables.insert("id".into(), pull.into());
+        for (i, path) in paths.iter().enumerate() {
+            variables.insert(format!("p{i}"), path.as_str().into());
+        }
+
+        Self {
+            query: format!("mutation($id: ID!, {args}) {{ {calls} }}"),
+            variables: serde_json::Value::Object(variables),
+        }
+    }
+}
+
+/// How many of the aliases came back with something in them.
+///
+/// GraphQL answers 200 and puts what failed in `errors`, so the status says
+/// nothing here. Counting the aliases that are not null is also what makes a
+/// path the pull request does not know fail on its own without taking the rest
+/// of the request with it.
+fn took(answer: &serde_json::Value) -> usize {
+    answer
+        .get("data")
+        .and_then(|d| d.as_object())
+        .map(|fields| fields.values().filter(|v| !v.is_null()).count())
+        .unwrap_or(0)
 }
 
 /// The comments, as a review nobody has submitted yet. No event: that is what
@@ -403,15 +492,74 @@ mod tests {
     }
 
     #[test]
+    fn one_request_carries_a_mutation_per_file() {
+        // Thirty files ticked is one round trip, not thirty. The paths ride in
+        // `variables`, so a path with a quote in it cannot end the query string
+        // and have the rest read as GraphQL.
+        let body = serde_json::to_value(Mutations::over(
+            "PR_kwDO",
+            &["src/a.rs".into(), "he said \"hi\".rs".into()],
+        ))
+        .unwrap();
+
+        let query = body["query"].as_str().unwrap();
+        assert!(query.contains("m0: markFileAsViewed"), "{query}");
+        assert!(query.contains("m1: markFileAsViewed"), "{query}");
+        assert!(
+            query.contains("$id: ID!, $p0: String!, $p1: String!"),
+            "{query}"
+        );
+        assert!(
+            !query.contains("src/a.rs"),
+            "the data belongs in the variables"
+        );
+
+        assert_eq!(body["variables"]["id"], "PR_kwDO");
+        assert_eq!(body["variables"]["p0"], "src/a.rs");
+        assert_eq!(body["variables"]["p1"], "he said \"hi\".rs");
+    }
+
+    #[test]
+    fn a_path_the_pull_request_does_not_know_fails_on_its_own() {
+        // GraphQL answers 200 and puts what went wrong in `errors`, so the
+        // status says nothing. What counts is how many aliases came back with
+        // something in them.
+        let answered = serde_json::json!({
+            "data": { "m0": { "clientMutationId": null }, "m1": null },
+            "errors": [{ "message": "Could not resolve to a file", "path": ["m1"] }],
+        });
+
+        assert_eq!(took(&answered), 1);
+    }
+
+    #[test]
+    fn the_other_language_is_served_from_its_own_place() {
+        // Enterprise puts GraphQL beside the REST root rather than under it,
+        // so the `/api/v3` of the other calls would be a 404 here.
+        assert_eq!(
+            github("github.com").graphql(),
+            "https://api.github.com/graphql"
+        );
+        assert_eq!(
+            github("github.acme.example").graphql(),
+            "https://github.acme.example/api/graphql"
+        );
+    }
+
+    #[test]
     fn the_open_pull_request_is_read_with_the_commit_it_is_showing() {
         // The commit is the whole reason to ask: comments anchor to line
-        // numbers, and those only mean anything against one commit.
-        let body = serde_json::json!([{"number": 12, "head": {"sha": "abc1234"}}]);
+        // numbers, and those only mean anything against one commit. The node id
+        // comes along because marking a file as read needs it and there is no
+        // second call that would hand it over.
+        let body =
+            serde_json::json!([{"number": 12, "node_id": "PR_kwDO", "head": {"sha": "abc1234"}}]);
 
         assert_eq!(
             first_pull(body),
             Some(Readiness::Ready {
                 pull_request: 12,
+                id: "PR_kwDO".into(),
                 head: "abc1234".into()
             })
         );

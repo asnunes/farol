@@ -18,6 +18,7 @@ import { said } from "@/lib/utils";
  * the whole of it has been read. */
 export function Writing({
   waiting,
+  read,
   pullRequest,
   publish,
   onSent,
@@ -57,6 +58,10 @@ export function Writing({
           {alone
             ? "No comments are waiting to go."
             : `${waiting} comment${waiting === 1 ? "" : "s"} will go with it.`}{" "}
+          {read > 0 &&
+            `The ${read} file${read === 1 ? "" : "s"} you have read ${
+              read === 1 ? "goes" : "go"
+            } up ticked. `}
           {pullRequest !== undefined && `Pull request #${pullRequest}.`}
         </DialogDescription>
       </DialogHeader>
@@ -99,6 +104,8 @@ const ASKS: Record<Verdict, string> = {
 type WritingProps = {
   /** Comments that have not gone yet, which is what is about to be sent. */
   waiting: number;
+  /** Files the reviewer has read, which go up ticked with it. */
+  read: number;
   pullRequest?: number;
   publish: (verdict: Verdict, summary: string) => Promise<SentView>;
   onSent: (sent: SentView) => void;

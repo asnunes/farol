@@ -5,6 +5,7 @@ use crate::comments::domain::{
 };
 use crate::diff::application::{CommitHistory, FileDiffs, ReviewScope};
 use crate::error::Result;
+use crate::progress::application::ProgressStore;
 use crate::shared::short;
 
 /// Send the review to the pull request: the summary, the verdict, and every
@@ -21,6 +22,7 @@ pub struct PublishReview {
     scope: ReviewScope,
     diffs: FileDiffs,
     history: CommitHistory,
+    progress: ProgressStore,
 }
 
 impl PublishReview {
@@ -30,6 +32,7 @@ impl PublishReview {
         scope: ReviewScope,
         diffs: FileDiffs,
         history: CommitHistory,
+        progress: ProgressStore,
     ) -> Self {
         Self {
             store,
@@ -37,6 +40,7 @@ impl PublishReview {
             scope,
             diffs,
             history,
+            progress,
         }
     }
 
@@ -51,8 +55,12 @@ impl PublishReview {
             return Err(CommentError::Uncommitted.into());
         }
 
-        let (pull_request, theirs) = match self.publisher.readiness(&scope.branch)? {
-            Readiness::Ready { pull_request, head } => (pull_request, head),
+        let (pull_request, id, theirs) = match self.publisher.readiness(&scope.branch)? {
+            Readiness::Ready {
+                pull_request,
+                id,
+                head,
+            } => (pull_request, id, head),
             Readiness::NoRemote => return Err(CommentError::NoRemote.into()),
             Readiness::NoToken => return Err(CommentError::NoToken.into()),
             Readiness::TokenRefused => return Err(CommentError::TokenRefused.into()),
@@ -102,10 +110,38 @@ impl PublishReview {
                 ..comment.clone()
             })?;
         }
+
+        // After the review, and unable to bring it down. The review is posted
+        // and cannot be taken back; the ticks are a convenience, so a host that
+        // refuses them is reported beside a review that went.
+        let read = self.publisher.mark_read(&id, &self.already_read()?);
         Ok(Sent {
             url,
             comments: waiting.len(),
+            read: *read.as_ref().unwrap_or(&0),
+            read_failed: read.err().map(|e| e.to_string()),
         })
+    }
+
+    /// The files the reviewer has read and that have not moved since.
+    ///
+    /// The same question the screen asks of every row: read is read *of this
+    /// content*, so a file whose hash moved on is not read any more. Sending it
+    /// as viewed would tick something on the pull request that nobody has read
+    /// in the shape it is in now.
+    ///
+    /// Taken from the review window, which also means every path sent is one
+    /// the pull request knows.
+    fn already_read(&self) -> Result<Vec<String>> {
+        let progress = self.progress.load()?;
+        let mut read = Vec::new();
+        for file in &self.scope.get()?.files {
+            let hash = self.diffs.content_hash(&file.path)?;
+            if progress.is_current(&file.path, &hash) {
+                read.push(file.path.clone());
+            }
+        }
+        Ok(read)
     }
 
     /// The same rule `Comments::add` applies, asked again at the last moment.
@@ -140,12 +176,21 @@ impl PublishReview {
 pub struct Sent {
     pub url: String,
     pub comments: usize,
+    /// Files ticked as read on the pull request, so a second round shows what
+    /// changed rather than everything.
+    pub read: usize,
+    /// What stopped the ticks, when something did. The review went either way,
+    /// which is why this is a note and not an error.
+    pub read_failed: Option<String>,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::diff::domain::Hunk;
+    use crate::progress::application::MarkViewed;
+    use crate::progress::domain::{Progress, ProgressRepository};
+    use crate::testing::InMemoryProgressRepository;
     use crate::testing::{FakeDiffSource, FakePublisher, InMemoryComments};
 
     #[test]
@@ -185,6 +230,67 @@ mod tests {
         publish.execute(Verdict::Comment, "").unwrap();
 
         assert_eq!(publisher.sent().comments.len(), 1);
+    }
+
+    #[test]
+    fn the_files_already_read_go_up_ticked_with_the_review() {
+        // So a second round shows what changed instead of everything. The host
+        // is told which files, and the reviewer is told how many went.
+        let publisher = Arc::new(FakePublisher::ready_at("head"));
+        let source = Arc::new(FakeDiffSource::with_paths(&["src/a.rs", "src/b.rs"]));
+        let (publish, progress, _) = with_progress(publisher.clone(), source);
+        MarkViewed::new(progress)
+            .execute("src/a.rs", "now")
+            .unwrap();
+
+        let sent = publish.execute(Verdict::Approve, "").unwrap();
+
+        assert_eq!(publisher.marked(), vec!["src/a.rs".to_string()]);
+        assert_eq!(sent.read, 1);
+        assert!(sent.read_failed.is_none());
+    }
+
+    #[test]
+    fn a_file_that_changed_after_it_was_read_is_not_ticked() {
+        // Read means read of this content: the screen reopens a file whose
+        // hash moved on, and ticking it on the pull request would say somebody
+        // read a version nobody has seen.
+        let publisher = Arc::new(FakePublisher::ready_at("head"));
+        let source = Arc::new(FakeDiffSource::with_paths(&["src/a.rs"]));
+        let (publish, _, repo) = with_progress(publisher.clone(), source);
+        // Written straight into the store, because the ordinary way of marking
+        // a file pins it to the hash it has now, and this test is about the
+        // one it had then.
+        let mut stale = Progress::new();
+        stale.mark("src/a.rs", "the hash it had back then", "then");
+        repo.save(&stale).unwrap();
+
+        publish.execute(Verdict::Approve, "").unwrap();
+
+        assert!(publisher.marked().is_empty(), "{:?}", publisher.marked());
+    }
+
+    #[test]
+    fn a_host_that_will_not_tick_does_not_undo_a_review_that_went() {
+        // The review is on the pull request and cannot be taken back. The
+        // ticks are a convenience, so their failure is reported beside it
+        // rather than in place of it.
+        let publisher =
+            Arc::new(FakePublisher::ready_at("head").marking_fails("no permission for that"));
+        let source = Arc::new(FakeDiffSource::with_paths(&["src/a.rs"]));
+        let (publish, progress, _) = with_progress(publisher, source);
+        MarkViewed::new(progress)
+            .execute("src/a.rs", "now")
+            .unwrap();
+
+        let sent = publish.execute(Verdict::Approve, "").unwrap();
+
+        assert_eq!(sent.url, "https://example.test/r1");
+        assert_eq!(sent.read, 0);
+        assert!(
+            sent.read_failed.unwrap().contains("no permission"),
+            "the reviewer has to be told which half did not happen"
+        );
     }
 
     #[test]
@@ -339,13 +445,31 @@ mod tests {
     }
 
     fn over(publisher: Arc<FakePublisher>, source: Arc<FakeDiffSource>) -> PublishReview {
-        PublishReview::new(
+        with_progress(publisher, source).0
+    }
+
+    /// The same, with what the reviewer has read handed back: the store, for a
+    /// test that marks a file the ordinary way, and the repository under it,
+    /// for one that has to seed a mark that has since gone stale.
+    fn with_progress(
+        publisher: Arc<FakePublisher>,
+        source: Arc<FakeDiffSource>,
+    ) -> (
+        PublishReview,
+        ProgressStore,
+        Arc<InMemoryProgressRepository>,
+    ) {
+        let repo = Arc::new(InMemoryProgressRepository::default());
+        let progress = ProgressStore::new(repo.clone(), FileDiffs::new(source.clone()));
+        let publish = PublishReview::new(
             Arc::new(InMemoryComments::default()),
             publisher,
             ReviewScope::new(source.clone()),
             FileDiffs::new(source.clone()),
             CommitHistory::new(source),
-        )
+            progress.clone(),
+        );
+        (publish, progress, repo)
     }
 
     fn hunk(start: u32, lines: u32) -> Hunk {

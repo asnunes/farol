@@ -246,6 +246,11 @@ impl ReadinessView {
 pub struct SentView {
     pub url: String,
     pub comments: usize,
+    /// Files ticked as read on the pull request, and what stopped it when
+    /// something did. The review went in both cases, which is why the screen
+    /// says this beside the address rather than instead of it.
+    pub read: usize,
+    pub read_failed: Option<String>,
 }
 
 /// A comment the store could not read, in the terms the page speaks: the file

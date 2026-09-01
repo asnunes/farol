@@ -188,6 +188,8 @@ async fn publish(
         Ok(sent) => Json(view::SentView {
             url: sent.url,
             comments: sent.comments,
+            read: sent.read,
+            read_failed: sent.read_failed,
         })
         .into_response(),
         Err(e) => fail(e),
@@ -372,7 +374,11 @@ pub(super) mod tests {
                 publisher.clone(),
                 ReviewScope::new(source.clone()),
                 FileDiffs::new(source.clone()),
-                CommitHistory::new(source),
+                CommitHistory::new(source.clone()),
+                ProgressStore::new(
+                    Arc::new(crate::testing::InMemoryProgressRepository::default()),
+                    FileDiffs::new(source),
+                ),
             )),
             Arc::new(SaveToken::new(Arc::new(FakeCredentials::default()))),
             publisher,
@@ -400,6 +406,7 @@ pub(super) mod tests {
             &paths,
             Readiness::Ready {
                 pull_request: 12,
+                id: "PR_kwDO".into(),
                 head: "head".into(),
             },
         );
@@ -507,6 +514,7 @@ pub(super) mod tests {
     async fn a_pull_request_that_is_there_comes_back_with_its_number() {
         let body = ask(Readiness::Ready {
             pull_request: 12,
+            id: "PR_kwDO".into(),
             head: "head".into(),
         })
         .await;

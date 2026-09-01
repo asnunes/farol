@@ -16,6 +16,16 @@ pub trait ReviewPublisher: Send + Sync {
 
     /// Send it. Answers with where the review can be read.
     fn publish(&self, review: &Review) -> Result<String>;
+
+    /// Mark these files as read on the pull request, for whoever the token
+    /// belongs to. Answers with how many the host took.
+    ///
+    /// Its own verb rather than part of `publish`, because the two have
+    /// different consequences: the review is posted once and cannot be taken
+    /// back, while marks are a convenience that can fail without costing
+    /// anything. Folded together, the second failing would hide inside the
+    /// first succeeding.
+    fn mark_read(&self, pull: &str, paths: &[String]) -> Result<usize>;
 }
 
 /// Why the review cannot be sent yet — or that it can.
@@ -28,7 +38,16 @@ pub trait ReviewPublisher: Send + Sync {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Readiness {
     /// The pull request is there, and this is the commit it is showing.
-    Ready { pull_request: u32, head: String },
+    ///
+    /// `id` is the host's own name for it, which marking a file as read needs
+    /// and the number cannot stand in for. It comes back in the same answer as
+    /// the other two and goes no further than the use case: the screen is told
+    /// the number, which is what a person recognises.
+    Ready {
+        pull_request: u32,
+        id: String,
+        head: String,
+    },
 
     /// The repository has no remote, so there is no host to publish to. Not a
     /// step on the way to being ready — a different situation entirely.

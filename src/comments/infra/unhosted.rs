@@ -17,4 +17,8 @@ impl ReviewPublisher for Unhosted {
     fn publish(&self, _review: &Review) -> Result<String> {
         Err(CommentError::NoRemote.into())
     }
+
+    fn mark_read(&self, _pull: &str, _paths: &[String]) -> Result<usize> {
+        Err(CommentError::NoRemote.into())
+    }
 }

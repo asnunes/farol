@@ -108,6 +108,37 @@ describe("sending", () => {
     expect(screen.getByText("https://example.test/r1")).toBeTruthy();
   });
 
+  it("says the ticks are going up with it, before they do", async () => {
+    // The reviewer has spent the whole read ticking files off. Saying so here
+    // is what tells them they will not have to do it again on the other side.
+    render(<Publish {...props(at("ready", { pullRequest: 12 }), [comment({ id: "1" })], 12)} />);
+
+    fireEvent.click(button());
+
+    expect(screen.getByRole("dialog").textContent).toContain("12 files you have read");
+  });
+
+  it("says what happened to the ticks when the review has gone", async () => {
+    // The review is on the pull request either way, so a host that would not
+    // tick is a note beside the address and not a failure in its place.
+    const publishing = props(at("ready", { pullRequest: 12 }), [comment({ id: "1" })]);
+    publishing.publishing.publish = vi.fn().mockResolvedValue({
+      url: "https://example.test/r1",
+      comments: 1,
+      read: 0,
+      readFailed: "no permission for that",
+    });
+    render(<Publish {...publishing} />);
+    fireEvent.click(button());
+    fireEvent.click(screen.getByText("Approve"));
+    await waitFor(() => expect(send().hasAttribute("disabled")).toBe(false));
+
+    await act(async () => void fireEvent.click(send()));
+
+    expect(screen.getByText("https://example.test/r1")).toBeTruthy();
+    expect(screen.getByRole("dialog").textContent).toContain("were not ticked");
+  });
+
   it("offers only approve when there is nothing to send", () => {
     // Comment and request changes are somebody being asked for something, and
     // an empty review is not asking for anything.
@@ -139,14 +170,19 @@ function at(
   return { state, branch: "feature/x", ...over };
 }
 
-function props(readiness: ReadinessView | null, comments = [comment({ id: "1" })]) {
+function props(readiness: ReadinessView | null, comments = [comment({ id: "1" })], read = 0) {
   const publishing: Publishing = {
     readiness,
     ask: vi.fn().mockResolvedValue(undefined),
     publish: vi
       .fn<(verdict: Verdict, summary: string) => Promise<SentView>>()
-      .mockResolvedValue({ url: "https://example.test/r1", comments: 1 }),
+      .mockResolvedValue({
+        url: "https://example.test/r1",
+        comments: 1,
+        read: 0,
+        readFailed: null,
+      }),
     saveToken: vi.fn().mockResolvedValue(undefined),
   };
-  return { publishing, comments, onError: vi.fn() };
+  return { publishing, comments, read, onError: vi.fn() };
 }

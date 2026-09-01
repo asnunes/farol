@@ -10,7 +10,15 @@ import type { SentView, Verdict } from "@/api";
  * The two share the frame and nothing else. Each brings its own title, its own
  * words and its own buttons, which is why neither is a branch inside the other:
  * this decides which face is showing, and stops there. */
-export function Send({ open, onOpenChange, waiting, pullRequest, publish, onError }: SendProps) {
+export function Send({
+  open,
+  onOpenChange,
+  waiting,
+  read,
+  pullRequest,
+  publish,
+  onError,
+}: SendProps) {
   const [sent, setSent] = useState<SentView | null>(null);
 
   function close(next: boolean) {
@@ -28,6 +36,7 @@ export function Send({ open, onOpenChange, waiting, pullRequest, publish, onErro
         ) : (
           <Writing
             waiting={waiting}
+            read={read}
             pullRequest={pullRequest}
             publish={publish}
             onSent={setSent}
@@ -48,6 +57,8 @@ type SendProps = {
   onOpenChange: (open: boolean) => void;
   /** Comments that have not gone yet, which is what is about to be sent. */
   waiting: number;
+  /** Files the reviewer has read, which go up ticked with the review. */
+  read: number;
   pullRequest?: number;
   publish: (verdict: Verdict, summary: string) => Promise<SentView>;
   onError: (message: string) => void;

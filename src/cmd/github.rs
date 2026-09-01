@@ -43,6 +43,16 @@ impl Action for GithubAction {
                     false => "s",
                 };
                 println!("Sent {} comment{s}. {}", sent.comments, sent.url);
+                // Said after the address, and only when there is something to
+                // say: the review went either way, and the ticks are what
+                // saves the next round rather than what the command is for.
+                match sent.read_failed {
+                    Some(why) => println!("The files you had read were not ticked: {why}"),
+                    None if sent.read > 0 => {
+                        println!("{} file(s) ticked as read on the pull request.", sent.read)
+                    }
+                    None => {}
+                }
                 Ok(())
             }
         }

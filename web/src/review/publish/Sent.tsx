@@ -16,6 +16,22 @@ export function Sent({ sent, onDone }: SentProps) {
             ? "Your verdict is on the pull request."
             : `${sent.comments} comment${sent.comments === 1 ? "" : "s"} went with it.`}{" "}
           They stay here too, still open, until you close them.
+          {sent.readFailed ? (
+            // The review is on the pull request and cannot be taken back, so
+            // this is a note beside it rather than a failure in place of it.
+            <>
+              {" "}
+              The files you had read were not ticked: {sent.readFailed}
+            </>
+          ) : (
+            sent.read > 0 && (
+              <>
+                {" "}
+                The {sent.read} file{sent.read === 1 ? "" : "s"} you had read went up ticked,
+                so a second round shows what changed.
+              </>
+            )
+          )}
         </DialogDescription>
       </DialogHeader>
 
