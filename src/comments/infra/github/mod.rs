@@ -96,9 +96,7 @@ impl ReviewPublisher for GitHub {
     /// With nothing to carry there is nothing to draft, and an empty draft is
     /// refused at submission anyway, so that case goes straight out.
     fn publish(&self, review: &Review) -> Result<String> {
-        let Some(token) = self.credentials.token()? else {
-            return Err(CommentError::NoToken.into());
-        };
+        let token = self.token()?;
 
         let reviews = format!("{}/pulls/{}/reviews", self.repo(), review.pull_request);
         if review.comments.is_empty() {
@@ -146,10 +144,7 @@ impl ReviewPublisher for GitHub {
         if paths.is_empty() {
             return Ok(0);
         }
-        let Some(token) = self.credentials.token()? else {
-            return Err(CommentError::NoToken.into());
-        };
-
+        let token = self.token()?;
         let answer = self.read(self.http.post(
             &token,
             &self.graphql(),
@@ -160,6 +155,17 @@ impl ReviewPublisher for GitHub {
 }
 
 impl GitHub {
+    /// The token, or the refusal that says there is none.
+    ///
+    /// `readiness` does not use this: without a token it has a state to
+    /// report rather than an error to raise, which is the whole point of that
+    /// question.
+    fn token(&self) -> Result<String> {
+        self.credentials
+            .token()?
+            .ok_or_else(|| CommentError::NoToken.into())
+    }
+
     /// What the host said, as JSON, or the refusal in farol's own words.
     fn read(&self, answer: Answer) -> Result<serde_json::Value> {
         if answer.refused() {
