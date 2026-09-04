@@ -137,6 +137,7 @@ describe("sending", () => {
 
     expect(screen.getByText("https://example.test/r1")).toBeTruthy();
     expect(screen.getByRole("dialog").textContent).toContain("were not ticked");
+    expect(screen.getByRole("dialog").textContent).toContain("Review sent");
   });
 
   it("offers all three verdicts even with no comments to carry", () => {
@@ -174,6 +175,12 @@ describe("sending", () => {
 
     expect(publishing.publishing.ticks).toHaveBeenCalled();
     expect(publishing.publishing.publish).not.toHaveBeenCalled();
+    // And it says so. Calling this "review sent" would tell somebody they did
+    // the one thing they deliberately did not do.
+    const said = screen.getByRole("dialog").textContent ?? "";
+    expect(said).toContain("Files ticked");
+    expect(said).toContain("No review was sent");
+    expect(said).not.toContain("Your verdict");
   });
 });
 

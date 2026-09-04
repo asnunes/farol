@@ -24,6 +24,7 @@ export function Writing({
   publish,
   onTicks,
   onSent,
+  onTicked,
   onError,
   onCancel,
 }: WritingProps) {
@@ -42,7 +43,7 @@ export function Writing({
     if (sending) return;
     setSending(true);
     try {
-      onSent({ url: "", comments: 0, read: await onTicks(), readFailed: null });
+      onTicked(await onTicks());
     } catch (e) {
       onError(String(e));
     } finally {
@@ -139,6 +140,8 @@ type WritingProps = {
   pullRequest?: number;
   publish: (verdict: Verdict, summary: string) => Promise<SentView>;
   onSent: (sent: SentView) => void;
+  /** The ticks went and no review did. */
+  onTicked: (read: number) => void;
   onError: (message: string) => void;
   onCancel: () => void;
 };
