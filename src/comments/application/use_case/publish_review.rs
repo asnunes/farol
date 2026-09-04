@@ -55,12 +55,13 @@ impl PublishReview {
             return Err(CommentError::Uncommitted.into());
         }
 
-        let (pull_request, id, theirs) = match self.publisher.readiness(&scope.branch)? {
+        let (pull_request, id, theirs, mine) = match self.publisher.readiness(&scope.branch)? {
             Readiness::Ready {
                 pull_request,
                 id,
                 head,
-            } => (pull_request, id, head),
+                mine,
+            } => (pull_request, id, head, mine),
             Readiness::NoRemote => return Err(CommentError::NoRemote.into()),
             Readiness::NoToken => return Err(CommentError::NoToken.into()),
             Readiness::TokenRefused => return Err(CommentError::TokenRefused.into()),
@@ -77,6 +78,13 @@ impl PublishReview {
                 .into());
             }
         };
+
+        // Refused here rather than at the far end, where it comes back as a
+        // bare "Unprocessable Entity" and the reviewer is left guessing which
+        // of the things they just did was the problem.
+        if mine && verdict != Verdict::Comment {
+            return Err(CommentError::OwnPullRequest.into());
+        }
 
         if theirs != scope.head_sha {
             return Err(CommentError::HeadMoved {
@@ -142,6 +150,36 @@ impl PublishReview {
             }
         }
         Ok(read)
+    }
+
+    /// The ticks, and nothing else.
+    ///
+    /// Wanted on its own because a review is not always possible: on your own
+    /// pull request GitHub takes a comment and nothing more, and a reader who
+    /// has no comment to leave still wants the next round to show what changed.
+    /// Nothing is posted here, so none of the refusals that guard publishing
+    /// apply.
+    pub fn ticks_only(&self) -> Result<usize> {
+        let scope = self.scope.get()?;
+        let id = match self.publisher.readiness(&scope.branch)? {
+            Readiness::Ready { id, .. } => id,
+            Readiness::NoRemote => return Err(CommentError::NoRemote.into()),
+            Readiness::NoToken => return Err(CommentError::NoToken.into()),
+            Readiness::TokenRefused => return Err(CommentError::TokenRefused.into()),
+            Readiness::BranchNotPushed => {
+                return Err(CommentError::BranchNotPushed {
+                    branch: scope.branch.clone(),
+                }
+                .into());
+            }
+            Readiness::NoPullRequest { .. } => {
+                return Err(CommentError::NoPullRequest {
+                    branch: scope.branch.clone(),
+                }
+                .into());
+            }
+        };
+        self.publisher.mark_read(&id, &self.already_read()?)
     }
 
     /// The same rule `Comments::add` applies, asked again at the last moment.
@@ -230,6 +268,48 @@ mod tests {
         publish.execute(Verdict::Comment, "").unwrap();
 
         assert_eq!(publisher.sent().comments.len(), 1);
+    }
+
+    #[test]
+    fn a_verdict_nobody_can_give_on_their_own_pull_request_is_refused_here() {
+        // GitHub answers a bare "Unprocessable Entity" for this, which leaves
+        // the reviewer guessing which of the things they just did was wrong.
+        let publisher = Arc::new(FakePublisher::ready_at("head").mine());
+        let publish = publish_with(publisher.clone(), &[]);
+
+        let err = publish.execute(Verdict::Approve, "reads well").unwrap_err();
+
+        assert!(err.to_string().contains("yours"), "{err}");
+        assert!(publisher.nothing_sent());
+    }
+
+    #[test]
+    fn a_comment_on_your_own_pull_request_goes_as_it_always_did() {
+        // Only approving and asking for changes are refused. Commenting on
+        // your own is ordinary, and it is the whole of what farol can offer
+        // there.
+        let publisher = Arc::new(FakePublisher::ready_at("head").mine());
+        let publish = publish_with(publisher.clone(), &[]);
+
+        publish.execute(Verdict::Comment, "worth a note").unwrap();
+
+        assert_eq!(publisher.sent().verdict, Verdict::Comment);
+    }
+
+    #[test]
+    fn the_ticks_can_go_without_a_review_at_all() {
+        // What is left when a review is not possible: the reader still wants
+        // the next round to show what changed.
+        let publisher = Arc::new(FakePublisher::ready_at("head").mine());
+        let source = Arc::new(FakeDiffSource::with_paths(&["src/a.rs"]));
+        let (publish, progress, _) = with_progress(publisher.clone(), source);
+        MarkViewed::new(progress)
+            .execute("src/a.rs", "now")
+            .unwrap();
+
+        assert_eq!(publish.ticks_only().unwrap(), 1);
+        assert_eq!(publisher.marked(), vec!["src/a.rs".to_string()]);
+        assert!(publisher.nothing_sent(), "no review was asked for");
     }
 
     #[test]

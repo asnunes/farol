@@ -58,7 +58,17 @@ impl ReviewPublisher for GitHub {
             return Ok(Readiness::TokenRefused);
         }
         if let Some(pull) = open.json()?.and_then(first_pull) {
-            return Ok(pull);
+            // One more call, and only here: the screen has to know whose pull
+            // request this is before it offers a verdict, and the answer is
+            // the same for every state that is not Ready.
+            let me = self.read(self.http.get(&token, &format!("{}/user", self.api()))?)?;
+            let me = me.get("login").and_then(|l| l.as_str()).unwrap_or_default();
+            return Ok(Readiness::Ready {
+                mine: !me.is_empty() && me == pull.author,
+                pull_request: pull.number,
+                id: pull.id,
+                head: pull.head,
+            });
         }
 
         // No pull request, and two very different reasons for it. Asking the
@@ -213,14 +223,27 @@ impl GitHub {
     }
 }
 
-/// The first open pull request on the branch, and the commit it is showing.
-fn first_pull(body: serde_json::Value) -> Option<Readiness> {
+/// The first open pull request on the branch, as farol needs it.
+fn first_pull(body: serde_json::Value) -> Option<Pull> {
     let pull = body.as_array()?.first()?;
-    Some(Readiness::Ready {
-        pull_request: pull.get("number")?.as_u64()? as u32,
+    Some(Pull {
+        number: pull.get("number")?.as_u64()? as u32,
         id: pull.get("node_id")?.as_str()?.to_string(),
         head: pull.get("head")?.get("sha")?.as_str()?.to_string(),
+        author: pull.get("user")?.get("login")?.as_str()?.to_string(),
     })
+}
+
+/// What the listing says about the one pull request that matters.
+#[derive(Debug, PartialEq, Eq)]
+struct Pull {
+    number: u32,
+    /// The host's own name for it, which marking a file as read needs.
+    id: String,
+    /// The commit it is showing, which every comment is anchored against.
+    head: String,
+    /// Who opened it, which decides whether approving is even on the table.
+    author: String,
 }
 
 /// Where the review can now be read, off whatever the host answered with.
@@ -556,17 +579,22 @@ mod tests {
     fn the_open_pull_request_is_read_with_the_commit_it_is_showing() {
         // The commit is the whole reason to ask: comments anchor to line
         // numbers, and those only mean anything against one commit. The node id
-        // comes along because marking a file as read needs it and there is no
-        // second call that would hand it over.
-        let body =
-            serde_json::json!([{"number": 12, "node_id": "PR_kwDO", "head": {"sha": "abc1234"}}]);
+        // comes along because marking a file as read needs it, and the author
+        // because approving your own pull request is not a thing GitHub allows.
+        let body = serde_json::json!([{
+            "number": 12,
+            "node_id": "PR_kwDO",
+            "head": {"sha": "abc1234"},
+            "user": {"login": "asnunes"},
+        }]);
 
         assert_eq!(
             first_pull(body),
-            Some(Readiness::Ready {
-                pull_request: 12,
+            Some(Pull {
+                number: 12,
                 id: "PR_kwDO".into(),
-                head: "abc1234".into()
+                head: "abc1234".into(),
+                author: "asnunes".into(),
             })
         );
         assert_eq!(first_pull(serde_json::json!([])), None);

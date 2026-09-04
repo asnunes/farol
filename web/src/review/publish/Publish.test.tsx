@@ -139,14 +139,41 @@ describe("sending", () => {
     expect(screen.getByRole("dialog").textContent).toContain("were not ticked");
   });
 
-  it("offers only approve when there is nothing to send", () => {
-    // Comment and request changes are somebody being asked for something, and
-    // an empty review is not asking for anything.
+  it("offers all three verdicts even with no comments to carry", () => {
+    // A review with only a summary is an ordinary thing to send, and the rule
+    // that used to leave approve alone here offered the one verdict a reviewer
+    // cannot use on their own pull request.
     render(<Publish {...props(at("ready", { pullRequest: 12 }), [])} />);
     fireEvent.click(button());
 
+    expect(screen.getByText("Comment")).toBeTruthy();
+    expect(screen.getByText("Request changes")).toBeTruthy();
     expect(screen.getByText("Approve")).toBeTruthy();
-    expect(screen.queryByText("Request changes")).toBeNull();
+  });
+
+  it("offers no verdict at all on your own pull request", () => {
+    // GitHub takes a comment there and refuses the other two, so a picker
+    // would be three buttons with two that cannot work. It says what will be
+    // sent instead.
+    render(<Publish {...props(at("ready", { pullRequest: 12, mine: true }))} />);
+    fireEvent.click(button());
+
+    expect(screen.queryByText("Approve")).toBeNull();
+    expect(screen.getByRole("dialog").textContent).toContain("goes up as a comment");
+  });
+
+  it("sends the ticks with no review in front of them", async () => {
+    // What is left when a review is not possible, and the reason the reader
+    // asked for this at all.
+    const publishing = props(at("ready", { pullRequest: 12, mine: true }), [], 4);
+    publishing.publishing.ticks = vi.fn().mockResolvedValue(4);
+    render(<Publish {...publishing} />);
+    fireEvent.click(button());
+
+    await act(async () => void fireEvent.click(screen.getByText("Just tick the files")));
+
+    expect(publishing.publishing.ticks).toHaveBeenCalled();
+    expect(publishing.publishing.publish).not.toHaveBeenCalled();
   });
 });
 
@@ -167,7 +194,7 @@ function at(
   state: ReadinessView["state"],
   over: Partial<ReadinessView> = {},
 ): ReadinessView {
-  return { state, branch: "feature/x", ...over };
+  return { state, branch: "feature/x", mine: false, ...over };
 }
 
 function props(readiness: ReadinessView | null, comments = [comment({ id: "1" })], read = 0) {
@@ -182,6 +209,7 @@ function props(readiness: ReadinessView | null, comments = [comment({ id: "1" })
         read: 0,
         readFailed: null,
       }),
+    ticks: vi.fn().mockResolvedValue(0),
     saveToken: vi.fn().mockResolvedValue(undefined),
   };
   return { publishing, comments, read, onError: vi.fn() };

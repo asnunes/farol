@@ -20,6 +20,9 @@ export const api = {
   readiness: () => fetch("/api/publish").then(json<ReadinessView>),
   publish: (verdict: Verdict, summary: string) =>
     write<SentView>("/api/publish", "POST", { verdict, summary }),
+  /** The ticks with no review in front of them, for the pull request that
+   * cannot take one. */
+  ticks: () => write<{ read: number }>("/api/publish/ticks", "POST", {}),
   /** One way. Nothing reads it back, here or on the server. */
   saveToken: (token: string) => send("/api/token", "PUT", { token }),
 };
@@ -163,6 +166,9 @@ export type ReadinessView = {
     | "noPullRequest";
   branch: string;
   pullRequest?: number;
+  /** Whether the pull request is the reviewer's own. GitHub takes a comment on
+   * your own and nothing else, so this decides what can be offered. */
+  mine: boolean;
   /** The page that opens a pull request, on the one state that has one. */
   openAt?: string;
 };

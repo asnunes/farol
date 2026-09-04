@@ -19,17 +19,17 @@ import { said } from "@/lib/utils";
 export function Writing({
   waiting,
   read,
+  mine,
   pullRequest,
   publish,
+  onTicks,
   onSent,
   onError,
   onCancel,
 }: WritingProps) {
-  // With nothing waiting to go, approving is the only verdict on offer, so it
-  // is also where the picker starts. A clean approval is the commonest one
-  // there is, and the other two would have nothing to point at.
-  const alone = waiting === 0;
-  const [verdict, setVerdict] = useState<Verdict>(alone ? "approve" : "comment");
+  // Commenting is where it starts, and on your own pull request it is where it
+  // stays: GitHub takes a comment there and refuses the other two.
+  const [verdict, setVerdict] = useState<Verdict>("comment");
   const [summary, setSummary] = useState("");
   const [sending, setSending] = useState(false);
 
@@ -37,6 +37,18 @@ export function Writing({
   // approve are carried by whatever is going with them, and farol sends the
   // comments as a draft first so that the host asks for no summary either.
   const short = verdict === "requestChanges" && !summary.trim();
+
+  async function ticks() {
+    if (sending) return;
+    setSending(true);
+    try {
+      onSent({ url: "", comments: 0, read: await onTicks(), readFailed: null });
+    } catch (e) {
+      onError(String(e));
+    } finally {
+      setSending(false);
+    }
+  }
 
   async function send() {
     if (short || sending) return;
@@ -55,7 +67,7 @@ export function Writing({
       <DialogHeader>
         <DialogTitle className="font-sans text-base text-ink">Send review</DialogTitle>
         <DialogDescription className="font-serif text-ink-soft">
-          {alone
+          {waiting === 0
             ? "No comments are waiting to go."
             : `${waiting} comment${waiting === 1 ? "" : "s"} will go with it.`}{" "}
           {read > 0 &&
@@ -75,9 +87,23 @@ export function Writing({
         onChange={(e) => setSummary(e.target.value)}
       />
 
-      <Verdicts value={verdict} onChange={setVerdict} approveOnly={alone} />
+      <Verdicts value={verdict} onChange={setVerdict} mine={mine} />
 
       <DialogFooter>
+        {/* The ticks with no review in front of them. Offered whenever there
+            are any, because the review that cannot be sent is exactly when
+            somebody still wants the next round to show what changed. */}
+        {read > 0 && (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="mr-auto text-ink-muted"
+            disabled={sending}
+            onClick={() => void ticks()}
+          >
+            Just tick the files
+          </Button>
+        )}
         <Button size="sm" variant="ghost" className="text-ink-muted" onClick={onCancel}>
           Cancel
         </Button>
@@ -106,6 +132,10 @@ type WritingProps = {
   waiting: number;
   /** Files the reviewer has read, which go up ticked with it. */
   read: number;
+  /** The reviewer opened this pull request, so only a comment can go on it. */
+  mine: boolean;
+  /** Send the ticks and no review. */
+  onTicks: () => Promise<number>;
   pullRequest?: number;
   publish: (verdict: Verdict, summary: string) => Promise<SentView>;
   onSent: (sent: SentView) => void;

@@ -47,6 +47,13 @@ pub enum Readiness {
         pull_request: u32,
         id: String,
         head: String,
+        /// Whether the pull request is the reviewer's own.
+        ///
+        /// GitHub does not let anybody approve or ask changes on their own, and
+        /// answers a bare "Unprocessable Entity" when they try. Knowing first
+        /// is what lets farol offer the verdict that exists instead of the two
+        /// that do not.
+        mine: bool,
     },
 
     /// The repository has no remote, so there is no host to publish to. Not a

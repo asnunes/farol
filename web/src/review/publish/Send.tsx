@@ -15,8 +15,10 @@ export function Send({
   onOpenChange,
   waiting,
   read,
+  mine,
   pullRequest,
   publish,
+  onTicks,
   onError,
 }: SendProps) {
   const [sent, setSent] = useState<SentView | null>(null);
@@ -37,6 +39,8 @@ export function Send({
           <Writing
             waiting={waiting}
             read={read}
+            mine={mine}
+            onTicks={onTicks}
             pullRequest={pullRequest}
             publish={publish}
             onSent={setSent}
@@ -59,7 +63,11 @@ type SendProps = {
   waiting: number;
   /** Files the reviewer has read, which go up ticked with the review. */
   read: number;
+  /** The reviewer opened this pull request, so only a comment can go on it. */
+  mine: boolean;
   pullRequest?: number;
   publish: (verdict: Verdict, summary: string) => Promise<SentView>;
+  /** Send the ticks with no review in front of them. */
+  onTicks: () => Promise<number>;
   onError: (message: string) => void;
 };

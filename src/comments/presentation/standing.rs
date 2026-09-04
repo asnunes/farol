@@ -67,6 +67,7 @@ mod tests {
                 Readiness::Ready {
                     pull_request: 12,
                     id: "PR_kwDO".into(),
+                    mine: false,
                     head: "abc1234def".into(),
                 },
                 "ready:",
@@ -94,6 +95,7 @@ mod tests {
         let said = StandingLine(&at(Readiness::Ready {
             pull_request: 12,
             id: "PR_kwDO".into(),
+            mine: false,
             head: "abc1234def5678".into(),
         }))
         .to_string();

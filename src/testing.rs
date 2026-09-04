@@ -532,6 +532,7 @@ impl FakePublisher {
         Self::blocked(crate::comments::domain::Readiness::Ready {
             pull_request: 12,
             id: "PR_kwDO".into(),
+            mine: false,
             head: head.into(),
         })
     }
@@ -543,6 +544,15 @@ impl FakePublisher {
             marked: Mutex::new(Vec::new()),
             marking: Mutex::new(None),
         }
+    }
+
+    /// The pull request belongs to whoever is reviewing it, which is the one
+    /// arrangement where approving is not on the table.
+    pub fn mine(mut self) -> Self {
+        if let crate::comments::domain::Readiness::Ready { mine, .. } = &mut self.readiness {
+            *mine = true;
+        }
+        self
     }
 
     /// A host that takes the review and then refuses to mark anything.

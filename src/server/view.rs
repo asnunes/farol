@@ -211,6 +211,9 @@ pub struct ReadinessView {
     pub branch: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pull_request: Option<u32>,
+    /// Whether the pull request is the reviewer's own, which decides what
+    /// verdicts the screen can offer at all.
+    pub mine: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub open_at: Option<String>,
 }
@@ -228,10 +231,16 @@ impl ReadinessView {
             },
             branch: branch.to_string(),
             pull_request: None,
+            mine: false,
             open_at: None,
         };
         match readiness {
-            Readiness::Ready { pull_request, .. } => view.pull_request = Some(*pull_request),
+            Readiness::Ready {
+                pull_request, mine, ..
+            } => {
+                view.pull_request = Some(*pull_request);
+                view.mine = *mine;
+            }
             Readiness::NoPullRequest { open_at } => view.open_at = Some(open_at.clone()),
             _ => {}
         }

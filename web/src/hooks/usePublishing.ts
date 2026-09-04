@@ -55,6 +55,9 @@ export function usePublishing() {
     };
   }, [ask, ready]);
 
+  /** The ticks with no review in front of them. */
+  const ticks = useCallback(async () => (await api.ticks()).read, []);
+
   const publish = useCallback(
     async (verdict: Verdict, summary: string): Promise<SentView> => {
       try {
@@ -78,7 +81,7 @@ export function usePublishing() {
     [ask],
   );
 
-  return { readiness, ask, publish, saveToken };
+  return { readiness, ask, publish, ticks, saveToken };
 }
 
 /** Everything the top bar can do about publishing. */

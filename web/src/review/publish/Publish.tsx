@@ -71,6 +71,8 @@ export function Publish({ publishing, comments, read, onError }: PublishProps) {
             onOpenChange={setSending}
             waiting={waiting.length}
             read={read}
+            mine={readiness.mine}
+            onTicks={publishing.ticks}
             pullRequest={readiness.pullRequest}
             publish={publishing.publish}
             onError={onError}
