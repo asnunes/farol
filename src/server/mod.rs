@@ -154,6 +154,7 @@ async fn serve(config: ServeConfig) -> Result<()> {
     let app = routes::router(state);
 
     println!("farol is reading at {url}");
+    #[cfg(target_os = "macos")]
     if config.open_browser {
         let _ = std::process::Command::new("open").arg(&url).spawn();
     }

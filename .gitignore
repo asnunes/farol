@@ -16,3 +16,6 @@ web/tsconfig.tsbuildinfo
 # already lives under the git dir, and a copy in the tree goes stale the moment
 # the branch moves.
 *.farol.json
+
+# Archives produced by the release packaging recipe.
+/dist

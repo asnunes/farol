@@ -4,10 +4,16 @@
 default: check
 
 # Build the frontend, then the binary that embeds it.
-build:
-    cd web && npm ci --silent || npm install --silent
-    cd web && npm run build
-    cargo build --release
+build: web-dist
+    cargo build --locked --release
+
+# Native release packages are built and exercised on their matching runners.
+package target: web-dist
+    cargo build --locked --release --target {{target}}
+    bash scripts/package-release.sh {{target}}
+
+smoke-package archive:
+    bash scripts/smoke-release.sh "{{archive}}"
 
 # A symlink rather than a copy: `just build` then updates the installed binary
 # too, which is what you want while the tool is still being written. `cargo
@@ -51,7 +57,7 @@ dev:
 
 # Run every suite: Rust unit, Rust integration, and web.
 test:
-    cargo test
+    cargo test --locked
     cd web && npm test
 
 # `testing.rs` is excluded because measuring the fakes tells you nothing about
@@ -88,8 +94,8 @@ check: check-rust check-web
 
 # Everything the Rust side has to satisfy.
 check-rust: layers
-    cargo test
-    cargo clippy --all-targets -- -D warnings
+    cargo test --locked
+    cargo clippy --locked --all-targets -- -D warnings
     cargo fmt --check
 
 # `tsc` is here and not in `npm test` because vitest does not typecheck: a test
