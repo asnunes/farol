@@ -32,6 +32,7 @@ pub(super) fn router(state: Arc<AppState>, identity: ServerEntry) -> Router {
         .route("/api/comments", get(comments).post(write_comment))
         .route("/api/comments/{id}", delete(close_comment))
         .route("/api/publish", get(readiness).post(publish))
+        .route("/api/publish/ticks", post(ticks))
         .route("/api/token", put(save_token))
         .route("/api/watch", get(watch))
         .route("/health", get(move || health(identity.clone())))
@@ -188,8 +189,21 @@ async fn publish(
         Ok(sent) => Json(view::SentView {
             url: sent.url,
             comments: sent.comments,
+            read: sent.read,
+            read_failed: sent.read_failed,
         })
         .into_response(),
+        Err(e) => fail(e),
+    }
+}
+
+/// The ticks on their own, for the review that cannot be sent or has nothing
+/// to say. Same call the publish route makes last, without the review in front
+/// of it.
+async fn ticks(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    let publish = state.use_cases.publish_review.clone();
+    match away(move || publish.ticks_only()).await {
+        Ok(read) => Json(serde_json::json!({ "read": read })).into_response(),
         Err(e) => fail(e),
     }
 }
@@ -372,7 +386,11 @@ pub(super) mod tests {
                 publisher.clone(),
                 ReviewScope::new(source.clone()),
                 FileDiffs::new(source.clone()),
-                CommitHistory::new(source),
+                CommitHistory::new(source.clone()),
+                ProgressStore::new(
+                    Arc::new(crate::testing::InMemoryProgressRepository::default()),
+                    FileDiffs::new(source),
+                ),
             )),
             Arc::new(SaveToken::new(Arc::new(FakeCredentials::default()))),
             publisher,
@@ -400,6 +418,8 @@ pub(super) mod tests {
             &paths,
             Readiness::Ready {
                 pull_request: 12,
+                id: "PR_kwDO".into(),
+                mine: false,
                 head: "head".into(),
             },
         );
@@ -507,6 +527,8 @@ pub(super) mod tests {
     async fn a_pull_request_that_is_there_comes_back_with_its_number() {
         let body = ask(Readiness::Ready {
             pull_request: 12,
+            id: "PR_kwDO".into(),
+            mine: false,
             head: "head".into(),
         })
         .await;

@@ -62,7 +62,12 @@ export function TopBar({
         </div>
         {/* Last on the bar, because it is the last thing done: everything to
             its left is the reading, and this is what closes it. */}
-        <Publish publishing={publishing} comments={comments} onError={onError} />
+        <Publish
+          publishing={publishing}
+          comments={comments}
+          read={review.viewedFiles}
+          onError={onError}
+        />
       </div>
     </header>
   );

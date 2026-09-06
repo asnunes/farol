@@ -3,10 +3,20 @@ import type { Verdict } from "@/api";
 
 /** What the review says about the change as a whole, as three buttons.
  *
- * `approveOnly` narrows it to one: comment and request changes are somebody
- * being asked for something, and a review with nothing waiting to go is not
- * asking for anything. */
-export function Verdicts({ value, onChange, approveOnly }: VerdictsProps) {
+ * On your own pull request there is only one: GitHub takes a comment there and
+ * refuses the other two, so they are not drawn. A picker with a single item is
+ * not a picker, so that case says the verdict in words instead of leaving a
+ * button that cannot be pressed or unpressed. */
+export function Verdicts({ value, onChange, mine }: VerdictsProps) {
+  if (mine) {
+    return (
+      <p className="verdicts font-serif text-sm text-ink-muted">
+        This pull request is yours, so it goes up as a comment. GitHub keeps
+        approving and asking for changes for somebody else.
+      </p>
+    );
+  }
+
   return (
     <ToggleGroup
       type="single"
@@ -14,7 +24,7 @@ export function Verdicts({ value, onChange, approveOnly }: VerdictsProps) {
       value={value}
       onValueChange={(next) => next && onChange(next as Verdict)}
     >
-      {(approveOnly ? APPROVE_ONLY : ALL).map(([verdict, label, why]) => (
+      {ALL.map(([verdict, label, why]) => (
         <ToggleGroupItem
           key={verdict}
           value={verdict}
@@ -35,10 +45,9 @@ const ALL: [Verdict, string, string][] = [
   ["approve", "Approve", "Say it is good to merge"],
 ];
 
-const APPROVE_ONLY = ALL.filter(([verdict]) => verdict === "approve");
-
 type VerdictsProps = {
   value: Verdict;
   onChange: (verdict: Verdict) => void;
-  approveOnly: boolean;
+  /** The reviewer opened this pull request themselves. */
+  mine: boolean;
 };

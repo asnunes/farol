@@ -19,7 +19,9 @@ impl Display for StandingLine<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let branch = &self.0.branch;
         match &self.0.readiness {
-            Readiness::Ready { pull_request, head } => writeln!(
+            Readiness::Ready {
+                pull_request, head, ..
+            } => writeln!(
                 f,
                 "ready: pull request #{pull_request}, showing {}",
                 short(head)
@@ -64,6 +66,8 @@ mod tests {
             (
                 Readiness::Ready {
                     pull_request: 12,
+                    id: "PR_kwDO".into(),
+                    mine: false,
                     head: "abc1234def".into(),
                 },
                 "ready:",
@@ -90,6 +94,8 @@ mod tests {
         // in the answer, at the length every other tool prints.
         let said = StandingLine(&at(Readiness::Ready {
             pull_request: 12,
+            id: "PR_kwDO".into(),
+            mine: false,
             head: "abc1234def5678".into(),
         }))
         .to_string();

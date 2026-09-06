@@ -13,7 +13,7 @@ import type { CommentView } from "@/api";
  * says what is missing and lets the reader fix it there. The button stays
  * visible either way: hidden, there would be nothing to explain, and the
  * reader would conclude farol cannot do this at all. */
-export function Publish({ publishing, comments, onError }: PublishProps) {
+export function Publish({ publishing, comments, read, onError }: PublishProps) {
   const [sending, setSending] = useState(false);
   const [explaining, setExplaining] = useState(false);
   const readiness = publishing.readiness;
@@ -70,6 +70,9 @@ export function Publish({ publishing, comments, onError }: PublishProps) {
             open={sending}
             onOpenChange={setSending}
             waiting={waiting.length}
+            read={read}
+            mine={readiness.mine}
+            onTicks={publishing.ticks}
             pullRequest={readiness.pullRequest}
             publish={publishing.publish}
             onError={onError}
@@ -96,5 +99,8 @@ type PublishProps = {
   /** Every comment on the review, so the control can count the ones that have
    * not gone yet — the number the reader is about to send. */
   comments: CommentView[];
+  /** Files read and still current, which go up ticked with the review. The
+   * same number the meter beside this button is showing. */
+  read: number;
   onError: (message: string) => void;
 };

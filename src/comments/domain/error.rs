@@ -49,6 +49,11 @@ pub enum CommentError {
     #[error("'{branch}' has no pull request yet, and a review is posted onto one")]
     NoPullRequest { branch: String },
 
+    #[error(
+        "this pull request is yours, and GitHub only lets somebody else approve it or ask changes on it\nLeave a comment instead, or send the ticks on their own."
+    )]
+    OwnPullRequest,
+
     /// Why this is refused rather than sent: a comment anchors to a line
     /// number, and against another commit it lands on code nobody read. The
     /// message says none of that. Somebody reading it is standing in front of a

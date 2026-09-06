@@ -292,10 +292,25 @@ impl ProgressRepository for BrokenProgressRepository {
 #[derive(Default)]
 pub struct InMemoryProgressRepository {
     progress: Mutex<Progress>,
+    /// A store that cannot be read, for the tests about what happens to work
+    /// that depends on knowing what was read.
+    broken: bool,
+}
+
+impl InMemoryProgressRepository {
+    pub fn broken() -> Self {
+        Self {
+            broken: true,
+            ..Default::default()
+        }
+    }
 }
 
 impl ProgressRepository for InMemoryProgressRepository {
     fn load(&self) -> Result<Progress> {
+        if self.broken {
+            return Err(crate::error::Error::msg("progress file is not readable"));
+        }
         Ok(self.progress.lock().unwrap().clone())
     }
 
@@ -521,12 +536,18 @@ pub fn orphaned(
 pub struct FakePublisher {
     readiness: crate::comments::domain::Readiness,
     sent: Mutex<Option<crate::comments::domain::Review>>,
+    marked: Mutex<Vec<String>>,
+    /// What `mark_read` answers. `Err` is the case that matters: the review is
+    /// already on the pull request when it happens.
+    marking: Mutex<Option<String>>,
 }
 
 impl FakePublisher {
     pub fn ready_at(head: &str) -> Self {
         Self::blocked(crate::comments::domain::Readiness::Ready {
             pull_request: 12,
+            id: "PR_kwDO".into(),
+            mine: false,
             head: head.into(),
         })
     }
@@ -535,7 +556,28 @@ impl FakePublisher {
         Self {
             readiness,
             sent: Mutex::new(None),
+            marked: Mutex::new(Vec::new()),
+            marking: Mutex::new(None),
         }
+    }
+
+    /// The pull request belongs to whoever is reviewing it, which is the one
+    /// arrangement where approving is not on the table.
+    pub fn mine(mut self) -> Self {
+        if let crate::comments::domain::Readiness::Ready { mine, .. } = &mut self.readiness {
+            *mine = true;
+        }
+        self
+    }
+
+    /// A host that takes the review and then refuses to mark anything.
+    pub fn marking_fails(self, why: &str) -> Self {
+        *self.marking.lock().unwrap() = Some(why.into());
+        self
+    }
+
+    pub fn marked(&self) -> Vec<String> {
+        self.marked.lock().unwrap().clone()
     }
 
     pub fn sent(&self) -> crate::comments::domain::Review {
@@ -555,6 +597,14 @@ impl crate::comments::domain::ReviewPublisher for FakePublisher {
     fn publish(&self, review: &crate::comments::domain::Review) -> Result<String> {
         *self.sent.lock().unwrap() = Some(review.clone());
         Ok("https://example.test/r1".into())
+    }
+
+    fn mark_read(&self, _pull: &str, paths: &[String]) -> Result<usize> {
+        if let Some(why) = self.marking.lock().unwrap().clone() {
+            return Err(crate::comments::domain::CommentError::Refused { what: why }.into());
+        }
+        self.marked.lock().unwrap().extend_from_slice(paths);
+        Ok(paths.len())
     }
 }
 

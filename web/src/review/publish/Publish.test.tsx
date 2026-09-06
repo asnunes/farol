@@ -108,14 +108,79 @@ describe("sending", () => {
     expect(screen.getByText("https://example.test/r1")).toBeTruthy();
   });
 
-  it("offers only approve when there is nothing to send", () => {
-    // Comment and request changes are somebody being asked for something, and
-    // an empty review is not asking for anything.
+  it("says the ticks are going up with it, before they do", async () => {
+    // The reviewer has spent the whole read ticking files off. Saying so here
+    // is what tells them they will not have to do it again on the other side.
+    render(<Publish {...props(at("ready", { pullRequest: 12 }), [comment({ id: "1" })], 12)} />);
+
+    fireEvent.click(button());
+
+    expect(screen.getByRole("dialog").textContent).toContain("12 files you have read");
+  });
+
+  it("says what happened to the ticks when the review has gone", async () => {
+    // The review is on the pull request either way, so a host that would not
+    // tick is a note beside the address and not a failure in its place.
+    const publishing = props(at("ready", { pullRequest: 12 }), [comment({ id: "1" })]);
+    publishing.publishing.publish = vi.fn().mockResolvedValue({
+      url: "https://example.test/r1",
+      comments: 1,
+      read: 0,
+      readFailed: "no permission for that",
+    });
+    render(<Publish {...publishing} />);
+    fireEvent.click(button());
+    fireEvent.click(screen.getByText("Approve"));
+    await waitFor(() => expect(send().hasAttribute("disabled")).toBe(false));
+
+    await act(async () => void fireEvent.click(send()));
+
+    expect(screen.getByText("https://example.test/r1")).toBeTruthy();
+    expect(screen.getByRole("dialog").textContent).toContain("were not ticked");
+    expect(screen.getByRole("dialog").textContent).toContain("Review sent");
+  });
+
+  it("offers all three verdicts even with no comments to carry", () => {
+    // A review with only a summary is an ordinary thing to send, and the rule
+    // that used to leave approve alone here offered the one verdict a reviewer
+    // cannot use on their own pull request.
     render(<Publish {...props(at("ready", { pullRequest: 12 }), [])} />);
     fireEvent.click(button());
 
+    expect(screen.getByText("Comment")).toBeTruthy();
+    expect(screen.getByText("Request changes")).toBeTruthy();
     expect(screen.getByText("Approve")).toBeTruthy();
-    expect(screen.queryByText("Request changes")).toBeNull();
+  });
+
+  it("offers no verdict at all on your own pull request", () => {
+    // GitHub takes a comment there and refuses the other two, so a picker
+    // would be three buttons with two that cannot work. It says what will be
+    // sent instead.
+    render(<Publish {...props(at("ready", { pullRequest: 12, mine: true }))} />);
+    fireEvent.click(button());
+
+    expect(screen.queryByText("Approve")).toBeNull();
+    expect(screen.getByRole("dialog").textContent).toContain("goes up as a comment");
+  });
+
+  it("sends the ticks with no review in front of them", async () => {
+    // What is left when a review is not possible, and the reason the reader
+    // asked for this at all.
+    const publishing = props(at("ready", { pullRequest: 12, mine: true }), [], 4);
+    publishing.publishing.ticks = vi.fn().mockResolvedValue(4);
+    render(<Publish {...publishing} />);
+    fireEvent.click(button());
+
+    await act(async () => void fireEvent.click(screen.getByText("Just tick the files")));
+
+    expect(publishing.publishing.ticks).toHaveBeenCalled();
+    expect(publishing.publishing.publish).not.toHaveBeenCalled();
+    // And it says so. Calling this "review sent" would tell somebody they did
+    // the one thing they deliberately did not do.
+    const said = screen.getByRole("dialog").textContent ?? "";
+    expect(said).toContain("Files ticked");
+    expect(said).toContain("No review was sent");
+    expect(said).not.toContain("Your verdict");
   });
 });
 
@@ -136,17 +201,23 @@ function at(
   state: ReadinessView["state"],
   over: Partial<ReadinessView> = {},
 ): ReadinessView {
-  return { state, branch: "feature/x", ...over };
+  return { state, branch: "feature/x", mine: false, ...over };
 }
 
-function props(readiness: ReadinessView | null, comments = [comment({ id: "1" })]) {
+function props(readiness: ReadinessView | null, comments = [comment({ id: "1" })], read = 0) {
   const publishing: Publishing = {
     readiness,
     ask: vi.fn().mockResolvedValue(undefined),
     publish: vi
       .fn<(verdict: Verdict, summary: string) => Promise<SentView>>()
-      .mockResolvedValue({ url: "https://example.test/r1", comments: 1 }),
+      .mockResolvedValue({
+        url: "https://example.test/r1",
+        comments: 1,
+        read: 0,
+        readFailed: null,
+      }),
+    ticks: vi.fn().mockResolvedValue(0),
     saveToken: vi.fn().mockResolvedValue(undefined),
   };
-  return { publishing, comments, onError: vi.fn() };
+  return { publishing, comments, read, onError: vi.fn() };
 }
