@@ -306,6 +306,58 @@ fn a_map_can_be_handed_to_another_machine() {
 }
 
 #[test]
+fn an_imported_map_cannot_overwrite_files_outside_its_store() {
+    let repo = Repo::new();
+    repo.feature();
+    repo.derive();
+    repo.core_block(&["src/a.rs"]);
+    let exported = repo.path().join("review.farol.json");
+    repo.ok(&["map", "export", "--out", exported.to_str().unwrap()]);
+    let original = std::fs::read_to_string(&exported).unwrap();
+    let marker = repo.path().join("import-canary.json");
+    repo.write("import-canary.json", "keep this file intact");
+    let before = repo.ok(&["map", "show"]);
+
+    for generated_at in [
+        "../../../../import-canary".to_string(),
+        marker.with_extension("").to_str().unwrap().to_string(),
+    ] {
+        let mut bundle: serde_json::Value = serde_json::from_str(&original).unwrap();
+        bundle["map"]["generated_at"] = generated_at.clone().into();
+        std::fs::write(&exported, serde_json::to_vec(&bundle).unwrap()).unwrap();
+        let out = repo.farol(&["map", "import", exported.to_str().unwrap()]);
+
+        assert!(
+            !out.status.success(),
+            "an imported path must be rejected: {generated_at}"
+        );
+        let error = String::from_utf8_lossy(&out.stderr);
+        assert!(
+            error.contains("map.generated_at"),
+            "the error must identify the invalid field: {error}"
+        );
+        assert_eq!(
+            std::fs::read_to_string(&marker).unwrap(),
+            "keep this file intact",
+            "an import must never overwrite a file outside its map store"
+        );
+        assert_eq!(
+            repo.ok(&["map", "show"]),
+            before,
+            "a rejected import must not alter the existing review"
+        );
+    }
+
+    std::fs::write(&exported, original).unwrap();
+    repo.ok(&["map", "import", exported.to_str().unwrap()]);
+    assert_eq!(
+        repo.ok(&["map", "show"]),
+        before,
+        "rejecting malicious exports must not prevent a valid import"
+    );
+}
+
+#[test]
 fn a_map_from_another_repository_is_refused() {
     // Nothing but the base commit stands between a map and the wrong tree.
     let repo = Repo::new();

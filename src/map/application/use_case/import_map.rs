@@ -25,8 +25,7 @@ impl ImportMap {
     }
 
     pub fn execute(&self, raw: &str) -> Result<Import> {
-        let bundle: Bundle =
-            serde_json::from_str(raw).map_err(|e| MapError::NotAnExport { why: e.to_string() })?;
+        let bundle = Bundle::parse(raw)?;
 
         let here = self.scope.get()?;
         if bundle.base != here.base_sha {
@@ -93,24 +92,24 @@ mod tests {
     fn abc() -> FakeDiffSource {
         FakeDiffSource::with_paths(&["a.rs"])
             .from_base("base1234")
-            .on_commit("abc1234")
-            .with_ancestors(&["abc1234"])
+            .on_commit("abc1234000000000000000000000000000000000")
+            .with_ancestors(&["abc1234000000000000000000000000000000000"])
     }
 
     /// The same review, further on.
     fn def() -> FakeDiffSource {
         FakeDiffSource::with_paths(&["a.rs"])
             .from_base("base1234")
-            .on_commit("def5678")
-            .with_ancestors(&["def5678"])
+            .on_commit("def5678000000000000000000000000000000000")
+            .with_ancestors(&["def5678000000000000000000000000000000000"])
     }
 
     /// Another repository: the base is what differs.
     fn other_repo() -> FakeDiffSource {
         FakeDiffSource::with_paths(&["a.rs"])
             .from_base("zzz9999")
-            .on_commit("abc1234")
-            .with_ancestors(&["abc1234"])
+            .on_commit("abc1234000000000000000000000000000000000")
+            .with_ancestors(&["abc1234000000000000000000000000000000000"])
     }
 
     #[test]
@@ -119,10 +118,15 @@ mod tests {
 
         let landed = import.execute(&handed_over(abc)).unwrap();
 
-        assert_eq!(landed.map.generated_at, "abc1234");
+        assert_eq!(
+            landed.map.generated_at,
+            "abc1234000000000000000000000000000000000"
+        );
         assert!(landed.behind.is_none());
         assert_eq!(
-            repo.load_at("abc1234").unwrap().unwrap(),
+            repo.load_at("abc1234000000000000000000000000000000000")
+                .unwrap()
+                .unwrap(),
             landed.map,
             "it has to be stored, not only returned"
         );
@@ -150,9 +154,15 @@ mod tests {
 
         assert_eq!(
             landed.behind,
-            Some(("abc1234".to_string(), "def5678".to_string()))
+            Some((
+                "abc1234000000000000000000000000000000000".to_string(),
+                "def5678000000000000000000000000000000000".to_string()
+            ))
         );
-        assert_eq!(landed.map.generated_at, "abc1234");
+        assert_eq!(
+            landed.map.generated_at,
+            "abc1234000000000000000000000000000000000"
+        );
     }
 
     #[test]
@@ -163,6 +173,21 @@ mod tests {
         import.execute(&handed_over(abc)).unwrap();
 
         assert!(import.execute(&handed_over(abc)).is_ok());
+    }
+
+    #[test]
+    fn an_invalid_import_never_reaches_storage() {
+        let (import, repo) = importing(abc);
+        let mut bundle: serde_json::Value = serde_json::from_str(&handed_over(abc)).unwrap();
+        bundle["map"]["generated_at"] = "../../outside".into();
+
+        let error = import.execute(&bundle.to_string()).unwrap_err();
+
+        assert!(error.to_string().contains("map.generated_at"), "{error}");
+        assert!(
+            repo.stored_shas().unwrap().is_empty(),
+            "invalid input must be rejected before calling the repository"
+        );
     }
 
     #[test]
