@@ -143,6 +143,13 @@ instance; `--foreground` also reuses one that is already running. Different
 worktrees have their own instances. The registry lives under
 `$XDG_STATE_HOME/farol`; entries whose process is gone are dropped on the way past.
 
+**Local access only.** Open the address printed by `farol serve`. The server
+accepts `127.0.0.1` or `localhost` on its listening port and rejects browser
+origins that do not exactly match the requested address. Cross-site browser
+requests are refused before reading the repository or changing state. CLI calls
+without browser headers still work against the local address. The Vite dev
+proxy forwards its own page's origin without authorizing unrelated origins.
+
 **An open review follows Git.** Each request resolves the comparison again,
 including its files and content hashes. A commit without a new map shows how
 far the map is behind; deriving the map makes it available on the same URL.

@@ -41,6 +41,10 @@ pub(super) fn router(state: Arc<AppState>) -> Router {
         .route("/api/watch", get(watch))
         .route("/health", get(health))
         .fallback(assets::handler)
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            super::local_request::local_request,
+        ))
         .with_state(state)
 }
 
@@ -551,6 +555,7 @@ pub(super) mod tests {
         let response = router(state)
             .oneshot(
                 Request::builder()
+                    .header("host", "127.0.0.1:4600")
                     .uri("/api/review")
                     .body(Body::empty())
                     .unwrap(),
@@ -621,6 +626,7 @@ pub(super) mod tests {
         let response = router(state)
             .oneshot(
                 Request::builder()
+                    .header("host", "127.0.0.1:4600")
                     .method("POST")
                     .uri("/api/publish")
                     .header("content-type", "application/json")
@@ -646,6 +652,7 @@ pub(super) mod tests {
         let response = router(state)
             .oneshot(
                 Request::builder()
+                    .header("host", "127.0.0.1:4600")
                     .method("PUT")
                     .uri("/api/token")
                     .header("content-type", "application/json")
@@ -674,6 +681,7 @@ pub(super) mod tests {
         let response = router(state)
             .oneshot(
                 Request::builder()
+                    .header("host", "127.0.0.1:4600")
                     .uri("/api/publish")
                     .body(Body::empty())
                     .unwrap(),

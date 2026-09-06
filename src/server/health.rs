@@ -37,7 +37,7 @@ fn identity(port: u16) -> Option<ServerEntry> {
     // HTTP/1.0: the server closes when it has finished, so the read ends on its
     // own and nothing here has to understand keep-alive or chunked bodies.
     socket
-        .write_all(b"GET /health HTTP/1.0\r\nHost: 127.0.0.1\r\n\r\n")
+        .write_all(format!("GET /health HTTP/1.0\r\nHost: 127.0.0.1:{port}\r\n\r\n").as_bytes())
         .ok()?;
 
     let mut answer = Vec::new();
