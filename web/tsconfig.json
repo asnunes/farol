@@ -22,6 +22,8 @@
     }
   },
   "include": [
-    "src"
+    "src",
+    "localProxy.ts",
+    "localProxy.test.ts"
   ]
 }

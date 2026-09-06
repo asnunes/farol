@@ -88,6 +88,16 @@ impl Serving {
 
     /// Status code and body, for the requests that are meant to be refused.
     fn probe(&self, method: &str, path: &str, body: Option<&str>) -> (u32, String) {
+        self.probe_headers(method, path, body, &[])
+    }
+
+    fn probe_headers(
+        &self,
+        method: &str,
+        path: &str,
+        body: Option<&str>,
+        headers: &[(&str, &str)],
+    ) -> (u32, String) {
         let mut args = vec![
             "-s".to_string(),
             "-o".to_string(),
@@ -105,6 +115,10 @@ impl Serving {
                 body.to_string(),
             ]);
         }
+        for (name, value) in headers {
+            args.extend(["-H".into(), format!("{name}: {value}")]);
+        }
+        args.extend(["--max-time".into(), "5".into()]);
         args.push(self.url(path));
 
         let out = Command::new("curl")
@@ -185,6 +199,125 @@ fn port_from(stdout: std::process::ChildStdout) -> u16 {
 fn port_in(line: &str) -> Option<u16> {
     line.rsplit_once(':')
         .and_then(|(_, tail)| tail.trim().parse().ok())
+}
+
+#[test]
+fn foreign_hosts_and_origins_cannot_read_any_local_surface() {
+    let s = Serving::new();
+    for path in [
+        "/api/review",
+        "/api/file?path=src/a.rs",
+        "/api/lines?path=src/a.rs&from=1&to=2",
+        "/api/comments",
+        "/api/publish",
+        "/api/watch",
+        "/health",
+        "/",
+    ] {
+        for headers in [
+            vec![("Host", "foreign.example")],
+            vec![("Origin", "http://foreign.example")],
+            vec![("Sec-Fetch-Site", "cross-site")],
+        ] {
+            let (status, body) = s.probe_headers("GET", path, None, &headers);
+            assert_eq!(status, 403, "{path}: {headers:?}: {body}");
+            assert!(body.contains("local review page"), "{body}");
+        }
+    }
+}
+
+#[test]
+fn foreign_origins_cannot_change_state_or_start_publication() {
+    let s = Serving::new();
+    let before = s.json("/api/review");
+    for (method, path, body) in [
+        (
+            "POST",
+            "/api/viewed",
+            r#"{"path":"src/a.rs","viewed":true}"#,
+        ),
+        (
+            "POST",
+            "/api/comments",
+            r#"{"path":"src/a.rs","from":1,"to":1,"body":"unwanted"}"#,
+        ),
+        ("DELETE", "/api/comments/nonexistent", ""),
+        (
+            "POST",
+            "/api/publish",
+            r#"{"verdict":"comment","summary":"unwanted"}"#,
+        ),
+        ("POST", "/api/publish/ticks", "{}"),
+        (
+            "PUT",
+            "/api/token",
+            r#"{"host":"github.com","token":"test-secret"}"#,
+        ),
+        (
+            "PUT",
+            "/api/session",
+            r#"{"base":"nonexistent","watch":false}"#,
+        ),
+    ] {
+        let (status, response) = s.probe_headers(
+            method,
+            path,
+            Some(body),
+            &[("Origin", "http://foreign.example")],
+        );
+        assert_eq!(status, 403, "{method} {path}: {response}");
+    }
+    assert_eq!(
+        s.json("/api/review"),
+        before,
+        "rejected requests must not change the review or session"
+    );
+    assert!(
+        s.json("/api/comments")["comments"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        !s.repo
+            .path()
+            .join(".farol-config/farol/github-credential.json")
+            .exists()
+    );
+}
+
+#[test]
+fn the_local_page_and_cli_can_still_read_and_update_the_review() {
+    let s = Serving::new();
+    for host in [
+        format!("127.0.0.1:{}", s.port),
+        format!("localhost:{}", s.port),
+    ] {
+        let origin = format!("http://{host}");
+        let headers = [
+            ("Host", host.as_str()),
+            ("Origin", origin.as_str()),
+            ("Sec-Fetch-Site", "same-origin"),
+        ];
+        assert_eq!(s.probe_headers("GET", "/api/review", None, &headers).0, 200);
+        assert_eq!(
+            s.probe_headers(
+                "POST",
+                "/api/viewed",
+                Some(r#"{"path":"src/a.rs","viewed":true}"#),
+                &headers
+            )
+            .0,
+            204
+        );
+    }
+    assert_eq!(s.json("/api/review")["viewedFiles"], 1);
+    let result = s.repo.ok(&["serve", "--no-open", "--no-watch"]);
+    assert!(
+        result.contains(&s.url("")),
+        "the CLI must reuse its existing server: {result}"
+    );
+    assert_eq!(s.json("/health")["port"], s.port);
 }
 
 // ---- what the screen is built from --------------------------------------

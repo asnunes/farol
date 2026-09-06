@@ -8,6 +8,7 @@ mod assets;
 mod control;
 pub mod detach;
 mod health;
+mod local_request;
 mod registry;
 mod routes;
 mod server_list;
