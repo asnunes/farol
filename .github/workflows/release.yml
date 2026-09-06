@@ -1,0 +1,83 @@
+name: release packages
+
+on:
+  pull_request:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: Package ${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            target: aarch64-apple-darwin
+          - runner: macos-15-intel
+            target: x86_64-apple-darwin
+          - runner: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install the pinned Rust toolchain
+        run: rustup show
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+      - uses: extractions/setup-just@v2
+        with:
+          just-version: 1.57.0
+      - name: Set the supported macOS deployment target
+        if: runner.os == 'macOS'
+        run: echo "MACOSX_DEPLOYMENT_TARGET=15.0" >> "$GITHUB_ENV"
+      - name: Build and package
+        env:
+          RELEASE_TARGET: ${{ matrix.target }}
+        run: just package "$RELEASE_TARGET"
+      - name: Test the extracted package
+        shell: bash
+        run: |
+          for archive in dist/*.tar.gz; do
+            just smoke-package "$archive"
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: farol-${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+
+  publish:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: package
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: farol-*
+          path: dist
+          merge-multiple: true
+      - name: Publish the verified prerelease
+        working-directory: dist
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          cat ./*.sha256 > SHA256SUMS
+          sha256sum --check SHA256SUMS
+          gh release create "$RELEASE_TAG" ./*.tar.gz SHA256SUMS \
+            --verify-tag --prerelease --title "$RELEASE_TAG" \
+            --notes "Preview release. See the packaged README for installation and supported platforms. macOS packages are not Developer ID signed or notarized."

@@ -31,13 +31,12 @@ jobs:
       # for an unbuilt checkout, which asserts nothing about the page.
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .node-version
           cache: npm
           cache-dependency-path: web/package-lock.json
 
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy, rustfmt
+      - name: Install the pinned Rust toolchain
+        run: rustup show
 
       # Saved on a red run too. Without this a branch that fails three times
       # compiles gix and tokio from scratch three times, which is how the first
@@ -47,6 +46,8 @@ jobs:
           cache-on-failure: true
 
       - uses: extractions/setup-just@v2
+        with:
+          just-version: 1.57.0
 
       - run: just web-dist
       - run: just check-rust
@@ -58,11 +59,13 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .node-version
           cache: npm
           cache-dependency-path: web/package-lock.json
 
       - uses: extractions/setup-just@v2
+        with:
+          just-version: 1.57.0
 
       - run: npm ci
         working-directory: web

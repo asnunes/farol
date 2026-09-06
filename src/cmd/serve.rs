@@ -20,7 +20,7 @@ pub(super) struct ServeArgs {
     /// always keeps its port.
     #[arg(long)]
     port: Option<u16>,
-    /// Do not open a browser.
+    /// Do not open a browser on macOS. Linux always prints the URL only.
     #[arg(long)]
     no_open: bool,
     /// Do not watch the repository for changes.
@@ -43,6 +43,7 @@ impl ServeArgs {
             if self.port.is_some() {
                 println!("Reused the existing port {}.", entry.port);
             }
+            #[cfg(target_os = "macos")]
             if !self.no_open {
                 let _ = std::process::Command::new("open").arg(entry.url()).spawn();
             }
