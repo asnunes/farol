@@ -9,8 +9,10 @@ mod blob;
 #[cfg(test)]
 mod fixture;
 mod git;
+mod gix_head;
 mod gix_source;
 mod text_diff;
 mod window;
 
+pub use gix_head::GixHead;
 pub use gix_source::*;

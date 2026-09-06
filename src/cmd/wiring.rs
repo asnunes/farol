@@ -204,6 +204,13 @@ impl Ctx {
     }
 }
 
+pub fn check_head(root: &Path) -> Result<crate::diff::application::CheckHead> {
+    let workspace = Workspace::discover(root)?;
+    Ok(crate::diff::application::CheckHead::new(Arc::new(
+        crate::diff::infra::GixHead::new(workspace.into_repo()),
+    )))
+}
+
 pub fn server_factory(root: PathBuf) -> Arc<dyn ServerUseCaseFactory> {
     Arc::new(WorkspaceUseCases { root })
 }

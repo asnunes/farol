@@ -20,6 +20,20 @@ impl Git {
         Self { repo }
     }
 
+    pub fn head_state(&self) -> Result<crate::diff::domain::HeadState> {
+        let mut head = self
+            .repo
+            .head()
+            .map_err(|e| Error::msg(format!("cannot read HEAD: {e}")))?;
+        let reference = head.referent_name().map(|name| name.as_bstr().to_string());
+        let commit = head
+            .peel_to_commit()
+            .map_err(|e| Error::msg(format!("cannot resolve HEAD: {e}")))?
+            .id
+            .to_string();
+        Ok(crate::diff::domain::HeadState { reference, commit })
+    }
+
     pub fn into_sync(self) -> gix::ThreadSafeRepository {
         self.repo.into_sync()
     }

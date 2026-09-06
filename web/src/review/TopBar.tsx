@@ -2,6 +2,7 @@ import { TriangleAlert } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import type { RefreshReason } from "@/hooks/useReview";
 import { Refresh } from "@/review/Refresh";
 import { Publish } from "@/review/publish/Publish";
 import { ViewToggle } from "@/review/ViewToggle";
@@ -40,7 +41,7 @@ export function TopBar({
 
       <div className="flex items-center gap-4">
         {unreadable.length > 0 && <Unreadable broken={unreadable} />}
-        {stale && <Refresh onRefresh={onRefresh} />}
+        {stale && <Refresh reason={stale} onRefresh={onRefresh} />}
         <ViewToggle view={view} onChange={onView} />
         <div className="progress flex items-center gap-2 font-mono text-xs text-ink-muted">
           {done ? (
@@ -112,7 +113,7 @@ type TopBarProps = {
   review: ReviewView;
   view: DiffView;
   onView: (view: DiffView) => void;
-  stale: boolean;
+  stale: RefreshReason | null;
   onRefresh: () => void;
   /** Comment files that could not be parsed, in the reviewer's terms. */
   unreadable: UnreadableView[];

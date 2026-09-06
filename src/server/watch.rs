@@ -13,9 +13,23 @@ pub(super) fn spawn(
     common_dir: PathBuf,
     tx: broadcast::Sender<String>,
     config: tokio::sync::watch::Receiver<super::SessionConfig>,
+    mut check_head: crate::diff::application::CheckHead,
 ) {
     std::thread::spawn(move || {
         use notify::{RecursiveMode, Watcher};
+
+        // Linked worktree common dirs may contain ../..; notify reports the
+        // resolved path, so both watch roots must use the same spelling.
+        let roots = git_dir
+            .canonicalize()
+            .and_then(|git| common_dir.canonicalize().map(|common| (git, common)));
+        let (git_dir, common_dir) = match roots {
+            Ok(roots) => roots,
+            Err(error) => {
+                eprintln!("warning: cannot watch the repository: {error}");
+                return;
+            }
+        };
 
         let (raw_tx, raw_rx) = std::sync::mpsc::channel();
         let mut watcher = match notify::recommended_watcher(raw_tx) {
@@ -43,24 +57,31 @@ pub(super) fn spawn(
             }
         }
 
-        // Empty, not "everything just now": nothing has been sent yet, so the
-        // first change of each kind must get through. Starting the clock at
-        // startup swallowed it if it landed within the quiet period, which is
-        // exactly what happens when the skill finishes writing the map as the
-        // server comes up.
+        if let Err(error) = check_head.execute() {
+            eprintln!("warning: cannot check HEAD: {error}");
+        }
+        // The first map or comment event must get through, even at startup.
         let mut last: HashMap<&'static str, std::time::Instant> = HashMap::new();
         for event in raw_rx {
             if !config.borrow().watch {
                 continue;
             }
             let Ok(event) = event else { continue };
-            let Some(kind) = nudge_for(&event.paths) else {
+            let Some(kind) = nudge_for(&event.paths, &git_dir, &common_dir) else {
                 continue;
             };
-            // Git rewrites several files per operation; one nudge is enough.
-            // Per kind, though: `map derive` right after a commit writes the
-            // map within milliseconds of the ref, and one quiet window for
-            // both would let the commit swallow the map.
+            if kind == "head" {
+                match check_head.execute() {
+                    Ok(true) => {
+                        let _ = tx.send(kind.to_string());
+                    }
+                    Ok(false) => {}
+                    Err(error) => eprintln!("warning: cannot check HEAD: {error}"),
+                }
+                continue;
+            }
+            // Map and comment writes may produce several filesystem events.
+            // Keep their quiet windows separate so neither silences the other.
             if last.get(kind).is_some_and(|t| t.elapsed() < QUIET) {
                 continue;
             }
@@ -70,10 +91,7 @@ pub(super) fn spawn(
     });
 }
 
-/// How long to ignore further events of the same kind after nudging. A commit
-/// rewrites `HEAD`, a ref and the index in quick succession; the browser needs
-/// one reload, not three. Of the same kind only: different news is different
-/// news however close together it lands.
+/// Coalesce map and comment writes; HEAD changes are deduplicated by identity.
 const QUIET: std::time::Duration = std::time::Duration::from_millis(300);
 
 /// What an event on the git dir means for the browser, if anything.
@@ -82,7 +100,11 @@ const QUIET: std::time::Duration = std::time::Duration::from_millis(300);
 /// objects being written, locks being taken. Three things change what is on
 /// screen: a comment being written, the skill rewriting the map, and the branch
 /// moving.
-fn nudge_for(paths: &[PathBuf]) -> Option<&'static str> {
+fn nudge_for(
+    paths: &[PathBuf],
+    git_dir: &std::path::Path,
+    common_dir: &std::path::Path,
+) -> Option<&'static str> {
     let under = |p: &PathBuf, dir: &str| {
         let path = p.to_string_lossy();
         path.contains("/farol/") && path.contains(dir)
@@ -103,7 +125,14 @@ fn nudge_for(paths: &[PathBuf]) -> Option<&'static str> {
         return Some("map");
     }
     let touched_head = paths.iter().any(|p| {
-        p.ends_with("HEAD") || p.ends_with("packed-refs") || p.to_string_lossy().contains("/refs/")
+        if p == &git_dir.join("HEAD") || p == &common_dir.join("packed-refs") {
+            return true;
+        }
+        p.strip_prefix(common_dir.join("refs/heads"))
+            .is_ok_and(|relative| {
+                relative.components().next().is_some()
+                    && !relative.as_os_str().to_string_lossy().ends_with(".lock")
+            })
     });
     touched_head.then_some("head")
 }
@@ -122,7 +151,18 @@ mod tests {
                 ..Default::default()
             })
             .1,
+            crate::diff::application::CheckHead::new(std::sync::Arc::new(
+                crate::testing::FakeDiffSource::with_paths(&[]),
+            )),
         );
+    }
+
+    fn nudge_for(paths: &[PathBuf]) -> Option<&'static str> {
+        super::nudge_for(
+            paths,
+            std::path::Path::new("/repo/.git"),
+            std::path::Path::new("/repo/.git"),
+        )
     }
 
     fn paths(list: &[&str]) -> Vec<PathBuf> {
@@ -194,6 +234,42 @@ mod tests {
     }
 
     #[test]
+    fn a_fetch_or_push_does_not_ask_the_reader_to_refresh() {
+        for path in [
+            "/repo/.git/refs/remotes/origin/main",
+            "/repo/.git/refs/tags/v1",
+            "/repo/.git/FETCH_HEAD",
+            "/repo/.git/HEAD.lock",
+            "/repo/.git/refs/heads/main.lock",
+            "/elsewhere/refs/heads/main",
+            "/repo/.git/worktrees/other/HEAD",
+        ] {
+            assert_eq!(
+                nudge_for(&paths(&[path])),
+                None,
+                "{path} does not signal a current branch change"
+            );
+        }
+    }
+
+    #[test]
+    fn a_linked_worktree_watches_its_private_head_and_common_refs() {
+        let git = std::path::Path::new("/repo/.git/worktrees/review");
+        let common = std::path::Path::new("/repo/.git");
+        for path in [
+            "/repo/.git/worktrees/review/HEAD",
+            "/repo/.git/refs/heads/review",
+            "/repo/.git/packed-refs",
+        ] {
+            assert_eq!(super::nudge_for(&paths(&[path]), git, common), Some("head"));
+        }
+        assert_eq!(
+            super::nudge_for(&paths(&["/repo/.git/HEAD"]), git, common),
+            None
+        );
+    }
+
+    #[test]
     fn an_event_carrying_no_paths_says_nothing() {
         assert_eq!(nudge_for(&[]), None);
     }
@@ -247,7 +323,15 @@ mod tests {
             ..Default::default()
         });
         let (tx, mut rx) = broadcast::channel(16);
-        super::spawn(dir.path().into(), dir.path().into(), tx, updates);
+        super::spawn(
+            dir.path().into(),
+            dir.path().into(),
+            tx,
+            updates,
+            crate::diff::application::CheckHead::new(std::sync::Arc::new(
+                crate::testing::FakeDiffSource::with_paths(&[]),
+            )),
+        );
         assert_eq!(
             nudged_by(|| std::fs::write(&file, "{}").unwrap(), &mut rx).as_deref(),
             Some("map")
@@ -267,10 +351,7 @@ mod tests {
 
     #[test]
     fn news_of_one_kind_does_not_swallow_news_of_another() {
-        // `map derive` right after a commit is the documented flow, and the
-        // two writes land milliseconds apart. One quiet window for both let
-        // the ref silence the map, so the page heard that the branch moved and
-        // never that the map it is showing had been rewritten.
+        // A comment write must not silence a map written immediately afterwards.
         let dir = tempfile::tempdir().unwrap();
         let maps = dir.path().join("farol").join("x").join("maps");
         std::fs::create_dir_all(&maps).unwrap();
@@ -278,14 +359,16 @@ mod tests {
         let (tx, mut rx) = broadcast::channel(16);
         spawn(dir.path().to_path_buf(), tx);
 
-        let head = dir.path().join("HEAD");
+        let comments = dir.path().join("farol/x/comments");
+        std::fs::create_dir_all(&comments).unwrap();
+        let head = comments.join("note.md");
         assert_eq!(
             nudged_by(
                 || std::fs::write(&head, "ref: refs/heads/x\n").unwrap(),
                 &mut rx
             )
             .as_deref(),
-            Some("head"),
+            Some("comments"),
             "the watcher has to be awake, or the map below proves nothing"
         );
 

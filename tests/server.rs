@@ -861,6 +861,46 @@ fn linked_worktrees_have_independent_instances_in_the_same_registry() {
 }
 
 #[test]
+fn fetching_pushing_and_packing_refs_do_not_announce_a_branch_change() {
+    let s = Serving::with(&[]);
+    let remote = tempfile::tempdir().unwrap();
+    s.repo
+        .git(&["init", "--bare", "-q", remote.path().to_str().unwrap()]);
+    s.repo
+        .git(&["remote", "add", "origin", remote.path().to_str().unwrap()]);
+    let watching = Command::new("curl")
+        .args(["-sN", "--max-time", "4", &s.url("/api/watch")])
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    std::thread::sleep(Duration::from_millis(500));
+    s.repo.git(&["push", "origin", "HEAD:refs/heads/review"]);
+    s.repo.git(&["fetch", "origin"]);
+    s.repo.git(&["branch", "unrelated"]);
+    s.repo.git(&["tag", "v1"]);
+    s.repo.git(&["pack-refs", "--all", "--prune"]);
+    s.repo.ok(&[
+        "block",
+        "add",
+        "watch-probe",
+        "--title",
+        "Watch probe",
+        "--context",
+        "Prove notifications are active",
+    ]);
+    let output = watching.wait_with_output().unwrap();
+    let events = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        events.contains("event: map"),
+        "the watcher must be active for its silence to prove anything: {events}"
+    );
+    assert!(
+        !events.contains("event: head"),
+        "bookkeeping must not ask the reader to refresh: {events}"
+    );
+}
+
+#[test]
 fn shared_ref_changes_reach_a_linked_worktree_and_its_next_read() {
     let repo = mapped();
     let linked = tempfile::tempdir().unwrap();
