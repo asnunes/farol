@@ -58,6 +58,36 @@ describe("the panel that says what is missing", () => {
     expect(screen.queryByText(/open a pull request for this branch/i)).toBeNull();
   });
 
+  it("saves the token only for the host shown in the form", async () => {
+    const value = props(at("noToken", { host: "enterprise.example" }));
+    render(<Publish {...value} />);
+    fireEvent.click(screen.getByLabelText("Why this review cannot be sent yet"));
+    expect(screen.getByText("enterprise.example")).toBeTruthy();
+    fireEvent.change(screen.getByPlaceholderText("github_pat_…"), { target: { value: "test-secret" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save token for enterprise.example" }));
+    await waitFor(() => expect(value.publishing.saveToken).toHaveBeenCalledWith("enterprise.example", "test-secret"));
+  });
+
+  it("explains when the server refuses an outdated host authorization", async () => {
+    const value = props(at("noToken"));
+    vi.mocked(value.publishing.saveToken).mockRejectedValue(new Error("The credential host changed. Refresh the review."));
+    render(<Publish {...value} />);
+    fireEvent.click(screen.getByLabelText("Why this review cannot be sent yet"));
+    fireEvent.change(screen.getByPlaceholderText("github_pat_…"), { target: { value: "test-secret" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save token for github.com" }));
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toContain("host changed"));
+  });
+
+  it("clears an entered token when the destination host changes", () => {
+    const value = props(at("noToken"));
+    const page = render(<Publish {...value} />);
+    fireEvent.click(screen.getByLabelText("Why this review cannot be sent yet"));
+    fireEvent.change(screen.getByPlaceholderText("github_pat_…"), { target: { value: "test-secret" } });
+    page.rerender(<Publish {...value} publishing={{ ...value.publishing, readiness: at("noToken", { host: "another.example" }) }} />);
+    expect((screen.getByPlaceholderText("github_pat_…") as HTMLTextAreaElement).value).toBe("");
+    expect(value.publishing.saveToken).not.toHaveBeenCalled();
+  });
+
   it("covers the push and the pull request together, because both are missing", () => {
     // A branch GitHub has never seen cannot have a pull request. Naming only
     // the push would send the reader back a second time.
@@ -201,7 +231,7 @@ function at(
   state: ReadinessView["state"],
   over: Partial<ReadinessView> = {},
 ): ReadinessView {
-  return { state, branch: "feature/x", mine: false, ...over };
+  return { state, branch: "feature/x", host: "github.com", mine: false, ...over };
 }
 
 function props(readiness: ReadinessView | null, comments = [comment({ id: "1" })], read = 0) {

@@ -40,7 +40,7 @@ impl GitHub {
 
 impl ReviewPublisher for GitHub {
     fn readiness(&self, branch: &str) -> Result<Readiness> {
-        let Some(token) = self.credentials.token()? else {
+        let Some(token) = self.credentials.token(&self.remote.host)? else {
             return Ok(Readiness::NoToken);
         };
 
@@ -180,7 +180,7 @@ impl GitHub {
     /// question.
     fn token(&self) -> Result<String> {
         self.credentials
-            .token()?
+            .token(&self.remote.host)?
             .ok_or_else(|| CommentError::NoToken.into())
     }
 
@@ -645,23 +645,46 @@ mod tests {
         assert_eq!(first_pull(serde_json::json!([])), None);
     }
 
-    fn github(host: &str) -> GitHub {
-        struct NoToken;
-        impl Credentials for NoToken {
-            fn token(&self) -> Result<Option<String>> {
-                Ok(None)
-            }
-            fn set(&self, _: &str) -> Result<()> {
-                Ok(())
-            }
-        }
+    #[test]
+    fn an_unauthorized_host_receives_no_requests_from_any_publishing_action() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let credentials = Arc::new(crate::testing::FakeCredentials::default());
+        credentials.set("github.com", "test-secret").unwrap();
+        let github = GitHub::new(
+            Remote {
+                host: listener.local_addr().unwrap().to_string(),
+                slug: "owner/repo".into(),
+            },
+            credentials,
+        );
 
+        assert_eq!(github.readiness("feature/x").unwrap(), Readiness::NoToken);
+        let error = github
+            .publish(&Review {
+                pull_request: 1,
+                head: "head".into(),
+                summary: "summary".into(),
+                verdict: crate::comments::domain::Verdict::Comment,
+                comments: vec![],
+            })
+            .unwrap_err();
+        assert!(error.to_string().contains("no token"), "{error}");
+        assert!(github.mark_read("pull", &["a.rs".into()]).is_err());
+        assert_eq!(
+            listener.accept().unwrap_err().kind(),
+            std::io::ErrorKind::WouldBlock,
+            "the host must not receive even a connection when its credential is absent"
+        );
+    }
+
+    fn github(host: &str) -> GitHub {
         GitHub::new(
             Remote {
                 host: host.into(),
                 slug: "asnunes/farol".into(),
             },
-            Arc::new(NoToken),
+            Arc::new(crate::testing::FakeCredentials::default()),
         )
     }
 }

@@ -118,14 +118,14 @@ impl Verdict {
     }
 }
 
-/// The GitHub credential, kept where the review cannot see it.
+/// A credential is available only for the host its owner authorized.
 ///
 /// A port for one reason: publishing is tested against a fake, and a fake that
 /// reached for the real file would read the person's actual token.
 pub trait Credentials: Send + Sync {
-    fn token(&self) -> Result<Option<String>>;
+    fn token(&self, host: &str) -> Result<Option<String>>;
 
-    fn set(&self, token: &str) -> Result<()>;
+    fn set(&self, host: &str, token: &str) -> Result<()>;
 }
 
 #[cfg(test)]

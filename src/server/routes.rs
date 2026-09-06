@@ -197,6 +197,7 @@ async fn readiness(Extension(cases): Extension<ServerUseCases>) -> impl IntoResp
         Ok(standing) => Json(view::ReadinessView::of(
             &standing.readiness,
             &standing.branch,
+            standing.host.as_deref(),
         ))
         .into_response(),
         Err(e) => fail(e),
@@ -244,6 +245,7 @@ async fn ticks(Extension(cases): Extension<ServerUseCases>) -> impl IntoResponse
 
 #[derive(Deserialize)]
 struct NewToken {
+    host: String,
     token: String,
 }
 
@@ -255,7 +257,7 @@ async fn save_token(
     Extension(cases): Extension<ServerUseCases>,
     Json(body): Json<NewToken>,
 ) -> impl IntoResponse {
-    match cases.save_token.execute(&body.token) {
+    match cases.save_token.execute(&body.host, &body.token) {
         Ok(()) => StatusCode::NO_CONTENT.into_response(),
         Err(e) => fail(e),
     }
@@ -427,7 +429,11 @@ pub(super) mod tests {
         let source = Arc::new(FakeDiffSource::with_paths(paths));
         let publisher = Arc::new(FakePublisher::blocked(readiness));
         (
-            ReviewReadiness::new(publisher.clone(), ReviewScope::new(source.clone())),
+            ReviewReadiness::new(
+                publisher.clone(),
+                ReviewScope::new(source.clone()),
+                Some("github.com".into()),
+            ),
             Arc::new(PublishReview::new(
                 Arc::new(InMemoryComments::default()),
                 publisher.clone(),
@@ -439,7 +445,10 @@ pub(super) mod tests {
                     FileDiffs::new(source),
                 ),
             )),
-            Arc::new(SaveToken::new(Arc::new(FakeCredentials::default()))),
+            Arc::new(SaveToken::new(
+                Arc::new(FakeCredentials::default()),
+                Some("github.com".into()),
+            )),
             publisher,
         )
     }
@@ -640,7 +649,7 @@ pub(super) mod tests {
                     .method("PUT")
                     .uri("/api/token")
                     .header("content-type", "application/json")
-                    .body(Body::from(r#"{"token":"ghp_abc123"}"#))
+                    .body(Body::from(r#"{"host":"github.com","token":"ghp_abc123"}"#))
                     .unwrap(),
             )
             .await

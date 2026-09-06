@@ -86,8 +86,19 @@ farol github review --request-changes --summary "The retry window needs a bound.
 ```
 
 `status` exits non-zero while the review cannot go, so a session can branch on
-it. The token is the one step that is not delegated: farol keeps it under
-`~/.config/farol`, and only the screen asks for it.
+it. The token is the one step that is not delegated: only the screen asks for it,
+showing the remote host you are authorizing. Approve only a host you trust.
+
+Farol stores one credential with its authorized host under
+`$XDG_CONFIG_HOME/farol/github-credential.json` (by default `~/.config/farol`).
+Saving another token replaces that credential. It is never used for a different
+host, including during availability checks; a host with no matching credential
+receives no authenticated request. If the remote changes while the form is open,
+refresh the review before saving.
+
+An existing `github-token` file has no authorized host and is not loaded. Save
+the token again through the host-specific form; Farol does not migrate or delete
+the unbound file.
 
 `farol --help` and `farol <command> --help` list the rest.
 

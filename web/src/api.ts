@@ -24,7 +24,7 @@ export const api = {
    * cannot take one. */
   ticks: () => write<{ read: number }>("/api/publish/ticks", "POST", {}),
   /** One way. Nothing reads it back, here or on the server. */
-  saveToken: (token: string) => send("/api/token", "PUT", { token }),
+  saveToken: (host: string, token: string) => send("/api/token", "PUT", { host, token }),
 };
 
 /** Flat reading order across blocks — what j/k and "next unread" walk. */
@@ -157,6 +157,7 @@ export type CommentView = {
  * A reason rather than a flag: each state is a different thing for the reader
  * to go and do, and the panel that explains it is written per state. */
 export type ReadinessView = {
+  host: string | null;
   state:
     | "ready"
     | "noRemote"

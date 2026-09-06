@@ -30,6 +30,11 @@ pub enum CommentError {
     #[error("farol has no token for GitHub yet")]
     NoToken,
 
+    #[error(
+        "the credential host changed\nRefresh the review and authorize the displayed host before saving a token."
+    )]
+    CredentialHostChanged,
+
     #[error("a review that asks for something has to say what — write the summary first")]
     NoSummary,
 

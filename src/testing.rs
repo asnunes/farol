@@ -618,16 +618,22 @@ impl crate::comments::domain::ReviewPublisher for FakePublisher {
 /// A token that never touches the disk, so a test cannot read the real one.
 #[derive(Default)]
 pub struct FakeCredentials {
-    token: Mutex<Option<String>>,
+    token: Mutex<Option<(String, String)>>,
 }
 
 impl crate::comments::domain::Credentials for FakeCredentials {
-    fn token(&self) -> Result<Option<String>> {
-        Ok(self.token.lock().unwrap().clone())
+    fn token(&self, host: &str) -> Result<Option<String>> {
+        Ok(self
+            .token
+            .lock()
+            .unwrap()
+            .as_ref()
+            .filter(|(saved_host, _)| saved_host == host)
+            .map(|(_, token)| token.clone()))
     }
 
-    fn set(&self, token: &str) -> Result<()> {
-        *self.token.lock().unwrap() = Some(token.to_string());
+    fn set(&self, host: &str, token: &str) -> Result<()> {
+        *self.token.lock().unwrap() = Some((host.to_string(), token.to_string()));
         Ok(())
     }
 }
