@@ -292,10 +292,25 @@ impl ProgressRepository for BrokenProgressRepository {
 #[derive(Default)]
 pub struct InMemoryProgressRepository {
     progress: Mutex<Progress>,
+    /// A store that cannot be read, for the tests about what happens to work
+    /// that depends on knowing what was read.
+    broken: bool,
+}
+
+impl InMemoryProgressRepository {
+    pub fn broken() -> Self {
+        Self {
+            broken: true,
+            ..Default::default()
+        }
+    }
 }
 
 impl ProgressRepository for InMemoryProgressRepository {
     fn load(&self) -> Result<Progress> {
+        if self.broken {
+            return Err(crate::error::Error::msg("progress file is not readable"));
+        }
         Ok(self.progress.lock().unwrap().clone())
     }
 

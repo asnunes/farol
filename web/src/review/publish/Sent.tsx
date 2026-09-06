@@ -54,7 +54,7 @@ function said(sent: SentView): string {
       } here until you close ${sent.comments === 1 ? "it" : "them"}.`,
     );
   }
-  if (sent.readFailed) {
+  if (sent.readFailed !== null) {
     parts.push(`The files you had read were not ticked: ${sent.readFailed}`);
   } else if (sent.read > 0) {
     parts.push(`${sent.read} file${sent.read === 1 ? "" : "s"} ticked.`);

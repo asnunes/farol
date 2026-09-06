@@ -160,7 +160,15 @@ impl ReviewPublisher for GitHub {
             &self.graphql(),
             serde_json::to_string(&Mutations::over(pull, paths))?,
         )?)?;
-        Ok(took(&answer))
+
+        // Nothing marked and the host saying why is a refusal, not an empty
+        // answer. Reported as a count it would arrive on the screen as "there
+        // was nothing to tick", which is what somebody whose token lacks the
+        // permission would be told.
+        match (took(&answer), refusal(&answer)) {
+            (0, Some(why)) => Err(CommentError::Refused { what: why }.into()),
+            (marked, _) => Ok(marked),
+        }
     }
 }
 
@@ -311,6 +319,24 @@ fn took(answer: &serde_json::Value) -> usize {
         .and_then(|d| d.as_object())
         .map(|fields| fields.values().filter(|v| !v.is_null()).count())
         .unwrap_or(0)
+}
+
+/// What the host said went wrong, when it said anything.
+///
+/// GraphQL answers 200 and puts the failures here, so this is the only place a
+/// refusal is written down: a missing permission arrives as a message beside a
+/// `data` full of nulls.
+fn refusal(answer: &serde_json::Value) -> Option<String> {
+    let said: Vec<&str> = answer
+        .get("errors")?
+        .as_array()?
+        .iter()
+        .filter_map(|e| e.get("message").and_then(|m| m.as_str()))
+        .collect();
+    match said.is_empty() {
+        true => None,
+        false => Some(said.join("; ")),
+    }
 }
 
 /// The comments, as a review nobody has submitted yet. No event: that is what
@@ -559,6 +585,25 @@ mod tests {
         });
 
         assert_eq!(took(&answered), 1);
+    }
+
+    #[test]
+    fn a_request_the_host_refused_outright_is_a_failure_and_not_a_zero() {
+        // The shape a token without the permission comes back in: nothing
+        // marked, and the reason only in `errors`. Counted, it would reach the
+        // screen as "there was nothing to tick".
+        let refused = serde_json::json!({
+            "data": null,
+            "errors": [{ "message": "Resource not accessible by personal access token" }],
+        });
+
+        assert_eq!(took(&refused), 0);
+        assert_eq!(
+            refusal(&refused).unwrap(),
+            "Resource not accessible by personal access token"
+        );
+
+        assert!(refusal(&serde_json::json!({ "data": { "m0": {} } })).is_none());
     }
 
     #[test]

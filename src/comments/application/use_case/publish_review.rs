@@ -120,9 +120,14 @@ impl PublishReview {
         }
 
         // After the review, and unable to bring it down. The review is posted
-        // and cannot be taken back; the ticks are a convenience, so a host that
-        // refuses them is reported beside a review that went.
-        let read = self.publisher.mark_read(&id, &self.already_read()?);
+        // and cannot be taken back; the ticks are a convenience, so everything
+        // that can go wrong from here is reported beside a review that went.
+        // That includes working out which files to tick: a `?` on this line
+        // would raise an error for a review that is already on the pull
+        // request, which reads as though nothing had been sent.
+        let read = self
+            .already_read()
+            .and_then(|paths| self.publisher.mark_read(&id, &paths));
         Ok(Sent {
             url,
             comments: waiting.len(),
@@ -509,6 +514,33 @@ mod tests {
 
     /// A review of one file whose diff prints lines 10–14 and 40–42, with an
     /// open pull request sitting on the commit we are on.
+    #[test]
+    fn a_store_that_cannot_say_what_was_read_does_not_undo_a_review_either() {
+        // Working out which files to tick reads the progress store, and that
+        // happens after the review is on the pull request. Raised as an error,
+        // it would tell somebody nothing had been sent when everything was.
+        let publisher = Arc::new(FakePublisher::ready_at("head"));
+        let source = Arc::new(FakeDiffSource::with_paths(&["src/a.rs"]));
+        let repo = Arc::new(InMemoryProgressRepository::broken());
+        let publish = PublishReview::new(
+            Arc::new(InMemoryComments::default()),
+            publisher,
+            ReviewScope::new(source.clone()),
+            FileDiffs::new(source.clone()),
+            CommitHistory::new(source.clone()),
+            ProgressStore::new(repo, FileDiffs::new(source)),
+        );
+
+        let sent = publish.execute(Verdict::Approve, "").unwrap();
+
+        assert_eq!(sent.url, "https://example.test/r1");
+        assert_eq!(sent.read, 0);
+        assert!(
+            sent.read_failed.unwrap().contains("not readable"),
+            "the half that did not happen has to be named"
+        );
+    }
+
     fn published() -> (Arc<FakePublisher>, PublishReview) {
         let publisher = Arc::new(FakePublisher::ready_at("head"));
         (publisher.clone(), publish_with(publisher, &[]))
