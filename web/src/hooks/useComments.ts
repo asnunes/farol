@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type CommentsView } from "@/api";
 import { onNudge } from "@/lib/watch";
 import { said } from "@/lib/utils";
@@ -10,20 +10,25 @@ import { said } from "@/lib/utils";
  * the blocks under someone who is mid-file. Reloading after a write rather than
  * patching the list in place is the same choice `useReview` makes for the tick
  * boxes — the server is what decides, here as there. */
-export function useComments(onError: (message: string) => void) {
+export function useComments(onError: (message: string) => void, generation = 0) {
   const [found, setFound] = useState<CommentsView>({ comments: [], unreadable: [] });
+  const latest = useRef(0);
 
   const load = useCallback(async () => {
+    const request = ++latest.current;
     try {
-      setFound(await api.comments());
+      const next = await api.comments();
+      if (request === latest.current) setFound(next);
     } catch (e) {
-      onError(said(e));
+      if (request === latest.current) onError(said(e));
     }
   }, [onError]);
 
   useEffect(() => {
+    setFound({ comments: [], unreadable: [] });
     void load();
-  }, [load]);
+    return () => { latest.current++; };
+  }, [load, generation]);
 
   // Applied, not announced. A comment file edited in an editor next door is the
   // reader's own writing coming back, so it lands quietly — unlike a map that

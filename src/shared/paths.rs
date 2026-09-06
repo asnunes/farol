@@ -46,6 +46,10 @@ impl Workspace {
         &self.git_dir
     }
 
+    pub fn common_dir(&self) -> &Path {
+        self.repo.common_dir()
+    }
+
     /// The working tree — what the person reading a list of open reviews
     /// recognises. A bare repository has none, and there the git dir is the
     /// only name it has.

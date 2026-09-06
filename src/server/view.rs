@@ -354,8 +354,8 @@ impl ReviewView {
             .count();
 
         ReviewView {
-            branch: map.branch.clone(),
-            base: map.base.clone(),
+            branch: scope.branch.clone(),
+            base: scope.base_ref.clone(),
             generated_at: map.generated_at.clone(),
             commits_behind,
             blocks,

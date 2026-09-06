@@ -655,3 +655,13 @@ impl crate::comments::domain::CommentStore for InMemoryComments {
         Ok(all.len() != before)
     }
 }
+pub struct FixedServerUseCases(pub crate::cmd::ServerUseCases);
+
+impl crate::cmd::ServerUseCaseFactory for FixedServerUseCases {
+    fn build(
+        &self,
+        _: crate::diff::infra::ScopeRequest,
+    ) -> crate::error::Result<crate::cmd::ServerUseCases> {
+        Ok(self.0.clone())
+    }
+}

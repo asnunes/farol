@@ -29,6 +29,7 @@ export default function App() {
     toggleViewed,
     stale,
     refresh,
+    generation,
   } = useReview();
   const [helpOpen, setHelpOpen] = useState(false);
   // What the reader just tried and did not get: a comment that would not save,
@@ -39,7 +40,7 @@ export default function App() {
   const [view, setView] = useDiffView();
   const files = useOpenFiles();
   const [theme, setTheme] = useTheme();
-  const comments = useComments(setFailed);
+  const comments = useComments(setFailed, generation);
   const publishing = usePublishing();
 
   const order = review ? readingOrder(review) : [];
@@ -127,6 +128,7 @@ export default function App() {
         <Sidebar review={review} current={current} onPick={goTo} />
 
         <Reading
+          key={generation}
           review={review}
           view={view}
           current={current}

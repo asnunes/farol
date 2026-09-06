@@ -613,6 +613,10 @@ fn writing_a_map_reaches_the_open_page_without_it_asking() {
     // this the nudge arrives on the wire, satisfies curl, and never reaches the
     // page — which is exactly how this went unnoticed.
     assert!(body.contains("data: map"), "{body}");
+    assert!(
+        s.get("/api/review").contains("written while reading"),
+        "the event must lead to fresh data"
+    );
 }
 
 // ---- the frontend ---------------------------------------------------------
@@ -639,6 +643,282 @@ fn the_page_itself_is_served_from_the_binary() {
 }
 
 // ---- refusing to start ----------------------------------------------------
+
+#[test]
+fn a_running_review_follows_commits_and_then_the_new_map() {
+    let s = Serving::new();
+    let original = s.json("/api/review");
+    s.probe(
+        "POST",
+        "/api/viewed",
+        Some(r#"{"path":"src/a.rs","viewed":true}"#),
+    );
+    s.repo.write("src/a.rs", "new content\n");
+    s.repo.write("src/later.rs", "new file\n");
+    s.repo.git(&["add", "src/a.rs", "src/later.rs"]);
+    s.repo
+        .git(&["commit", "-qm", "change the review", "--no-gpg-sign"]);
+    let head = String::from_utf8(s.repo.git(&["rev-parse", "HEAD"]).stdout).unwrap();
+
+    let behind = s.json("/api/review");
+    assert_eq!(behind["generatedAt"], original["generatedAt"]);
+    assert_eq!(
+        behind["commitsBehind"], 1,
+        "distance must use the current ref"
+    );
+    assert!(
+        behind["unmapped"]
+            .as_array()
+            .unwrap()
+            .contains(&Value::from("src/later.rs"))
+    );
+    assert_eq!(behind["blocks"][0]["files"][0]["viewed"], false);
+    assert!(s.get("/api/file?path=src/a.rs").contains("new content"));
+    assert!(
+        s.get("/api/lines?path=src/a.rs&from=1&to=1")
+            .contains("new content")
+    );
+
+    s.repo.derive();
+    s.repo.ok(&[
+        "block",
+        "update",
+        "core",
+        "--context",
+        "written for the new commit",
+    ]);
+    let current = s.json("/api/review");
+    assert_eq!(current["generatedAt"], head.trim());
+    assert_eq!(current["commitsBehind"], 0);
+    assert_eq!(
+        current["blocks"][0]["context"],
+        "written for the new commit"
+    );
+
+    s.repo.git(&["rm", "src/a.rs"]);
+    s.repo
+        .git(&["commit", "-qm", "remove the old file", "--no-gpg-sign"]);
+    s.repo.derive();
+    assert!(!s.get("/api/review").contains("src/a.rs"));
+    assert_eq!(s.probe("GET", "/api/file?path=src/a.rs", None).0, 400);
+}
+
+#[test]
+fn explicit_arguments_update_the_same_process_and_port() {
+    let s = Serving::new();
+    let pid = s.json("/health")["pid"].clone();
+    let head = String::from_utf8(s.repo.git(&["rev-parse", "HEAD"]).stdout).unwrap();
+    let base = String::from_utf8(s.repo.git(&["rev-parse", "main"]).stdout).unwrap();
+    s.repo.git(&["branch", "comparison", base.trim()]);
+
+    for args in [
+        vec![
+            "serve",
+            "comparison",
+            "HEAD",
+            "--direct",
+            "--foreground",
+            "--port",
+            "0",
+            "--no-open",
+        ],
+        vec!["serve", "main", head.trim(), "--no-open"],
+        vec!["serve", "--dirty", "--no-open"],
+        vec!["serve", "--no-open", "--no-watch"],
+    ] {
+        let said = s.repo.ok(&args);
+        assert!(said.contains(&s.url("")), "{said}");
+        assert_eq!(s.json("/health")["pid"], pid);
+        assert_eq!(s.repo.ok(&["servers"]).lines().count(), 1);
+        if args.contains(&"comparison") {
+            assert_eq!(s.json("/health")["base"], "comparison");
+            assert_eq!(s.json("/api/review")["base"], "comparison");
+        }
+    }
+    assert_eq!(
+        s.json("/api/review")["base"],
+        "main",
+        "omitted options restore CLI defaults"
+    );
+    let before = s.json("/api/review");
+    let error = s.repo.fails(&["serve", "missing-ref", "--no-open"]);
+    assert!(error.contains("missing-ref"), "{error}");
+    assert_eq!(
+        s.json("/api/review"),
+        before,
+        "a refused scope must not replace the valid one"
+    );
+    assert_eq!(s.repo.ok(&["servers"]).lines().count(), 1);
+}
+
+#[test]
+fn changing_branches_reuses_the_worktree_and_reads_its_own_store() {
+    let s = Serving::new();
+    s.repo.git(&["switch", "-qc", "feature/other"]);
+    s.repo.derive();
+    s.repo.core_block(&["src/a.rs"]);
+    s.repo
+        .ok(&["block", "update", "core", "--context", "the other branch"]);
+
+    let current = s.json("/api/review");
+    assert_eq!(current["branch"], "feature/other");
+    assert_eq!(current["blocks"][0]["context"], "the other branch");
+    let pid = s.json("/health")["pid"].clone();
+    assert!(s.repo.ok(&["serve", "--no-open"]).contains(&s.url("")));
+    assert_eq!(s.json("/health")["pid"], pid);
+    assert!(s.repo.ok(&["servers"]).contains("feature/other"));
+}
+
+#[test]
+fn a_symbolic_head_follows_changes_but_an_explicit_commit_stays_selected() {
+    let s = Serving::new();
+    let original = s.json("/api/review")["generatedAt"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    s.repo.ok(&["serve", "main", &original, "--no-open"]);
+    s.repo
+        .git(&["commit", "--allow-empty", "-qm", "advance", "--no-gpg-sign"]);
+    s.repo.derive();
+    assert_eq!(s.json("/api/review")["generatedAt"], original);
+    s.repo.ok(&["serve", "main", "HEAD", "--no-open"]);
+    assert_ne!(s.json("/api/review")["generatedAt"], original);
+}
+
+#[test]
+fn dirty_reads_and_direct_comparisons_use_the_updated_window() {
+    let s = Serving::new();
+    s.repo.ok(&["serve", "--dirty", "--no-open"]);
+    s.repo.write("src/a.rs", "first uncommitted edit\n");
+    assert!(
+        s.get("/api/file?path=src/a.rs")
+            .contains("first uncommitted edit")
+    );
+    s.repo.write("src/a.rs", "second uncommitted edit\n");
+    assert!(
+        s.get("/api/lines?path=src/a.rs&from=1&to=1")
+            .contains("second uncommitted edit")
+    );
+    s.repo.ok(&["serve", "--no-open"]);
+    assert!(
+        !s.get("/api/file?path=src/a.rs")
+            .contains("uncommitted edit")
+    );
+    s.repo.ok(&["serve", "HEAD", "--direct", "--no-open"]);
+    assert_eq!(
+        s.probe("GET", "/api/file?path=src/a.rs", None).0,
+        400,
+        "HEAD compared with itself has no changed files"
+    );
+    s.repo.ok(&["serve", "main", "--no-open"]);
+    assert_eq!(s.probe("GET", "/api/file?path=src/a.rs", None).0, 200);
+}
+
+#[test]
+fn reaching_a_worktree_through_a_symlink_reuses_its_canonical_identity() {
+    let s = Serving::new();
+    let alias_dir = tempfile::tempdir().unwrap();
+    let alias = alias_dir.path().join("review");
+    std::os::unix::fs::symlink(s.repo.path(), &alias).unwrap();
+    let result = s.repo.farol_in(&alias, &["serve", "main", "--no-open"]);
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    assert!(String::from_utf8_lossy(&result.stdout).contains(&s.url("")));
+    assert_eq!(s.repo.ok(&["servers"]).lines().count(), 1);
+}
+
+#[test]
+fn linked_worktrees_have_independent_instances_in_the_same_registry() {
+    let s = Serving::new();
+    let linked = tempfile::tempdir().unwrap();
+    s.repo.git(&[
+        "worktree",
+        "add",
+        "-qb",
+        "feature/linked",
+        linked.path().to_str().unwrap(),
+    ]);
+    let derive = s.repo.farol_in(linked.path(), &["map", "derive"]);
+    assert!(derive.status.success());
+    let start = s
+        .repo
+        .farol_in(linked.path(), &["serve", "--no-open", "--no-watch"]);
+    assert!(
+        start.status.success(),
+        "{}",
+        String::from_utf8_lossy(&start.stderr)
+    );
+    let port = String::from_utf8_lossy(&start.stdout)
+        .lines()
+        .find_map(port_in)
+        .unwrap();
+    assert_ne!(port, s.port);
+    assert_eq!(s.repo.ok(&["servers"]).lines().count(), 2);
+    s.repo.ok(&["servers", "stop", &port.to_string()]);
+}
+
+#[test]
+fn shared_ref_changes_reach_a_linked_worktree_and_its_next_read() {
+    let repo = mapped();
+    let linked = tempfile::tempdir().unwrap();
+    repo.git(&[
+        "worktree",
+        "add",
+        "-qb",
+        "feature/linked",
+        linked.path().to_str().unwrap(),
+    ]);
+    assert!(
+        repo.farol_in(linked.path(), &["map", "derive"])
+            .status
+            .success()
+    );
+    let mut child = repo
+        .command(&["serve", "--foreground", "--no-open", "--port", "0"])
+        .current_dir(linked.path())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let port = port_from(child.stdout.take().unwrap());
+    let s = Serving { repo, child, port };
+    s.get("/api/review");
+    let watching = Command::new("curl")
+        .args(["-sN", "--max-time", "5", &s.url("/api/watch")])
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    std::thread::sleep(Duration::from_millis(500));
+
+    let commit = s.repo.git(&[
+        "commit-tree",
+        "HEAD^{tree}",
+        "-p",
+        "HEAD",
+        "-m",
+        "advance shared ref",
+    ]);
+    let head = String::from_utf8(commit.stdout).unwrap();
+    // Updating the shared ref externally leaves the worktree's private HEAD
+    // and HEAD reflog untouched, so only watching common refs can see it.
+    s.repo
+        .git(&["update-ref", "refs/heads/feature/linked", head.trim()]);
+    assert_eq!(s.json("/api/review")["commitsBehind"], 1);
+    assert!(
+        s.repo
+            .farol_in(linked.path(), &["map", "derive"])
+            .status
+            .success()
+    );
+    assert_eq!(s.json("/api/review")["generatedAt"], head.trim());
+
+    let output = watching.wait_with_output().unwrap();
+    let events = String::from_utf8_lossy(&output.stdout);
+    assert!(events.contains("event: head"), "{events}");
+    assert!(events.contains("event: map"), "{events}");
+}
 
 #[test]
 fn serve_will_not_start_without_a_map() {

@@ -122,13 +122,23 @@ HEAD is refused: there is no branch name to key state on.
 **No map, no server.** `farol serve` refuses when the branch has no map, instead
 of falling back to a plain diff. Run `farol map derive` and write one.
 
-**One server per review.** `farol serve` goes into the background and takes the
-first free port from 4600 up. Asking again for the same branch hands back the
-one already open rather than starting a second. Asking for a different window,
-be it another base, `--dirty` or a port of your own, starts its own. What is
-running is kept under `$XDG_STATE_HOME/farol`, and it is a cache of what the
-operating system already knows: entries whose process is gone are dropped on the
-way past.
+**One server per working tree.** `farol serve` goes into the background and
+takes the first free port from 4600 up. Calling it again updates that instance
+on the same port, including after a branch switch or with another base, head,
+`--direct` or `--dirty`. Each invocation replaces the previous options; omitted
+options return to their defaults. An invalid comparison leaves the previous
+configuration in place. `--port` chooses a port only when opening the first
+instance; `--foreground` also reuses one that is already running. Different
+worktrees have their own instances. The registry lives under
+`$XDG_STATE_HOME/farol`; entries whose process is gone are dropped on the way past.
+
+**An open review follows Git.** Each request resolves the comparison again,
+including its files and content hashes. A commit without a new map shows how
+far the map is behind; deriving the map makes it available on the same URL.
+Changes to maps or refs, including shared refs in a linked worktree, announce
+a refresh in the page. The reader chooses when to load it, and that refresh
+also replaces cached diffs and expanded context. `--no-watch` disables filesystem
+notifications until a subsequent `serve` enables them again.
 
 **State lives with the worktree.** Everything is stored under the worktree's own
 git dir, so removing a worktree takes the review with it. That is the intended

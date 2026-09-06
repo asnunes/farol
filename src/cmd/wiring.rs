@@ -4,7 +4,7 @@
 //! only place that assembles a use case out of services. A command receives use
 //! cases; it never sees a service, a repository or a port.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::comments::application::{Comments, PublishReview, ReviewReadiness, SaveToken};
@@ -69,6 +69,7 @@ pub struct Ctx {
 /// value instead of six.
 #[derive(Clone)]
 pub struct ServerUseCases {
+    pub scope: GetScope,
     pub review: GetReview,
     pub file_diff: GetFileDiff,
     pub file_lines: GetFileLines,
@@ -83,7 +84,11 @@ pub struct ServerUseCases {
 impl Ctx {
     /// Choose the real implementations for the repository farol was invoked in.
     pub fn from_workspace(request: ScopeRequest) -> Result<Self> {
-        let workspace = Workspace::here()?;
+        Self::at(&std::env::current_dir()?, request)
+    }
+
+    pub fn at(root: &Path, request: ScopeRequest) -> Result<Self> {
+        let workspace = Workspace::discover(root)?;
         let git_dir = workspace.git_dir().to_path_buf();
         let root = workspace.root();
         let branch = workspace.branch().to_string();
@@ -169,6 +174,7 @@ impl Ctx {
             publish_review: publish_review.clone(),
 
             server: ServerUseCases {
+                scope: GetScope::new(scope.clone()),
                 review: GetReview::new(versions, scope, progress.clone()),
                 file_diff: GetFileDiff::new(diffs),
                 file_lines: GetFileLines::new(scope_for_lines),
@@ -196,4 +202,24 @@ impl Ctx {
     pub fn root(&self) -> &PathBuf {
         &self.root
     }
+}
+
+pub fn server_factory(root: PathBuf) -> Arc<dyn ServerUseCaseFactory> {
+    Arc::new(WorkspaceUseCases { root })
+}
+
+/// A request gets one Git window, shared by all the use cases it invokes.
+/// Keeping the factory instead of its result lets the next request follow refs.
+pub trait ServerUseCaseFactory: Send + Sync {
+    fn build(&self, request: ScopeRequest) -> Result<ServerUseCases>;
+}
+
+impl ServerUseCaseFactory for WorkspaceUseCases {
+    fn build(&self, request: ScopeRequest) -> Result<ServerUseCases> {
+        Ok(Ctx::at(&self.root, request)?.server)
+    }
+}
+
+struct WorkspaceUseCases {
+    root: PathBuf,
 }

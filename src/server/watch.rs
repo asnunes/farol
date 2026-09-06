@@ -8,7 +8,12 @@ use tokio::sync::broadcast;
 /// Watch the git dir rather than the worktree: commits, checkouts and the
 /// skill writing a map all land here, while a big working tree would flood us
 /// with noise from builds.
-pub(super) fn spawn(git_dir: PathBuf, tx: broadcast::Sender<String>) {
+pub(super) fn spawn(
+    git_dir: PathBuf,
+    common_dir: PathBuf,
+    tx: broadcast::Sender<String>,
+    config: tokio::sync::watch::Receiver<super::SessionConfig>,
+) {
     std::thread::spawn(move || {
         use notify::{RecursiveMode, Watcher};
 
@@ -25,6 +30,19 @@ pub(super) fn spawn(git_dir: PathBuf, tx: broadcast::Sender<String>) {
             return;
         }
 
+        // Linked worktrees keep maps privately but branch refs in the common
+        // directory. Its root also carries packed-refs; objects need no watch.
+        if common_dir != git_dir {
+            for (path, mode) in [
+                (common_dir.clone(), RecursiveMode::NonRecursive),
+                (common_dir.join("refs"), RecursiveMode::Recursive),
+            ] {
+                if let Err(e) = watcher.watch(&path, mode) {
+                    eprintln!("warning: cannot watch {}: {e}", path.display());
+                }
+            }
+        }
+
         // Empty, not "everything just now": nothing has been sent yet, so the
         // first change of each kind must get through. Starting the clock at
         // startup swallowed it if it landed within the quiet period, which is
@@ -32,6 +50,9 @@ pub(super) fn spawn(git_dir: PathBuf, tx: broadcast::Sender<String>) {
         // server comes up.
         let mut last: HashMap<&'static str, std::time::Instant> = HashMap::new();
         for event in raw_rx {
+            if !config.borrow().watch {
+                continue;
+            }
             let Ok(event) = event else { continue };
             let Some(kind) = nudge_for(&event.paths) else {
                 continue;
@@ -81,15 +102,28 @@ fn nudge_for(paths: &[PathBuf]) -> Option<&'static str> {
     if paths.iter().any(|p| under(p, "/maps/")) {
         return Some("map");
     }
-    let touched_head = paths
-        .iter()
-        .any(|p| p.ends_with("HEAD") || p.to_string_lossy().contains("/refs/"));
+    let touched_head = paths.iter().any(|p| {
+        p.ends_with("HEAD") || p.ends_with("packed-refs") || p.to_string_lossy().contains("/refs/")
+    });
     touched_head.then_some("head")
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn spawn(git_dir: PathBuf, tx: broadcast::Sender<String>) {
+        super::spawn(
+            git_dir.clone(),
+            git_dir,
+            tx,
+            tokio::sync::watch::channel(super::super::SessionConfig {
+                watch: true,
+                ..Default::default()
+            })
+            .1,
+        );
+    }
 
     fn paths(list: &[&str]) -> Vec<PathBuf> {
         list.iter().map(PathBuf::from).collect()
@@ -134,6 +168,7 @@ mod tests {
             nudge_for(&paths(&["/repo/.git/refs/heads/feature/x"])),
             Some("head")
         );
+        assert_eq!(nudge_for(&paths(&["/repo/.git/packed-refs"])), Some("head"));
     }
 
     #[test]
@@ -199,6 +234,35 @@ mod tests {
         let kind = nudged_by(|| std::fs::write(&file, "{}").unwrap(), &mut rx);
 
         assert_eq!(kind.as_deref(), Some("map"));
+    }
+
+    #[test]
+    fn watching_can_be_disabled_and_enabled_without_starting_another_server() {
+        let dir = tempfile::tempdir().unwrap();
+        let maps = dir.path().join("farol/x/maps");
+        std::fs::create_dir_all(&maps).unwrap();
+        let file = maps.join("head.json");
+        let (config, updates) = tokio::sync::watch::channel(super::super::SessionConfig {
+            watch: true,
+            ..Default::default()
+        });
+        let (tx, mut rx) = broadcast::channel(16);
+        super::spawn(dir.path().into(), dir.path().into(), tx, updates);
+        assert_eq!(
+            nudged_by(|| std::fs::write(&file, "{}").unwrap(), &mut rx).as_deref(),
+            Some("map")
+        );
+        config.send_modify(|config| config.watch = false);
+        std::thread::sleep(QUIET * 2);
+        while rx.try_recv().is_ok() {}
+        std::fs::write(&file, "disabled").unwrap();
+        std::thread::sleep(QUIET * 2);
+        assert!(rx.try_recv().is_err());
+        config.send_modify(|config| config.watch = true);
+        assert_eq!(
+            nudged_by(|| std::fs::write(&file, "enabled").unwrap(), &mut rx).as_deref(),
+            Some("map")
+        );
     }
 
     #[test]

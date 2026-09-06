@@ -5,16 +5,19 @@
 //! `assets` serves the frontend. What is left here is starting and stopping.
 
 mod assets;
+mod control;
 pub mod detach;
 mod health;
 mod registry;
 mod routes;
 mod server_list;
+mod session;
 pub mod view;
 mod watch;
 
 pub use registry::{Registry, ServerEntry};
 pub use server_list::ServerList;
+pub use session::SessionConfig;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -23,7 +26,7 @@ use tokio::sync::broadcast;
 // `watch` next door is the file watcher; this one is the shutdown signal.
 use tokio::sync::watch as signal;
 
-use crate::cmd::ServerUseCases;
+use crate::cmd::ServerUseCaseFactory;
 use crate::error::{Error, Result};
 
 /// Which port to listen on, and what to do if it is taken.
@@ -49,16 +52,15 @@ pub const FIRST_PORT: u16 = 4600;
 const PORTS_TO_TRY: u16 = 64;
 
 pub struct ServeConfig {
-    pub use_cases: ServerUseCases,
+    pub factory: Arc<dyn ServerUseCaseFactory>,
+    pub session: SessionConfig,
     pub port: Port,
     pub open_browser: bool,
-    pub watch: bool,
     pub git_dir: PathBuf,
+    pub common_dir: PathBuf,
     /// The working tree, for the list of what is running.
     pub repo: PathBuf,
-    /// What this server is showing, for that same list. The map itself is not
-    /// held here: it is read from disk on every request, so one written while
-    /// the server runs reaches the browser without a restart.
+    /// Initial identity; subsequent requests follow the working tree.
     pub branch: String,
     pub base: String,
 }
@@ -66,7 +68,7 @@ pub struct ServeConfig {
 struct AppState {
     /// Transport holds use cases and nothing else: the routes translate HTTP
     /// into a call and back, and own no business logic of their own.
-    use_cases: ServerUseCases,
+    session: Arc<session::Session>,
     changes: broadcast::Sender<String>,
     /// Turns true when the process has been asked to stop.
     ///
@@ -79,12 +81,12 @@ struct AppState {
 
 impl AppState {
     fn new(
-        use_cases: ServerUseCases,
+        session: session::Session,
         stopping: signal::Receiver<bool>,
     ) -> (Arc<Self>, broadcast::Sender<String>) {
         let (changes, _) = broadcast::channel(16);
         let state = Arc::new(Self {
-            use_cases,
+            session: Arc::new(session),
             changes: changes.clone(),
             stopping,
         });
@@ -110,18 +112,8 @@ impl Server {
 }
 
 async fn serve(config: ServeConfig) -> Result<()> {
-    let registry = Registry::open()?;
+    let registry = Arc::new(Registry::open()?);
     let (stopping, stops) = signal::channel(false);
-    let (state, changes) = AppState::new(config.use_cases, stops);
-
-    // One line of wiring, and the only one in this file with no test of its
-    // own: `watch::spawn` is tested next door over a real directory, and the
-    // route that carries its nudges is tested in `routes`. Driving both through
-    // a live server needed a streaming client, and the timing-dependent test
-    // that resulted was worse than saying so here.
-    if config.watch {
-        watch::spawn(config.git_dir, changes);
-    }
 
     let listener = bind(config.port).await?;
     let addr = listener
@@ -140,9 +132,23 @@ async fn serve(config: ServeConfig) -> Result<()> {
     };
     registry.register(&entry)?;
 
+    let session = session::Session::new(
+        config.factory,
+        config.session,
+        entry.clone(),
+        registry.clone(),
+    );
+    let (state, changes) = AppState::new(session, stops);
+    watch::spawn(
+        config.git_dir,
+        config.common_dir,
+        changes,
+        state.session.changes(),
+    );
+
     // The same entry the registry holds, so that asking the server who it is
     // and asking the file who it should be can be compared.
-    let app = routes::router(state, entry.clone());
+    let app = routes::router(state);
 
     println!("farol is reading at {url}");
     if config.open_browser {
@@ -232,7 +238,10 @@ mod tests {
         // The watcher and the SSE route have to meet on the same channel, or
         // the browser is told nothing and never reloads.
         let (_dir, use_cases) = routes::tests::use_cases();
-        let (state, changes) = AppState::new(use_cases, signal::channel(false).1);
+        let (state, changes) = AppState::new(
+            routes::tests::session(use_cases, _dir.path()),
+            signal::channel(false).1,
+        );
 
         let mut rx = state.changes.subscribe();
         changes.send("map".into()).unwrap();

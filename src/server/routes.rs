@@ -6,24 +6,26 @@
 
 use std::sync::Arc;
 
+use axum::extract::Request;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
+use axum::middleware::{self, Next};
 use axum::response::IntoResponse;
 use axum::response::sse::{Event, Sse};
 use axum::routing::{delete, get, post, put};
-use axum::{Json, Router};
+use axum::{Extension, Json, Router};
 use serde::Deserialize;
 
 use tokio::sync::broadcast;
 
-use super::registry::ServerEntry;
-use super::{AppState, assets, view};
+use super::{AppState, SessionConfig, assets, view};
+use crate::cmd::ServerUseCases;
 use crate::comments::domain::Verdict;
 use crate::error::Error;
 
 /// The whole HTTP surface. Everything it serves arrives injected, so the routes
 /// can be exercised over fakes with nothing listening on a port.
-pub(super) fn router(state: Arc<AppState>, identity: ServerEntry) -> Router {
+pub(super) fn router(state: Arc<AppState>) -> Router {
     Router::new()
         .route("/api/review", get(review))
         .route("/api/file", get(file))
@@ -34,8 +36,10 @@ pub(super) fn router(state: Arc<AppState>, identity: ServerEntry) -> Router {
         .route("/api/publish", get(readiness).post(publish))
         .route("/api/publish/ticks", post(ticks))
         .route("/api/token", put(save_token))
+        .route_layer(middleware::from_fn_with_state(state.clone(), resolve))
+        .route("/api/session", put(configure))
         .route("/api/watch", get(watch))
-        .route("/health", get(move || health(identity.clone())))
+        .route("/health", get(health))
         .fallback(assets::handler)
         .with_state(state)
 }
@@ -45,13 +49,41 @@ pub(super) fn router(state: Arc<AppState>, identity: ServerEntry) -> Router {
 /// It carries the whole entry rather than an empty 200 because a port that was
 /// let go and taken by another server answers just as readily — what settles it
 /// is the process id coming back the same.
-async fn health(identity: ServerEntry) -> impl IntoResponse {
-    Json(identity)
+async fn health(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    Json(state.session.identity())
+}
+
+async fn resolve(
+    State(state): State<Arc<AppState>>,
+    mut request: Request,
+    next: Next,
+) -> axum::response::Response {
+    match away(move || state.session.open()).await {
+        Ok(cases) => {
+            request.extensions_mut().insert(cases);
+            next.run(request).await
+        }
+        Err(e) => fail(e),
+    }
+}
+
+async fn configure(
+    State(state): State<Arc<AppState>>,
+    Json(config): Json<SessionConfig>,
+) -> impl IntoResponse {
+    let session = state.session.clone();
+    match away(move || session.configure(config)).await {
+        Ok(identity) => {
+            let _ = state.changes.send("map".to_string());
+            Json(identity).into_response()
+        }
+        Err(e) => fail(e),
+    }
 }
 
 /// Everything the screen needs to draw itself, in one call.
-async fn review(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    match state.use_cases.review.execute() {
+async fn review(Extension(cases): Extension<ServerUseCases>) -> impl IntoResponse {
+    match cases.review.execute() {
         Ok(snapshot) => Json(view::ReviewView::build(&snapshot)).into_response(),
         Err(e) => fail(e),
     }
@@ -62,8 +94,11 @@ struct PathQuery {
     path: String,
 }
 
-async fn file(State(state): State<Arc<AppState>>, Query(q): Query<PathQuery>) -> impl IntoResponse {
-    match state.use_cases.file_diff.execute(&q.path) {
+async fn file(
+    Extension(cases): Extension<ServerUseCases>,
+    Query(q): Query<PathQuery>,
+) -> impl IntoResponse {
+    match cases.file_diff.execute(&q.path) {
         Ok(diff) => Json(view::FileDiffView::of(&diff)).into_response(),
         Err(e) => fail(e),
     }
@@ -81,10 +116,10 @@ struct RangeQuery {
 /// Text and nothing else: which line each string is, and which line it was
 /// before the change, the page works out from the hunks it already has.
 async fn lines(
-    State(state): State<Arc<AppState>>,
+    Extension(cases): Extension<ServerUseCases>,
     Query(q): Query<RangeQuery>,
 ) -> impl IntoResponse {
-    match state.use_cases.file_lines.execute(&q.path, q.from, q.to) {
+    match cases.file_lines.execute(&q.path, q.from, q.to) {
         Ok(lines) => Json(view::LinesView { lines }).into_response(),
         Err(e) => fail(e),
     }
@@ -97,13 +132,13 @@ struct ViewedBody {
 }
 
 async fn viewed(
-    State(state): State<Arc<AppState>>,
+    Extension(cases): Extension<ServerUseCases>,
     Json(body): Json<ViewedBody>,
 ) -> impl IntoResponse {
     let result = if body.viewed {
-        state.use_cases.mark_viewed.execute(&body.path, &now())
+        cases.mark_viewed.execute(&body.path, &now())
     } else {
-        state.use_cases.unmark_viewed.execute(&body.path)
+        cases.unmark_viewed.execute(&body.path)
     };
     match result {
         Ok(_) => StatusCode::NO_CONTENT.into_response(),
@@ -113,8 +148,8 @@ async fn viewed(
 
 /// What the reviewer wrote back, which is everything still waiting for an
 /// answer: closing a comment removes it, so there is nothing here to filter.
-async fn comments(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    match state.use_cases.comments.all() {
+async fn comments(Extension(cases): Extension<ServerUseCases>) -> impl IntoResponse {
+    match cases.comments.all() {
         Ok(found) => Json(view::CommentsView::of(&found)).into_response(),
         Err(e) => fail(e),
     }
@@ -129,11 +164,10 @@ struct NewComment {
 }
 
 async fn write_comment(
-    State(state): State<Arc<AppState>>,
+    Extension(cases): Extension<ServerUseCases>,
     Json(body): Json<NewComment>,
 ) -> impl IntoResponse {
-    match state
-        .use_cases
+    match cases
         .comments
         .add(&body.path, body.from, body.to, &body.body)
     {
@@ -143,10 +177,10 @@ async fn write_comment(
 }
 
 async fn close_comment(
-    State(state): State<Arc<AppState>>,
+    Extension(cases): Extension<ServerUseCases>,
     Path(id): Path<String>,
 ) -> impl IntoResponse {
-    match state.use_cases.comments.close(&id) {
+    match cases.comments.close(&id) {
         Ok(()) => StatusCode::NO_CONTENT.into_response(),
         Err(e) => fail(e),
     }
@@ -157,8 +191,8 @@ async fn close_comment(
 /// The page asks this on load and keeps asking while the answer is no, because
 /// the answer changes elsewhere: a token pasted into a file, a branch pushed
 /// from a terminal, a pull request opened in a browser.
-async fn readiness(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    let readiness = state.use_cases.readiness.clone();
+async fn readiness(Extension(cases): Extension<ServerUseCases>) -> impl IntoResponse {
+    let readiness = cases.readiness;
     match away(move || readiness.execute()).await {
         Ok(standing) => Json(view::ReadinessView::of(
             &standing.readiness,
@@ -178,13 +212,13 @@ struct ReviewToSend {
 /// Send it. The one irreversible thing farol does, which is why every reason it
 /// should not happen is decided in the use case rather than here.
 async fn publish(
-    State(state): State<Arc<AppState>>,
+    Extension(cases): Extension<ServerUseCases>,
     Json(body): Json<ReviewToSend>,
 ) -> impl IntoResponse {
     let Some(verdict) = verdict(&body.verdict) else {
         return fail(Error::msg(format!("unknown verdict '{}'", body.verdict)));
     };
-    let publish = state.use_cases.publish_review.clone();
+    let publish = cases.publish_review;
     match away(move || publish.execute(verdict, &body.summary)).await {
         Ok(sent) => Json(view::SentView {
             url: sent.url,
@@ -200,8 +234,8 @@ async fn publish(
 /// The ticks on their own, for the review that cannot be sent or has nothing
 /// to say. Same call the publish route makes last, without the review in front
 /// of it.
-async fn ticks(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    let publish = state.use_cases.publish_review.clone();
+async fn ticks(Extension(cases): Extension<ServerUseCases>) -> impl IntoResponse {
+    let publish = cases.publish_review;
     match away(move || publish.ticks_only()).await {
         Ok(read) => Json(serde_json::json!({ "read": read })).into_response(),
         Err(e) => fail(e),
@@ -218,10 +252,10 @@ struct NewToken {
 /// No route ever answers with it and nothing logs it: a credential that can be
 /// read back out of the thing holding it is a credential with two homes.
 async fn save_token(
-    State(state): State<Arc<AppState>>,
+    Extension(cases): Extension<ServerUseCases>,
     Json(body): Json<NewToken>,
 ) -> impl IntoResponse {
-    match state.use_cases.save_token.execute(&body.token) {
+    match cases.save_token.execute(&body.token) {
         Ok(()) => StatusCode::NO_CONTENT.into_response(),
         Err(e) => fail(e),
     }
@@ -318,6 +352,7 @@ pub(super) mod tests {
     use crate::comments::application::{PublishReview, ReviewReadiness, SaveToken};
     use crate::comments::domain::Readiness;
     use crate::progress::application::ProgressStore;
+    use crate::server::{Registry, ServerEntry};
     use crate::testing::{
         FakeCredentials, FakeDiffSource, FakePublisher, InMemoryComments,
         InMemoryProgressRepository,
@@ -337,6 +372,18 @@ pub(super) mod tests {
             branch: "feature/x".into(),
             base: "main".into(),
         }
+    }
+
+    pub(in crate::server) fn session(
+        cases: ServerUseCases,
+        root: &std::path::Path,
+    ) -> super::super::session::Session {
+        super::super::session::Session::new(
+            Arc::new(crate::testing::FixedServerUseCases(cases)),
+            SessionConfig::default(),
+            identity(),
+            Arc::new(Registry::at(root).unwrap()),
+        )
     }
 
     /// The use cases over fakes, shared with the tests that start a real
@@ -426,6 +473,7 @@ pub(super) mod tests {
         (
             dir,
             ServerUseCases {
+                scope: crate::map::application::GetScope::new(scope.clone()),
                 review: GetReview::new(maps.versions, scope, progress.clone()),
                 file_diff: GetFileDiff::new(diffs),
                 file_lines: GetFileLines::new(ReviewScope::new(Arc::new(
@@ -467,6 +515,9 @@ pub(super) mod tests {
         let (_dir, comments) = comments(&paths);
         let (readiness, publish_review, save_token, _) = publishing(&paths, Readiness::NoToken);
         let use_cases = ServerUseCases {
+            scope: crate::map::application::GetScope::new(ReviewScope::new(Arc::new(
+                FakeDiffSource::with_paths(&paths),
+            ))),
             review: GetReview::new(
                 maps.versions,
                 ReviewScope::new(Arc::new(FakeDiffSource::with_paths(&paths))),
@@ -483,9 +534,12 @@ pub(super) mod tests {
             publish_review,
             save_token,
         };
-        let (state, _) = AppState::new(use_cases, tokio::sync::watch::channel(false).1);
+        let (state, _) = AppState::new(
+            session(use_cases, _dir.path()),
+            tokio::sync::watch::channel(false).1,
+        );
 
-        let response = router(state, identity())
+        let response = router(state)
             .oneshot(
                 Request::builder()
                     .uri("/api/review")
@@ -550,9 +604,12 @@ pub(super) mod tests {
     #[tokio::test]
     async fn a_verdict_the_api_does_not_have_is_refused_before_anything_is_sent() {
         let (_dir, use_cases) = use_cases();
-        let (state, _) = AppState::new(use_cases, tokio::sync::watch::channel(false).1);
+        let (state, _) = AppState::new(
+            session(use_cases, _dir.path()),
+            tokio::sync::watch::channel(false).1,
+        );
 
-        let response = router(state, identity())
+        let response = router(state)
             .oneshot(
                 Request::builder()
                     .method("POST")
@@ -572,9 +629,12 @@ pub(super) mod tests {
         // Not even an echo. A route that hands the token back is a second place
         // it can be read from.
         let (_dir, use_cases) = use_cases();
-        let (state, _) = AppState::new(use_cases, tokio::sync::watch::channel(false).1);
+        let (state, _) = AppState::new(
+            session(use_cases, _dir.path()),
+            tokio::sync::watch::channel(false).1,
+        );
 
-        let response = router(state, identity())
+        let response = router(state)
             .oneshot(
                 Request::builder()
                     .method("PUT")
@@ -597,9 +657,12 @@ pub(super) mod tests {
         use_cases.readiness = asked;
         use_cases.publish_review = publish_review;
         use_cases.save_token = save_token;
-        let (state, _) = AppState::new(use_cases, tokio::sync::watch::channel(false).1);
+        let (state, _) = AppState::new(
+            session(use_cases, _dir.path()),
+            tokio::sync::watch::channel(false).1,
+        );
 
-        let response = router(state, identity())
+        let response = router(state)
             .oneshot(
                 Request::builder()
                     .uri("/api/publish")
