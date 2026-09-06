@@ -8,6 +8,11 @@ Pull requests and manual workflow runs upload build artifacts only. A pushed
 `v*` tag publishes a GitHub prerelease after every package passes its smoke
 check. No stable-release promotion or signing is automated here.
 
+For agent-assisted releases, use `$farol-release` in a Codex session in this
+repository. The project skill lives at `.agents/skills/farol-release/SKILL.md`.
+It prepares the version PR and requires explicit publication authorization
+before pushing the release tag.
+
 ## Inspect packages before publishing
 
 1. Open the `release packages` run for the pull request.
