@@ -1,3 +1,4 @@
+import { RefreshCw } from "lucide-react";
 import type { RefreshReason } from "@/hooks/useReview";
 import { Button } from "@/components/ui/button";
 
@@ -14,7 +15,8 @@ export function Refresh({ reason, onRefresh }: RefreshProps) {
       onClick={onRefresh}
       title={reason === "map" ? "A newer map was written. Click to read it." : "The current branch changed. Click to refresh the review."}
     >
-      {reason === "map" ? "new map" : "branch changed"} · refresh
+      <RefreshCw className="size-3" aria-hidden="true" />
+      {reason === "map" ? "new map available" : "branch changed"}
     </Button>
   );
 }
