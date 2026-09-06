@@ -83,6 +83,7 @@ impl ServeArgs {
 
         crate::server::Server::new(crate::server::ServeConfig {
             factory: server_factory(root.clone()),
+            check_head: super::wiring::check_head(&root)?,
             session,
             branch: scope.branch,
             base: scope.base_ref,

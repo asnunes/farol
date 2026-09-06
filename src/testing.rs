@@ -17,6 +17,7 @@ use crate::progress::domain::{Progress, ProgressRepository};
 
 /// A diff source you assemble by hand.
 pub struct FakeDiffSource {
+    head_reads: Mutex<std::collections::VecDeque<Result<crate::diff::domain::HeadState>>>,
     scope: Scope,
     /// (from, to, path) -> the diff between those two commits.
     between: Vec<((String, String, String), FileDiff)>,
@@ -28,8 +29,14 @@ pub struct FakeDiffSource {
 }
 
 impl FakeDiffSource {
+    pub fn with_head_reads(self, reads: Vec<Result<crate::diff::domain::HeadState>>) -> Self {
+        *self.head_reads.lock().unwrap() = reads.into();
+        self
+    }
+
     pub fn with_paths(paths: &[&str]) -> Self {
         Self {
+            head_reads: Mutex::new(Default::default()),
             scope: Scope {
                 branch: "feature/x".into(),
                 base_ref: "main".into(),
@@ -663,5 +670,17 @@ impl crate::cmd::ServerUseCaseFactory for FixedServerUseCases {
         _: crate::diff::infra::ScopeRequest,
     ) -> crate::error::Result<crate::cmd::ServerUseCases> {
         Ok(self.0.clone())
+    }
+}
+
+impl crate::diff::domain::HeadSource for FakeDiffSource {
+    fn read_head(&self) -> Result<crate::diff::domain::HeadState> {
+        if let Some(read) = self.head_reads.lock().unwrap().pop_front() {
+            return read;
+        }
+        Ok(crate::diff::domain::HeadState {
+            reference: Some(format!("refs/heads/{}", self.scope.branch)),
+            commit: self.scope.head_sha.clone(),
+        })
     }
 }

@@ -6,6 +6,9 @@
 //! recording that a file was read needs a content hash, not the ability to walk
 //! history.
 
+mod check_head;
+pub use check_head::CheckHead;
+
 use std::sync::Arc;
 
 use crate::diff::domain::{

@@ -11,7 +11,7 @@ export function useReview() {
   const [review, setReview] = useState<ReviewView | null>(null);
   const [current, setCurrent] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [stale, setStale] = useState(false);
+  const [stale, setStale] = useState<RefreshReason | null>(null);
   const [generation, setGeneration] = useState(0);
 
   const load = useCallback(async (refreshDiffs = true) => {
@@ -20,7 +20,7 @@ export function useReview() {
       setReview(next);
       setError(null);
       if (refreshDiffs) setGeneration((previous) => previous + 1);
-      setStale(false);
+      setStale(null);
       setCurrent((prev) => {
         // Stay where the reader is, unless the file they were on is gone.
         if (prev && readingOrder(next).some((f) => f.path === prev)) return prev;
@@ -40,8 +40,10 @@ export function useReview() {
   // halfway through a file would move the blocks and the file they are on; the
   // reader decides when to take it.
   useEffect(() => {
-    const announce = () => setStale(true);
-    const off = [onNudge("map", announce), onNudge("head", announce)];
+    const off = [
+      onNudge("map", () => setStale("map")),
+      onNudge("head", () => setStale((previous) => previous ?? "head")),
+    ];
     return () => off.forEach((stop) => stop());
   }, []);
 
@@ -55,3 +57,5 @@ export function useReview() {
 
   return { review, current, setCurrent, error, toggleViewed, stale, generation, refresh: load };
 }
+
+export type RefreshReason = "map" | "head";

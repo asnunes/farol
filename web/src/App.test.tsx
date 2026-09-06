@@ -421,7 +421,7 @@ describe("refreshing an open review", () => {
       removeEventListener(kind: string, listener: EventListener) { source.removeEventListener(kind, listener); }
       close() {}
     });
-    return () => act(() => { source.dispatchEvent(new Event("map")); });
+    return (kind = "map") => act(() => { source.dispatchEvent(new Event(kind)); });
   }
 
   function diff(content: string): FileDiff {
@@ -431,6 +431,24 @@ describe("refreshing an open review", () => {
         lines: [{ kind: "added", oldNumber: null, newNumber: 1, content }] }],
     };
   }
+
+  it.each([
+    ["head"], ["map"], ["head", "map"], ["map", "head"],
+  ])("announces the reason without applying changes: %s %s", async (...kinds) => {
+    const announce = notifications();
+    serve({ review: review() });
+    const reads = vi.spyOn(api, "review");
+    render(<App />);
+    await waitFor(() => expect(section("src/a.rs")).toBeTruthy());
+    const before = reads.mock.calls.length;
+    for (const kind of kinds) announce(kind);
+    const label = kinds.includes("map") ? /new map/ : /branch changed/;
+    expect(screen.getByRole("button", { name: label })).toBeTruthy();
+    expect(reads.mock.calls.length).toBe(before);
+    fireEvent.click(screen.getByRole("button", { name: label }));
+    await waitFor(() => expect(screen.queryByRole("button", { name: label })).toBeNull());
+    expect(reads.mock.calls.length).toBeGreaterThan(before);
+  });
 
   it("refreshes already loaded diffs and comments while keeping the selected file", async () => {
     const announce = notifications();

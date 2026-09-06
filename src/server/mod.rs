@@ -52,6 +52,7 @@ pub const FIRST_PORT: u16 = 4600;
 const PORTS_TO_TRY: u16 = 64;
 
 pub struct ServeConfig {
+    pub check_head: crate::diff::application::CheckHead,
     pub factory: Arc<dyn ServerUseCaseFactory>,
     pub session: SessionConfig,
     pub port: Port,
@@ -144,6 +145,7 @@ async fn serve(config: ServeConfig) -> Result<()> {
         config.common_dir,
         changes,
         state.session.changes(),
+        config.check_head,
     );
 
     // The same entry the registry holds, so that asking the server who it is
