@@ -132,15 +132,12 @@ impl Registry {
             .collect())
     }
 
-    /// A server already showing this branch of this repository, if there is one.
+    /// One instance belongs to the working tree, even when its branch changes.
     ///
     /// Answering, not merely registered: handing back a port that stopped
     /// serving would send the reviewer to an empty tab.
-    pub fn serving(&self, repo: &Path, branch: &str) -> Result<Option<ServerEntry>> {
-        Ok(self
-            .answering()?
-            .into_iter()
-            .find(|e| e.repo == repo && e.branch == branch))
+    pub fn serving(&self, repo: &Path) -> Result<Option<ServerEntry>> {
+        Ok(self.answering()?.into_iter().find(|e| e.repo == repo))
     }
 
     /// Ask a server to stop, and wait until it has.
@@ -285,7 +282,7 @@ mod tests {
     }
 
     #[test]
-    fn a_repository_and_branch_find_the_server_already_showing_them() {
+    fn the_working_tree_finds_its_server_regardless_of_branch() {
         // Answering, so something has to be there to answer: `serving` is what
         // hands a second `farol serve` back the review already open, and a port
         // that stopped serving must not be handed to anybody.
@@ -295,25 +292,8 @@ mod tests {
         open.pid = std::process::id();
         registry.register(&open).unwrap();
 
-        assert!(
-            registry
-                .serving(Path::new("/repo"), "feature/x")
-                .unwrap()
-                .is_some()
-        );
-        assert!(
-            registry
-                .serving(Path::new("/repo"), "other")
-                .unwrap()
-                .is_none(),
-            "another branch of the same repository is another review"
-        );
-        assert!(
-            registry
-                .serving(Path::new("/elsewhere"), "feature/x")
-                .unwrap()
-                .is_none()
-        );
+        assert!(registry.serving(Path::new("/repo")).unwrap().is_some());
+        assert!(registry.serving(Path::new("/elsewhere")).unwrap().is_none());
     }
 
     #[test]

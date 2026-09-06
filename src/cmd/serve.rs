@@ -2,9 +2,9 @@
 
 use clap::Args;
 
-use super::{Ctx, ScopeFlags};
+use super::{Ctx, ScopeFlags, server_factory};
 use crate::error::Result;
-use crate::server::{Port, Registry, detach};
+use crate::server::{Port, Registry, SessionConfig, detach};
 use crate::shared::paths::Workspace;
 
 #[derive(Args)]
@@ -16,7 +16,8 @@ pub(super) struct ServeArgs {
     #[command(flatten)]
     scope: ScopeFlags,
     /// Port to listen on. Omit it and farol takes the first free one from
-    /// 4600 up; `0` asks the operating system for any.
+    /// 4600 up; `0` asks the operating system for any. An existing instance
+    /// always keeps its port.
     #[arg(long)]
     port: Option<u16>,
     /// Do not open a browser.
@@ -33,22 +34,22 @@ pub(super) struct ServeArgs {
 
 impl ServeArgs {
     pub(super) fn run(self) -> Result<()> {
+        let workspace = Workspace::here()?;
+        let root = workspace.root().canonicalize()?;
+        let registry = Registry::open()?;
+        if let Some(running) = registry.serving(&root)? {
+            let entry = running.configure(&self.session())?;
+            println!("farol updated the review at {}", entry.url());
+            if self.port.is_some() {
+                println!("Reused the existing port {}.", entry.port);
+            }
+            if !self.no_open {
+                let _ = std::process::Command::new("open").arg(entry.url()).spawn();
+            }
+            return Ok(());
+        }
         if self.foreground {
             return self.serve();
-        }
-
-        let registry = Registry::open()?;
-
-        // Asking twice for the same review should hand back the one already
-        // open, not a second server on a second port. Only for a bare `farol
-        // serve`: any flag means a different window was asked for, and a window
-        // this one may not be showing.
-        if self.is_plain() {
-            let workspace = Workspace::here()?;
-            if let Some(running) = registry.serving(&workspace.root(), workspace.branch())? {
-                println!("farol is already reading at {}", running.url());
-                return Ok(());
-            }
         }
 
         let entry = detach::spawn(&registry)?;
@@ -57,34 +58,42 @@ impl ServeArgs {
         Ok(())
     }
 
-    /// Nothing in particular was asked for, so whatever is already running for
-    /// this branch is the same review.
-    fn is_plain(&self) -> bool {
-        self.base.is_none() && self.head.is_none() && self.port.is_none() && self.scope.is_default()
+    fn session(&self) -> SessionConfig {
+        SessionConfig {
+            scope: self
+                .scope
+                .with_base(self.base.clone())
+                .request(self.head.clone()),
+            watch: !self.no_watch,
+        }
     }
 
     fn serve(self) -> Result<()> {
-        let scope = self.scope.with_base(self.base.clone());
-        let ctx = Ctx::from_workspace(scope.request(self.head.clone()))?;
+        let session = self.session();
+        let workspace = Workspace::here()?;
+        let root = workspace.root().canonicalize()?;
+        let ctx = Ctx::at(&root, session.scope.clone())?;
 
         // Without a map there is nothing farol can show. Falling back to a plain
         // diff viewer would make it a worse version of tools that already do
         // that well, so it refuses in the terminal instead of opening a browser
         // onto an apology.
-        let map = ctx.show_map.require()?;
+        ctx.show_map.require()?;
+        let scope = ctx.scope.execute()?;
 
         crate::server::Server::new(crate::server::ServeConfig {
-            use_cases: ctx.server().clone(),
-            branch: map.branch,
-            base: map.base,
+            factory: server_factory(root.clone()),
+            session,
+            branch: scope.branch,
+            base: scope.base_ref,
             port: self.port.map_or(Port::Free, |p| match p {
                 0 => Port::Ephemeral,
                 p => Port::Exactly(p),
             }),
             open_browser: !self.no_open,
-            watch: !self.no_watch,
             git_dir: ctx.git_dir().clone(),
-            repo: ctx.root().clone(),
+            common_dir: workspace.common_dir().to_path_buf(),
+            repo: root,
         })
         .run()
     }
@@ -117,15 +126,12 @@ mod tests {
     }
 
     #[test]
-    fn a_bare_serve_is_the_only_one_that_reuses_what_is_running() {
-        assert!(args(&[]).is_plain());
-        assert!(args(&["--no-open"]).is_plain(), "how the tests start one");
-
-        // Each of these asks for a window the running server may not be showing.
-        assert!(!args(&["develop"]).is_plain());
-        assert!(!args(&["main", "feature/x"]).is_plain());
-        assert!(!args(&["--port", "4700"]).is_plain());
-        assert!(!args(&["--dirty"]).is_plain());
-        assert!(!args(&["--direct"]).is_plain());
+    fn a_new_invocation_carries_its_own_scope_and_watch_preference() {
+        let config = args(&["develop", "HEAD", "--direct", "--no-watch"]).session();
+        assert_eq!(config.scope.base.as_deref(), Some("develop"));
+        assert_eq!(config.scope.head.as_deref(), Some("HEAD"));
+        assert!(config.scope.direct);
+        assert!(!config.watch);
+        assert!(args(&[]).session().watch);
     }
 }

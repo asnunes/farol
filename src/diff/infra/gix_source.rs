@@ -15,7 +15,7 @@ use crate::diff::domain::{
 use crate::error::{Error, Result};
 
 /// What the caller asked for on the command line, before resolution.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct ScopeRequest {
     pub base: Option<String>,
     pub head: Option<String>,

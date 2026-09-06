@@ -12,11 +12,14 @@ export function useReview() {
   const [current, setCurrent] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [stale, setStale] = useState(false);
+  const [generation, setGeneration] = useState(0);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (refreshDiffs = true) => {
     try {
       const next = await api.review();
       setReview(next);
+      setError(null);
+      if (refreshDiffs) setGeneration((previous) => previous + 1);
       setStale(false);
       setCurrent((prev) => {
         // Stay where the reader is, unless the file they were on is gone.
@@ -45,10 +48,10 @@ export function useReview() {
   const toggleViewed = useCallback(
     async (path: string, viewed: boolean) => {
       await api.setViewed(path, viewed);
-      await load();
+      await load(false);
     },
     [load],
   );
 
-  return { review, current, setCurrent, error, toggleViewed, stale, refresh: load };
+  return { review, current, setCurrent, error, toggleViewed, stale, generation, refresh: load };
 }

@@ -1,7 +1,7 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
-import type { FileView, ReviewView } from "./api";
+import { api, type FileDiff, type FileView, type ReviewView } from "./api";
 
 function file(path: string, over: Partial<FileView> = {}): FileView {
   return {
@@ -410,6 +410,72 @@ describe("a map behind the branch", () => {
     render(<App />);
     await waitFor(() => expect(screen.getByText(/2 commits behind/)).toBeTruthy());
     expect(screen.getByText("src/arrived_later.rs")).toBeTruthy();
+  });
+});
+
+describe("refreshing an open review", () => {
+  function notifications() {
+    const source = new EventTarget();
+    vi.stubGlobal("EventSource", class {
+      addEventListener(kind: string, listener: EventListener) { source.addEventListener(kind, listener); }
+      removeEventListener(kind: string, listener: EventListener) { source.removeEventListener(kind, listener); }
+      close() {}
+    });
+    return () => act(() => { source.dispatchEvent(new Event("map")); });
+  }
+
+  function diff(content: string): FileDiff {
+    return {
+      ...emptyDiff, path: "src/a.rs", lineCount: 1,
+      hunks: [{ oldStart: 1, oldLines: 1, newStart: 1, newLines: 1,
+        lines: [{ kind: "added", oldNumber: null, newNumber: 1, content }] }],
+    };
+  }
+
+  it("refreshes already loaded diffs and comments while keeping the selected file", async () => {
+    const announce = notifications();
+    serve({ review: review() });
+    const files = vi.spyOn(api, "file").mockResolvedValue(diff("OLD_CONTENT"));
+    const comments = vi.spyOn(api, "comments").mockResolvedValue({ comments: [], unreadable: [] });
+    render(<App />);
+    await waitFor(() => expect(section("src/a.rs").textContent).toContain("OLD_CONTENT"));
+    const beforeComments = comments.mock.calls.length;
+    const selected = reading();
+    files.mockResolvedValue(diff("NEW_CONTENT"));
+    announce();
+    expect(section("src/a.rs").textContent).toContain("OLD_CONTENT");
+    fireEvent.click(screen.getByRole("button", { name: /new map/ }));
+    await waitFor(() => expect(section("src/a.rs").textContent).toContain("NEW_CONTENT"));
+    expect(section("src/a.rs").textContent).not.toContain("OLD_CONTENT");
+    expect(reading()).toBe(selected);
+    expect(comments.mock.calls.length).toBeGreaterThan(beforeComments);
+  });
+
+  it("ignores an old diff response that arrives after the refresh", async () => {
+    const announce = notifications();
+    serve({ review: review() });
+    let finish!: (value: FileDiff) => void;
+    const pending = new Promise<FileDiff>((resolve) => { finish = resolve; });
+    const files = vi.spyOn(api, "file").mockReturnValue(pending);
+    render(<App />);
+    await waitFor(() => expect(files).toHaveBeenCalled());
+    files.mockResolvedValue(diff("CURRENT_CONTENT"));
+    announce();
+    fireEvent.click(screen.getByRole("button", { name: /new map/ }));
+    await waitFor(() => expect(section("src/a.rs").textContent).toContain("CURRENT_CONTENT"));
+    await act(async () => { finish(diff("LATE_OLD_CONTENT")); });
+    expect(section("src/a.rs").textContent).not.toContain("LATE_OLD_CONTENT");
+  });
+
+  it("keeps loaded diffs when only a viewed checkbox changes", async () => {
+    serve({ review: review() });
+    const files = vi.spyOn(api, "file").mockResolvedValue(diff("UNCHANGED_CONTENT"));
+    render(<App />);
+    await waitFor(() => expect(section("src/b.rs").textContent).toContain("UNCHANGED_CONTENT"));
+    const fetched = files.mock.calls.length;
+    fireEvent.click(section("src/a.rs").querySelector(".markbox")!);
+    await waitFor(() => expect(reading()).toContain("b.rs"));
+    expect(files.mock.calls.length).toBe(fetched);
   });
 });
 

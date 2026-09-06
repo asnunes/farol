@@ -25,7 +25,7 @@ use serve::ServeArgs;
 use servers::ServersArgs;
 use skim::SkimAction;
 
-pub use wiring::{Ctx, ServerUseCases};
+pub use wiring::{Ctx, ServerUseCaseFactory, ServerUseCases, server_factory};
 
 use crate::diff::infra::ScopeRequest;
 use crate::error::Result;
@@ -63,12 +63,6 @@ pub struct ScopeFlags {
 }
 
 impl ScopeFlags {
-    /// Whether the window was left alone. `serve` asks so it can tell a plain
-    /// start from one that asked for something in particular.
-    fn is_default(&self) -> bool {
-        !self.direct && !self.dirty
-    }
-
     fn with_base(&self, base: Option<String>) -> ScopeArgs {
         ScopeArgs {
             base,

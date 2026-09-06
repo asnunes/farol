@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type FileDiff } from "@/api";
 import { said } from "@/lib/utils";
 
@@ -11,6 +11,14 @@ import { said } from "@/lib/utils";
 export function useDiffs(onError: (message: string) => void) {
   const [diffs, setDiffs] = useState<Record<string, FileDiff>>({});
   const asked = useRef(new Set<string>());
+  const active = useRef(true);
+
+  // A refreshed reading owns a new cache. Requests from the previous reading
+  // must not report errors or deliver code after that reading has unmounted.
+  useEffect(() => {
+    active.current = true;
+    return () => { active.current = false; };
+  }, []);
 
   const request = useCallback(
     (path: string) => {
@@ -19,8 +27,11 @@ export function useDiffs(onError: (message: string) => void) {
 
       api
         .file(path)
-        .then((diff) => setDiffs((all) => ({ ...all, [path]: diff })))
+        .then((diff) => {
+          if (active.current) setDiffs((all) => ({ ...all, [path]: diff }));
+        })
         .catch((e) => {
+          if (!active.current) return;
           // Let it be asked for again: the reader will scroll past it twice.
           asked.current.delete(path);
           onError(said(e));
