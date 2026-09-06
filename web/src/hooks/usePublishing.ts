@@ -74,8 +74,8 @@ export function usePublishing() {
   );
 
   const saveToken = useCallback(
-    async (token: string) => {
-      await api.saveToken(token);
+    async (host: string, token: string) => {
+      await api.saveToken(host, token);
       await ask();
     },
     [ask],

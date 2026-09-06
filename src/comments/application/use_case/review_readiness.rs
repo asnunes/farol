@@ -14,16 +14,26 @@ use crate::error::Result;
 pub struct ReviewReadiness {
     publisher: Arc<dyn ReviewPublisher>,
     scope: ReviewScope,
+    host: Option<String>,
 }
 
 impl ReviewReadiness {
-    pub fn new(publisher: Arc<dyn ReviewPublisher>, scope: ReviewScope) -> Self {
-        Self { publisher, scope }
+    pub fn new(
+        publisher: Arc<dyn ReviewPublisher>,
+        scope: ReviewScope,
+        host: Option<String>,
+    ) -> Self {
+        Self {
+            publisher,
+            scope,
+            host,
+        }
     }
 
     pub fn execute(&self) -> Result<Standing> {
         let branch = self.scope.get()?.branch.clone();
         Ok(Standing {
+            host: self.host.clone(),
             readiness: self.publisher.readiness(&branch)?,
             branch,
         })
@@ -37,6 +47,7 @@ impl ReviewReadiness {
 /// pull request for it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Standing {
+    pub host: Option<String>,
     pub branch: String,
     pub readiness: Readiness,
 }

@@ -52,6 +52,7 @@ mod tests {
 
     fn at(readiness: Readiness) -> Standing {
         Standing {
+            host: Some("github.com".into()),
             branch: "feat/x".into(),
             readiness,
         }

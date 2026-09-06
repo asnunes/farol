@@ -107,6 +107,7 @@ impl Ctx {
         let diffs = FileDiffs::new(source.clone());
         let history = CommitHistory::new(source);
 
+        let host = remote.as_ref().map(|remote| remote.host.clone());
         let credentials = Arc::new(TokenFile::here()?);
         let publisher: Arc<dyn ReviewPublisher> = match remote {
             Some(remote) => Arc::new(GitHub::new(remote, credentials.clone())),
@@ -128,7 +129,11 @@ impl Ctx {
         let scope_for_lines = scope.clone();
         let diffs_for_publishing = diffs.clone();
 
-        let readiness = ReviewReadiness::new(publisher.clone(), scope_for_publishing.clone());
+        let readiness = ReviewReadiness::new(
+            publisher.clone(),
+            scope_for_publishing.clone(),
+            host.clone(),
+        );
         let publish_review = Arc::new(PublishReview::new(
             comment_store,
             publisher,
@@ -183,7 +188,7 @@ impl Ctx {
                 comments,
                 readiness,
                 publish_review,
-                save_token: Arc::new(SaveToken::new(credentials)),
+                save_token: Arc::new(SaveToken::new(credentials, host)),
             },
             git_dir,
             root,

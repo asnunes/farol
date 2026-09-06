@@ -205,6 +205,7 @@ pub struct CommentsView {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReadinessView {
+    pub host: Option<String>,
     pub state: &'static str,
     /// The branch, in every state: the panel spells out commands with it in
     /// them, and it should not have to go and ask a second route for the name.
@@ -219,8 +220,9 @@ pub struct ReadinessView {
 }
 
 impl ReadinessView {
-    pub fn of(readiness: &Readiness, branch: &str) -> Self {
+    pub fn of(readiness: &Readiness, branch: &str, host: Option<&str>) -> Self {
         let mut view = Self {
+            host: host.map(str::to_string),
             state: match readiness {
                 Readiness::Ready { .. } => "ready",
                 Readiness::NoRemote => "noRemote",

@@ -47,7 +47,7 @@ export function Setup({ open, onOpenChange, readiness, onCheck, onToken }: Setup
           <Prose className="font-serif leading-relaxed text-ink-soft">{said.after}</Prose>
         )}
         {readiness.openAt && <Open at={readiness.openAt} />}
-        {said.token && <Token onToken={onToken} />}
+        {said.token && readiness.host && <Token key={readiness.host} host={readiness.host} onToken={onToken} />}
 
         {said.check && (
           <DialogFooter>
@@ -110,5 +110,5 @@ type SetupProps = {
   onOpenChange: (open: boolean) => void;
   readiness: ReadinessView;
   onCheck: () => Promise<void>;
-  onToken: (token: string) => Promise<void>;
+  onToken: (host: string, token: string) => Promise<void>;
 };

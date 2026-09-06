@@ -568,15 +568,57 @@ fn the_token_route_answers_with_nothing_and_keeps_it_that_way() {
     // from. Driven over the wire here, where the whole composition is in
     // play, rather than against the handler alone.
     let s = Serving::new();
+    s.repo.git(&[
+        "remote",
+        "add",
+        "origin",
+        "https://github.com/example/repo.git",
+    ]);
 
     let (status, body) = s.probe(
         "PUT",
         "/api/token",
-        Some(r#"{"token":"github_pat_written_by_a_test"}"#),
+        Some(r#"{"host":"github.com","token":"github_pat_written_by_a_test"}"#),
     );
 
     assert_eq!(status, 204);
     assert!(body.trim().is_empty(), "{body}");
+}
+
+#[test]
+fn a_token_cannot_be_saved_for_a_remote_that_changed_after_the_form_opened() {
+    let s = Serving::new();
+    s.repo.git(&[
+        "remote",
+        "add",
+        "origin",
+        "https://github.com/example/repo.git",
+    ]);
+    let standing = s.json("/api/publish");
+    assert_eq!(standing["host"], "github.com");
+    assert_eq!(standing["state"], "noToken");
+    s.repo.git(&[
+        "remote",
+        "set-url",
+        "origin",
+        "https://another.example/owner/repo.git",
+    ]);
+    let (status, body) = s.probe(
+        "PUT",
+        "/api/token",
+        Some(r#"{"host":"github.com","token":"test-secret"}"#),
+    );
+    assert_ne!(status, 204);
+    assert!(body.contains("host changed"), "{body}");
+    assert!(!body.contains("test-secret"));
+    assert!(
+        !s.repo
+            .path()
+            .join(".farol-config/farol/github-credential.json")
+            .exists(),
+        "rejecting an outdated form must not save its credential"
+    );
+    assert_eq!(s.json("/api/publish")["state"], "noToken");
 }
 
 // ---- the page finding out on its own ------------------------------------

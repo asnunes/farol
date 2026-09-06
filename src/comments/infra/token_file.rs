@@ -27,7 +27,7 @@ impl TokenFile {
 }
 
 impl Credentials for TokenFile {
-    fn token(&self) -> Result<Option<String>> {
+    fn token(&self, host: &str) -> Result<Option<String>> {
         let raw = match std::fs::read_to_string(&self.path) {
             Ok(raw) => raw,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
@@ -38,16 +38,23 @@ impl Credentials for TokenFile {
                 });
             }
         };
-        // A token pasted from a browser carries a newline, and every request
-        // made with it would then fail on a header the server calls malformed.
-        let token = raw.trim().to_string();
-        Ok(match token.is_empty() {
-            true => None,
-            false => Some(token),
-        })
+        if raw.trim().is_empty() {
+            return Ok(None);
+        }
+        let saved: SavedToken = serde_json::from_str(&raw).map_err(|_| {
+            Error::msg("cannot read the saved credential\nSave a token for this host again in the review page.")
+        })?;
+        if saved.host != host || saved.token.trim().is_empty() {
+            return Ok(None);
+        }
+        Ok(Some(saved.token.trim().to_string()))
     }
 
-    fn set(&self, token: &str) -> Result<()> {
+    fn set(&self, host: &str, token: &str) -> Result<()> {
+        let body = serde_json::to_vec(&SavedToken {
+            host: host.to_string(),
+            token: token.trim().to_string(),
+        })?;
         let write = || -> std::io::Result<()> {
             if let Some(parent) = self.path.parent() {
                 std::fs::create_dir_all(parent)?;
@@ -56,7 +63,7 @@ impl Credentials for TokenFile {
             // file opened world-readable and chmodded afterwards is readable
             // for as long as that takes.
             let mut file = restricted(&self.path)?;
-            std::io::Write::write_all(&mut file, token.trim().as_bytes())?;
+            std::io::Write::write_all(&mut file, &body)?;
             file.sync_all()
         };
         write().map_err(|source| Error::CannotWrite {
@@ -66,9 +73,8 @@ impl Credentials for TokenFile {
     }
 }
 
-/// Named for what it is rather than for the host, because a second host is a
-/// second file and not a second meaning.
-const NAME: &str = "github-token";
+// Unbound tokens cannot authorize a host; this file records the explicit choice.
+const NAME: &str = "github-credential.json";
 
 #[cfg(unix)]
 fn restricted(path: &Path) -> std::io::Result<std::fs::File> {
@@ -87,9 +93,68 @@ fn restricted(path: &Path) -> std::io::Result<std::fs::File> {
     std::fs::File::create(path)
 }
 
+#[derive(serde::Serialize, serde::Deserialize)]
+struct SavedToken {
+    host: String,
+    token: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_saved_token_is_available_only_to_its_authorized_host() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = TokenFile::at(dir.path().join(NAME));
+        file.set("github.com", "test-secret").unwrap();
+        let reopened = TokenFile::at(dir.path().join(NAME));
+        assert_eq!(
+            reopened.token("github.com").unwrap().as_deref(),
+            Some("test-secret")
+        );
+        for host in [
+            "enterprise.example",
+            "github.com.attacker.example",
+            "attacker.example",
+        ] {
+            assert_eq!(
+                reopened.token(host).unwrap(),
+                None,
+                "a saved credential must not authorize {host}"
+            );
+        }
+        reopened
+            .set("enterprise.example", "enterprise-secret")
+            .unwrap();
+        assert_eq!(file.token("github.com").unwrap(), None);
+        assert_eq!(
+            file.token("enterprise.example").unwrap().as_deref(),
+            Some("enterprise-secret")
+        );
+    }
+
+    #[test]
+    fn an_unbound_file_does_not_authorize_any_host() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("github-token"), "unbound-secret").unwrap();
+        let file = TokenFile::at(dir.path().join(NAME));
+        assert_eq!(file.token("github.com").unwrap(), None);
+        assert_eq!(file.token("enterprise.example").unwrap(), None);
+    }
+
+    #[test]
+    fn unreadable_credentials_do_not_echo_secret_material() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(NAME);
+        std::fs::write(&path, r#"{"host": "github.com", "token": ["test-secret"]}"#).unwrap();
+        let error = TokenFile::at(path)
+            .token("github.com")
+            .unwrap_err()
+            .to_string();
+        assert!(!error.contains("test-secret"));
+        assert!(error.contains("Save a token"), "{error}");
+    }
 
     #[test]
     fn a_token_that_was_never_written_reads_as_absent_rather_than_as_an_error() {
@@ -98,7 +163,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let file = TokenFile::at(dir.path().join("github-token"));
 
-        assert_eq!(file.token().unwrap(), None);
+        assert_eq!(file.token("github.com").unwrap(), None);
     }
 
     #[test]
@@ -106,9 +171,12 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let file = TokenFile::at(dir.path().join("nested/github-token"));
 
-        file.set("ghp_abc123\n").unwrap();
+        file.set("github.com", "ghp_abc123\n").unwrap();
 
-        assert_eq!(file.token().unwrap().as_deref(), Some("ghp_abc123"));
+        assert_eq!(
+            file.token("github.com").unwrap().as_deref(),
+            Some("ghp_abc123")
+        );
     }
 
     #[test]
@@ -119,7 +187,7 @@ mod tests {
         let path = dir.path().join("github-token");
         std::fs::write(&path, "  \n").unwrap();
 
-        assert_eq!(TokenFile::at(&path).token().unwrap(), None);
+        assert_eq!(TokenFile::at(&path).token("github.com").unwrap(), None);
     }
 
     #[cfg(unix)]
@@ -129,7 +197,9 @@ mod tests {
 
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("github-token");
-        TokenFile::at(&path).set("ghp_abc123").unwrap();
+        TokenFile::at(&path)
+            .set("github.com", "ghp_abc123")
+            .unwrap();
 
         let mode = std::fs::metadata(&path).unwrap().permissions().mode();
         assert_eq!(mode & 0o077, 0, "mode is {mode:o}");
@@ -141,10 +211,14 @@ mod tests {
         // happen would leave its tail on the end of the shorter one.
         let dir = tempfile::tempdir().unwrap();
         let file = TokenFile::at(dir.path().join("github-token"));
-        file.set("ghp_a_very_long_token_indeed").unwrap();
+        file.set("github.com", "ghp_a_very_long_token_indeed")
+            .unwrap();
 
-        file.set("ghp_short").unwrap();
+        file.set("github.com", "ghp_short").unwrap();
 
-        assert_eq!(file.token().unwrap().as_deref(), Some("ghp_short"));
+        assert_eq!(
+            file.token("github.com").unwrap().as_deref(),
+            Some("ghp_short")
+        );
     }
 }
