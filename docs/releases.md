@@ -1,7 +1,7 @@
 # Release packages
 
 The `release packages` workflow builds native archives for macOS Apple Silicon,
-macOS Intel, and Linux x86_64. Each archive contains the executable and README;
+macOS Intel, and Linux x86_64. Each archive contains the executable, README, and documentation;
 the frontend is embedded in the executable.
 
 Pull requests and manual workflow runs upload build artifacts only. A pushed

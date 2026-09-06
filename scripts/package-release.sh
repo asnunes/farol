@@ -17,7 +17,8 @@ trap 'rm -rf "$staging"' EXIT
 mkdir -p dist
 cp "$binary" "$staging/farol"
 cp README.md "$staging/README.md"
-tar -czf "dist/$archive" -C "$staging" farol README.md
+cp -R docs "$staging/docs"
+COPYFILE_DISABLE=1 tar -czf "dist/$archive" -C "$staging" farol README.md docs
 (
     cd dist
     shasum -a 256 "$archive" > "$archive.sha256"

@@ -6,283 +6,77 @@
   A walkthrough, not a diff: the author's order, and the reasons behind it.
 </p>
 
-Every review starts the same way. You get a list of files in alphabetical order
-and no idea which one carries the change and which is only there so the rest
-compiles. Whoever wrote it knew all of that, and the order in which it makes
-sense.
+Farol is a local code-review app. It turns a branch diff into a guided walkthrough:
+files in reading order, with explanations from the coding session that made the
+change. Read the code, leave comments, and send the finished review to GitHub.
 
-Now imagine reviewing it with that person next to you, taking you through the
-change in the order they would choose and saying why as you go. You would spend
-the hour judging the work instead of reconstructing what it was for.
+## Install
 
-farol gives you that without needing them in the room. The order and the notes
-are written as the code is, commit by commit, so you reach each file already
-knowing why it is in front of you. By hand that was never worth doing, and the
-people who could explain a change best were the ones with the least time left to
-do it.
+Download **one archive** and `SHA256SUMS` from the same
+[release](https://github.com/asnunes/farol/releases) into an empty folder.
 
-A lot of code is written with AI now, which is what makes it practical:
-farol's CLI is driven by the session doing the implementation, so the reasons
-are recorded as the decisions are taken.
+| Your machine | Choose the archive ending in |
+|---|---|
+| Mac with Apple Silicon, macOS 15+ | `aarch64-apple-darwin.tar.gz` |
+| Mac with Intel, macOS 15+ | `x86_64-apple-darwin.tar.gz` |
+| Linux x86_64, Ubuntu 22.04+ or glibc 2.35+ | `x86_64-unknown-linux-gnu.tar.gz` |
 
-The same works on your own branch. Hand a feature to a session, and when the
-work is done, open farol and read the change back in the session's order, with
-the reasons attached.
+In that folder, verify the download:
 
-## Installation
+- **macOS:** `shasum -a 256 --check SHA256SUMS --ignore-missing`
+- **Linux:** `sha256sum --check SHA256SUMS --ignore-missing`
 
-Download the archive for your machine and `SHA256SUMS` from the same
-[GitHub Release](https://github.com/asnunes/farol/releases). Initial releases are
-previews. If no release assets are available yet, use the source build below.
-
-| Platform | Archive target | Supported environment |
-|---|---|---|
-| macOS, Apple Silicon | `aarch64-apple-darwin` | macOS 15 or newer |
-| macOS, Intel | `x86_64-apple-darwin` | macOS 15 or newer |
-| Linux, x86_64 | `x86_64-unknown-linux-gnu` | glibc 2.35 or newer; tested on Ubuntu 22.04 |
-
-Windows, Linux ARM64, and musl-based distributions such as Alpine do not have
-packages in this first release. Git and a modern browser are required to use
-Farol. Node, Rust, and Just are only needed to build it.
-
-In the download directory, replace `VERSION` and `TARGET` with the values from
-the archive you downloaded:
+Once it reports `OK`, install:
 
 ```bash
-archive="farol-vVERSION-TARGET.tar.gz"
-grep -F "  $archive" SHA256SUMS > "$archive.sha256"
-```
-
-Verify with `shasum -a 256 -c "$archive.sha256"` on macOS or
-`sha256sum -c "$archive.sha256"` on Linux. Continue only if the checksum reports
-`OK`. Then extract and install:
-
-```bash
-tar -xzf "$archive"
+tar -xzf farol-*.tar.gz
 mkdir -p "$HOME/.local/bin"
-install -m 755 farol "$HOME/.local/bin/farol"
+install -m 755 ./farol "$HOME/.local/bin/farol"
 export PATH="$HOME/.local/bin:$PATH"
 farol --version
 ```
 
-Add the PATH line to your shell configuration if that directory is not already
-on your PATH. The executable contains the frontend; it does not need to stay
-beside the extracted README or the source checkout.
+You need Git and a browser. macOS may require [approval to run the unsigned
+binary](docs/install.md#macos-approval). For updates, removal, or PATH setup,
+see the [installation guide](docs/install.md).
 
-macOS packages are not Developer ID signed or notarized. A checksum verifies
-file integrity, not publisher identity. If macOS blocks the executable, follow
-[Apple's instructions for an app from an unknown developer](https://support.apple.com/guide/mac-help/mh40616/mac)
-only after verifying its source. Farol does not disable system security settings.
+No release available yet? [Build from source](docs/development.md).
 
-**Updating:** download and verify the new archive, stop your running reviews with
-`farol servers stop PORT`, and repeat the installation commands. Start the
-reviews again to use the new binary. There is no automatic updater.
+## Open your first review
 
-**Removing:** stop the running reviews and remove `~/.local/bin/farol`.
-Configuration and worktree review data are separate from the executable and are
-not removed by deleting it.
-
-## Using it
+In the repository and branch you want to review, check the changed files:
 
 ```bash
-farol scope          # the files under review, as farol sees them
-farol map derive     # start (or continue) the map for this commit
-farol serve          # read it in a browser
+farol scope
 ```
 
-The map is normally written by the `farol` skill, from inside the session that
-implemented the change. By hand, the commands look like this:
+Ask the coding agent that implemented the change:
+
+> Use the Farol CLI to prepare a review map. Start with `farol map derive`,
+> group the changed files into blocks in reading order, explain the decisions
+> behind the change, and mark mechanical changes as skim. Finish with
+> `farol map check`.
+
+Then open the review:
 
 ```bash
-farol block add retry-window \
-  --title "Bound the retry window" \
-  --context "The first version retried forever, which hid the timeout." \
-  src/retry.rs
-
-farol file add retry-window src/client.rs --note "The deletions here are not an additional change."
-farol line add retry-window src/retry.rs 82-116 --note "This ordering is deliberate."
-farol skim add Cargo.lock --reason "regenerated by the dependency bump"
-farol map check      # non-zero while anything is unassigned or undecided
+farol serve
 ```
 
-`serve` prints the URL and gives the terminal back, and the review stays open
-until it is stopped. On macOS it also opens the browser unless `--no-open` is
-passed. On Linux it only prints the URL; open that link yourself.
+On macOS the browser opens automatically. On Linux, open the printed URL.
+Farol needs a map before it can serve a review. You can also
+[write one by hand](docs/usage.md#write-a-map).
 
-```bash
-farol servers            # what is open, and where
-farol servers stop 4600
-farol servers stop --all
-```
+## Review
 
-Comments go the other way: what the reviewer asks back, over the lines they were
-reading. They are written on the screen, or here.
+- Follow the blocks in the sidebar and mark files as read.
+- Drag across line numbers, or click `+`, to leave a comment.
+- Press `?` for keyboard shortcuts.
+- Use **Send review** to publish to GitHub. The page explains how to authorize
+  the destination host with your token; local reading needs no token.
 
-```bash
-farol comment add src/retry.rs 82-116 --text "Why is this ordering deliberate?"
-farol comment list          # everything still waiting for an answer
-farol comment close 18cb73437f4b6058-150e1
-```
+Your progress stays local and survives new commits until a file changes.
+Use `farol servers` to list open reviews.
 
-Each one is a markdown file under the branch's own store, so the session that
-wrote the code can read them, answer, and close them without leaving the
-terminal. Closing removes it: a comment lives as long as it is a question, which
-is why the list never needs a filter.
-
-When the review is finished, it goes to the pull request as a real GitHub
-review: the same files, the same line ranges, the same words, with a summary and
-a verdict. From the screen, or from here.
-
-```bash
-farol github status         # whether it can be sent, and what is missing
-farol github review --comment
-farol github review --request-changes --summary "The retry window needs a bound."
-```
-
-`status` exits non-zero while the review cannot go, so a session can branch on
-it. The token is the one step that is not delegated: only the screen asks for it,
-showing the remote host you are authorizing. Approve only a host you trust.
-
-Farol stores one credential with its authorized host under
-`$XDG_CONFIG_HOME/farol/github-credential.json` (by default `~/.config/farol`).
-Saving another token replaces that credential. It is never used for a different
-host, including during availability checks; a host with no matching credential
-receives no authenticated request. If the remote changes while the form is open,
-refresh the review before saving.
-
-An existing `github-token` file has no authorized host and is not loaded. Save
-the token again through the host-specific form; Farol does not migrate or delete
-the unbound file.
-
-`farol --help` and `farol <command> --help` list the rest.
-
-## Reading
-
-The map is the spine down the left, the code is on the right, and the reviewer
-lands inside the first file rather than on an index. Typography says where a
-text came from: serif is what the session wrote for you, monospace is code.
-
-`j` and `k` move between files in reading order, `n` jumps to the next unread
-one, `;` marks the current file read, `[` and `]` move between blocks, and `?`
-shows the keys. The arrows and the space bar do the same, for whoever would rather not
-learn them. The page keys are left to scroll with.
-
-To comment, drag down the line numbers, or press the `+` that appears beside one.
-A comment can be copied — path, lines and text in one paste — and closed once it
-is answered. Closing asks twice, because it drops the comment and nothing here
-is in git to recover it from.
-
-Anything the diff did not print is a keystroke away: the band between two hunks
-opens twenty lines at a time, from either end, or the whole gap at once. Opened
-lines take no comment, because GitHub only accepts one on a line the diff
-reaches.
-
-## How it behaves
-
-**Base and head.** `main`, falling back to `master`; head is the branch you are
-standing on. The diff is taken from the merge base, so what the base branch did
-after you branched stays out of your review, and `--direct` opts out. Detached
-HEAD is refused: there is no branch name to key state on.
-
-**No map, no server.** `farol serve` refuses when the branch has no map, instead
-of falling back to a plain diff. Run `farol map derive` and write one.
-
-**One server per working tree.** `farol serve` goes into the background and
-takes the first free port from 4600 up. Calling it again updates that instance
-on the same port, including after a branch switch or with another base, head,
-`--direct` or `--dirty`. Each invocation replaces the previous options; omitted
-options return to their defaults. An invalid comparison leaves the previous
-configuration in place. `--port` chooses a port only when opening the first
-instance; `--foreground` also reuses one that is already running. Different
-worktrees have their own instances. The registry lives under
-`$XDG_STATE_HOME/farol`; entries whose process is gone are dropped on the way past.
-
-**Local access only.** Open the address printed by `farol serve`. The server
-accepts `127.0.0.1` or `localhost` on its listening port and rejects browser
-origins that do not exactly match the requested address. Cross-site browser
-requests are refused before reading the repository or changing state. CLI calls
-without browser headers still work against the local address. The Vite dev
-proxy forwards its own page's origin without authorizing unrelated origins.
-
-**An open review follows Git.** Each request resolves the comparison again,
-including its files and content hashes. A commit without a new map shows how
-far the map is behind; deriving the map makes it available on the same URL.
-Changes to maps or refs, including shared refs in a linked worktree, announce
-a refresh in the page. The reader chooses when to load it, and that refresh
-also replaces cached diffs and expanded context. `--no-watch` disables filesystem
-notifications until a subsequent `serve` enables them again.
-
-**State lives with the worktree.** Everything is stored under the worktree's own
-git dir, so removing a worktree takes the review with it. That is the intended
-cleanup, not a limitation. It also means the map does not travel: it is local to
-the worktree it was written in.
-
-**Progress survives new commits.** A file marked read stays read until its
-contents change. A rebase that only shifts context lines does not reopen it,
-because the hash is of the file, not of the diff.
-
-## Why it works this way
-
-**Maps are derived, not rebuilt.** Each commit gets a version inheriting the one
-before. The reviewer may be halfway through, and rebuilding from scratch would
-reshuffle the block boundaries under them.
-
-**Line notes are the fragile part.** When a file changes far from a note, the
-range is recomputed arithmetically. When the change reaches into the code the
-note covered, the note is *deactivated* rather than moved or deleted: the prose
-is kept along with the code it used to cover, and `farol map derive` asks the
-session to restore or discard it. Guessing would put a confident note on
-unrelated code, which is worse than showing nothing.
-
-## Building
-
-Install Git, a C/C++ build toolchain, [rustup](https://rustup.rs/), Node **22.23.2**
-with npm, and Just **1.57.0**. macOS builds require Xcode Command Line Tools;
-Ubuntu builds require `build-essential` and `pkg-config`. Rust **1.97.1**,
-Clippy, and rustfmt are selected by `rust-toolchain.toml`; `.node-version`
-records the Node version used by CI.
-
-```bash
-git clone https://github.com/asnunes/farol.git
-cd farol
-rustup show
-just build     # npm ci, frontend build, then cargo build --locked --release
-./target/release/farol --version
-just check     # layers, tests, clippy, formatting, TypeScript
-```
-
-Install the resulting binary using the installation commands above. For a
-checkout you actively develop, `just install` instead creates a symlink from
-`~/.local/bin/farol` to this checkout's release binary; `just uninstall` removes
-that link if it still points here.
-
-`just check` is `check-rust` plus `check-web`, and CI runs them in parallel on
-pull requests. The frontend is built before the Rust tests that serve it.
-
-For development, run `npm run dev` inside `web/`, then run `just dev` from the
-repository root and follow the printed command. On Linux, open the printed URL
-manually.
-
-Native packaging and extracted-binary checks are described in
-[the release guide](https://github.com/asnunes/farol/blob/main/docs/releases.md).
-The release workflow also builds all three packages on pull requests, so the
-artifacts can be inspected before a tag publishes anything.
-
-## Layout
-
-```
-src/
-├── cmd/         CLI entry points
-├── server/      HTTP, SSE, embedded assets
-├── shared/      errors, git dir and store paths
-├── diff/        derived from git, never persisted
-├── map/         blocks, order, notes, written by the session
-├── comments/    what the reviewer asks back, and sending it to GitHub
-└── progress/    what you have read, written by the server
-web/             vite + react
-```
-
-Each of the three parts is split into `domain`, `application`, `infra` and
-`presentation`. The parts were chosen by who writes them: the session writes
-`map`, the server writes `progress`, nobody writes `diff`. That is the same line
-that separates the files on disk, which is why two processes never contend.
+[CLI and behavior guide](docs/usage.md) · [Development](docs/development.md) ·
+[Preparing a release](docs/releases.md)
