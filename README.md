@@ -42,6 +42,17 @@ see the [installation guide](docs/install.md).
 
 No release available yet? [Build from source](docs/development.md).
 
+## Install the agent skills
+
+In the project you want to review, install the complete skill set:
+
+```bash
+npx skills add https://github.com/asnunes/farol/tree/main/skills --skill '*'
+```
+
+The installer handles agent selection; add `--agent codex` or another supported
+agent to choose explicitly. See [skills and workflows](docs/skills.md).
+
 ## Open your first review
 
 In the repository and branch you want to review, check the changed files:
@@ -50,12 +61,9 @@ In the repository and branch you want to review, check the changed files:
 farol scope
 ```
 
-Ask the coding agent that implemented the change:
-
-> Use the Farol CLI to prepare a review map. Start with `farol map derive`,
-> group the changed files into blocks in reading order, explain the decisions
-> behind the change, and mark mechanical changes as skim. Finish with
-> `farol map check`.
+Ask the coding agent that implemented the change to use `farol-maintain-map`
+to prepare the review map. It loads the general Farol guidance and records the
+implementation decisions from that session.
 
 Then open the review:
 
