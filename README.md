@@ -7,8 +7,10 @@
 </p>
 
 Farol is a local code-review app. It turns a branch diff into a guided walkthrough:
-files in reading order, with explanations from the coding session that made the
-change. Read the code, leave comments, and send the finished review to GitHub.
+**files ordered to help you understand the feature, not alphabetically by path.**
+The map puts the core implementation first and builds on it, with explanations
+from the coding session that made the change. Read the code, leave comments,
+and send the finished review to GitHub.
 
 ![A Farol review with reading-order blocks, implementation context, skim markers, and the code diff.](docs/review.jpg)
 
@@ -79,9 +81,17 @@ Farol needs a map before it can serve a review. You can also
 
 ## Review
 
-Follow the blocks in the sidebar: each brings the implementation context next
-to the code it explains. Mark files as read as you go; your progress stays local
-and survives new commits until a file changes.
+### Read in the order the feature makes sense
+
+The map orders blocks and files by their importance to understanding the change.
+Start with the core implementation, then follow the parts that depend on it;
+when one file needs context from another, that context comes first. Files from
+different folders can sit together in the same block, with the implementation
+decisions beside the code they explain. The sidebar and diff follow this reading
+order instead of an alphabetical file tree.
+
+Mark files as read as you go; your progress stays local and survives new commits
+until a file changes.
 
 ### Compare side by side
 
