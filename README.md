@@ -118,5 +118,9 @@ whether to open it anyway.
 
 Press `?` for keyboard shortcuts. Use `farol servers` to list open reviews.
 
+## License
+
+Farol is available under the [MIT License](LICENSE).
+
 [CLI and behavior guide](docs/usage.md) · [Development](docs/development.md) ·
 [Preparing a release](docs/releases.md)
