@@ -20,9 +20,9 @@ publication behavior; use the existing workflow for building and publishing.
 - Prepare the version change on a dedicated branch from current `origin/main`.
   Update the root package version in `Cargo.toml` and its matching entry in
   `Cargo.lock`, keeping dependency versions unchanged.
-- Run `just check`, commit, and open or update the version PR. Require both the
-  normal CI and all three native package jobs to pass. Report the PR and artifact
-  links. A request to prepare a release ends here, without a tag push.
+- Run `just check`, commit, and open or update the version PR. Require the
+  normal CI to pass; native packages run after the merge to `main`. Report the
+  PR link. A request to prepare a release ends here, without a tag push.
 
 ## Publish an authorized version
 
@@ -31,6 +31,7 @@ publication behavior; use the existing workflow for building and publishing.
   the version PR unless the user also authorized that action.
 - Resolve the intended release commit on `origin/main`. Read its Cargo manifest
   and lockfile, and require the tag to be exactly `v` plus that package version.
+- Require all three native package jobs for that commit on `main` to pass.
 - Pushing this tag triggers publication. Do it only when the user explicitly
   authorized publishing this release. Approval of the version PR or its merge
   is not publication approval. Reuse explicit publication authorization already

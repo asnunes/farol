@@ -1,10 +1,11 @@
 # Release packages
 
 The `release packages` workflow builds native archives for macOS Apple Silicon,
-macOS Intel, and Linux x86_64. Each archive contains the executable, README, and documentation;
+macOS Intel, and Linux x86_64. Each archive contains the executable, LICENSE, README, and documentation;
 the frontend is embedded in the executable.
 
-Pull requests and manual workflow runs upload build artifacts only. A pushed
+Pushes to `main` and manual workflow runs upload build artifacts only. Pull
+requests run the code checks without building release packages. A pushed
 `v*` tag publishes a GitHub prerelease after every package passes its smoke
 check. No stable-release promotion or signing is automated here.
 
@@ -15,7 +16,8 @@ before pushing the release tag.
 
 ## Inspect packages before publishing
 
-1. Open the `release packages` run for the pull request.
+1. Open the `release packages` run for the merged commit on `main`, or trigger
+   a manual run on the branch you want to verify.
 2. Require all three package jobs to succeed.
 3. Download the matching `farol-TARGET` workflow artifact. It contains a
    `.tar.gz` and a `.sha256` file.
