@@ -10,6 +10,8 @@ Farol is a local code-review app. It turns a branch diff into a guided walkthrou
 files in reading order, with explanations from the coding session that made the
 change. Read the code, leave comments, and send the finished review to GitHub.
 
+![A Farol review with reading-order blocks, implementation context, skim markers, and the code diff.](docs/review.jpg)
+
 ## Install
 
 Download **one archive** and `SHA256SUMS` from the same
