@@ -79,14 +79,34 @@ Farol needs a map before it can serve a review. You can also
 
 ## Review
 
-- Follow the blocks in the sidebar and mark files as read.
-- Drag across line numbers, or click `+`, to leave a comment.
-- Press `?` for keyboard shortcuts.
-- Use **Send review** to publish to GitHub. The page explains how to authorize
-  the destination host with your token; local reading needs no token.
+Follow the blocks in the sidebar: each brings the implementation context next
+to the code it explains. Mark files as read as you go; your progress stays local
+and survives new commits until a file changes.
 
-Your progress stays local and survives new commits until a file changes.
-Use `farol servers` to list open reviews.
+### Compare side by side
+
+Switch between unified and split views to read changes in the layout you prefer.
+Split view puts the old and new code next to each other.
+
+![Split view showing the old and new versions of two configuration files.](docs/review-split.jpg)
+
+### Leave comments on the code
+
+Click `+` or drag across line numbers to comment on a line or range. Comments
+stay local until you use **Send review** to publish them to GitHub; the page
+guides you through authorizing the destination host.
+
+![A local example comment beside the changed line and its implementation context.](docs/review-comments.jpg)
+
+### Know what you can skim
+
+The map marks supporting files as **skim** when they can be skipped without
+missing the core implementation. Each carries a reason, so you can decide
+whether to open it anyway.
+
+![Skim markers in the sidebar and reasons above the supporting configuration changes.](docs/review-skim.jpg)
+
+Press `?` for keyboard shortcuts. Use `farol servers` to list open reviews.
 
 [CLI and behavior guide](docs/usage.md) · [Development](docs/development.md) ·
 [Preparing a release](docs/releases.md)
