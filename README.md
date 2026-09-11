@@ -57,7 +57,9 @@ npx skills add https://github.com/asnunes/farol/tree/main/skills --skill '*'
 The installer handles agent selection; add `--agent codex` or another supported
 agent to choose explicitly. See [skills and workflows](docs/skills.md).
 
-## Review AI-generated code
+## Use cases
+
+### Review AI-generated code
 
 Before accepting the change, ask the agent **in the session that implemented
 it** to prepare the walkthrough:
@@ -83,7 +85,7 @@ Farol needs a map before it can serve a review. You can also
 The same flow works for reviewing your own code before opening a PR, including
 code written without AI; provide the implementation context to the agent.
 
-## Open a PR for someone else to review
+### Open a PR for someone else to review
 
 Give the reviewer the reading order and the reasons behind your change, even
 though they were not in your implementation session. Prepare or update the map
@@ -98,7 +100,7 @@ send it directly to the reviewer. The JSON carries the map and its explanations;
 the reviewer checks out the PR's code separately on their own machine. Your
 local comments and reading progress are not included.
 
-## Review someone else's PR
+### Review someone else's PR
 
 You can use Farol whether or not the author prepared a map.
 
