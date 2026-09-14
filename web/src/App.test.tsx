@@ -1001,10 +1001,10 @@ describe("the skim list", () => {
     serve({ review: r });
     render(<App />);
 
-    await waitFor(() => {
-      const row = document.querySelector('[title="generated"]');
-      expect(row).toBeTruthy();
-    });
+    await waitForReading("a.rs");
+    fireEvent.focus(screen.getByRole("button", { name: "src/a.rs" }));
+
+    expect((await screen.findByRole("tooltip")).textContent).toContain("generated");
   });
 });
 
