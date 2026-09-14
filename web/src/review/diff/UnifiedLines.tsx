@@ -21,7 +21,10 @@ export function UnifiedLines({ hunk, file, coloured, marks, commentary }: Unifie
       <div key={i}>
         <div
           className={cn(
-            "row diff-row",
+            // The row is what the `+` comes up on, so the row is what names
+            // the group: the pointer reading this line is over the code,
+            // not over four characters of gutter.
+            "row diff-row group/line",
             line.kind === "added" && "add bg-add-bg text-add-ink",
             line.kind === "removed" && "del bg-del-bg text-del-ink",
             notedBy(file, line) && "noted",

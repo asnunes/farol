@@ -69,7 +69,14 @@ export function SplitLines({ hunk, file, coloured, marks, commentary }: SplitLin
  * The two cells are separate grid children so the columns line up across every
  * row of the hunk, however the lines wrap. Both sides take a comment, each on
  * its own numbering: the left column is the code that is going, which is as
- * much a part of the change as what replaced it. */
+ * much a part of the change as what replaced it.
+ *
+ * Which is also why the `+` answers to this half and not to the row. The two
+ * columns are two different lines, and raising the right-hand control because
+ * the pointer is over the left-hand code would offer a comment on code the
+ * reader is not looking at. The wrapper is `contents` so it names the half
+ * without becoming a box: the four cells stay grid children of the row and the
+ * columns still line up. */
 function Side({ index, hunk, coloured, marks, side, commentary }: SideProps) {
   if (index === null) {
     return (
@@ -89,12 +96,12 @@ function Side({ index, hunk, coloured, marks, side, commentary }: SideProps) {
         : "";
 
   return (
-    <>
+    <div className="group/line contents">
       <LineNumber line={line} side={side} tint={tint} commentary={commentary} />
       <div className={cn("code break-words whitespace-pre-wrap", tint)}>
         {marker(line)} <Code tokens={coloured?.[index]} plain={line.content} marks={marks[index]} />
       </div>
-    </>
+    </div>
   );
 }
 
