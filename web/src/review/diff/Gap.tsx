@@ -1,5 +1,5 @@
 import { useRef } from "react";
-import { ChevronDown, ChevronsUpDown, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronUp, UnfoldVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { fitsInOneStep, fromAbove, fromBelow } from "./gaps";
 import type { Gap as Stretch, Range } from "./gaps";
@@ -56,7 +56,7 @@ export function Gap({ gap, onOpen, children }: GapProps) {
     >
       {fitsInOneStep(gap) ? (
         <Pull label={`Open the ${gap.to - gap.from + 1} lines hidden here`} onPull={() => pull(whole)}>
-          <ChevronsUpDown className="size-3.5" aria-hidden="true" />
+          <UnfoldVertical className="size-3.5" aria-hidden="true" />
         </Pull>
       ) : (
         <>
@@ -74,7 +74,7 @@ export function Gap({ gap, onOpen, children }: GapProps) {
             label={`Open all ${gap.to - gap.from + 1} lines hidden here`}
             onPull={() => pull(whole)}
           >
-            <ChevronsUpDown className="size-3.5" aria-hidden="true" />
+            <UnfoldVertical className="size-3.5" aria-hidden="true" />
           </Pull>
         </>
       )}
