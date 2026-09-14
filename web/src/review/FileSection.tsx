@@ -13,6 +13,8 @@ import type { CommentView, FileDiff, FileView } from "@/api";
 export function FileSection({
   file,
   diff,
+  error,
+  onRetry,
   view,
   open,
   onToggleOpen,
@@ -90,6 +92,13 @@ export function FileSection({
                 Load the diff
               </Button>
             </div>
+          ) : error ? (
+            <div role="alert" className="broken px-6 py-6 font-sans text-sm text-ink-muted">
+              <span className="font-mono text-faint">{error}</span>{" "}
+              <Button variant="link" size="xs" className="px-0 text-highlight" onClick={onRetry}>
+                Try again
+              </Button>
+            </div>
           ) : diff ? (
             <Diff diff={diff} file={file} view={view} comments={comments} actions={commentActions} />
           ) : (
@@ -110,6 +119,10 @@ const BIG = 500;
 type FileSectionProps = {
   file: FileView;
   diff?: FileDiff;
+  /** Why this file's diff never arrived. Its own line rather than the box over
+   * the review: the reader is looking at the section that failed. */
+  error?: string;
+  onRetry: () => void;
   view: DiffView;
   open: boolean;
   onToggleOpen: () => void;

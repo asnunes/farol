@@ -22,12 +22,11 @@ export function Reading({
   current,
   onCurrent,
   onToggleViewed,
-  onError,
   files,
   comments,
 }: ReadingProps) {
   const pane = useRef<HTMLElement>(null);
-  const { diffs, request } = useDiffs(onError);
+  const { diffs, errors, request, retry } = useDiffs();
 
   // Landing first, and the order is load-bearing: effects run in the order
   // they are called, and naming the current file from the scroll before the
@@ -64,6 +63,8 @@ export function Reading({
             key={row.file.path}
             file={row.file}
             diff={diffs[row.file.path]}
+            error={errors[row.file.path]}
+            onRetry={() => retry(row.file.path)}
             view={view}
             open={files.isOpen(row.file)}
             onToggleOpen={() => files.set(row.file.path, !files.isOpen(row.file))}
@@ -100,7 +101,6 @@ type ReadingProps = {
   current: string | null;
   onCurrent: (path: string) => void;
   onToggleViewed: (path: string, viewed: boolean) => void;
-  onError: (message: string) => void;
   files: OpenFiles;
   comments: CommentActions;
 };

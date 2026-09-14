@@ -134,7 +134,6 @@ export default function App() {
           current={current}
           onCurrent={setCurrent}
           onToggleViewed={(path, viewed) => void mark(path, viewed)}
-          onError={setFailed}
           files={files}
           comments={comments}
         />
