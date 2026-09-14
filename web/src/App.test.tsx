@@ -978,3 +978,21 @@ describe("the sidebar", () => {
     expect(marked?.textContent).toContain("a.rs");
   });
 });
+
+describe("a comparison the map has outlived", () => {
+  it("says there is nothing to read and asks for no diffs", async () => {
+    // The branch was merged, so the base moved and the diff is empty. The
+    // server already dropped the blocks along with their files; what must not
+    // happen here is a page of sections asking for diffs this same server
+    // refuses, which is what left it on "Loading diff…".
+    serve({ review: review({ blocks: [], looseSkim: [], totalFiles: 0 }) });
+
+    render(<App />);
+    await screen.findByText("No changes in this comparison.");
+
+    expect(document.querySelectorAll(".filesection")).toHaveLength(0);
+    expect(screen.queryByText("Loading diff…")).toBeNull();
+    const asked = vi.mocked(fetch).mock.calls.map(([url]) => String(url));
+    expect(asked.filter((u) => u.startsWith("/api/file"))).toEqual([]);
+  });
+});
