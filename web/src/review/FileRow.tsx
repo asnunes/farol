@@ -1,65 +1,89 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { splitPath } from "@/lib/path";
+import type { FileLabel } from "@/lib/path";
 import type { FileView } from "@/api";
 
-/** One file in the sidebar: read state, name, and what is waiting inside it. */
+/** One file in the sidebar: read state, name, and what is waiting inside it.
+ *
+ * The name leads and the directory follows only when something else on screen
+ * is called the same thing — the whole path in every row would be a column of
+ * near-identical prefixes to read past. The path is always a keystroke away in
+ * the tooltip, and is what a screen reader announces. */
 export function FileRow({
   file,
+  label,
   current,
   onPick,
 }: FileRowProps) {
   return (
     <li>
-      <Button
-        variant="ghost"
-        className={cn(
-          "fileitem h-auto w-full justify-start gap-2 px-2 py-1 font-mono text-[0.8125rem] font-normal text-ink-soft",
-          "hover:bg-sunken hover:text-ink-soft",
-          "aria-[current=true]:bg-highlight-dim aria-[current=true]:text-ink",
-          file.skim && "skim text-faint",
-        )}
-        data-seen={file.viewed ? "true" : undefined}
-        aria-current={file.path === current ? "true" : undefined}
-        title={file.skimReason ?? undefined}
-        onClick={() => onPick(file.path)}
-      >
-        <span className="chk w-3 shrink-0 text-add-ink">{file.viewed ? "✓" : ""}</span>
-        <span
-          className={cn(
-            "nm truncate",
-            file.viewed && "text-faint line-through",
-            file.path === current && "font-semibold",
-          )}
-        >
-          {splitPath(file.path).name}
-        </span>
-
-        {file.skim ? (
-          <Badge
-            variant="outline"
-            className="fast ml-auto shrink-0 border-rule px-1 font-mono text-[0.625rem] font-normal text-faint"
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            className={cn(
+              "fileitem h-auto w-full justify-start gap-2 px-2 py-1 font-mono text-[0.8125rem] font-normal text-ink-soft",
+              "hover:bg-sunken hover:text-ink-soft",
+              "aria-[current=true]:bg-highlight-dim aria-[current=true]:text-ink",
+              file.skim && "skim text-faint",
+            )}
+            data-seen={file.viewed ? "true" : undefined}
+            aria-current={file.path === current ? "true" : undefined}
+            aria-label={file.path}
+            onClick={() => onPick(file.path)}
           >
-            skim
-          </Badge>
-        ) : (
-          file.lineNotes.length > 0 && (
+            <span className="chk w-3 shrink-0 text-add-ink">{file.viewed ? "✓" : ""}</span>
             <span
-              className="dot ml-auto shrink-0 text-highlight"
-              title={`${file.lineNotes.length} note(s)`}
+              className={cn(
+                "nm truncate",
+                file.viewed && "text-faint line-through",
+                file.path === current && "font-semibold",
+              )}
             >
-              {"•".repeat(Math.min(3, file.lineNotes.length))}
+              {label.name}
             </span>
-          )
-        )}
-      </Button>
+            {label.where && (
+              <span aria-hidden="true" className="where truncate text-[0.6875rem] text-faint">
+                · {label.where}
+              </span>
+            )}
+
+            {file.skim ? (
+              <Badge
+                variant="outline"
+                className="fast ml-auto shrink-0 border-rule px-1 font-mono text-[0.625rem] font-normal text-faint"
+              >
+                skim
+              </Badge>
+            ) : (
+              file.lineNotes.length > 0 && (
+                <span
+                  className="dot ml-auto shrink-0 text-highlight"
+                  title={`${file.lineNotes.length} note(s)`}
+                >
+                  {"•".repeat(Math.min(3, file.lineNotes.length))}
+                </span>
+              )
+            )}
+          </Button>
+        </TooltipTrigger>
+        {/* A real tooltip rather than `title`: the browser's own waits a second,
+            never opens on keyboard focus, and would drop the skim reason that
+            used to be the only thing it carried. */}
+        <TooltipContent className="max-w-[28rem]">
+          <div className="font-mono text-[0.6875rem]">{file.path}</div>
+          {file.skimReason && <div className="font-sans opacity-80">{file.skimReason}</div>}
+        </TooltipContent>
+      </Tooltip>
     </li>
   );
 }
 
 type FileRowProps = {
   file: FileView;
+  label: FileLabel;
   current: string | null;
   onPick: (path: string) => void;
 };

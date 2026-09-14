@@ -1,5 +1,9 @@
+import { useMemo } from "react";
 import { cn } from "@/lib/utils";
+import { fileLabels } from "@/lib/path";
 import { FileRow } from "./FileRow";
+import { readingOrder } from "@/api";
+import type { FileLabels } from "@/lib/path";
 import type { BlockView, ReviewView } from "@/api";
 
 /** Navigation only, deliberately: no prose here, or the reader would try to
@@ -9,12 +13,20 @@ export function Sidebar({
   current,
   onPick,
 }: SidebarProps) {
+  // Over the sidebar as a whole, not per block: two files called `mod.rs` are
+  // two rows to tell apart wherever they were grouped.
+  const label = useMemo(
+    () => fileLabels(readingOrder(review).map((f) => f.path)),
+    [review],
+  );
+
   return (
     <aside className="map overflow-y-auto border-r border-rule bg-surface py-3">
       {review.blocks.map((block, i) => (
         <Block
           key={block.slug}
           block={block}
+          label={label}
           number={i + 1}
           current={current}
           onPick={onPick}
@@ -36,7 +48,13 @@ export function Sidebar({
           </div>
           <ul className="blk-files mt-1">
             {review.looseSkim.map((f) => (
-              <FileRow key={f.path} file={f} current={current} onPick={onPick} />
+              <FileRow
+                key={f.path}
+                file={f}
+                label={label(f.path)}
+                current={current}
+                onPick={onPick}
+              />
             ))}
           </ul>
         </section>
@@ -47,6 +65,7 @@ export function Sidebar({
 
 function Block({
   block,
+  label,
   number,
   current,
   onPick,
@@ -83,7 +102,13 @@ function Block({
       </div>
       <ul className="blk-files mt-1">
         {block.files.map((f) => (
-          <FileRow key={f.path} file={f} current={current} onPick={onPick} />
+          <FileRow
+            key={f.path}
+            file={f}
+            label={label(f.path)}
+            current={current}
+            onPick={onPick}
+          />
         ))}
       </ul>
     </section>
@@ -98,6 +123,7 @@ type SidebarProps = {
 
 type BlockProps = {
   block: BlockView;
+  label: FileLabels;
   number: number;
   current: string | null;
   onPick: (path: string) => void;
