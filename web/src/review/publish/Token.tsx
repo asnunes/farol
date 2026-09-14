@@ -1,17 +1,20 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { said } from "@/lib/utils";
-import { Textarea } from "@/components/ui/textarea";
 
-/** Where the token goes in. A textarea and not an input: a fine-grained token
- * runs to ninety characters, and a single line hides all but the tail of it
- * exactly when the reader wants to check they pasted the whole thing.
+/** Where the token goes in. Masked, and an input rather than the textarea this
+ * was: a credential sitting in plain text is a credential handed to whoever is
+ * watching the screen share, and a review is a thing people screen-share.
  *
- * `break-all` is what makes that true. A token has no spaces in it, so soft
- * wrapping treats the whole thing as one word and runs it off the side, which
- * is the very problem the textarea was chosen to avoid. */
+ * The textarea existed so a ninety-character fine-grained token could be read
+ * back whole after a paste. That check is what Show token is for — the reader
+ * asks for the value at the moment they want to check it, instead of the box
+ * offering it to the room for the whole time the panel is open. */
 export function Token({ host, onToken }: TokenProps) {
+  const field = useId();
   const [token, setToken] = useState("");
+  const [shown, setShown] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -24,6 +27,9 @@ export function Token({ host, onToken }: TokenProps) {
       // Out of the page as soon as it is out of the box. It is not coming back
       // from the server, and there is no reason for it to sit in a form.
       setToken("");
+      // Back to masked with it: leaving the box revealed would show the next
+      // token typed into it from the first keystroke.
+      setShown(false);
     } catch (error) {
       setError(said(error));
     } finally {
@@ -36,9 +42,26 @@ export function Token({ host, onToken }: TokenProps) {
       <p className="mb-2 text-sm text-ink">
         Authorize <strong>{host}</strong> to receive this token. Only continue if you trust this host.
       </p>
-      <Textarea
-        className="resize-none break-all border-rule-strong bg-surface font-mono text-xs text-ink"
-        rows={3}
+      <div className="mb-1.5 flex items-center justify-between gap-2">
+        <label htmlFor={field} className="font-sans text-xs font-medium text-ink-soft">
+          GitHub token
+        </label>
+        {/* The label is the whole state: it says what pressing does, which is
+            also what the box is not doing now. An `aria-pressed` beside a name
+            that already changes would announce the same fact twice. */}
+        <Button
+          size="xs"
+          variant="ghost"
+          className="text-faint hover:text-ink"
+          onClick={() => setShown(!shown)}
+        >
+          {shown ? "Hide token" : "Show token"}
+        </Button>
+      </div>
+      <Input
+        id={field}
+        type={shown ? "text" : "password"}
+        className="border-rule-strong bg-surface font-mono text-xs text-ink"
         placeholder="github_pat_…"
         autoComplete="off"
         spellCheck={false}

@@ -53,7 +53,7 @@ describe("the panel that says what is missing", () => {
     // What must not appear is work on the branch: nothing is wrong with it.
     open(at("noToken"));
 
-    expect(screen.getByPlaceholderText("github_pat_…")).toBeTruthy();
+    expect(screen.getByLabelText("GitHub token")).toBeTruthy();
     expect(screen.queryByText(/git push/)).toBeNull();
     expect(screen.queryByText(/open a pull request for this branch/i)).toBeNull();
   });
@@ -63,7 +63,7 @@ describe("the panel that says what is missing", () => {
     render(<Publish {...value} />);
     fireEvent.click(screen.getByLabelText("Why this review cannot be sent yet"));
     expect(screen.getByText("enterprise.example")).toBeTruthy();
-    fireEvent.change(screen.getByPlaceholderText("github_pat_…"), { target: { value: "test-secret" } });
+    fireEvent.change(screen.getByLabelText("GitHub token"), { target: { value: "test-secret" } });
     fireEvent.click(screen.getByRole("button", { name: "Save token for enterprise.example" }));
     await waitFor(() => expect(value.publishing.saveToken).toHaveBeenCalledWith("enterprise.example", "test-secret"));
   });
@@ -73,7 +73,7 @@ describe("the panel that says what is missing", () => {
     vi.mocked(value.publishing.saveToken).mockRejectedValue(new Error("The credential host changed. Refresh the review."));
     render(<Publish {...value} />);
     fireEvent.click(screen.getByLabelText("Why this review cannot be sent yet"));
-    fireEvent.change(screen.getByPlaceholderText("github_pat_…"), { target: { value: "test-secret" } });
+    fireEvent.change(screen.getByLabelText("GitHub token"), { target: { value: "test-secret" } });
     fireEvent.click(screen.getByRole("button", { name: "Save token for github.com" }));
     await waitFor(() => expect(screen.getByRole("alert").textContent).toContain("host changed"));
   });
@@ -82,9 +82,9 @@ describe("the panel that says what is missing", () => {
     const value = props(at("noToken"));
     const page = render(<Publish {...value} />);
     fireEvent.click(screen.getByLabelText("Why this review cannot be sent yet"));
-    fireEvent.change(screen.getByPlaceholderText("github_pat_…"), { target: { value: "test-secret" } });
+    fireEvent.change(screen.getByLabelText("GitHub token"), { target: { value: "test-secret" } });
     page.rerender(<Publish {...value} publishing={{ ...value.publishing, readiness: at("noToken", { host: "another.example" }) }} />);
-    expect((screen.getByPlaceholderText("github_pat_…") as HTMLTextAreaElement).value).toBe("");
+    expect((screen.getByLabelText("GitHub token") as HTMLInputElement).value).toBe("");
     expect(value.publishing.saveToken).not.toHaveBeenCalled();
   });
 
@@ -109,7 +109,7 @@ describe("the panel that says what is missing", () => {
     // The one thing the reader must not be sent off to fix when it is fine.
     open(at("branchNotPushed"));
 
-    expect(screen.queryByPlaceholderText("github_pat_…")).toBeNull();
+    expect(screen.queryByLabelText("GitHub token")).toBeNull();
   });
 });
 
