@@ -202,7 +202,7 @@ impl PublishReview {
                 && self
                     .diffs
                     .of(&comment.path)?
-                    .shows(comment.from, comment.to);
+                    .shows(comment.side, comment.from, comment.to);
             if !shown {
                 drifted.push(comment.at());
             }
@@ -230,7 +230,7 @@ pub struct Sent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::diff::domain::Hunk;
+    use crate::diff::domain::{Hunk, Side};
     use crate::progress::application::MarkViewed;
     use crate::progress::domain::{Progress, ProgressRepository};
     use crate::testing::InMemoryProgressRepository;
@@ -434,6 +434,38 @@ mod tests {
     }
 
     #[test]
+    fn a_comment_on_the_old_side_is_checked_against_the_old_side() {
+        // The diff prints old lines 10 to 14, and the same numbers on the new
+        // side. A comment on the old side of a line the pre-image never had is
+        // as drifted as one on the new side, and one that is there must not be
+        // refused for sitting where the new side does not reach.
+        let (publisher, publish) = published();
+        publish
+            .store
+            .save(&Comment {
+                side: Side::Old,
+                ..comment("1", 10, 12)
+            })
+            .unwrap();
+        publish
+            .store
+            .save(&Comment {
+                side: Side::Old,
+                ..comment("2", 30, 30)
+            })
+            .unwrap();
+
+        let err = publish
+            .execute(Verdict::Comment, "Reads well.")
+            .unwrap_err()
+            .to_string();
+
+        assert!(err.contains("src/a.rs:30 (old)"), "{err}");
+        assert!(!err.contains("src/a.rs:10-12"), "{err}");
+        assert!(publisher.nothing_sent());
+    }
+
+    #[test]
     fn a_pull_request_showing_another_commit_is_refused_and_says_which_way() {
         let publisher = Arc::new(FakePublisher::ready_at("older99"));
         let publish = publish_with(publisher.clone(), &["older99"]);
@@ -598,6 +630,7 @@ mod tests {
         Comment {
             id: id.into(),
             path: "src/a.rs".into(),
+            side: Side::New,
             from,
             to,
             body: "Why this order?".into(),

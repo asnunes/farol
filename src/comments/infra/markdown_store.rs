@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use crate::comments::domain::{Comment, CommentStore, Found, Unread, Unreadable};
+use crate::diff::domain::Side;
 use crate::error::{Error, Result};
 use crate::shared::paths::Store;
 
@@ -105,9 +106,13 @@ fn render(comment: &Comment) -> String {
         Some(url) => format!("published: {url}\n"),
         None => String::new(),
     };
+    // The side is written every time, including the one that is the default.
+    // This is a file somebody opens and edits, and a key that appears only
+    // sometimes is a key they have to know about before they can use it.
     format!(
-        "---\npath: {}\nlines: {}-{}\n{published}---\n\n{}\n",
+        "---\npath: {}\nside: {}\nlines: {}-{}\n{published}---\n\n{}\n",
         comment.path,
+        comment.side,
         comment.from,
         comment.to,
         comment.body.trim()
@@ -115,11 +120,11 @@ fn render(comment: &Comment) -> String {
 }
 
 /// The header, then the prose. Written by hand rather than with a yaml crate:
-/// two keys do not justify a dependency, and a file a person edited by hand and
-/// got slightly wrong should be skipped, not fatal.
+/// a handful of keys does not justify a dependency, and a file a person edited
+/// by hand and got slightly wrong should be skipped, not fatal.
 ///
-/// Anything in the header that is not one of the two keys is passed over: a key
-/// from an older farol, a line somebody was drafting, a blank one. Only the two
+/// Anything in the header that is not one of the keys it knows is passed over: a
+/// key from an older farol, a line somebody was drafting, a blank one. Only the
 /// facts it needs can stop it — and when they do, what survived comes back so
 /// the reviewer is told in their own terms rather than in file names.
 fn parse(id: &str, file: String, raw: &str) -> std::result::Result<Comment, Unreadable> {
@@ -140,11 +145,13 @@ fn parse(id: &str, file: String, raw: &str) -> std::result::Result<Comment, Unre
     };
 
     let mut path = None;
+    let mut side = None;
     let mut lines = None;
     let mut published = None;
     for (key, value) in head.lines().filter_map(|line| line.split_once(':')) {
         match key.trim() {
             "path" => path = Some(value.trim().to_string()),
+            "side" => side = Some(value.trim().to_string()),
             "lines" => lines = Some(value.trim().to_string()),
             // The url has its own colons, so the key is split off and the rest
             // is taken whole rather than split again.
@@ -155,6 +162,19 @@ fn parse(id: &str, file: String, raw: &str) -> std::result::Result<Comment, Unre
 
     let Some(path) = path else {
         return Err(unreadable(Unread::NoPath, None, body));
+    };
+    // No side is the new one: every comment farol wrote before it could write
+    // any other was about the file as it now reads, so reading those files that
+    // way is reading them correctly rather than defaulting. A side that is
+    // there and says something else is a different matter — it is skipped and
+    // named, because putting the comment on the wrong column is worse than
+    // telling the reviewer one file needs a look.
+    let side = match side.as_deref() {
+        None => Side::New,
+        Some(raw) => match Side::parse(raw) {
+            Some(side) => side,
+            None => return Err(unreadable(Unread::BadSide, Some(path), body)),
+        },
     };
     let range = lines
         .as_deref()
@@ -167,6 +187,7 @@ fn parse(id: &str, file: String, raw: &str) -> std::result::Result<Comment, Unre
     Ok(Comment {
         id: id.to_string(),
         path,
+        side,
         from,
         to,
         body: body.trim().to_string(),
@@ -205,6 +226,7 @@ mod tests {
         Comment {
             id: id.into(),
             path: "src/a.rs".into(),
+            side: Side::New,
             from: 82,
             to: 116,
             body: "Why **this** order?".into(),
@@ -245,6 +267,59 @@ mod tests {
             all[0].published.as_deref(),
             Some("https://github.com/asnunes/farol/pull/12#discussion_r1")
         );
+    }
+
+    #[test]
+    fn which_side_it_was_written_on_survives_the_round_trip() {
+        // The file outlives the session, and reading it back on the wrong side
+        // would move the comment onto code it was never about.
+        let (_dir, store) = store();
+        store
+            .save(&Comment {
+                side: Side::Old,
+                ..comment("1")
+            })
+            .unwrap();
+
+        let raw = std::fs::read_to_string(store.file("1")).unwrap();
+        assert!(raw.contains("side: old"), "{raw}");
+        assert_eq!(store.list().unwrap().comments[0].side, Side::Old);
+    }
+
+    #[test]
+    fn a_comment_written_before_sides_existed_is_about_the_file_as_it_now_reads() {
+        // Every comment farol could write back then was on the new side, so a
+        // file with no `side:` is not ambiguous — reading it as `new` is
+        // reading it correctly, and nothing has to be migrated.
+        let (_dir, store) = store();
+        std::fs::create_dir_all(&store.dir).unwrap();
+        std::fs::write(
+            store.file("1"),
+            "---\npath: src/a.rs\nlines: 82-116\n---\n\nWhy **this** order?\n",
+        )
+        .unwrap();
+
+        assert_eq!(store.list().unwrap().comments, vec![comment("1")]);
+    }
+
+    #[test]
+    fn a_side_that_is_neither_is_skipped_and_named_rather_than_guessed_at() {
+        // `left` is what somebody types who knows GitHub's vocabulary. Taking
+        // it for one side or the other is how a question lands on the column
+        // they were not reading; saying so costs them one file to fix.
+        let (_dir, store) = store();
+        std::fs::create_dir_all(&store.dir).unwrap();
+        std::fs::write(
+            store.file("1"),
+            "---\npath: src/a.rs\nside: left\nlines: 82-116\n---\n\nWhy?\n",
+        )
+        .unwrap();
+
+        let found = store.list().unwrap();
+
+        assert!(found.comments.is_empty());
+        assert_eq!(found.unreadable[0].why, Unread::BadSide);
+        assert_eq!(found.unreadable[0].about.as_deref(), Some("src/a.rs"));
     }
 
     #[test]

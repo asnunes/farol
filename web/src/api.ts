@@ -13,8 +13,8 @@ export const api = {
       .then((answer) => answer.lines),
 
   comments: () => fetch("/api/comments").then(json<CommentsView>),
-  addComment: (path: string, from: number, to: number, body: string) =>
-    send("/api/comments", "POST", { path, from, to, body }),
+  addComment: (path: string, side: Side, from: number, to: number, body: string) =>
+    send("/api/comments", "POST", { path, side, from, to, body }),
   closeComment: (id: string) => send(`/api/comments/${encodeURIComponent(id)}`, "DELETE"),
 
   readiness: () => fetch("/api/publish").then(json<ReadinessView>),
@@ -106,6 +106,14 @@ export type Hunk = {
   lines: DiffLine[];
 };
 
+/** Which side of the diff a line number is counted on.
+ *
+ * Both sides number from one, so the same number names two different lines —
+ * the file as it was, and the file as it now reads. Anything anchored to a line
+ * carries this with it, all the way to the host, where it is spelled LEFT and
+ * RIGHT. */
+export type Side = "old" | "new";
+
 export type DiffLine = {
   kind: "context" | "added" | "removed";
   oldNumber: number | null;
@@ -143,6 +151,8 @@ export type Unreadable = {
 export type CommentView = {
   id: string;
   path: string;
+  /** Which side of the diff `from` and `to` are counted on. */
+  side: Side;
   from: number;
   to: number;
   /** Markdown, as it was typed. */

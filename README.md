@@ -150,9 +150,11 @@ Split view puts the old and new code next to each other.
 
 ### Leave comments on the code
 
-Click `+` or drag across line numbers to comment on a line or range. Comments
-stay local until you use **Send review** to publish them to GitHub; the page
-guides you through authorizing the destination host.
+Click `+` or drag across line numbers to comment on a line or range, on either
+side of the diff — including removed lines, and files that were deleted whole.
+Comments stay local until you use **Send review** to publish them to GitHub,
+each on the side it was written on; the page guides you through authorizing the
+destination host.
 
 ![A local example comment beside the changed line and its implementation context.](docs/review-comments.jpg)
 

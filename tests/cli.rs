@@ -1250,3 +1250,160 @@ fn github_review_refuses_where_there_is_nowhere_to_send() {
 
     assert!(err.contains("no remote"), "{err}");
 }
+
+// ---- comments on either side of the diff --------------------------------
+
+/// A branch that deletes one file whole and edits another in place, which is
+/// what gives the review an old side worth asking about.
+fn removing() -> Repo {
+    let repo = Repo::new();
+    repo.write("src/gone.rs", &numbered(6));
+    repo.write("src/keep.rs", &numbered(20));
+    repo.commit("what the branch will take away and change");
+    repo.feature();
+    repo.git(&["rm", "-q", "src/gone.rs"]);
+    repo.write(
+        "src/keep.rs",
+        &numbered(20).replace("line 5\n", "line five\n"),
+    );
+    repo.commit("delete one file and edit another");
+    repo
+}
+
+#[test]
+fn a_comment_can_be_written_on_the_old_side_of_a_file_that_is_gone() {
+    // A deleted file has no new side at all, so refusing the old one would
+    // leave the one kind of change nobody can ask a question about. The list
+    // says which side, because the numbers alone would name two places.
+    let repo = removing();
+
+    let wrote = repo.ok(&[
+        "comment",
+        "add",
+        "src/gone.rs",
+        "2-4",
+        "--side",
+        "old",
+        "--text",
+        "Where did this go?",
+    ]);
+    let list = repo.ok(&["comment", "list"]);
+
+    assert!(wrote.contains("src/gone.rs:2-4 (old)"), "{wrote}");
+    assert!(list.contains("src/gone.rs:2-4 (old)"), "{list}");
+    assert!(list.contains("    Where did this go?"), "{list}");
+}
+
+#[test]
+fn a_comment_defaults_to_the_side_the_reviewer_is_reading() {
+    // No flag is the new side, which is what every comment written before
+    // there was a choice meant — and what the unmarked form goes on meaning.
+    let repo = removing();
+
+    repo.ok(&[
+        "comment",
+        "add",
+        "src/keep.rs",
+        "5-5",
+        "--text",
+        "Why this?",
+    ]);
+    let list = repo.ok(&["comment", "list"]);
+
+    assert!(list.contains("src/keep.rs:5\n"), "{list}");
+    assert!(!list.contains("(old)"), "{list}");
+}
+
+#[test]
+fn the_two_sides_of_one_line_are_two_separate_comments() {
+    // Line 5 was rewritten, so it is in the diff on both sides. Neither the
+    // store nor the list may fold them into one.
+    let repo = removing();
+
+    repo.ok(&[
+        "comment",
+        "add",
+        "src/keep.rs",
+        "5-5",
+        "--side",
+        "old",
+        "--text",
+        "Why was this here?",
+    ]);
+    repo.ok(&[
+        "comment",
+        "add",
+        "src/keep.rs",
+        "5-5",
+        "--side",
+        "new",
+        "--text",
+        "Why is this here?",
+    ]);
+    let list = repo.ok(&["comment", "list"]);
+
+    assert!(list.contains("src/keep.rs:5 (old)"), "{list}");
+    assert!(list.contains("Why was this here?"), "{list}");
+    assert!(list.contains("Why is this here?"), "{list}");
+}
+
+#[test]
+fn a_comment_off_the_diff_is_refused_in_the_terms_of_the_side_it_was_asked_on() {
+    // The same numbers are in the diff on one side and not on the other, so a
+    // refusal that did not say which side would read as farol being wrong.
+    let repo = removing();
+
+    let err = repo.fails(&[
+        "comment",
+        "add",
+        "src/keep.rs",
+        "18-18",
+        "--side",
+        "old",
+        "--text",
+        "Why?",
+    ]);
+
+    assert!(err.contains("old side"), "{err}");
+    assert!(err.contains("src/keep.rs"), "{err}");
+    assert!(repo.ok(&["comment", "list"]).contains("No comments yet"));
+}
+
+#[test]
+fn a_file_that_is_gone_has_no_new_side_left_to_ask_about() {
+    // Nothing of it survives the change, so the new side is a file of no
+    // length at all and every line of it is past the end.
+    let repo = removing();
+
+    let err = repo.fails(&[
+        "comment",
+        "add",
+        "src/gone.rs",
+        "2-4",
+        "--side",
+        "new",
+        "--text",
+        "Why?",
+    ]);
+
+    assert!(err.contains("0 lines"), "{err}");
+    assert!(repo.ok(&["comment", "list"]).contains("No comments yet"));
+}
+
+#[test]
+fn a_side_that_is_neither_is_refused_before_anything_is_written() {
+    let repo = removing();
+
+    let err = repo.fails(&[
+        "comment",
+        "add",
+        "src/gone.rs",
+        "2-4",
+        "--side",
+        "left",
+        "--text",
+        "Why?",
+    ]);
+
+    assert!(err.contains("'old' or 'new'"), "{err}");
+}

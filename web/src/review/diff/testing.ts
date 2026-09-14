@@ -17,6 +17,7 @@ export function comment(over: Partial<CommentView> = {}): CommentView {
   return {
     id: "18cb-3731",
     path: "src/a.rs",
+    side: "new",
     from: 1,
     to: 1,
     body: "Why this order?",

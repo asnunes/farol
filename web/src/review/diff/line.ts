@@ -1,6 +1,6 @@
 import type { CommentActions } from "@/hooks/useComments";
 import type { LineSelection } from "./useLineSelection";
-import type { CommentView, DiffLine, FileView, TaggedLineNote } from "@/api";
+import type { CommentView, DiffLine, FileView, Side, TaggedLineNote } from "@/api";
 
 /** The comment layer over one file's diff: what is already written, what can be
  * done to it, and which lines the reader is choosing right now.
@@ -18,6 +18,27 @@ export type Commentary = {
 /** What a line is marked with in the gutter of a unified diff. */
 export function marker(line: DiffLine) {
   return line.kind === "added" ? "+" : line.kind === "removed" ? "−" : " ";
+}
+
+/** The line a row carries on each side, and where a comment written on that
+ * side hangs.
+ *
+ * Split view fills the two halves from the two columns. Unified view puts the
+ * same line in both, because one row there stands for whichever sides that line
+ * has a number on: a removed line is the old side only, an added line the new
+ * side only, and a context line is both at once under two different numbers. */
+export type Anchor = { old: DiffLine | null; new: DiffLine | null };
+
+/** A unified row, as the two sides it stands for. */
+export function sidesOf(line: DiffLine): Anchor {
+  return { old: line, new: line };
+}
+
+/** What a line is numbered on one side, or nothing when it is not on that side
+ * at all. The single place the two numbers on a line are told apart. */
+export function numberOn(line: DiffLine | null, side: Side): number | null {
+  if (line === null) return null;
+  return side === "old" ? line.oldNumber : line.newNumber;
 }
 
 /** Whether a note is about this line.
@@ -39,20 +60,24 @@ export function notesAt(file: FileView, line: DiffLine): TaggedLineNote[] {
   return file.lineNotes.filter((n) => line.newNumber !== null && n.to === line.newNumber);
 }
 
-/** Whether a comment covers this line. The reviewer's writing gets the same
- * treatment as the session's: the span is marked, and the prose sits under it. */
-export function commentedBy(comments: CommentView[], line: DiffLine): boolean {
-  return comments.some(
-    (c) => line.newNumber !== null && c.from <= line.newNumber && line.newNumber <= c.to,
-  );
+/** Whether a comment covers this row. The reviewer's writing gets the same
+ * treatment as the session's: the span is marked, and the prose sits under it.
+ *
+ * Each comment is asked about the side it was written on, so line 12 as it was
+ * and line 12 as it now reads mark the rows they are actually about. */
+export function commentedBy(comments: CommentView[], at: Anchor): boolean {
+  return comments.some((c) => {
+    const line = numberOn(at[c.side], c.side);
+    return line !== null && c.from <= line && line <= c.to;
+  });
 }
 
-/** The comments that belong under this line, oldest first — questions read in
+/** The comments that belong under this row, oldest first — questions read in
  * the order they were asked. Ids carry the clock, so sorting by id is sorting
  * by when. */
-export function commentsAt(comments: CommentView[], line: DiffLine): CommentView[] {
+export function commentsAt(comments: CommentView[], at: Anchor): CommentView[] {
   return comments
-    .filter((c) => line.newNumber !== null && c.to === line.newNumber)
+    .filter((c) => numberOn(at[c.side], c.side) === c.to)
     .sort((a, b) => a.id.localeCompare(b.id));
 }
 

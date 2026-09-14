@@ -27,7 +27,12 @@ impl Serving {
     }
 
     fn with(extra: &[&str]) -> Self {
-        let repo = mapped();
+        Self::over(mapped(), extra)
+    }
+
+    /// The same, over a review the test built itself — for the ones that need
+    /// something `mapped` does not have, like a file the branch deleted.
+    fn over(repo: Repo, extra: &[&str]) -> Self {
         // No `--port` at all: this is how a reviewer starts one, and it
         // exercises the search. The port comes back off the line the server
         // prints, which is the only account that cannot be stale.
@@ -181,6 +186,26 @@ fn mapped() -> Repo {
         "src/b.rs",
     ]);
     repo.ok(&["skim", "add", "Cargo.lock", "--reason", "regenerated"]);
+    repo
+}
+
+/// A review with an old side worth commenting on: one file the branch deleted
+/// whole, and one it edited in place so the same line number exists on both
+/// sides and means two different things.
+fn with_a_deletion() -> Repo {
+    let repo = Repo::new();
+    repo.write("src/gone.rs", &numbered(6));
+    repo.write("src/keep.rs", &numbered(20));
+    repo.commit("what the branch will take away and change");
+    repo.feature();
+    repo.git(&["rm", "-q", "src/gone.rs"]);
+    repo.write(
+        "src/keep.rs",
+        &numbered(20).replace("line 5\n", "line five\n"),
+    );
+    repo.commit("delete one file and edit another");
+    repo.derive();
+    repo.core_block(&["src/a.rs", "src/gone.rs", "src/keep.rs"]);
     repo
 }
 
@@ -665,6 +690,7 @@ fn a_comment_is_written_to_the_git_dir_as_markdown() {
     assert_eq!(written[0].extension().unwrap(), "md");
     let raw = std::fs::read_to_string(&written[0]).unwrap();
     assert!(raw.contains("path: src/a.rs"), "{raw}");
+    assert!(raw.contains("side: new"), "{raw}");
     assert!(raw.contains("lines: 10-12"), "{raw}");
     assert!(
         !raw.contains("resolved"),
@@ -744,6 +770,104 @@ fn a_comment_file_edited_into_nonsense_is_reported_to_the_page() {
             ".git/farol/feature-x/comments/{}",
             file.file_name().unwrap().to_str().unwrap()
         )
+    );
+}
+
+#[test]
+fn a_comment_on_a_removed_line_survives_the_page_being_reloaded() {
+    // The whole of the old side over the wire: written on a file the branch
+    // deleted, kept with the side it was read on, and read back the way a
+    // reload reads it. Nothing else in the review has a line 2 to confuse it
+    // with, and the file has no new side at all.
+    let s = Serving::over(with_a_deletion(), &["--no-watch"]);
+
+    let (status, body) = s.probe(
+        "POST",
+        "/api/comments",
+        Some(r#"{"path":"src/gone.rs","side":"old","from":2,"to":4,"body":"Where did this go?"}"#),
+    );
+    assert_eq!(status, 200, "{body}");
+
+    let all = s.json("/api/comments")["comments"].clone();
+    assert_eq!(all[0]["path"], "src/gone.rs");
+    assert_eq!(all[0]["side"], "old");
+    assert_eq!(all[0]["from"], 2);
+    assert_eq!(all[0]["to"], 4);
+
+    // And on disk, which is what outlives the server.
+    let dir = s.repo.path().join(".git/farol/feature-x/comments");
+    let file = std::fs::read_dir(&dir)
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap()
+        .path();
+    let raw = std::fs::read_to_string(file).unwrap();
+    assert!(raw.contains("side: old"), "{raw}");
+    assert!(raw.contains("lines: 2-4"), "{raw}");
+}
+
+#[test]
+fn a_file_that_is_gone_has_no_new_side_to_comment_on() {
+    // The other half of the same rule. Its new side reaches nowhere, and a
+    // comment there is one GitHub would refuse after the reviewer wrote it.
+    let s = Serving::over(with_a_deletion(), &["--no-watch"]);
+
+    let (status, _) = s.probe(
+        "POST",
+        "/api/comments",
+        Some(r#"{"path":"src/gone.rs","side":"new","from":2,"to":2,"body":"Why?"}"#),
+    );
+
+    assert_eq!(status, 400);
+}
+
+#[test]
+fn the_same_numbers_on_the_two_sides_are_two_different_comments() {
+    // Line 5 of `src/keep.rs` was rewritten, so it exists on both sides. Read
+    // back by number alone the two questions would be one.
+    let s = Serving::over(with_a_deletion(), &["--no-watch"]);
+    for side in ["old", "new"] {
+        let (status, body) = s.probe(
+            "POST",
+            "/api/comments",
+            Some(&format!(
+                r#"{{"path":"src/keep.rs","side":"{side}","from":5,"to":5,"body":"about the {side} line 5"}}"#
+            )),
+        );
+        assert_eq!(status, 200, "{body}");
+    }
+
+    let all = s.json("/api/comments")["comments"].clone();
+    let all = all.as_array().unwrap();
+    assert_eq!(all.len(), 2);
+    for one in all {
+        assert_eq!(one["from"], 5);
+        assert_eq!(
+            one["body"],
+            format!("about the {} line 5", one["side"].as_str().unwrap()),
+            "each kept the side it was written on"
+        );
+    }
+}
+
+#[test]
+fn a_side_the_review_has_never_heard_of_is_refused() {
+    let s = Serving::new();
+
+    let (status, _) = s.probe(
+        "POST",
+        "/api/comments",
+        Some(r#"{"path":"src/a.rs","side":"sideways","from":10,"to":10,"body":"Why?"}"#),
+    );
+
+    assert!(status >= 400, "{status}");
+    assert_eq!(
+        s.json("/api/comments")["comments"]
+            .as_array()
+            .unwrap()
+            .len(),
+        0
     );
 }
 

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { span } from "./quoted";
+import type { Span } from "../useLineSelection";
 
 /** Where a comment gets written: a plain box under the lines it is about.
  *
@@ -68,7 +69,7 @@ export function Box({ span: lines, onSave, onCancel }: BoxProps) {
 }
 
 type BoxProps = {
-  span: { from: number; to: number };
+  span: Span;
   onSave: (body: string) => Promise<void>;
   onCancel: () => void;
 };

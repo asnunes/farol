@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, type CommentsView } from "@/api";
+import { api, type CommentsView, type Side } from "@/api";
 import { onNudge } from "@/lib/watch";
 import { said } from "@/lib/utils";
 
@@ -51,8 +51,8 @@ export function useComments(onError: (message: string) => void, generation = 0) 
   return {
     comments: found.comments,
     unreadable: found.unreadable,
-    add: (path: string, from: number, to: number, body: string) =>
-      write(api.addComment(path, from, to, body)),
+    add: (path: string, side: Side, from: number, to: number, body: string) =>
+      write(api.addComment(path, side, from, to, body)),
     close: (id: string) => write(api.closeComment(id)),
   };
 }
