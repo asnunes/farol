@@ -110,6 +110,18 @@ impl ReviewMap {
             .filter(move |s| s.block.as_ref() == Some(slug))
     }
 
+    /// Every path one block accounts for, read files and skim alike.
+    ///
+    /// The two lists are separate on the map because they are read differently;
+    /// to anything asking whether the block still holds anything they are one
+    /// list, and joining them at each call site is how the two drift.
+    pub fn paths_in(&self, slug: &Slug) -> impl Iterator<Item = &str> {
+        self.block(slug)
+            .into_iter()
+            .flat_map(|b| b.files.iter().map(|f| f.path.as_str()))
+            .chain(self.skim_for(slug).map(|s| s.path.as_str()))
+    }
+
     /// Skim entries belonging to no block — a lockfile has no story to sit in.
     pub fn loose_skim(&self) -> impl Iterator<Item = &SkimEntry> {
         self.skim().iter().filter(|s| s.block.is_none())

@@ -289,6 +289,18 @@ impl ReviewView {
         let mut placed: Vec<String> = Vec::new();
 
         for block in map.blocks() {
+            // A block whose every file left the comparison is gone from the
+            // screen with them: a band of prose over nothing reads as a bug.
+            //
+            // "Holds something" and "renders something" are different, and the
+            // difference is the whole reason this is not a filter on the list
+            // below. A file read under an earlier block is not rendered again
+            // here, and that block is still worth its band — the story it tells
+            // about the file is the reason the author wrote it twice.
+            if !map.paths_in(&block.slug).any(|path| scope.contains(path)) {
+                continue;
+            }
+
             let mut files = Vec::new();
 
             for bf in &block.files {
@@ -585,16 +597,41 @@ mod tests {
     }
 
     #[test]
-    fn an_empty_comparison_leaves_the_blocks_standing_with_nothing_in_them() {
-        // The map is not rewritten to repair the screen: the prose survives, the
-        // file list does not.
+    fn an_empty_comparison_leaves_nothing_on_the_screen_to_read() {
+        // Every block went with its files: a band of prose over no diff reads
+        // as a bug. The map on disk is untouched — this is the view saying
+        // there is nothing here, not the map being repaired.
         let map = map_of(&[("one", "a.rs"), ("two", "b.rs")]);
 
         let view = built(&map, FakeDiffSource::with_paths(&[]), &Progress::new());
 
-        assert_eq!(view.blocks.len(), 2, "the map's own material is untouched");
-        assert!(view.blocks.iter().all(|b| b.files.is_empty()));
+        assert!(view.blocks.is_empty(), "{:?}", view.blocks);
+        assert!(view.loose_skim.is_empty());
         assert_eq!((view.total_files, view.viewed_files), (0, 0));
+    }
+
+    #[test]
+    fn a_block_whose_file_is_read_under_an_earlier_one_keeps_its_band() {
+        // The dedup below leaves this block rendering no file, and that is not
+        // the same as holding none: the reason the author put the file in two
+        // blocks is the story the second one tells about it. Dropping every
+        // block with an empty file list would take that prose off the screen.
+        let mut map = map_of(&[("first", "shared.rs"), ("second", "shared.rs")]);
+        map.update_file(
+            &slug("second"),
+            "shared.rs",
+            Some("why it matters again".into()),
+        )
+        .unwrap();
+
+        let view = built(
+            &map,
+            FakeDiffSource::with_paths(&["shared.rs"]),
+            &Progress::new(),
+        );
+
+        assert_eq!(view.blocks.len(), 2, "{:?}", view.blocks);
+        assert!(view.blocks[1].files.is_empty());
     }
 
     #[test]

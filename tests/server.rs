@@ -380,14 +380,7 @@ fn a_map_the_comparison_has_outlived_offers_nothing_to_read() {
 
     let review = s.json("/api/review");
     assert_eq!(review["totalFiles"], 0);
-    assert!(
-        review["blocks"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .all(|b| b["files"].as_array().unwrap().is_empty()),
-        "{review}"
-    );
+    assert!(review["blocks"].as_array().unwrap().is_empty(), "{review}");
     assert!(
         review["looseSkim"].as_array().unwrap().is_empty(),
         "{review}"
@@ -395,12 +388,6 @@ fn a_map_the_comparison_has_outlived_offers_nothing_to_read() {
     assert!(
         review["unmapped"].as_array().unwrap().is_empty(),
         "{review}"
-    );
-    assert_eq!(
-        review["blocks"].as_array().unwrap().len(),
-        2,
-        "the blocks and their prose are what the reader paid for; only the \
-         files went out of scope"
     );
 
     // And the file the map still names is refused, which is why it must not be
@@ -424,12 +411,11 @@ fn only_the_files_that_left_the_comparison_go() {
 
     let review = s.json("/api/review");
 
-    assert_eq!(review["blocks"][0]["slug"], "core");
-    assert!(
-        review["blocks"][0]["files"].as_array().unwrap().is_empty(),
-        "src/a.rs is on main now: {review}"
-    );
-    assert_eq!(review["blocks"][1]["files"][0]["path"], "src/b.rs");
+    // `core` held only src/a.rs, which is on main now: the block goes with it
+    // rather than leaving a band of prose over no diff.
+    assert_eq!(review["blocks"].as_array().unwrap().len(), 1, "{review}");
+    assert_eq!(review["blocks"][0]["slug"], "wiring");
+    assert_eq!(review["blocks"][0]["files"][0]["path"], "src/b.rs");
     assert_eq!(review["looseSkim"][0]["path"], "Cargo.lock");
     assert_eq!(review["totalFiles"], 2);
     assert!(
@@ -864,6 +850,8 @@ fn writing_a_map_reaches_the_open_page_without_it_asking() {
         .expect("curl should start");
 
     std::thread::sleep(Duration::from_millis(500));
+    // With a file in it, because a block holding nothing in the comparison is
+    // not rendered and this test is about the nudge, not about that rule.
     s.repo.ok(&[
         "block",
         "add",
@@ -872,6 +860,7 @@ fn writing_a_map_reaches_the_open_page_without_it_asking() {
         "Later",
         "--context",
         "written while reading",
+        "src/a.rs",
     ]);
 
     let out = watching.wait_with_output().expect("curl should finish");
