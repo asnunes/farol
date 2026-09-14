@@ -4,6 +4,8 @@
 //! these are the things *this* layer decides, and the shared type should not
 //! have to know what a line range or a pull request is.
 
+use crate::diff::domain::Side;
+
 #[derive(Debug, thiserror::Error)]
 pub enum CommentError {
     #[error("a comment with no text says nothing")]
@@ -13,9 +15,16 @@ pub enum CommentError {
     Unknown { id: String },
 
     #[error(
-        "lines {from}-{to} of '{path}' are not in the diff\nA review comment can only sit where the diff reaches, so GitHub would refuse it."
+        "lines {from}-{to} on the {side} side of '{path}' are not in the diff\nA review comment can only sit where the diff reaches, so GitHub would refuse it."
     )]
-    OutsideDiff { path: String, from: u32, to: u32 },
+    OutsideDiff {
+        path: String,
+        /// Named, because the same numbers are in the diff on one side and not
+        /// on the other, and without it the refusal reads as simply wrong.
+        side: Side,
+        from: u32,
+        to: u32,
+    },
 
     // ---- publishing ------------------------------------------------------
     #[error(
@@ -112,6 +121,7 @@ mod tests {
     fn a_comment_off_the_diff_says_why_github_would_refuse_it() {
         let e = CommentError::OutsideDiff {
             path: "src/a.rs".into(),
+            side: Side::Old,
             from: 82,
             to: 116,
         };
@@ -120,6 +130,10 @@ mod tests {
         assert!(msg.contains("82-116"), "{msg}");
         assert!(msg.contains("src/a.rs"), "{msg}");
         assert!(msg.contains("where the diff reaches"), "{msg}");
+        // Which side, because those very numbers may well be in the diff on
+        // the other one — and then a refusal that did not say would read as
+        // farol being wrong.
+        assert!(msg.contains("old side"), "{msg}");
     }
 
     #[test]

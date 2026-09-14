@@ -34,6 +34,52 @@ pub struct FileChange {
     pub content_hash: String,
 }
 
+/// Which side of the diff a line number is counted on.
+///
+/// Both sides number from one, so the same number names two different lines:
+/// line 12 of the file as it was, and line 12 of the file as it now reads.
+/// Anything anchored to a line has to carry the side with it, or half the time
+/// it lands on the line the reader was not looking at.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Side {
+    /// The file as it was — the removals, and the left column of a split diff.
+    Old,
+    /// The file as it now reads. The default everywhere, because it is what a
+    /// review is mostly about and what farol could anchor to before it could
+    /// anchor to anything else.
+    #[default]
+    New,
+}
+
+impl Side {
+    /// The word farol writes down and the word a reader types, which are the
+    /// same word on purpose.
+    pub fn label(self) -> &'static str {
+        match self {
+            Side::Old => "old",
+            Side::New => "new",
+        }
+    }
+
+    /// Read it back. `None` rather than a default for anything else: a side
+    /// nobody recognises is not a side to guess at, and every caller has
+    /// somewhere better to put the refusal than on a line of code.
+    pub fn parse(raw: &str) -> Option<Self> {
+        match raw {
+            "old" => Some(Side::Old),
+            "new" => Some(Side::New),
+            _ => None,
+        }
+    }
+}
+
+impl std::fmt::Display for Side {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.label())
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum LineKind {
@@ -67,13 +113,19 @@ impl Hunk {
         self.new_lines as i64 - self.old_lines as i64
     }
 
-    /// Whether this hunk shows the given line of the file as it now reads.
+    /// Whether this hunk shows the given line, counted on the given side.
     ///
     /// Context counts. A hunk prints the lines around what changed, and those
     /// are as much a part of the diff as the changed ones — they are exactly
-    /// where a reader asks why the change was needed.
-    pub fn shows(&self, line: u32) -> bool {
-        line >= self.new_start && line < self.new_start + self.new_lines
+    /// where a reader asks why the change was needed. Context sits on both
+    /// sides, under a different number on each, which is the whole reason the
+    /// side has to be asked for rather than assumed.
+    pub fn shows(&self, side: Side, line: u32) -> bool {
+        let (start, lines) = match side {
+            Side::Old => (self.old_start, self.old_lines),
+            Side::New => (self.new_start, self.new_lines),
+        };
+        line >= start && line < start + lines
     }
 }
 
@@ -108,8 +160,12 @@ impl FileDiff {
     ///
     /// The whole span, not just its ends: a range that starts in one hunk and
     /// finishes in the next spans a gap the diff never printed.
-    pub fn shows(&self, from: u32, to: u32) -> bool {
-        (from..=to).all(|line| self.hunks.iter().any(|hunk| hunk.shows(line)))
+    ///
+    /// Asked of one side at a time. A span that began on the old side and ended
+    /// on the new one is not a span at all — it is two, and nothing here would
+    /// know which lines the reviewer meant.
+    pub fn shows(&self, side: Side, from: u32, to: u32) -> bool {
+        (from..=to).all(|line| self.hunks.iter().any(|hunk| hunk.shows(side, line)))
     }
 }
 
@@ -210,7 +266,7 @@ mod tests {
 
     #[test]
     fn a_span_inside_one_hunk_is_shown() {
-        assert!(two_hunks().shows(11, 13));
+        assert!(two_hunks().shows(Side::New, 11, 13));
     }
 
     #[test]
@@ -218,23 +274,26 @@ mod tests {
         // Off by one here is the difference between a comment landing and being
         // refused by GitHub after the reviewer already wrote it.
         let diff = two_hunks();
-        assert!(diff.shows(10, 10), "the first line the hunk prints");
-        assert!(diff.shows(14, 14), "the last one");
-        assert!(!diff.shows(9, 9), "one above");
-        assert!(!diff.shows(15, 15), "one below");
+        assert!(
+            diff.shows(Side::New, 10, 10),
+            "the first line the hunk prints"
+        );
+        assert!(diff.shows(Side::New, 14, 14), "the last one");
+        assert!(!diff.shows(Side::New, 9, 9), "one above");
+        assert!(!diff.shows(Side::New, 15, 15), "one below");
     }
 
     #[test]
     fn a_line_between_two_hunks_is_not_shown() {
         // The diff jumps from 14 to 40. Nothing printed line 27.
-        assert!(!two_hunks().shows(27, 27));
+        assert!(!two_hunks().shows(Side::New, 27, 27));
     }
 
     #[test]
     fn a_span_that_reaches_across_the_gap_is_not_shown() {
         // Both ends are in the diff and the middle is not, so a comment on it
         // would cover code the reader never saw.
-        assert!(!two_hunks().shows(14, 40));
+        assert!(!two_hunks().shows(Side::New, 14, 40));
     }
 
     #[test]
@@ -243,7 +302,78 @@ mod tests {
         diff.hunks.clear();
         diff.binary = true;
 
-        assert!(!diff.shows(1, 1));
+        assert!(!diff.shows(Side::New, 1, 1));
+    }
+
+    /// A file the change deleted whole: ten lines on the old side and nothing
+    /// at all on the new one.
+    fn deleted() -> FileDiff {
+        FileDiff {
+            path: "gone.rs".into(),
+            old_path: None,
+            status: FileStatus::Deleted,
+            line_count: 0,
+            hunks: vec![Hunk {
+                old_start: 1,
+                old_lines: 10,
+                new_start: 0,
+                new_lines: 0,
+                lines: vec![],
+            }],
+            binary: false,
+            additions: 0,
+            deletions: 10,
+            new_content_hash: String::new(),
+        }
+    }
+
+    #[test]
+    fn the_old_side_is_counted_on_the_old_numbers() {
+        // The fixture happens to number both sides alike, so this is really
+        // about the hunk being asked the question at all: the old span of the
+        // second hunk is 40 to 42, and 43 is past it.
+        let diff = two_hunks();
+
+        assert!(diff.shows(Side::Old, 40, 42));
+        assert!(!diff.shows(Side::Old, 43, 43));
+    }
+
+    #[test]
+    fn a_file_that_was_deleted_whole_is_all_old_side_and_no_new_one() {
+        // The only side there is. Refusing a comment here would leave the one
+        // kind of change nobody can ask a question about.
+        let diff = deleted();
+
+        assert!(diff.shows(Side::Old, 1, 10));
+        assert!(!diff.shows(Side::Old, 11, 11));
+        assert!(!diff.shows(Side::New, 1, 1), "there is no new side left");
+    }
+
+    #[test]
+    fn a_pure_insertion_shows_nothing_on_the_old_side() {
+        // `old_lines` is zero: the hunk replaced no line, so no old line of the
+        // file is inside it.
+        let mut diff = two_hunks();
+        diff.hunks = vec![Hunk {
+            old_start: 10,
+            old_lines: 0,
+            new_start: 11,
+            new_lines: 3,
+            lines: vec![],
+        }];
+
+        assert!(diff.shows(Side::New, 11, 13));
+        assert!(!diff.shows(Side::Old, 10, 10));
+    }
+
+    #[test]
+    fn a_side_is_read_back_as_the_word_it_was_written_with() {
+        assert_eq!(Side::parse("old"), Some(Side::Old));
+        assert_eq!(Side::parse("new"), Some(Side::New));
+        // Not guessed at. A side nobody recognises is how a comment lands on
+        // the column the reviewer was not reading.
+        assert_eq!(Side::parse("LEFT"), None);
+        assert_eq!(Side::Old.label(), "old");
     }
 
     use super::*;

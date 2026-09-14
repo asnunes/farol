@@ -399,8 +399,13 @@ fn event(review: &Review) -> &'static str {
     }
 }
 
-/// One comment, anchored. `side: RIGHT` is the file as it now reads, which is
-/// the only side farol lets anyone comment on.
+/// One comment, anchored. The side is sent with every one of them: `line` is
+/// read against it, so the same number means a different line depending on what
+/// this says, and GitHub's default is not something to lean on.
+///
+/// `RIGHT` is the file as it now reads — additions and the lines around them;
+/// `LEFT` is what the change removed. farol's own word for the two is `new` and
+/// `old`, and this is the one place the host's word is spoken.
 #[derive(Serialize)]
 struct AtLines<'a> {
     path: &'a str,
@@ -418,14 +423,27 @@ struct AtLines<'a> {
 impl<'a> From<&'a crate::comments::domain::Comment> for AtLines<'a> {
     fn from(comment: &'a crate::comments::domain::Comment) -> Self {
         let spans = comment.from != comment.to;
+        // Both ends on the one side. A span that crossed from the old side to
+        // the new is not something farol writes, so it is not something this
+        // has to spell.
+        let side = sided(comment.side);
         Self {
             path: &comment.path,
             body: &comment.body,
             line: comment.to,
-            side: "RIGHT",
+            side,
             start_line: spans.then_some(comment.from),
-            start_side: spans.then_some("RIGHT"),
+            start_side: spans.then_some(side),
         }
+    }
+}
+
+/// farol's side in GitHub's vocabulary.
+fn sided(side: crate::diff::domain::Side) -> &'static str {
+    use crate::diff::domain::Side;
+    match side {
+        Side::Old => "LEFT",
+        Side::New => "RIGHT",
     }
 }
 
@@ -448,6 +466,7 @@ mod tests {
         Comment {
             id: "1".into(),
             path: "src/a.rs".into(),
+            side: crate::diff::domain::Side::New,
             from,
             to,
             body: "Why this order?".into(),
@@ -472,7 +491,32 @@ mod tests {
 
         let one = &body["comments"][1];
         assert_eq!(one["line"], 9);
+        assert_eq!(one["side"], "RIGHT");
         assert!(one.get("start_line").is_none(), "{one}");
+        assert!(one.get("start_side").is_none(), "{one}");
+    }
+
+    #[test]
+    fn a_comment_on_the_old_side_goes_out_as_left_at_both_ends() {
+        // The numbers are read against the side, so a span sent without
+        // `start_side` would have its first line taken on the right and land
+        // somewhere nobody wrote about.
+        let old = |from, to| Comment {
+            side: crate::diff::domain::Side::Old,
+            ..comment(from, to)
+        };
+        let body =
+            serde_json::to_value(Drafted::from(&review(vec![old(82, 116), old(9, 9)]))).unwrap();
+
+        let span = &body["comments"][0];
+        assert_eq!(span["side"], "LEFT");
+        assert_eq!(span["start_side"], "LEFT");
+        assert_eq!(span["start_line"], 82);
+        assert_eq!(span["line"], 116);
+
+        let one = &body["comments"][1];
+        assert_eq!(one["side"], "LEFT");
+        assert_eq!(one["line"], 9);
         assert!(one.get("start_side").is_none(), "{one}");
     }
 

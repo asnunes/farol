@@ -1,4 +1,4 @@
-import type { CommentView } from "@/api";
+import type { CommentView, Side } from "@/api";
 
 /** Where it was and what it said, in one paste — enough to be answered
  * somewhere the file is not open.
@@ -11,7 +11,13 @@ export function quoted(comment: CommentView): string {
 }
 
 /** How a span of lines is written down, in the one place both the label on
- * screen and the clipboard read it from. */
-export function span(comment: { from: number; to: number }, dash = "-"): string {
-  return comment.from === comment.to ? `${comment.from}` : `${comment.from}${dash}${comment.to}`;
+ * screen and the clipboard read it from.
+ *
+ * The side is written only when it is the old one: both sides number from one,
+ * so the numbers alone would name two places, and the unmarked form has to keep
+ * meaning what it has always meant — the file as it now reads. */
+export function span(comment: { side: Side; from: number; to: number }, dash = "-"): string {
+  const lines =
+    comment.from === comment.to ? `${comment.from}` : `${comment.from}${dash}${comment.to}`;
+  return comment.side === "old" ? `${lines} (old)` : lines;
 }

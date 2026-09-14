@@ -41,12 +41,26 @@ changed files are assigned and pending note decisions are resolved.
 
 Drag down line numbers or click `+` to comment. Expanded context between hunks
 is readable but does not accept comments: GitHub comments must land inside the
-diff. Comments can also be managed through the CLI:
+diff.
+
+Both sides of the diff take comments. The numbers on the left are the code the
+change removed, which is the only side a file deleted whole still has; the
+numbers on the right are the file as it now reads. In split view the column you
+drag decides the side; in unified view a removed line is counted on the old
+numbering and everything else on the new one. A span stays on one side — a drag
+that reaches the other column stops where its own side stops. The side travels
+with the comment and is published as `LEFT` or `RIGHT`.
+
+Comments can also be managed through the CLI:
 
 ```bash
 farol comment list
 farol comment add src/retry.rs 82-116 --text "Why is this ordering deliberate?"
+farol comment add src/gone.rs 2-4 --side old --text "Where did this go?"
 ```
+
+`--side` is `new` by default, which is the file as it now reads. Ranges on the
+old side are the line numbers of the file before the change.
 
 `farol comment close ID` removes a comment once it is answered. In the browser,
 closing asks for confirmation because local comments are not recoverable from Git.

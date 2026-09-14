@@ -4,6 +4,7 @@ mod publishing;
 pub use error::*;
 pub use publishing::*;
 
+use crate::diff::domain::Side;
 use crate::error::Result;
 
 /// Something the reviewer wrote about a span of lines.
@@ -15,6 +16,13 @@ use crate::error::Result;
 pub struct Comment {
     pub id: String,
     pub path: String,
+    /// Which side of the diff `from` and `to` are counted on.
+    ///
+    /// Not a detail of how it is displayed: the same pair of numbers names one
+    /// passage on the old side and a different one on the new, and the host is
+    /// told the side along with the numbers. A comment without it is a comment
+    /// that could land on either.
+    pub side: Side,
     pub from: u32,
     pub to: u32,
     /// Markdown, kept as written.
@@ -35,10 +43,19 @@ impl Comment {
     }
 
     /// Where it sits, the way a person would type it to go there.
+    ///
+    /// The side is written only when it is the old one. Both sides number from
+    /// one, so `src/a.rs:12` alone would be two different places — and the
+    /// unmarked form has to keep meaning what it has always meant, which is the
+    /// file as it now reads.
     pub fn at(&self) -> String {
-        match self.from == self.to {
-            true => format!("{}:{}", self.path, self.from),
-            false => format!("{}:{}-{}", self.path, self.from, self.to),
+        let lines = match self.from == self.to {
+            true => format!("{}", self.from),
+            false => format!("{}-{}", self.from, self.to),
+        };
+        match self.side {
+            Side::New => format!("{}:{lines}", self.path),
+            Side::Old => format!("{}:{lines} (old)", self.path),
         }
     }
 }
@@ -94,6 +111,12 @@ pub enum Unread {
     NoPath,
     /// Nothing saying which lines, or something that is not a range.
     NoLines,
+    /// A side that is neither `old` nor `new`. A missing one is not this: it
+    /// means the new side, which is all farol could write for a long time.
+    /// Something else written there is a guess nobody should make, because
+    /// guessing wrong puts the comment on the column the reviewer was not
+    /// reading.
+    BadSide,
 }
 
 #[cfg(test)]
@@ -104,6 +127,7 @@ mod tests {
         Comment {
             id: "1".into(),
             path: "src/a.rs".into(),
+            side: Side::New,
             from,
             to,
             body: "  Why this order?  ".into(),
@@ -123,5 +147,26 @@ mod tests {
     #[test]
     fn a_comment_on_one_line_says_one_line() {
         assert_eq!(comment(82, 82).quoted(), "src/a.rs:82\n\nWhy this order?");
+    }
+
+    #[test]
+    fn one_on_the_old_side_says_so_where_the_numbers_are() {
+        // Line 82 exists on both sides of the same file. Pasted somewhere the
+        // diff is not open, the numbers alone would send the reader to the
+        // wrong one.
+        let removed = Comment {
+            side: Side::Old,
+            ..comment(82, 116)
+        };
+
+        assert_eq!(removed.at(), "src/a.rs:82-116 (old)");
+        assert_eq!(
+            Comment {
+                side: Side::Old,
+                ..comment(9, 9)
+            }
+            .at(),
+            "src/a.rs:9 (old)"
+        );
     }
 }

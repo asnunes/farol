@@ -1,10 +1,9 @@
 import { Box } from "./Box";
 import { Comment } from "./Comment";
-import { commentsAt } from "../line";
-import type { Commentary } from "../line";
-import type { DiffLine } from "@/api";
+import { commentsAt, numberOn } from "../line";
+import type { Anchor, Commentary } from "../line";
 
-/** Everything hanging off one line: what has already been asked there, and the
+/** Everything hanging off one row: what has already been asked there, and the
  * box if the reader is asking now.
  *
  * Not a thread — there are no replies to hang in one. A comment is a body and
@@ -13,15 +12,18 @@ import type { DiffLine } from "@/api";
  * the empty box belongs in it too.
  *
  * Both layouts show the same thing under the same line, so both draw it from
- * here rather than each assembling it from the parts. */
-export function AtLine({ line, commentary }: AtLineProps) {
+ * here rather than each assembling it from the parts. What differs is only what
+ * they hand in: split view gives the row's two columns, unified gives the one
+ * line standing for both sides. */
+export function AtLine({ at, commentary }: AtLineProps) {
   const { path, comments, actions, select } = commentary;
-  const here = commentsAt(comments, line);
+  const here = commentsAt(comments, at);
 
   // The box sits where the finished comment will: under the last line of the
-  // span, which is where the reader stopped reading to write it.
+  // span, on the side it was dragged on, which is where the reader stopped
+  // reading to write it.
   const span = select.composing;
-  const writing = span !== null && line.newNumber !== null && span.to === line.newNumber;
+  const writing = span !== null && numberOn(at[span.side], span.side) === span.to;
 
   if (here.length === 0 && !writing) return null;
 
@@ -34,7 +36,7 @@ export function AtLine({ line, commentary }: AtLineProps) {
         <Box
           span={span}
           onSave={async (body) => {
-            await actions.add(path, span.from, span.to, body);
+            await actions.add(path, span.side, span.from, span.to, body);
             select.close();
           }}
           onCancel={select.close}
@@ -44,4 +46,4 @@ export function AtLine({ line, commentary }: AtLineProps) {
   );
 }
 
-type AtLineProps = { line: DiffLine; commentary: Commentary };
+type AtLineProps = { at: Anchor; commentary: Commentary };

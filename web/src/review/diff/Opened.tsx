@@ -14,8 +14,8 @@ import type { DiffLine, FileView } from "@/api";
  * They take no comment. GitHub's rule is that a review comment sits on a line
  * the diff reaches, and farol refuses one at writing time rather than letting
  * the host refuse it at sending time — so the gutter here is a number and
- * nothing else, the same as a removed line's. Passing no commentary is what
- * says so: the gutter draws no `+` and starts no drag without one.
+ * nothing else. Passing no commentary is what says so: the gutter draws no `+`
+ * and starts no drag without one.
  *
  * The session's line notes do show. A note can be pinned anywhere in the file,
  * and one pinned outside the diff has been written and invisible until now. */
@@ -36,18 +36,18 @@ export function Opened({ range, file, tokenize, view, shift }: OpenedProps) {
       <div key={line.newNumber}>
         {view === "split" ? (
           <div className={cn("row split-row bg-surface", marked)}>
-            <LineNumber number={line.oldNumber} on={null} />
+            <LineNumber line={line} side="old" />
             <div className="code break-words whitespace-pre-wrap">
               <Code tokens={coloured?.[i]} plain={content} />
             </div>
-            <LineNumber number={line.newNumber} on={null} />
+            <LineNumber line={line} side="new" />
             <div className="code break-words whitespace-pre-wrap">
               <Code tokens={coloured?.[i]} plain={content} />
             </div>
           </div>
         ) : (
           <div className={cn("row diff-row bg-surface", marked)}>
-            <LineNumber number={line.newNumber} on={null} />
+            <LineNumber line={line} side="new" />
             <div className="code break-words whitespace-pre-wrap">
               {"  "}
               <Code tokens={coloured?.[i]} plain={content} />

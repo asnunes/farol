@@ -21,6 +21,7 @@ use tokio::sync::broadcast;
 use super::{AppState, SessionConfig, assets, view};
 use crate::cmd::ServerUseCases;
 use crate::comments::domain::Verdict;
+use crate::diff::domain::Side;
 use crate::error::Error;
 
 /// The whole HTTP surface. Everything it serves arrives injected, so the routes
@@ -162,6 +163,10 @@ async fn comments(Extension(cases): Extension<ServerUseCases>) -> impl IntoRespo
 #[derive(Deserialize)]
 struct NewComment {
     path: String,
+    /// Which side the numbers are counted on. Absent is the new side, which is
+    /// what every comment written before there was a choice was about.
+    #[serde(default)]
+    side: Side,
     from: u32,
     to: u32,
     body: String,
@@ -173,7 +178,7 @@ async fn write_comment(
 ) -> impl IntoResponse {
     match cases
         .comments
-        .add(&body.path, body.from, body.to, &body.body)
+        .add(&body.path, body.side, body.from, body.to, &body.body)
     {
         Ok(comment) => Json(view::CommentView::of(&comment)).into_response(),
         Err(e) => fail(e),

@@ -6,10 +6,10 @@ import { LineNumber } from "./LineNumber";
 import { AtLine } from "./comment/AtLine";
 import { commentedBy, marker, notedBy, notesAt } from "./line";
 import { splitRows } from "./split";
-import type { Commentary } from "./line";
+import type { Anchor, Commentary } from "./line";
 import type { Range } from "./intraline";
 import type { Token } from "@/highlight/tokens";
-import type { FileView, Hunk } from "@/api";
+import type { FileView, Hunk, Side as DiffSide } from "@/api";
 
 /** The old side and the new one, facing each other. */
 export function SplitLines({ hunk, file, coloured, marks, commentary }: SplitLinesProps) {
@@ -21,17 +21,31 @@ export function SplitLines({ hunk, file, coloured, marks, commentary }: SplitLin
     const anchor = row.right ?? row.left;
     const line = anchor === null ? null : hunk.lines[anchor];
 
+    // A comment belongs to the column it was written in, so each side of the
+    // row is offered as itself rather than one standing in for the other.
+    const at: Anchor = {
+      old: row.left === null ? null : hunk.lines[row.left],
+      new: row.right === null ? null : hunk.lines[row.right],
+    };
+
     return (
       <div key={i}>
         <div
           className={cn(
             "row split-row",
             line && notedBy(file, line) && "noted",
-            line && commentedBy(commentary.comments, line) && "commented",
-            line && commentary.select.covers(line.newNumber ?? -1) && "picking bg-comment-dim",
+            commentedBy(commentary.comments, at) && "commented",
+            commentary.select.covers(at) && "picking bg-comment-dim",
           )}
         >
-          <Side index={row.left} hunk={hunk} coloured={coloured} marks={marks} side="old" />
+          <Side
+            index={row.left}
+            hunk={hunk}
+            coloured={coloured}
+            marks={marks}
+            side="old"
+            commentary={commentary}
+          />
           <Side
             index={row.right}
             hunk={hunk}
@@ -42,12 +56,8 @@ export function SplitLines({ hunk, file, coloured, marks, commentary }: SplitLin
           />
         </div>
 
-        {line && (
-          <>
-            <LineNotes notes={notesAt(file, line)} file={file} />
-            <AtLine line={line} commentary={commentary} />
-          </>
-        )}
+        {line && <LineNotes notes={notesAt(file, line)} file={file} />}
+        <AtLine at={at} commentary={commentary} />
       </div>
     );
   });
@@ -57,9 +67,9 @@ export function SplitLines({ hunk, file, coloured, marks, commentary }: SplitLin
  * side has a line and this one does not.
  *
  * The two cells are separate grid children so the columns line up across every
- * row of the hunk, however the lines wrap. Only the new side takes a comment:
- * a comment is about the code as it now reads, and the left column is the code
- * that is gone. */
+ * row of the hunk, however the lines wrap. Both sides take a comment, each on
+ * its own numbering: the left column is the code that is going, which is as
+ * much a part of the change as what replaced it. */
 function Side({ index, hunk, coloured, marks, side, commentary }: SideProps) {
   if (index === null) {
     return (
@@ -80,12 +90,7 @@ function Side({ index, hunk, coloured, marks, side, commentary }: SideProps) {
 
   return (
     <>
-      <LineNumber
-        number={side === "old" ? line.oldNumber : line.newNumber}
-        on={side === "new" ? line.newNumber : null}
-        tint={tint}
-        commentary={commentary}
-      />
+      <LineNumber line={line} side={side} tint={tint} commentary={commentary} />
       <div className={cn("code break-words whitespace-pre-wrap", tint)}>
         {marker(line)} <Code tokens={coloured?.[index]} plain={line.content} marks={marks[index]} />
       </div>
@@ -106,6 +111,6 @@ type SideProps = {
   hunk: Hunk;
   coloured: Token[][] | null;
   marks: (Range[] | undefined)[];
-  side: "old" | "new";
-  commentary?: Commentary;
+  side: DiffSide;
+  commentary: Commentary;
 };

@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use crate::comments::domain::{Comment, CommentError, CommentStore, Found};
 use crate::diff::application::FileDiffs;
+use crate::diff::domain::Side;
 use crate::error::Result;
 use crate::map::application::GetScope;
 use crate::map::domain::LineRange;
@@ -43,16 +44,27 @@ impl Comments {
     /// can only sit on a line the diff reaches. Refusing at writing time costs
     /// the reviewer one attempt; letting it through costs them the comment,
     /// discovered at the moment they meant to send the review.
-    pub fn add(&self, path: &str, from: u32, to: u32, body: &str) -> Result<Comment> {
+    ///
+    /// The span is counted on the side it was written on, and the two are
+    /// checked differently. The length of the file only bounds the new side —
+    /// it is the length of the file as it now reads, and the old side is a file
+    /// that no longer exists at that length, or at all. What bounds the old
+    /// side is the diff itself, which never prints a line the pre-image did not
+    /// have.
+    pub fn add(&self, path: &str, side: Side, from: u32, to: u32, body: &str) -> Result<Comment> {
         if body.trim().is_empty() {
             return Err(CommentError::Empty.into());
         }
 
         let path = self.scope.path(path)?;
-        LineRange::new(from, to)?.require_within(&path)?;
-        if !self.diffs.of(path.as_str())?.shows(from, to) {
+        let range = LineRange::new(from, to)?;
+        if side == Side::New {
+            range.require_within(&path)?;
+        }
+        if !self.diffs.of(path.as_str())?.shows(side, from, to) {
             return Err(CommentError::OutsideDiff {
                 path: path.as_str().to_string(),
+                side,
                 from,
                 to,
             }
@@ -62,6 +74,7 @@ impl Comments {
         let comment = Comment {
             id: fresh_id(),
             path: path.as_str().to_string(),
+            side,
             from,
             to,
             body: body.trim().to_string(),
@@ -153,7 +166,7 @@ mod tests {
     fn a_comment_is_written_and_read_back() {
         let (_dir, comments) = comments();
         comments
-            .add("src/a.rs", 82, 116, "Why this order?")
+            .add("src/a.rs", Side::New, 82, 116, "Why this order?")
             .unwrap();
 
         let all = comments.all().unwrap().comments;
@@ -165,7 +178,7 @@ mod tests {
     fn an_empty_comment_is_refused() {
         let (_dir, comments) = comments();
 
-        assert!(comments.add("src/a.rs", 1, 1, "   \n ").is_err());
+        assert!(comments.add("src/a.rs", Side::New, 1, 1, "   \n ").is_err());
         assert!(comments.all().unwrap().comments.is_empty());
     }
 
@@ -175,7 +188,9 @@ mod tests {
         // able to leave a note on a file the reviewer is not looking at.
         let (_dir, comments) = comments();
 
-        let err = comments.add("elsewhere.rs", 1, 1, "Why?").unwrap_err();
+        let err = comments
+            .add("elsewhere.rs", Side::New, 1, 1, "Why?")
+            .unwrap_err();
 
         assert!(err.to_string().contains("elsewhere.rs"), "{err}");
         assert!(comments.all().unwrap().comments.is_empty());
@@ -186,7 +201,9 @@ mod tests {
         // It would render nowhere: there is no line to hang it under.
         let (_dir, comments) = comments();
 
-        let err = comments.add("src/a.rs", 300, 320, "Why?").unwrap_err();
+        let err = comments
+            .add("src/a.rs", Side::New, 300, 320, "Why?")
+            .unwrap_err();
 
         assert!(err.to_string().contains("200"), "{err}");
         assert!(comments.all().unwrap().comments.is_empty());
@@ -199,7 +216,9 @@ mod tests {
         // publishing it costs the comment.
         let (_dir, comments) = comments_showing(vec![hunk(10, 5), hunk(40, 3)]);
 
-        let err = comments.add("src/a.rs", 30, 30, "Why?").unwrap_err();
+        let err = comments
+            .add("src/a.rs", Side::New, 30, 30, "Why?")
+            .unwrap_err();
 
         let msg = err.to_string();
         assert!(msg.contains("30-30"), "{msg}");
@@ -213,9 +232,96 @@ mod tests {
         // a check on the ends alone would wave through.
         let (_dir, comments) = comments_showing(vec![hunk(10, 5), hunk(40, 3)]);
 
-        assert!(comments.add("src/a.rs", 12, 41, "Why?").is_err());
+        assert!(comments.add("src/a.rs", Side::New, 12, 41, "Why?").is_err());
         // And the span that stays inside one hunk goes in.
-        assert!(comments.add("src/a.rs", 12, 14, "Why?").is_ok());
+        assert!(comments.add("src/a.rs", Side::New, 12, 14, "Why?").is_ok());
+    }
+
+    #[test]
+    fn a_comment_on_the_old_side_is_written_against_the_old_numbers() {
+        // The diff prints old lines 40 to 42 and new lines 60 to 62. Asked on
+        // the old side, 40 is in the diff and 60 is not — and the other way
+        // round on the new one. Nothing here may quietly read one as the other.
+        let (_dir, comments) = over(a_file().showing(
+            "src/a.rs",
+            vec![Hunk {
+                old_start: 40,
+                old_lines: 3,
+                new_start: 60,
+                new_lines: 3,
+                lines: vec![],
+            }],
+        ));
+
+        assert!(
+            comments
+                .add("src/a.rs", Side::Old, 40, 42, "Why drop this?")
+                .is_ok()
+        );
+        assert!(comments.add("src/a.rs", Side::Old, 60, 60, "Why?").is_err());
+        assert!(comments.add("src/a.rs", Side::New, 60, 62, "Why?").is_ok());
+        assert!(comments.add("src/a.rs", Side::New, 40, 40, "Why?").is_err());
+
+        let all = comments.all().unwrap().comments;
+        assert_eq!(all.len(), 2);
+        assert_eq!(all[0].side, Side::Old);
+        assert_eq!(all[1].side, Side::New);
+    }
+
+    #[test]
+    fn a_file_that_was_deleted_whole_can_still_be_asked_about() {
+        // Nothing is left on the new side, so the length of the file is zero
+        // and a check against it would refuse every line there is. The diff is
+        // what says where the old side reaches.
+        let (_dir, comments) = over(
+            FakeDiffSource::with_paths(&["gone.rs"])
+                .with_line_count("gone.rs", 0)
+                .showing(
+                    "gone.rs",
+                    vec![Hunk {
+                        old_start: 1,
+                        old_lines: 10,
+                        new_start: 0,
+                        new_lines: 0,
+                        lines: vec![],
+                    }],
+                ),
+        );
+
+        assert!(
+            comments
+                .add("gone.rs", Side::Old, 3, 7, "Where did this go?")
+                .is_ok()
+        );
+        assert!(
+            comments.add("gone.rs", Side::Old, 3, 11, "Why?").is_err(),
+            "past the end of what the diff printed"
+        );
+        assert!(
+            comments.add("gone.rs", Side::New, 1, 1, "Why?").is_err(),
+            "there is no new side to ask about"
+        );
+    }
+
+    #[test]
+    fn the_two_sides_keep_their_own_comments_at_the_same_numbers() {
+        // The case the numbers alone cannot survive: one question about line 12
+        // as it was and another about line 12 as it now reads.
+        let (_dir, comments) = comments();
+        comments
+            .add("src/a.rs", Side::Old, 12, 12, "Why was this here?")
+            .unwrap();
+        comments
+            .add("src/a.rs", Side::New, 12, 12, "Why is this here?")
+            .unwrap();
+
+        let all = comments.all().unwrap().comments;
+        assert_eq!(all.len(), 2);
+        assert_eq!(
+            (all[0].side, all[1].side),
+            (Side::Old, Side::New),
+            "each kept the side it was written on"
+        );
     }
 
     #[test]
@@ -223,7 +329,7 @@ mod tests {
         // Closing is answering, and an answered question is not a thing the
         // review keeps: the list is what is still waiting.
         let (_dir, comments) = comments();
-        let one = comments.add("src/a.rs", 1, 1, "Why?").unwrap();
+        let one = comments.add("src/a.rs", Side::New, 1, 1, "Why?").unwrap();
 
         comments.close(&one.id).unwrap();
 
@@ -244,8 +350,8 @@ mod tests {
         // They are written to travel: the reviewer's come back to the author
         // and the two sets are read side by side.
         let (_dir, comments) = comments();
-        comments.add("src/a.rs", 1, 1, "one").unwrap();
-        comments.add("src/a.rs", 2, 2, "two").unwrap();
+        comments.add("src/a.rs", Side::New, 1, 1, "one").unwrap();
+        comments.add("src/a.rs", Side::New, 2, 2, "two").unwrap();
 
         let all = comments.all().unwrap().comments;
         assert_ne!(all[0].id, all[1].id);

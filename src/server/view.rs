@@ -9,7 +9,7 @@ use serde::Serialize;
 
 use crate::comments::domain::{Comment, Found, Readiness};
 use crate::comments::presentation::says;
-use crate::diff::domain::{FileChange, FileDiff, Hunk, Line, LineKind};
+use crate::diff::domain::{FileChange, FileDiff, Hunk, Line, LineKind, Side};
 use crate::map::application::ReviewSnapshot;
 use crate::map::domain::ReviewMap;
 use crate::progress::domain::Progress;
@@ -176,6 +176,10 @@ pub struct ReviewView {
 pub struct CommentView {
     pub id: String,
     pub path: String,
+    /// Which side of the diff `from` and `to` are counted on. The screen draws
+    /// the comment in the column it was written in, and the two columns number
+    /// separately.
+    pub side: Side,
     pub from: u32,
     pub to: u32,
     pub body: String,
@@ -411,6 +415,7 @@ impl CommentView {
         Self {
             id: comment.id.clone(),
             path: comment.path.clone(),
+            side: comment.side,
             from: comment.from,
             to: comment.to,
             body: comment.body.clone(),

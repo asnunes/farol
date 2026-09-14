@@ -12,11 +12,10 @@ impl Display for CommentList<'_> {
         }
 
         for comment in &self.0.comments {
-            let lines = match comment.from == comment.to {
-                true => format!("{}", comment.from),
-                false => format!("{}-{}", comment.from, comment.to),
-            };
-            writeln!(f, "{}  {}:{}", comment.id, comment.path, lines)?;
+            // `at` and not the three fields laid out again: it is the one place
+            // that knows a span on the old side has to say so, and a second
+            // spelling here would be the one that forgets.
+            writeln!(f, "{}  {}", comment.id, comment.at())?;
             for line in comment.body.lines() {
                 writeln!(f, "    {line}")?;
             }
@@ -63,6 +62,7 @@ pub fn says(why: Unread) -> &'static str {
         Unread::NoHeader => "its header is gone, so nothing says where it belongs",
         Unread::NoPath => "the header no longer says which file it is about",
         Unread::NoLines => "the header no longer says which lines",
+        Unread::BadSide => "the header says a side that is neither 'old' nor 'new'",
     }
 }
 
@@ -75,6 +75,7 @@ mod tests {
         Comment {
             id: "abc-1".into(),
             path: "src/a.rs".into(),
+            side: crate::diff::domain::Side::New,
             from,
             to,
             body: "Why this order?\nIt reads backwards.".into(),
@@ -112,6 +113,22 @@ mod tests {
         let out = CommentList(&found(vec![comment(9, 9)], vec![])).to_string();
 
         assert!(out.contains("src/a.rs:9\n"), "{out}");
+    }
+
+    #[test]
+    fn one_on_the_old_side_says_which_side_it_is_on() {
+        // The list is read by a session as well as by a person, and both of
+        // them would otherwise go looking at line 82 of the wrong file.
+        let out = CommentList(&found(
+            vec![Comment {
+                side: crate::diff::domain::Side::Old,
+                ..comment(82, 116)
+            }],
+            vec![],
+        ))
+        .to_string();
+
+        assert!(out.contains("abc-1  src/a.rs:82-116 (old)"), "{out}");
     }
 
     #[test]
