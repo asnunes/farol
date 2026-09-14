@@ -166,6 +166,11 @@ whether to open it anyway.
 
 Press `?` for keyboard shortcuts. Use `farol servers` to list open reviews.
 
+## Contributing
+
+See [Contributing](CONTRIBUTING.md) to report a bug or propose a change.
+Report vulnerabilities privately through the [security policy](SECURITY.md).
+
 ## License
 
 Farol is available under the [MIT License](LICENSE).
