@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { api, type FileDiff, type FileView, type ReviewView } from "./api";
@@ -848,7 +848,24 @@ describe("a comment file that cannot be read", () => {
 });
 
 describe("when the backend fails", () => {
-  function serveBroken(failing: "review" | "file") {
+  /** The review itself refuses: there is nothing to draw a page around. */
+  function serveNoReview() {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        const noComments = aside(url);
+        if (noComments) return noComments;
+        return new Response("the store is unreadable", { status: 400 });
+      }),
+    );
+  }
+
+  /** The review loads and one file in it does not. `broken` is flipped by the
+   * tests that press the button, which is the whole point of having one: the
+   * thing that failed can come back without reloading the page. */
+  function serveOneBrokenFile() {
+    const state = { broken: true };
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
@@ -856,31 +873,109 @@ describe("when the backend fails", () => {
         const noComments = aside(url);
         if (noComments) return noComments;
         if (url.startsWith("/api/review")) {
-          return failing === "review"
-            ? new Response("the store is unreadable", { status: 400 })
-            : new Response(JSON.stringify(review()), {
-                headers: { "content-type": "application/json" },
-              });
+          return new Response(JSON.stringify(review()), {
+            headers: { "content-type": "application/json" },
+          });
         }
-        return new Response("'nowhere.rs' is not part of this review", { status: 400 });
+        const path = new URL(url, "http://x").searchParams.get("path") ?? "";
+        if (path === "src/b.rs" && state.broken) {
+          return new Response("git could not read 'src/b.rs'", { status: 500 });
+        }
+        return new Response(JSON.stringify({ ...emptyDiff, path }), {
+          headers: { "content-type": "application/json" },
+        });
       }),
     );
+    return state;
+  }
+
+  /** How many times the page has asked for one file's diff. */
+  function asksFor(path: string): number {
+    return vi
+      .mocked(fetch)
+      .mock.calls.filter((call) =>
+        String(call[0]).startsWith(`/api/file?path=${encodeURIComponent(path)}`),
+      ).length;
   }
 
   it("says why the review could not be loaded instead of showing an empty page", async () => {
     // An empty screen reads as "nothing to review", which is the opposite of
     // what happened.
-    serveBroken("review");
+    serveNoReview();
     render(<App />);
 
     expect(await screen.findByText(/unreadable/)).toBeTruthy();
   });
 
-  it("says why a file could not be loaded", async () => {
-    serveBroken("file");
+  it("says why a file could not be loaded, where that file is", async () => {
+    // In the section rather than in the box over the review: an indefinite
+    // "Loading diff…" under a message that does not name a file leaves the
+    // reader watching a request that ended.
+    serveOneBrokenFile();
     render(<App />);
+    await waitForReading("a.rs");
 
-    expect(await screen.findByText(/not part of this review/)).toBeTruthy();
+    const broken = section("src/b.rs");
+    expect((await within(broken).findByRole("alert")).textContent).toContain(
+      "git could not read",
+    );
+    expect(broken.querySelector(".loading")).toBeNull();
+
+    // The rest of the page is untouched: the file beside it has its diff, the
+    // blocks are still announced, and the reader is still where they were.
+    expect(section("src/a.rs").querySelector(".loading")).toBeNull();
+    expect(section("src/a.rs").querySelector("[role=alert]")).toBeNull();
+    expect(currentBlock()).toBe("The change itself");
+    expect(reading()).toContain("a.rs");
+  });
+
+  it("does not ask for a failed file again on its own", async () => {
+    // Every draw watches the sections again, so a failure the page is free to
+    // re-request is one it re-requests on every keystroke.
+    serveOneBrokenFile();
+    render(<App />);
+    await waitForReading("a.rs");
+    await within(section("src/b.rs")).findByRole("alert");
+    expect(asksFor("src/b.rs")).toBe(1);
+
+    fireEvent.keyDown(window, { key: "j" });
+    await waitForScrollTo("b.rs");
+
+    expect(asksFor("src/b.rs")).toBe(1);
+  });
+
+  it("asks again for that file alone when the reader presses the button", async () => {
+    const backend = serveOneBrokenFile();
+    render(<App />);
+    await waitForReading("a.rs");
+    await within(section("src/b.rs")).findByRole("alert");
+    const asksForA = asksFor("src/a.rs");
+
+    backend.broken = false;
+    fireEvent.click(within(section("src/b.rs")).getByRole("button", { name: "Try again" }));
+
+    // Loading again while the second attempt is in the air, and the diff in
+    // its place once it lands.
+    expect(section("src/b.rs").querySelector(".loading")).toBeTruthy();
+    await waitFor(() => expect(section("src/b.rs").querySelector(".loading")).toBeNull());
+    expect(section("src/b.rs").querySelector("[role=alert]")).toBeNull();
+    expect(asksFor("src/b.rs")).toBe(2);
+    expect(asksFor("src/a.rs")).toBe(asksForA);
+  });
+
+  it("says so again when the second attempt fails too", async () => {
+    serveOneBrokenFile();
+    render(<App />);
+    await waitForReading("a.rs");
+    await within(section("src/b.rs")).findByRole("alert");
+
+    fireEvent.click(within(section("src/b.rs")).getByRole("button", { name: "Try again" }));
+    await waitFor(() => expect(asksFor("src/b.rs")).toBe(2));
+
+    expect((await within(section("src/b.rs")).findByRole("alert")).textContent).toContain(
+      "git could not read",
+    );
+    expect(section("src/b.rs").querySelector(".loading")).toBeNull();
   });
 });
 
