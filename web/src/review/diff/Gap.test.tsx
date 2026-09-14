@@ -33,25 +33,46 @@ describe("opening what the diff did not print", () => {
     const { container } = render(<Diff {...props(twoHunks(100))} />);
     const tail = gapAt(container, 2);
 
-    expect(within(tail).getByLabelText("Open twenty lines from the top")).toBeTruthy();
-    expect(within(tail).queryByLabelText("Open twenty lines from the bottom")).toBeNull();
+    expect(within(tail).getByLabelText("Open lines 62–81, above")).toBeTruthy();
+    expect(within(tail).queryByLabelText("Open lines 81–100, below")).toBeNull();
   });
 
-  it("opens twenty lines under the hunk above, and asks for exactly those", async () => {
+  it("opens twenty lines under the hunk above, and puts them over the band", async () => {
+    // The chevron points up because that is the side the code comes out on.
+    // The lines it opens are the ones the hunk above runs into, and they are
+    // drawn between that hunk and the band.
     const { container } = render(<Diff {...props(twoHunks(100))} />);
 
-    pull(container, "Open twenty lines from the top");
+    pull(container, "Open lines 11–30, above");
 
     await waitFor(() => expect(lines).toHaveBeenCalledWith("src/a.rs", 11, 30));
     expect(await screen.findByText("line 11")).toBeTruthy();
   });
 
-  it("opens the last twenty of the gap when pulled from below", async () => {
+  it("opens the last twenty of the gap under the band, where the arrow points", async () => {
     const { container } = render(<Diff {...props(twoHunks(100))} />);
 
-    pull(container, "Open twenty lines from the bottom");
+    pull(container, "Open lines 40–59, below");
 
     await waitFor(() => expect(lines).toHaveBeenCalledWith("src/a.rs", 40, 59));
+  });
+
+  it("draws each step on the side its arrow points at", async () => {
+    // The whole meaning of the two chevrons. The stretch that is still closed
+    // has no height, so the band stands where all of it is: what is taken off
+    // its top can only come out over the band, and what is taken off its
+    // bottom under it. An arrow pointing the other way sends the reader
+    // looking for twenty lines at the far end of the file.
+    const { container } = render(<Diff {...props(twoHunks(100))} />);
+
+    pull(container, "Open lines 11–30, above");
+    await screen.findByText("line 11");
+    expect(side("line 11", gapAt(container, 1))).toBe("above");
+
+    pull(container, "Open lines 40–59, below");
+    await screen.findByText("line 40");
+    expect(side("line 40", gapAt(container, 1))).toBe("below");
+    expect(side("line 11", gapAt(container, 1))).toBe("above");
   });
 
   it("numbers an opened line on both sides", async () => {
@@ -59,7 +80,7 @@ describe("opening what the diff did not print", () => {
     // comparing against another checkout needs the number that side uses.
     const { container } = render(<Diff {...props(twoHunks(100), "split")} />);
 
-    pull(container, "Open twenty lines from the top");
+    pull(container, "Open lines 11–30, above");
 
     // Twice over, because a context line is the same on both sides. Which is
     // the point of the test: the two numbers beside it are not.
@@ -77,7 +98,7 @@ describe("opening what the diff did not print", () => {
     // definition of where it does not.
     const { container } = render(<Diff {...props(twoHunks(100))} />);
 
-    pull(container, "Open twenty lines from the top");
+    pull(container, "Open lines 11–30, above");
     await screen.findByText("line 11");
 
     const row = [...container.querySelectorAll(".diff-row")].find((r) =>
@@ -95,7 +116,7 @@ describe("opening what the diff did not print", () => {
     const { container } = render(<Diff {...props(twoHunks(100), "unified", hidden)} />);
     expect(screen.queryByText("vale ler junto")).toBeNull();
 
-    pull(container, "Open twenty lines from the top");
+    pull(container, "Open lines 11–30, above");
 
     expect(await screen.findByText("vale ler junto")).toBeTruthy();
   });
@@ -130,6 +151,12 @@ describe("opening what the diff did not print", () => {
  * one after the last. */
 function pull(container: HTMLElement, label: string) {
   fireEvent.click(within(gapAt(container, 1)).getByLabelText(label));
+}
+
+/** Which side of the band a line came out on. */
+function side(line: string, band: HTMLElement): "above" | "below" {
+  const where = band.compareDocumentPosition(screen.getByText(line));
+  return where & Node.DOCUMENT_POSITION_FOLLOWING ? "below" : "above";
 }
 
 /** The gaps in reading order: above the first hunk, between the two, after the
