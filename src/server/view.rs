@@ -9,7 +9,7 @@ use serde::Serialize;
 
 use crate::comments::domain::{Comment, Found, Readiness};
 use crate::comments::presentation::says;
-use crate::diff::domain::{FileDiff, FileStatus, Hunk, Line, LineKind};
+use crate::diff::domain::{FileChange, FileDiff, Hunk, Line, LineKind};
 use crate::map::application::ReviewSnapshot;
 use crate::map::domain::ReviewMap;
 use crate::progress::domain::Progress;
@@ -297,20 +297,25 @@ impl ReviewView {
                 if placed.contains(&bf.path) {
                     continue;
                 }
+                let Some(change) = scope.change(&bf.path) else {
+                    continue;
+                };
                 placed.push(bf.path.clone());
-                files.push(FileView::build(map, scope, progress, &bf.path, false, None));
+                files.push(FileView::build(map, change, progress, false, None));
             }
 
             for entry in map.skim_for(&block.slug) {
                 if placed.contains(&entry.path) {
                     continue;
                 }
+                let Some(change) = scope.change(&entry.path) else {
+                    continue;
+                };
                 placed.push(entry.path.clone());
                 files.push(FileView::build(
                     map,
-                    scope,
+                    change,
                     progress,
-                    &entry.path,
                     true,
                     Some(entry.reason.clone()),
                 ));
@@ -329,12 +334,14 @@ impl ReviewView {
             if placed.contains(&entry.path) {
                 continue;
             }
+            let Some(change) = scope.change(&entry.path) else {
+                continue;
+            };
             placed.push(entry.path.clone());
             loose_skim.push(FileView::build(
                 map,
-                scope,
+                change,
                 progress,
-                &entry.path,
                 true,
                 Some(entry.reason.clone()),
             ));
@@ -401,15 +408,18 @@ impl CommentView {
 }
 
 impl FileView {
+    /// Only ever called with the change git reports for the path. A file the
+    /// comparison no longer holds has no status and no line counts to show, and
+    /// inventing them is what left merged branches offering diffs the server
+    /// then refused.
     fn build(
         map: &ReviewMap,
-        scope: &crate::diff::domain::Scope,
+        change: &FileChange,
         progress: &Progress,
-        path: &str,
         skim: bool,
         skim_reason: Option<String>,
     ) -> FileView {
-        let change = scope.files.iter().find(|f| f.path == path);
+        let path = change.path.as_str();
 
         // Notes from every block the file appears in, so nothing is lost by
         // rendering it only once.
@@ -438,15 +448,13 @@ impl FileView {
         // Read *and still the same file*. Comparing paths alone was what kept
         // a file struck through after it had changed under the mark, which is
         // the one thing this is supposed to catch.
-        let viewed = change.is_some_and(|c| progress.is_current(path, &c.content_hash));
+        let viewed = progress.is_current(path, &change.content_hash);
 
         FileView {
             path: path.to_string(),
-            status: change
-                .map(|c| c.status.label())
-                .unwrap_or(FileStatus::Modified.label()),
-            additions: change.map(|c| c.additions).unwrap_or(0),
-            deletions: change.map(|c| c.deletions).unwrap_or(0),
+            status: change.status.label(),
+            additions: change.additions,
+            deletions: change.deletions,
             viewed,
             notes,
             line_notes,
@@ -551,6 +559,55 @@ mod tests {
         assert!(view.blocks[0].files[1].skim);
         assert_eq!(view.loose_skim.len(), 1);
         assert_eq!(view.loose_skim[0].path, "Cargo.lock");
+    }
+
+    #[test]
+    fn a_mapped_file_the_comparison_no_longer_holds_is_not_offered_at_all() {
+        // The base moved under the map — a merge, typically. The map still
+        // names the file, git no longer does, and offering it anyway left the
+        // pane asking for a diff the server refuses and loading forever.
+        let mut map = map_of(&[("one", "a.rs"), ("one", "gone.rs")]);
+        map.add_skim("skimmed_away.rs", "generated", Some(slug("one")))
+            .unwrap();
+        map.add_skim("loose_gone.rs", "generated", None).unwrap();
+
+        let view = built(
+            &map,
+            FakeDiffSource::with_paths(&["a.rs"]),
+            &Progress::new(),
+        );
+
+        let paths: Vec<_> = view.blocks[0].files.iter().map(|f| &f.path).collect();
+        assert_eq!(paths, vec!["a.rs"]);
+        assert!(view.loose_skim.is_empty());
+        assert_eq!(view.total_files, 1);
+        assert!(view.unmapped.is_empty());
+    }
+
+    #[test]
+    fn an_empty_comparison_leaves_the_blocks_standing_with_nothing_in_them() {
+        // The map is not rewritten to repair the screen: the prose survives, the
+        // file list does not.
+        let map = map_of(&[("one", "a.rs"), ("two", "b.rs")]);
+
+        let view = built(&map, FakeDiffSource::with_paths(&[]), &Progress::new());
+
+        assert_eq!(view.blocks.len(), 2, "the map's own material is untouched");
+        assert!(view.blocks.iter().all(|b| b.files.is_empty()));
+        assert_eq!((view.total_files, view.viewed_files), (0, 0));
+    }
+
+    #[test]
+    fn a_file_read_before_it_left_the_comparison_stops_counting_towards_progress() {
+        // Otherwise the bar reads 2 / 1 once half the scope goes away.
+        let map = map_of(&[("one", "a.rs"), ("one", "gone.rs")]);
+        let mut progress = Progress::new();
+        progress.mark("a.rs", "hash-of-a.rs", "now");
+        progress.mark("gone.rs", "hash-of-gone.rs", "now");
+
+        let view = built(&map, FakeDiffSource::with_paths(&["a.rs"]), &progress);
+
+        assert_eq!((view.total_files, view.viewed_files), (1, 1));
     }
 
     #[test]

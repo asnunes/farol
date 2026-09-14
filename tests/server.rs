@@ -367,6 +367,101 @@ fn a_file_marked_skim_arrives_with_the_reason_it_can_be_skimmed() {
 }
 
 #[test]
+fn a_map_the_comparison_has_outlived_offers_nothing_to_read() {
+    // The branch was merged and the local `main` moved up to it, so
+    // `main...HEAD` is empty while the map still names four files. Offering
+    // them anyway is what left the page on "Loading diff…": the pane asked for
+    // a diff and this same server refused it.
+    let s = Serving::new();
+    assert_eq!(s.json("/api/review")["totalFiles"], 3);
+    let map_before = maps(&s.repo);
+
+    s.repo.git(&["branch", "-f", "main", "HEAD"]);
+
+    let review = s.json("/api/review");
+    assert_eq!(review["totalFiles"], 0);
+    assert!(
+        review["blocks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|b| b["files"].as_array().unwrap().is_empty()),
+        "{review}"
+    );
+    assert!(
+        review["looseSkim"].as_array().unwrap().is_empty(),
+        "{review}"
+    );
+    assert!(
+        review["unmapped"].as_array().unwrap().is_empty(),
+        "{review}"
+    );
+    assert_eq!(
+        review["blocks"].as_array().unwrap().len(),
+        2,
+        "the blocks and their prose are what the reader paid for; only the \
+         files went out of scope"
+    );
+
+    // And the file the map still names is refused, which is why it must not be
+    // offered.
+    assert_eq!(s.probe("GET", "/api/file?path=src/a.rs", None).0, 400);
+
+    assert_eq!(
+        maps(&s.repo),
+        map_before,
+        "reading the review must not rewrite the map to repair the display"
+    );
+}
+
+#[test]
+fn only_the_files_that_left_the_comparison_go() {
+    // Half a merge: `main` moves up to the first commit of the branch, so
+    // `src/a.rs` is now on both sides and the second commit is all that is
+    // left to review.
+    let s = Serving::new();
+    s.repo.git(&["branch", "-f", "main", "HEAD~1"]);
+
+    let review = s.json("/api/review");
+
+    assert_eq!(review["blocks"][0]["slug"], "core");
+    assert!(
+        review["blocks"][0]["files"].as_array().unwrap().is_empty(),
+        "src/a.rs is on main now: {review}"
+    );
+    assert_eq!(review["blocks"][1]["files"][0]["path"], "src/b.rs");
+    assert_eq!(review["looseSkim"][0]["path"], "Cargo.lock");
+    assert_eq!(review["totalFiles"], 2);
+    assert!(
+        review["unmapped"].as_array().unwrap().is_empty(),
+        "what is left is still mapped: {review}"
+    );
+    assert_eq!(s.probe("GET", "/api/file?path=src/a.rs", None).0, 400);
+    assert_eq!(s.probe("GET", "/api/file?path=src/b.rs", None).0, 200);
+}
+
+/// Every stored map version, as bytes. What a test asserts has not moved when
+/// it says the map is left alone.
+fn maps(repo: &Repo) -> Vec<(String, String)> {
+    let mut found = Vec::new();
+    for branch in std::fs::read_dir(repo.path().join(".git/farol")).unwrap() {
+        let dir = branch.unwrap().path().join("maps");
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in entries {
+            let path = entry.unwrap().path();
+            found.push((
+                path.display().to_string(),
+                std::fs::read_to_string(&path).unwrap(),
+            ));
+        }
+    }
+    found.sort();
+    found
+}
+
+#[test]
 fn the_diff_of_a_file_comes_back_with_the_line_numbers_the_notes_anchor_to() {
     let s = Serving::new();
 

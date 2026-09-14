@@ -37,6 +37,18 @@ export function Reading({
   useResumeAt(current);
   useCurrentFile(pane, review, onCurrent);
 
+  // Nothing left in the comparison: the base moved under the map, typically
+  // because the branch was merged. The blocks are still on disk and still in
+  // the sidebar; there is simply no diff to read, and saying so beats a page of
+  // empty block bars over files that would never load.
+  if (review.totalFiles === 0 && review.unmapped.length === 0) {
+    return (
+      <main ref={pane} className="pane grid place-items-center bg-ground" data-current="">
+        <p className="empty font-serif text-sm text-ink-muted">No changes in this comparison.</p>
+      </main>
+    );
+  }
+
   return (
     <main ref={pane} className="pane overflow-y-auto bg-ground pb-[60vh]" data-current={current ?? ""}>
       {inReadingOrder(review).map((row) =>

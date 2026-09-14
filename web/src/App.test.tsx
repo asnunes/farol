@@ -978,3 +978,26 @@ describe("the sidebar", () => {
     expect(marked?.textContent).toContain("a.rs");
   });
 });
+
+describe("a comparison the map has outlived", () => {
+  it("says there is nothing to read and asks for no diffs", async () => {
+    // The branch was merged, so the base moved and the diff is empty. The
+    // blocks are still in the map and still in the sidebar; the files that
+    // would never load are not on the page at all.
+    serve({
+      review: review({
+        blocks: [
+          { slug: "first", title: "The change itself", context: "why", files: [] },
+        ],
+        totalFiles: 0,
+      }),
+    });
+
+    render(<App />);
+    await screen.findByText("No changes in this comparison.");
+
+    expect(screen.getByText("The change itself")).toBeTruthy();
+    const asked = vi.mocked(fetch).mock.calls.map(([url]) => String(url));
+    expect(asked.filter((u) => u.startsWith("/api/file"))).toEqual([]);
+  });
+});

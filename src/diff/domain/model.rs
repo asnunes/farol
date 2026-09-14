@@ -129,7 +129,14 @@ pub struct Scope {
 
 impl Scope {
     pub fn contains(&self, path: &str) -> bool {
-        self.files.iter().any(|f| f.path == path)
+        self.change(path).is_some()
+    }
+
+    /// The change git reports for a path, or nothing when the path is outside
+    /// the comparison. A map outlives the comparison it was written against —
+    /// once the base moves, some of its files are simply no longer here.
+    pub fn change(&self, path: &str) -> Option<&FileChange> {
+        self.files.iter().find(|f| f.path == path)
     }
 
     /// Reject a path that is not under review, carrying the near misses with
