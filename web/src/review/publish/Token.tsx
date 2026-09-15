@@ -40,7 +40,10 @@ export function Token({ host, onToken }: TokenProps) {
   }
 
   return (
-    <div className="token">
+    // Ruled off from the explanation above it: everything before this says why
+    // farol is asking, and this is the asking. Run together they read as one
+    // long page of instructions with a box somewhere in it.
+    <div className="token border-t border-rule pt-4">
       <p className="mb-2 text-sm text-ink">
         Authorize <strong>{host}</strong> to receive this token. Only continue if you trust this host.
       </p>
