@@ -37,18 +37,18 @@ export function Opened({ range, file, tokenize, view, shift }: OpenedProps) {
         {view === "split" ? (
           <div className={cn("row split-row bg-surface", marked)}>
             <LineNumber line={line} side="old" />
-            <div className="code break-words whitespace-pre-wrap">
+            <div className="code">
               <Code tokens={coloured?.[i]} plain={content} />
             </div>
             <LineNumber line={line} side="new" />
-            <div className="code break-words whitespace-pre-wrap">
+            <div className="code">
               <Code tokens={coloured?.[i]} plain={content} />
             </div>
           </div>
         ) : (
           <div className={cn("row diff-row bg-surface", marked)}>
             <LineNumber line={line} side="new" />
-            <div className="code break-words whitespace-pre-wrap">
+            <div className="code">
               {"  "}
               <Code tokens={coloured?.[i]} plain={content} />
             </div>

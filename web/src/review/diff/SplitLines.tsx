@@ -98,7 +98,7 @@ function Side({ index, hunk, coloured, marks, side, commentary }: SideProps) {
   return (
     <div className="group/line contents">
       <LineNumber line={line} side={side} tint={tint} commentary={commentary} />
-      <div className={cn("code break-words whitespace-pre-wrap", tint)}>
+      <div className={cn("code", tint)}>
         {marker(line)} <Code tokens={coloured?.[index]} plain={line.content} marks={marks[index]} />
       </div>
     </div>

@@ -176,18 +176,81 @@
 
 /* The one thing utilities cannot express: the diff is a two-column grid whose
    gutter stays the same width down the whole file, however long the line
-   numbers get. */
+   numbers get.
+   
+   The row is as wide as its line and never narrower than the pane. Code that
+   ran past the edge used to wrap, and wrapped anywhere — `break-word` cuts
+   inside a word, so `findAllForOrganisationWithActiveSubscriptions` arrived as
+   two fragments the reader had to join back up. One line per line is what makes
+   a diff scannable, so the line keeps its shape and `.diff` scrolls to reach the
+   end of it: one bar for the whole file, not one per line. */
 @utility diff-row {
   display: grid;
   grid-template-columns: 4rem minmax(0, 1fr);
+  width: max-content;
+  min-width: 100%;
 }
 
 /* Side by side: number and code twice over. The two halves are cells of one
    grid rather than two stacked lists, so a line that wraps on one side pushes
-   its counterpart down with it and the rows stay facing each other. */
+   its counterpart down with it and the rows stay facing each other.
+   
+   This one cannot take its width from its content the way the unified row does.
+   Each row is its own grid, so a `max-content` column is measured per row, and
+   the right-hand gutter would land at a different place on every line — the
+   facing columns stop facing. Here the code wraps instead, and only ever at a
+   space. */
 @utility split-row {
   display: grid;
   grid-template-columns: 3.5rem minmax(0, 1fr) 3.5rem minmax(0, 1fr);
+}
+
+/* One line per line, in the shape the file has it. Unlayered on purpose: it has
+   to beat the utilities that set the same properties. */
+.diff-row .code {
+  white-space: pre;
+}
+
+/* Wrapped, because the column cannot grow — but never inside a word. A token
+   longer than the column has nowhere to go, so that cell alone scrolls. */
+.split-row .code {
+  white-space: pre-wrap;
+  overflow-wrap: normal;
+  word-break: normal;
+  overflow-x: auto;
+}
+
+/* Two columns of code need a screen wide enough for two columns of code. Under
+   `md` there is room for one, so the four cells fall into two rows instead: the
+   old line above the new one, each under its own number and each with the whole
+   width to itself. The pair still reads as a pair, and neither side is a word
+   per line. The side a row does not have is left out rather than drawn as an
+   empty band the width of the screen.
+   
+   Split stays split — the toggle is not touched and nothing is written down.
+   What changes is how two columns are drawn where only one fits. */
+@media (width < 48rem) {
+  /* Four characters of gutter is a sixth of a 390px screen spent on line
+     numbers. Three is enough for every file anybody reads on one, and the
+     twenty pixels go to the code. */
+  .diff-row {
+    grid-template-columns: 2.75rem minmax(0, 1fr);
+  }
+
+  .split-row {
+    grid-template-columns: 2.75rem minmax(0, 1fr);
+    width: max-content;
+    min-width: 100%;
+  }
+
+  .split-row .absent {
+    display: none;
+  }
+
+  .split-row .code {
+    white-space: pre;
+    overflow-x: visible;
+  }
 }
 
 /* Syntax colour arrives on the token itself, as one custom property per theme,
