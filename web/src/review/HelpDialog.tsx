@@ -5,6 +5,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Kbd, KbdGroup } from "@/components/ui/kbd";
+import { MOD } from "@/hooks/useShortcuts";
 
 const KEYS: [string, string][] = [
   ["j / k", "previous and next file, in reading order"],
@@ -13,6 +14,7 @@ const KEYS: [string, string][] = [
   [";", "mark the current file read"],
   ["Space", "the same"],
   ["[ / ]", "previous and next block"],
+  [`${MOD}B`, "show or hide the map"],
   ["?", "this list"],
 ];
 

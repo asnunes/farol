@@ -1,5 +1,6 @@
 import { ArrowDown, ArrowUp, Space } from "lucide-react";
 import { Kbd } from "@/components/ui/kbd";
+import { MOD } from "@/hooks/useShortcuts";
 import { ThemeSwitch } from "@/review/ThemeSwitch";
 import type { Theme } from "@/hooks/useTheme";
 
@@ -33,7 +34,9 @@ export function KeyBar({ theme, onTheme }: KeyBarProps) {
 
 function Key({ children }: KeyProps) {
   return (
-    <Kbd className="size-[1.35rem] justify-center rounded border border-rule-strong bg-sunken text-[0.6875rem] text-ink-soft">
+    // `min-w` with padding rather than a fixed square: every other key on the
+    // bar is one character, and `Ctrl+B` is six.
+    <Kbd className="h-[1.35rem] min-w-[1.35rem] justify-center rounded border border-rule-strong bg-sunken px-1 text-[0.6875rem] text-ink-soft">
       {children}
     </Kbd>
   );
@@ -44,6 +47,7 @@ const SHORTCUTS: { keys: (string | { Icon: typeof ArrowUp })[]; what: string }[]
   { keys: ["n"], what: "next unread" },
   { keys: [";", { Icon: Space }], what: "mark read" },
   { keys: ["[", "]"], what: "block" },
+  { keys: [`${MOD}B`], what: "map" },
   { keys: ["?"], what: "help" },
 ];
 
