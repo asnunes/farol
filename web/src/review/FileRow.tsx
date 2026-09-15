@@ -50,22 +50,13 @@ export function FileRow({
               </span>
             )}
 
-            {file.skim ? (
+            {file.skim && (
               <Badge
                 variant="outline"
                 className="fast ml-auto shrink-0 border-rule px-1 font-mono text-[0.625rem] font-normal text-faint"
               >
                 skim
               </Badge>
-            ) : (
-              file.lineNotes.length > 0 && (
-                <span
-                  className="dot ml-auto shrink-0 text-highlight"
-                  title={`${file.lineNotes.length} note(s)`}
-                >
-                  {"•".repeat(Math.min(3, file.lineNotes.length))}
-                </span>
-              )
             )}
           </Button>
         </TooltipTrigger>
