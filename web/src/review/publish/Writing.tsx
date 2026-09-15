@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import {
   DialogDescription,
   DialogFooter,
@@ -28,6 +28,8 @@ export function Writing({
   onError,
   onCancel,
 }: WritingProps) {
+  const field = useId();
+  const asks = useId();
   // Commenting is where it starts, and on your own pull request it is where it
   // stays: GitHub takes a comment there and refuses the other two.
   const [verdict, setVerdict] = useState<Verdict>("comment");
@@ -79,14 +81,31 @@ export function Writing({
         </DialogDescription>
       </DialogHeader>
 
-      <Textarea
-        className="resize-y border-rule-strong bg-surface font-sans text-sm text-ink"
-        rows={5}
-        placeholder={ASKS[verdict]}
-        value={summary}
-        disabled={sending}
-        onChange={(e) => setSummary(e.target.value)}
-      />
+      {/* The box is named once; what it is asked for changes with the verdict.
+          Read off the placeholder, that name went away at the first keystroke
+          and changed under the reader every time they changed their mind about
+          the verdict — a name a box does not keep is not one. */}
+      <div className="summary">
+        <label
+          htmlFor={field}
+          className="mb-1.5 block font-sans text-xs font-medium text-ink-soft"
+        >
+          Summary
+        </label>
+        <Textarea
+          id={field}
+          aria-describedby={asks}
+          className="resize-y border-rule-strong bg-surface font-sans text-sm text-ink"
+          rows={5}
+          placeholder={ASKS[verdict]}
+          value={summary}
+          disabled={sending}
+          onChange={(e) => setSummary(e.target.value)}
+        />
+        <span id={asks} className="sr-only">
+          {ASKS[verdict]}
+        </span>
+      </div>
 
       <Verdicts value={verdict} onChange={setVerdict} mine={mine} />
 
