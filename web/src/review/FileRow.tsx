@@ -28,7 +28,7 @@ export function FileRow({
               "fileitem h-auto w-full justify-start gap-2 px-2 py-1 font-mono text-[0.8125rem] font-normal text-ink-soft",
               "hover:bg-sunken hover:text-ink-soft",
               "aria-[current=true]:bg-highlight-dim aria-[current=true]:text-ink",
-              file.skim && "skim text-faint",
+              file.skim && "skim text-ink-muted",
             )}
             data-seen={file.viewed ? "true" : undefined}
             aria-current={file.path === current ? "true" : undefined}
@@ -39,14 +39,14 @@ export function FileRow({
             <span
               className={cn(
                 "nm truncate",
-                file.viewed && "text-faint line-through",
+                file.viewed && "text-ink-muted line-through",
                 file.path === current && "font-semibold",
               )}
             >
               {label.name}
             </span>
             {label.where && (
-              <span aria-hidden="true" className="where truncate text-[0.6875rem] text-faint">
+              <span aria-hidden="true" className="where truncate text-[0.6875rem] text-ink-muted">
                 · {label.where}
               </span>
             )}
@@ -54,7 +54,7 @@ export function FileRow({
             {file.skim && (
               <Badge
                 variant="outline"
-                className="fast ml-auto shrink-0 border-rule px-1 font-mono text-[0.625rem] font-normal text-faint"
+                className="fast ml-auto shrink-0 border-rule px-1 font-mono text-[0.625rem] font-normal text-ink-muted"
               >
                 skim
               </Badge>

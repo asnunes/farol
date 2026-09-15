@@ -214,6 +214,51 @@ describe("sending", () => {
   });
 });
 
+describe("what the review is written in", () => {
+  it("names the summary box apart from the words that ask for one", () => {
+    // The ask changes with the verdict and disappears at the first keystroke,
+    // so it is the box's description and never its name.
+    render(<Publish {...props(at("ready", { pullRequest: 12 }))} />);
+    fireEvent.click(button());
+
+    const box = screen.getByLabelText("Summary");
+    fireEvent.change(box, { target: { value: "Reads well." } });
+
+    expect(screen.getByLabelText("Summary")).toBe(box);
+    const said = box.getAttribute("aria-describedby");
+    expect(document.getElementById(said ?? "")?.textContent).toBe(
+      "Anything to say on top of the comments. Optional.",
+    );
+  });
+
+  /** Open a panel from the control that opens it, then shut it. Neither panel
+   * has a `DialogTrigger` — both are opened from state — so Radix had nothing
+   * to give focus back to and left it on BODY, at the top of the page. */
+  function openAndShut(control: HTMLElement, shut: string) {
+    control.focus();
+    fireEvent.click(control);
+    fireEvent.click(screen.getByRole("button", { name: shut }));
+  }
+
+  it("hands the keyboard back to the send button the review was written from", async () => {
+    render(<Publish {...props(at("ready", { pullRequest: 12 }))} />);
+    const send = button();
+
+    openAndShut(send, "Cancel");
+
+    await waitFor(() => expect(document.activeElement).toBe(send));
+  });
+
+  it("hands it back to the (i) the setup panel was opened from", async () => {
+    render(<Publish {...props(at("noToken"))} />);
+    const why = screen.getByLabelText("Why this review cannot be sent yet");
+
+    openAndShut(why, "Close");
+
+    await waitFor(() => expect(document.activeElement).toBe(why));
+  });
+});
+
 function button(): HTMLElement {
   return screen.getByText("Send review").closest("button")!;
 }

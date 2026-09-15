@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { file, noComments } from "./testing";
 import type { FileDiff } from "@/api";
@@ -101,5 +101,81 @@ describe("split on a screen with room for one column of code", () => {
     expect(container.querySelectorAll(".stack-row")).toHaveLength(0);
     expect(container.querySelectorAll(".split-row").length).toBeGreaterThan(0);
     expect(screen.getAllByText("fn main() {")).toHaveLength(2);
+  });
+});
+
+describe("picking a span with the keyboard where the columns are stacked", () => {
+  /** The narrow layout, drawn, with the actions a finished comment reports to. */
+  function narrow() {
+    screenIs(390);
+    const actions = noComments();
+    render(
+      <Diff diff={diff()} file={file()} view="split" comments={[]} actions={actions} />,
+    );
+    return actions;
+  }
+
+  /** Shift and an arrow, on the `+` that has focus. */
+  function stretch(plus: HTMLElement, key: "ArrowUp" | "ArrowDown", times = 1) {
+    for (let i = 0; i < times; i++) fireEvent.keyDown(plus, { key, shiftKey: true });
+  }
+
+  /** Open the box the `+` now offers and send what is written in it. */
+  function write(plus: HTMLElement, body: string) {
+    fireEvent.click(plus);
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: body } });
+    fireEvent.click(screen.getByText("Comment"));
+  }
+
+  it("reaches down the old side from the line printed once for both", () => {
+    // Stacked, one row carries both gutters, and each of them has to be told
+    // how far its own side runs. Told nothing, the keyboard offered the one
+    // line under the cursor and no more — on the screen where there is no drag
+    // to fall back on.
+    const actions = narrow();
+    const plus = screen.getByLabelText("Comment on old line 1");
+
+    stretch(plus, "ArrowDown");
+
+    expect(plus.getAttribute("aria-label")).toBe("Comment on old lines 1–2");
+    write(plus, "Why did this go?");
+    expect(actions.add).toHaveBeenCalledWith("src/a.rs", "old", 1, 2, "Why did this go?");
+  });
+
+  it("reaches down the new side of that same row, on the new numbering", () => {
+    // The other gutter of the one row, counted separately: line 1 is on both
+    // sides here and means two different things.
+    const actions = narrow();
+    const plus = screen.getByLabelText("Comment on new line 1");
+
+    stretch(plus, "ArrowDown");
+
+    expect(plus.getAttribute("aria-label")).toBe("Comment on new lines 1–2");
+    write(plus, "Why is this here?");
+    expect(actions.add).toHaveBeenCalledWith("src/a.rs", "new", 1, 2, "Why is this here?");
+  });
+
+  it("reaches back up from a line the change touched", () => {
+    // A changed line sits on a row of its own with the other gutter blank, and
+    // that gutter is a third place the reach has to arrive at.
+    const actions = narrow();
+    const plus = screen.getByLabelText("Comment on old line 2");
+
+    stretch(plus, "ArrowUp");
+
+    expect(plus.getAttribute("aria-label")).toBe("Comment on old lines 1–2");
+    write(plus, "This pair, then?");
+    expect(actions.add).toHaveBeenCalledWith("src/a.rs", "old", 1, 2, "This pair, then?");
+  });
+
+  it("stops at the end of the hunk rather than crossing to the other side", () => {
+    // Both sides number 1 and 2 here. A reach that ran past its own side would
+    // land on the other one's numbering, which is a span nobody chose.
+    narrow();
+    const plus = screen.getByLabelText("Comment on old line 1");
+
+    stretch(plus, "ArrowDown", 4);
+
+    expect(plus.getAttribute("aria-label")).toBe("Comment on old lines 1–2");
   });
 });

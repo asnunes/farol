@@ -5,7 +5,7 @@ import { Code } from "./Code";
 import { LineNotes } from "./LineNotes";
 import { LineNumber } from "./LineNumber";
 import { AtLine } from "./comment/AtLine";
-import { commentedBy, marker, notedBy, notesAt } from "./line";
+import { commentedBy, marker, notedBy, notesAt, reachOf } from "./line";
 import { splitRows } from "./split";
 import type { SplitRow } from "./split";
 import type { Anchor, Commentary } from "./line";
@@ -109,7 +109,13 @@ function Side({ index, hunk, coloured, marks, side, commentary }: SideProps) {
 
   return (
     <div className="group/line contents">
-      <LineNumber line={line} side={side} tint={tint} commentary={commentary} />
+      <LineNumber
+        line={line}
+        side={side}
+        tint={tint}
+        reach={reachOf(hunk, side)}
+        commentary={commentary}
+      />
       <div className={cn("code", tint)}>
         {marker(line)} <Code tokens={coloured?.[index]} plain={line.content} marks={marks[index]} />
       </div>
@@ -137,8 +143,8 @@ function Stacked({ row, hunk, coloured, marks, commentary }: StackedProps) {
 
     return (
       <div className="group/line contents">
-        <LineNumber line={line} side="old" commentary={commentary} />
-        <LineNumber line={line} side="new" commentary={commentary} />
+        <LineNumber line={line} side="old" reach={reachOf(hunk, "old")} commentary={commentary} />
+        <LineNumber line={line} side="new" reach={reachOf(hunk, "new")} commentary={commentary} />
         <div className="code">
           {marker(line)}{" "}
           <Code tokens={coloured?.[row.left]} plain={line.content} marks={marks[row.left]} />
@@ -178,7 +184,15 @@ function Stacked({ row, hunk, coloured, marks, commentary }: StackedProps) {
 function Stack({ index, side, hunk, coloured, marks, commentary }: StackProps) {
   const line = hunk.lines[index];
   const tint = tintOf(line);
-  const number = <LineNumber line={line} side={side} tint={tint} commentary={commentary} />;
+  const number = (
+    <LineNumber
+      line={line}
+      side={side}
+      tint={tint}
+      reach={reachOf(hunk, side)}
+      commentary={commentary}
+    />
+  );
   const empty = <div className={cn("ln blank", tint)} aria-hidden="true" />;
 
   return (

@@ -1,6 +1,6 @@
 import type { CommentActions } from "@/hooks/useComments";
 import type { LineSelection } from "./useLineSelection";
-import type { CommentView, DiffLine, FileView, Side, TaggedLineNote } from "@/api";
+import type { CommentView, DiffLine, FileView, Hunk, Side, TaggedLineNote } from "@/api";
 
 /** The comment layer over one file's diff: what is already written, what can be
  * done to it, and which lines the reader is choosing right now.
@@ -40,6 +40,22 @@ export function numberOn(line: DiffLine | null, side: Side): number | null {
   if (line === null) return null;
   return side === "old" ? line.oldNumber : line.newNumber;
 }
+
+/** How far a comment picked from the keyboard may grow on one side: the first
+ * and last number that side carries across a hunk.
+ *
+ * The bound is the hunk rather than the file because the box hangs off a row,
+ * and a hunk is exactly what has a row for every number in it. Reached past,
+ * the span would cover lines the diff never printed and the box would have
+ * nowhere to open. A drag is bounded by the same thing without being told: the
+ * pointer can only be over a row that exists. */
+export function reachOf(hunk: Hunk, side: Side): Reach {
+  return side === "old"
+    ? { from: hunk.oldStart, to: hunk.oldStart + hunk.oldLines - 1 }
+    : { from: hunk.newStart, to: hunk.newStart + hunk.newLines - 1 };
+}
+
+export type Reach = { from: number; to: number };
 
 /** Whether a note is about this line.
  *

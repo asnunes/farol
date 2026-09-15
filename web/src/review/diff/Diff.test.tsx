@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { comment, file, noComments } from "./testing";
 import type { DiffView } from "@/hooks/useDiffView";
@@ -247,7 +247,12 @@ describe("commenting on the diff", () => {
     fireEvent.mouseOver(gutters[to]);
     fireEvent.mouseUp(window);
 
-    expect(container.querySelector(".commentbox .lbl")?.textContent).toBe("1–2");
+    // The label the box opens under is also the box's name, so the span the
+    // drag covered is what a screen reader reads out of it.
+    expect((screen.getByLabelText("Comment on lines 1–2") as HTMLTextAreaElement).tagName).toBe(
+      "TEXTAREA",
+    );
+    expect(container.querySelector(".commentbox .lbl")?.textContent).toBe("Comment on lines 1–2");
   });
 
   it("opens the box on the line whose plus was pressed", () => {
@@ -423,5 +428,222 @@ describe("commenting on the old side of the diff", () => {
     draw(withARemoval(), "unified", [comment({ side: "old", from: 1, to: 2 })]);
 
     expect(screen.getByText("1–2 (old)")).toBeTruthy();
+  });
+});
+
+describe("picking the lines a comment is about with the keyboard", () => {
+  function draw(one: FileDiff, view: DiffView, actions = noComments()) {
+    tokenizer = null;
+    render(
+      <Diff
+        diff={one}
+        file={file({ path: one.path })}
+        view={view}
+        comments={[]}
+        actions={actions}
+      />,
+    );
+    return actions;
+  }
+
+  /** Shift and an arrow, on the `+` that has focus. */
+  function stretch(plus: HTMLElement, key: "ArrowUp" | "ArrowDown", times = 1) {
+    for (let i = 0; i < times; i++) fireEvent.keyDown(plus, { key, shiftKey: true });
+  }
+
+  it("reaches down the lines from the plus, and opens the box over all of them", () => {
+    // The drag is a mouse and nothing else. This is the same passage, picked
+    // from the one control the keyboard can already reach.
+    const actions = draw(diff(), "unified");
+    const plus = screen.getByLabelText("Comment on new line 1");
+
+    stretch(plus, "ArrowDown");
+
+    expect(plus.getAttribute("aria-label")).toBe("Comment on new lines 1–2");
+    fireEvent.click(plus);
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "Both of these?" } });
+    fireEvent.click(screen.getByText("Comment"));
+
+    expect(actions.add).toHaveBeenCalledWith("src/a.rs", "new", 1, 2, "Both of these?");
+  });
+
+  it("marks every line reached, the way a drag does", () => {
+    // The reader has to see the passage grow, or they are choosing it blind.
+    const { container } = render(
+      <Diff
+        diff={diff()}
+        file={file()}
+        view="unified"
+        comments={[]}
+        actions={noComments()}
+      />,
+    );
+
+    stretch(screen.getByLabelText("Comment on new line 1"), "ArrowDown");
+
+    expect([...container.querySelectorAll(".row")].map((r) => r.className.includes("picking"))).toEqual([
+      true,
+      true,
+    ]);
+  });
+
+  it("stops at the end of the hunk rather than reaching for lines nobody printed", () => {
+    // The box hangs off a row. Reached past what the hunk prints, the span
+    // would cover lines that are not on screen and the box would have nowhere
+    // to open.
+    draw(diff(), "unified");
+    const plus = screen.getByLabelText("Comment on new line 1");
+
+    stretch(plus, "ArrowDown", 4);
+
+    expect(plus.getAttribute("aria-label")).toBe("Comment on new lines 1–2");
+  });
+
+  it("reaches back up from the line that puzzled the reader", () => {
+    draw(diff(), "unified");
+    const plus = screen.getByLabelText("Comment on new line 2");
+
+    stretch(plus, "ArrowUp");
+
+    expect(plus.getAttribute("aria-label")).toBe("Comment on new lines 1–2");
+  });
+
+  it("keeps a reach on the old side counted on the old numbers", () => {
+    // A file deleted whole: every line is on the old side and nowhere else.
+    const actions = draw(deleted(), "unified");
+    const plus = screen.getByLabelText("Comment on old line 1");
+
+    stretch(plus, "ArrowDown");
+    fireEvent.click(plus);
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "All of it?" } });
+    fireEvent.click(screen.getByText("Comment"));
+
+    expect(actions.add).toHaveBeenCalledWith("src/gone.rs", "old", 1, 2, "All of it?");
+  });
+
+  it("will not reach across into the other side, however far it is pushed", () => {
+    // Two lines rewritten in place: 1 and 2 exist on both sides and mean two
+    // different things. The `+` belongs to one column, and so does its span.
+    const actions = draw(rewritten(), "unified");
+    const plus = screen.getByLabelText("Comment on old line 1");
+
+    stretch(plus, "ArrowDown", 4);
+
+    expect(plus.getAttribute("aria-label")).toBe("Comment on old lines 1–2");
+    fireEvent.click(plus);
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "Why both?" } });
+    fireEvent.click(screen.getByText("Comment"));
+    expect(actions.add).toHaveBeenCalledWith("src/a.rs", "old", 1, 2, "Why both?");
+  });
+
+  it("picks a passage in the left column of a split view too", () => {
+    const actions = draw(rewritten(), "split");
+    const plus = screen.getByLabelText("Comment on old line 1");
+
+    stretch(plus, "ArrowDown");
+    fireEvent.click(plus);
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "Why both?" } });
+    fireEvent.click(screen.getByText("Comment"));
+
+    expect(actions.add).toHaveBeenCalledWith("src/a.rs", "old", 1, 2, "Why both?");
+  });
+
+  it("gives the span up when the reader tabs off the plus", () => {
+    const { container } = render(
+      <Diff
+        diff={diff()}
+        file={file()}
+        view="unified"
+        comments={[]}
+        actions={noComments()}
+      />,
+    );
+    const plus = screen.getByLabelText("Comment on new line 1");
+    stretch(plus, "ArrowDown");
+
+    fireEvent.blur(plus);
+
+    expect(container.querySelector(".picking")).toBeNull();
+  });
+
+  it("takes no notice of an arrow pressed without shift", () => {
+    // Shift is what separates reaching for lines from every other arrow the
+    // reader might press while the `+` happens to have focus.
+    draw(diff(), "unified");
+    const plus = screen.getByLabelText("Comment on new line 1");
+
+    fireEvent.keyDown(plus, { key: "ArrowDown" });
+
+    expect(plus.getAttribute("aria-label")).toBe("Comment on new line 1");
+  });
+});
+
+describe("where the keyboard is left when a comment box closes", () => {
+  /** The box, opened from the `+` with the keyboard on it — which is the only
+   * way there is a control to hand focus back to. */
+  function open() {
+    tokenizer = null;
+    const page = render(
+      <Diff diff={diff()} file={file()} view="unified" comments={[]} actions={noComments()} />,
+    );
+    const plus = screen.getByLabelText("Comment on new line 2");
+    plus.focus();
+    fireEvent.click(plus);
+    return { ...page, plus };
+  }
+
+  it("opens ready to type", () => {
+    open();
+
+    expect(document.activeElement).toBe(screen.getByRole("textbox"));
+  });
+
+  it("keeps its name once there is something written in it", () => {
+    // A box with no label of its own is named by its placeholder, and only in
+    // a browser generous enough to do it — which is a name that goes away at
+    // the first keystroke. The line it is about is the name here, and the keys
+    // are what the box is described by.
+    open();
+    const box = screen.getByRole("textbox");
+
+    fireEvent.change(box, { target: { value: "Why this order?" } });
+
+    expect(screen.getByLabelText("Comment on line 2")).toBe(box);
+    const said = box.getAttribute("aria-describedby");
+    expect(document.getElementById(said ?? "")?.textContent).toContain("⌘↵");
+  });
+
+  it("keeps that description inside the box and not off the foot of the page", () => {
+    // `sr-only` is absolute with no offsets, so it lands at its static position
+    // inside the nearest positioned ancestor — and with none, that is the page.
+    // A box opened far down a scrolled pane put a one-pixel span hundreds of
+    // pixels below the screen, and the page grew a scrollbar for it. jsdom does
+    // no layout, so what is checked is the containing block that prevents it.
+    const { container } = open();
+    const box = screen.getByRole("textbox");
+    const said = document.getElementById(box.getAttribute("aria-describedby") ?? "");
+
+    const wrapper = container.querySelector(".commentbox");
+    expect(wrapper?.className).toContain("relative");
+    expect(wrapper?.contains(said)).toBe(true);
+  });
+
+  it("hands it back to the plus it was opened from when the box is cancelled", () => {
+    // Dropped on BODY instead, the reader is back at the top of the review,
+    // a page away from the line they had just read.
+    const { plus } = open();
+
+    fireEvent.click(screen.getByText("Cancel"));
+
+    expect(document.activeElement).toBe(plus);
+  });
+
+  it("hands it back when the comment has been saved, too", async () => {
+    const { plus } = open();
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "Why this order?" } });
+
+    await act(async () => void fireEvent.click(screen.getByText("Comment")));
+
+    expect(document.activeElement).toBe(plus);
   });
 });

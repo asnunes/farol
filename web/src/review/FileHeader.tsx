@@ -47,7 +47,7 @@ export function FileHeader({ file, open, onToggleOpen, onToggleViewed, comments 
         />
 
         <div className="path truncate font-mono text-sm font-semibold text-ink">
-          <span className="dir font-normal text-faint">{dir}</span>
+          <span className="dir font-normal text-ink-muted">{dir}</span>
           {name}
         </div>
 

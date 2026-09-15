@@ -67,8 +67,17 @@
   --farol-sunken: light-dark(#eceef0, #101215);
   --farol-ink: light-dark(#16181b, #e6e8ea);
   --farol-ink-soft: light-dark(#3d444c, #bfc5cb);
-  --farol-muted: light-dark(#697079, #8a929b);
-  --farol-faint: light-dark(#949ba3, #6c747d);
+  /* The two quiet inks are quiet for different reasons, and only one of them
+     has words in it. `muted` carries meaning nobody may be asked to guess at —
+     the directory that tells two `mod.rs` apart, a skim marker, a line number,
+     the band that says the file jumps — so it is held at 4.5:1 against every
+     surface it lands on, the selected row and the wash under a drag included,
+     which is where it used to sit at 3.9:1. `faint` is left for icons, which
+     carry their meaning in a label and need 3:1 as controls rather than 4.5:1
+     as prose; brightening those to match would flatten the one distinction the
+     pair exists to draw. */
+  --farol-muted: light-dark(#5e646c, #929aa2);
+  --farol-faint: light-dark(#7f8791, #6c747d);
   --farol-rule: light-dark(#dee1e4, #282c31);
   --farol-rule-strong: light-dark(#c6cbd1, #3a4048);
   --farol-accent: light-dark(#96690f, #e3b23c);

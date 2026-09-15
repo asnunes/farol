@@ -14,7 +14,7 @@ export function BlockBar({ block, number, total }: BlockBarProps) {
         number > 1 && "mt-6 md:mt-10",
       )}
     >
-      <div className="kicker font-mono text-[0.6875rem] tracking-wide text-faint uppercase">
+      <div className="kicker font-mono text-[0.6875rem] tracking-wide text-ink-muted uppercase">
         block {number} of {total}
       </div>
       <h2 className="mt-1 font-sans text-lg font-semibold text-ink">{block.title}</h2>

@@ -45,19 +45,43 @@ function DialogOverlay({
   )
 }
 
+/** Radix hands focus back to the `DialogTrigger` it was opened from, and none
+ * of farol's dialogs have one: every one of them is opened from state — a key,
+ * a button in the top bar — so the default restore has nothing to aim at and
+ * the panel closes with focus on BODY, putting the keyboard back at the top of
+ * the page. The control that opened it is read here instead, before Radix
+ * moves focus into the panel, and given it back on the way out. */
 function DialogContent({
   className,
   children,
   showCloseButton = true,
+  onOpenAutoFocus,
+  onCloseAutoFocus,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
 }) {
+  const opener = React.useRef<HTMLElement | null>(null)
+
   return (
     <DialogPortal data-slot="dialog-portal">
       <DialogOverlay />
       <DialogPrimitive.Content
         data-slot="dialog-content"
+        onOpenAutoFocus={(event) => {
+          // Still the opener at this point: Radix raises this before it moves
+          // focus into the panel.
+          opener.current = document.activeElement as HTMLElement | null
+          onOpenAutoFocus?.(event)
+        }}
+        onCloseAutoFocus={(event) => {
+          onCloseAutoFocus?.(event)
+          if (event.defaultPrevented) return
+          // Preventing is also what keeps Radix from reaching for the trigger
+          // that is not there.
+          event.preventDefault()
+          if (opener.current?.isConnected) opener.current.focus()
+        }}
         className={cn(
           "fixed top-[50%] left-[50%] z-50 grid max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 overflow-y-auto rounded-lg border bg-background p-5 shadow-lg sm:p-6 duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 sm:max-w-lg",
           className
