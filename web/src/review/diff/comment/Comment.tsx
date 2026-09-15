@@ -13,7 +13,7 @@ import type { CommentView } from "@/api";
  * the page has to say which without a legend. */
 export function Comment({ comment, actions }: CommentProps) {
   return (
-    <div className="comment commented flex items-start gap-2 border-b border-comment-rule bg-comment-bg py-2 pr-3 pl-8 md:gap-3 md:pr-6 md:pl-16">
+    <div className="comment commented flex items-start gap-2 border-b border-comment-rule bg-comment-bg py-2 pr-4 pl-8 md:gap-3 md:pr-6 md:pl-16">
       <span className="lbl mt-0.5 shrink-0 font-mono text-xs text-comment-ink">
         {span(comment, "–")}
       </span>

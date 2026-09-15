@@ -18,7 +18,7 @@ export function FileHeader({ file, open, onToggleOpen, onToggleViewed, comments 
   const unanswered = commentsOn(comments, file.path).length;
 
   return (
-    <div className="filehead sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-rule bg-surface px-3 py-2 md:gap-4 md:px-6 md:py-2.5">
+    <div className="filehead sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-rule bg-surface px-4 py-2 md:gap-4 md:px-6 md:py-2.5">
       <div className="left flex min-w-0 items-center gap-2 md:gap-3">
         <Button
           variant="ghost"

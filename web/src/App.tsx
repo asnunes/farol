@@ -180,7 +180,12 @@ export default function App() {
           comments={comments}
         />
 
-        <KeyBar theme={theme} onTheme={setTheme} sidebarOpen={sidebarOpen} />
+        <KeyBar
+          theme={theme}
+          onTheme={setTheme}
+          sidebarOpen={sidebarOpen}
+          onHelp={() => setHelpOpen(true)}
+        />
         <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
         {failed && <Failed what={failed} onClose={() => setFailed(null)} />}
       </div>
@@ -199,7 +204,7 @@ function Failed({ what, onClose }: { what: string; onClose: () => void }) {
     <Alert
       variant="destructive"
       role="alert"
-      className="failed fixed right-3 bottom-14 left-3 z-50 flex w-auto max-w-[34rem] items-start gap-3 border-rule bg-surface shadow-lg sm:right-4 sm:left-auto"
+      className="failed fixed right-4 bottom-14 left-4 z-50 flex w-auto max-w-[34rem] items-start gap-3 border-rule bg-surface shadow-lg sm:left-auto"
     >
       <TriangleAlert />
       <AlertDescription className="min-w-0 flex-1 font-mono text-sm whitespace-pre-wrap">
