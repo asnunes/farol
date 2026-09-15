@@ -33,8 +33,14 @@ export function TopBar({
     // Wrapping and tightening rather than dropping anything: every control here
     // is one a reviewer needs to finish, and a narrow screen is still a screen
     // a review gets read on.
+    //
+    // Two full-width rows under `md` rather than two groups sharing a line and
+    // spilling into a third. A group that is only as wide as its contents gets
+    // stranded on the end of the row above it and then wraps inside itself; a
+    // row of its own has the whole width to lay the controls out in, and they
+    // start at the left edge like everything else on the screen.
     <header className="top col-span-full flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-rule bg-surface px-4 py-2 md:px-5 md:py-2.5">
-      <div className="left flex min-w-0 items-center gap-3 md:gap-3">
+      <div className="left flex min-w-0 items-center gap-3 max-md:w-full">
         {/* Ahead of the sidebar it opens and closes, which is where every
             editor puts it and the only place it cannot be mistaken for chrome
             belonging to the diff. */}
@@ -57,7 +63,7 @@ export function TopBar({
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center justify-end gap-3 gap-y-2 md:gap-4">
+      <div className="acts flex min-w-0 flex-wrap items-center gap-2 gap-y-2 max-md:w-full md:justify-end md:gap-4">
         {unreadable.length > 0 && <Unreadable broken={unreadable} />}
         {stale && <Refresh reason={stale} onRefresh={onRefresh} />}
         <ViewToggle view={view} onChange={onView} />
@@ -74,7 +80,7 @@ export function TopBar({
             </span>
           )}
           <Progress
-            className="meter h-1.5 w-16 bg-sunken md:w-28"
+            className="meter h-1.5 w-10 bg-sunken md:w-28"
             value={review.totalFiles ? (review.viewedFiles / review.totalFiles) * 100 : 0}
             aria-label={`${review.viewedFiles} of ${review.totalFiles} read`}
           />
