@@ -20,7 +20,7 @@ export function Verdicts({ value, onChange, mine }: VerdictsProps) {
   return (
     <ToggleGroup
       type="single"
-      className="verdicts justify-start gap-2"
+      className="verdicts flex-wrap justify-start gap-2"
       value={value}
       onValueChange={(next) => next && onChange(next as Verdict)}
     >

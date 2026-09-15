@@ -28,15 +28,19 @@ export function KeyBar({ theme, onTheme, sidebarOpen }: KeyBarProps) {
   ];
 
   return (
-    <nav className="keybar col-span-full flex items-center justify-between border-t border-rule bg-surface px-5 py-1.5 font-sans text-xs text-ink-muted">
+    <nav className="keybar col-span-full flex items-center justify-between gap-3 border-t border-rule bg-surface px-3 py-1.5 font-sans text-xs text-ink-muted md:px-5">
       <ThemeSwitch theme={theme} onChange={onTheme} />
 
-      <div className="flex gap-5">
+      {/* The run scrolls sideways where the bar is too narrow to hold it. These
+          are a hint and not a control — wrapping them would spend three lines
+          of a short screen on chrome, and dropping them would take the keys
+          away from the reader on a narrow window who has a keyboard. */}
+      <div className="keys flex min-w-0 gap-4 overflow-x-auto md:gap-5">
         {shortcuts.map(({ keys, what }) => (
           // Centred rather than sitting on a baseline: a chip holding an icon
           // and a chip holding a letter have different baselines inside them,
           // and a row aligned that way comes out stepped.
-          <span key={what} className="flex items-center gap-1">
+          <span key={what} className="flex shrink-0 items-center gap-1 whitespace-nowrap">
             {keys.map((key, i) => (
               <Key key={i}>{typeof key === "string" ? key : <key.Icon className="size-3" />}</Key>
             ))}

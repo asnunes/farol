@@ -18,8 +18,8 @@ export function FileHeader({ file, open, onToggleOpen, onToggleViewed, comments 
   const unanswered = commentsOn(comments, file.path).length;
 
   return (
-    <div className="filehead sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-rule bg-surface px-6 py-2.5">
-      <div className="left flex min-w-0 items-center gap-3">
+    <div className="filehead sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-rule bg-surface px-3 py-2 md:gap-4 md:px-6 md:py-2.5">
+      <div className="left flex min-w-0 items-center gap-2 md:gap-3">
         <Button
           variant="ghost"
           size="icon-xs"
@@ -72,7 +72,7 @@ export function FileHeader({ file, open, onToggleOpen, onToggleViewed, comments 
         )}
       </div>
 
-      <div className="right flex shrink-0 items-center gap-4">
+      <div className="right flex shrink-0 items-center gap-3 md:gap-4">
         {/* Marking a file read folds it away. Without this the questions still
             waiting for an answer would fold away with it. */}
         {unanswered > 0 && (
