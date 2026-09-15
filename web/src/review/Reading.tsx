@@ -49,7 +49,7 @@ export function Reading({
   }
 
   return (
-    <main ref={pane} className="pane overflow-y-auto bg-ground pb-[60vh]" data-current={current ?? ""}>
+    <main ref={pane} className="pane overflow-y-auto bg-ground" data-current={current ?? ""}>
       {inReadingOrder(review).map((row) =>
         "block" in row ? (
           <BlockBar
@@ -77,6 +77,19 @@ export function Reading({
       )}
 
       {review.unmapped.length > 0 && <Unmapped paths={review.unmapped} />}
+
+      {/* Room under the last file, so it too can be brought up to the line a
+          quarter down the pane that decides which file is being read.
+          
+          A block and not the padding this was: padding belongs to the pane's
+          own box, so a pane shorter than the padding — which is what a narrow
+          screen with the sidebar open leaves — grew past the row it was given
+          and printed over the key bar. Scrollable content cannot do that.
+          
+          Three quarters of the pane and not a share of the window: taller than
+          the pane, it scrolls the last file off the top instead of up to the
+          line, and the review ends up reporting a file nobody is looking at. */}
+      <div aria-hidden="true" className="tail h-3/4" />
     </main>
   );
 }
