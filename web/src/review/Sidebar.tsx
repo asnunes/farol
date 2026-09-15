@@ -2,14 +2,16 @@ import { useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { fileLabels } from "@/lib/path";
 import { FileRow } from "./FileRow";
+import { commentsOn } from "./diff/line";
 import { readingOrder } from "@/api";
 import type { FileLabels } from "@/lib/path";
-import type { BlockView, ReviewView } from "@/api";
+import type { BlockView, CommentView, ReviewView } from "@/api";
 
 /** Navigation only, deliberately: no prose here, or the reader would try to
  * read the map instead of the code. */
 export function Sidebar({
   review,
+  comments,
   current,
   onPick,
 }: SidebarProps) {
@@ -27,6 +29,7 @@ export function Sidebar({
           key={block.slug}
           block={block}
           label={label}
+          comments={comments}
           number={i + 1}
           current={current}
           onPick={onPick}
@@ -52,6 +55,7 @@ export function Sidebar({
                 key={f.path}
                 file={f}
                 label={label(f.path)}
+                comments={commentsOn(comments, f.path).length}
                 current={current}
                 onPick={onPick}
               />
@@ -66,6 +70,7 @@ export function Sidebar({
 function Block({
   block,
   label,
+  comments,
   number,
   current,
   onPick,
@@ -106,6 +111,7 @@ function Block({
             key={f.path}
             file={f}
             label={label(f.path)}
+            comments={commentsOn(comments, f.path).length}
             current={current}
             onPick={onPick}
           />
@@ -117,6 +123,7 @@ function Block({
 
 type SidebarProps = {
   review: ReviewView;
+  comments: CommentView[];
   current: string | null;
   onPick: (path: string) => void;
 };
@@ -124,6 +131,7 @@ type SidebarProps = {
 type BlockProps = {
   block: BlockView;
   label: FileLabels;
+  comments: CommentView[];
   number: number;
   current: string | null;
   onPick: (path: string) => void;

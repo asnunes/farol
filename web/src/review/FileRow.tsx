@@ -14,6 +14,7 @@ import type { FileView } from "@/api";
 export function FileRow({
   file,
   label,
+  comments,
   current,
   onPick,
 }: FileRowProps) {
@@ -58,6 +59,21 @@ export function FileRow({
                 skim
               </Badge>
             )}
+
+            {/* Blue because that is the reader's own voice here, the same one
+                the comment wears down in the diff. A number rather than a run
+                of marks: a count that stops counting is one to distrust. */}
+            {comments > 0 && (
+              <span
+                className={cn(
+                  "asked grid h-4 min-w-4 shrink-0 place-items-center rounded-full",
+                  "bg-comment-dim px-1 font-mono text-[0.625rem] text-comment-ink",
+                  !file.skim && "ml-auto",
+                )}
+              >
+                {comments}
+              </span>
+            )}
           </Button>
         </TooltipTrigger>
         {/* A real tooltip rather than `title`: the browser's own waits a second,
@@ -66,6 +82,14 @@ export function FileRow({
         <TooltipContent className="max-w-[28rem]">
           <div className="font-mono text-[0.6875rem]">{file.path}</div>
           {file.skimReason && <div className="font-sans opacity-80">{file.skimReason}</div>}
+          {/* The button is labelled with the path, which is what a screen
+              reader reads instead of the row — so the count only reaches one
+              from here. */}
+          {comments > 0 && (
+            <div className="font-sans opacity-80">
+              {comments === 1 ? "1 comment" : `${comments} comments`}
+            </div>
+          )}
         </TooltipContent>
       </Tooltip>
     </li>
@@ -75,6 +99,8 @@ export function FileRow({
 type FileRowProps = {
   file: FileView;
   label: FileLabel;
+  /** How many comments the reader has left open on this file. */
+  comments: number;
   current: string | null;
   onPick: (path: string) => void;
 };
