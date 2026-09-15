@@ -1,11 +1,13 @@
-import { TriangleAlert } from "lucide-react";
+import { PanelLeft, PanelLeftClose, TriangleAlert } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { RefreshReason } from "@/hooks/useReview";
 import { Refresh } from "@/review/Refresh";
 import { Publish } from "@/review/publish/Publish";
 import { ViewToggle } from "@/review/ViewToggle";
+import { MOD } from "@/hooks/useShortcuts";
 import type { DiffView } from "@/hooks/useDiffView";
 import type { Publishing } from "@/hooks/usePublishing";
 import type { CommentView, ReviewView, Unreadable as UnreadableView } from "@/api";
@@ -21,22 +23,31 @@ export function TopBar({
   publishing,
   comments,
   onError,
+  sidebarOpen,
+  onToggleSidebar,
 }: TopBarProps) {
   const done = review.totalFiles > 0 && review.viewedFiles === review.totalFiles;
 
   return (
     <header className="top col-span-full flex flex-wrap items-center justify-between gap-4 border-b border-rule bg-surface px-5 py-2.5">
-      <div className="refs flex items-baseline gap-2 font-mono text-[0.8125rem]">
-        <span className="head font-semibold">{review.branch}</span>
-        <span className="text-rule-strong">→</span>
-        <span className="base text-ink-muted">{review.base}</span>
-        {/* Beside the refs it qualifies: what is behind is this branch's map,
-            not anything on the right-hand side of the bar. */}
-        {review.commitsBehind > 0 && (
-          <Badge className="stale-chip rounded-full border-transparent bg-highlight-dim font-mono text-xs font-normal text-highlight">
-            map {review.commitsBehind} commit{review.commitsBehind === 1 ? "" : "s"} behind
-          </Badge>
-        )}
+      <div className="left flex items-center gap-3">
+        {/* Over the column it opens and closes, which is where every editor
+            puts it and the only place it cannot be mistaken for chrome
+            belonging to the diff. */}
+        <SidebarToggle open={sidebarOpen} onToggle={onToggleSidebar} />
+
+        <div className="refs flex items-baseline gap-2 font-mono text-[0.8125rem]">
+          <span className="head font-semibold">{review.branch}</span>
+          <span className="text-rule-strong">→</span>
+          <span className="base text-ink-muted">{review.base}</span>
+          {/* Beside the refs it qualifies: what is behind is this branch's map,
+              not anything on the right-hand side of the bar. */}
+          {review.commitsBehind > 0 && (
+            <Badge className="stale-chip rounded-full border-transparent bg-highlight-dim font-mono text-xs font-normal text-highlight">
+              map {review.commitsBehind} commit{review.commitsBehind === 1 ? "" : "s"} behind
+            </Badge>
+          )}
+        </div>
       </div>
 
       <div className="flex items-center gap-4">
@@ -71,6 +82,29 @@ export function TopBar({
         />
       </div>
     </header>
+  );
+}
+
+/** Show or hide the sidebar, for the reader who wants the width back. */
+function SidebarToggle({ open, onToggle }: { open: boolean; onToggle: () => void }) {
+  const what = `${open ? "Hide" : "Show"} the sidebar — ${MOD}B`;
+
+  return (
+    <Button
+      variant="ghost"
+      size="icon-xs"
+      className="sidebartoggle text-faint hover:bg-transparent hover:text-ink"
+      aria-expanded={open}
+      aria-label={what}
+      title={what}
+      onClick={onToggle}
+    >
+      {open ? (
+        <PanelLeftClose className="size-4" aria-hidden="true" />
+      ) : (
+        <PanelLeft className="size-4" aria-hidden="true" />
+      )}
+    </Button>
   );
 }
 
@@ -120,4 +154,6 @@ type TopBarProps = {
   publishing: Publishing;
   comments: CommentView[];
   onError: (message: string) => void;
+  sidebarOpen: boolean;
+  onToggleSidebar: () => void;
 };

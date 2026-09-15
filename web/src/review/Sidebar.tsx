@@ -23,7 +23,7 @@ export function Sidebar({
   );
 
   return (
-    <aside className="map overflow-y-auto border-r border-rule bg-surface py-3">
+    <aside className="sidebar overflow-y-auto border-r border-rule bg-surface py-3">
       {review.blocks.map((block, i) => (
         <Block
           key={block.slug}

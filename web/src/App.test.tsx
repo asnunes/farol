@@ -1131,3 +1131,43 @@ describe("a comparison the map has outlived", () => {
     expect(asked.filter((u) => u.startsWith("/api/file"))).toEqual([]);
   });
 });
+
+describe("hiding the sidebar", () => {
+  it("goes away on the button and comes back on the key, both ways round", async () => {
+    // The sidebar is the only chrome that costs width, and a split diff on a
+    // laptop wants it back. Whatever hides it has to unhide it, or the reader
+    // is left with a review they cannot navigate.
+    serve({ review: review() });
+    render(<App />);
+    await waitForReading("a.rs");
+
+    const button = () => screen.getByTitle(/the sidebar —/);
+    expect(document.querySelector(".sidebar")).toBeTruthy();
+
+    const bar = () => document.querySelector(".keybar")?.textContent ?? "";
+    expect(bar()).toContain("hide sidebar");
+
+    fireEvent.click(button());
+    await waitFor(() => expect(document.querySelector(".sidebar")).toBeNull());
+
+    // The key bar says what the key will do now, not what it did last time.
+    expect(bar()).toContain("show sidebar");
+
+    fireEvent.keyDown(window, { key: "b", metaKey: true });
+    await waitFor(() => expect(document.querySelector(".sidebar")).toBeTruthy());
+
+    // Ctrl for the reader who is not on a Mac, and it is still a toggle.
+    fireEvent.keyDown(window, { key: "b", ctrlKey: true });
+    await waitFor(() => expect(document.querySelector(".sidebar")).toBeNull());
+  });
+
+  it("leaves the unmodified b alone, so typing never hides it", async () => {
+    // Every other key here is bare, and b is one keystroke away from j and n.
+    serve({ review: review() });
+    render(<App />);
+    await waitForReading("a.rs");
+
+    fireEvent.keyDown(window, { key: "b" });
+    expect(document.querySelector(".sidebar")).toBeTruthy();
+  });
+});

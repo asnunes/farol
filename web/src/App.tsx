@@ -4,6 +4,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { readingOrder } from "@/api";
+import { cn } from "@/lib/utils";
 import { useComments } from "@/hooks/useComments";
 import { useDiffView } from "@/hooks/useDiffView";
 import { useOpenFiles } from "@/hooks/useOpenFiles";
@@ -32,6 +33,11 @@ export default function App() {
     generation,
   } = useReview();
   const [helpOpen, setHelpOpen] = useState(false);
+  // The sidebar is chrome, and a wide diff is worth more than it on a narrow
+  // screen. Not remembered between visits: it opens on, which is how a review
+  // starts.
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const toggleSidebar = useCallback(() => setSidebarOpen((open) => !open), []);
   // What the reader just tried and did not get: a comment that would not save,
   // a review the host turned down. Apart from the load failure above, because
   // the review is still on the screen and still worth reading, and blanking it
@@ -87,6 +93,7 @@ export default function App() {
     goTo,
     toggleViewed: mark,
     setHelpOpen,
+    toggleSidebar,
   });
 
   if (error) {
@@ -113,7 +120,12 @@ export default function App() {
 
   return (
     <TooltipProvider>
-      <div className="app grid h-screen grid-cols-[19rem_minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)]">
+      <div
+        className={cn(
+          "app grid h-screen grid-rows-[auto_minmax(0,1fr)]",
+          sidebarOpen ? "grid-cols-[19rem_minmax(0,1fr)]" : "grid-cols-[minmax(0,1fr)]",
+        )}
+      >
         <TopBar
           review={review}
           view={view}
@@ -124,13 +136,17 @@ export default function App() {
           publishing={publishing}
           comments={comments.comments}
           onError={setFailed}
+          sidebarOpen={sidebarOpen}
+          onToggleSidebar={toggleSidebar}
         />
-        <Sidebar
-          review={review}
-          comments={comments.comments}
-          current={current}
-          onPick={goTo}
-        />
+        {sidebarOpen && (
+          <Sidebar
+            review={review}
+            comments={comments.comments}
+            current={current}
+            onPick={goTo}
+          />
+        )}
 
         <Reading
           key={generation}
@@ -143,7 +159,7 @@ export default function App() {
           comments={comments}
         />
 
-        <KeyBar theme={theme} onTheme={setTheme} />
+        <KeyBar theme={theme} onTheme={setTheme} sidebarOpen={sidebarOpen} />
         <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
         {failed && <Failed what={failed} onClose={() => setFailed(null)} />}
       </div>
