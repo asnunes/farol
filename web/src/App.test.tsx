@@ -1144,8 +1144,14 @@ describe("hiding the map", () => {
     const button = () => screen.getByTitle(/the map —/);
     expect(document.querySelector(".map")).toBeTruthy();
 
+    const bar = () => document.querySelector(".keybar")?.textContent ?? "";
+    expect(bar()).toContain("hide map");
+
     fireEvent.click(button());
     await waitFor(() => expect(document.querySelector(".map")).toBeNull());
+
+    // The key bar says what the key will do now, not what it did last time.
+    expect(bar()).toContain("show map");
 
     fireEvent.keyDown(window, { key: "b", metaKey: true });
     await waitFor(() => expect(document.querySelector(".map")).toBeTruthy());

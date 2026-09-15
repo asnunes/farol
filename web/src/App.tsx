@@ -159,7 +159,7 @@ export default function App() {
           comments={comments}
         />
 
-        <KeyBar theme={theme} onTheme={setTheme} />
+        <KeyBar theme={theme} onTheme={setTheme} mapOpen={mapOpen} />
         <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
         {failed && <Failed what={failed} onClose={() => setFailed(null)} />}
       </div>

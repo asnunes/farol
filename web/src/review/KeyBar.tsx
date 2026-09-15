@@ -14,14 +14,25 @@ import type { Theme } from "@/hooks/useTheme";
  * `⌘B` opens the run rather than sitting inside it. It is the one key here
  * that is about the screen rather than about where the reader is in the
  * review, and buried between `block` and `help` that difference was invisible:
- * it read as one more way to move. */
-export function KeyBar({ theme, onTheme }: KeyBarProps) {
+ * it read as one more way to move.
+ *
+ * It is also the one label that says what the key does rather than what it
+ * moves through, and it changes with the map, like the button's own tooltip:
+ * `file` and `block` name a thing to walk, and `map` on its own named a thing
+ * the key does not take you to. The two words are the same width, so the run
+ * does not shift when it flips. */
+export function KeyBar({ theme, onTheme, mapOpen }: KeyBarProps) {
+  const shortcuts = [
+    { keys: [`${MOD}B`], what: mapOpen ? "hide map" : "show map" },
+    ...SHORTCUTS,
+  ];
+
   return (
     <nav className="keybar col-span-full flex items-center justify-between border-t border-rule bg-surface px-5 py-1.5 font-sans text-xs text-ink-muted">
       <ThemeSwitch theme={theme} onChange={onTheme} />
 
       <div className="flex gap-5">
-        {SHORTCUTS.map(({ keys, what }) => (
+        {shortcuts.map(({ keys, what }) => (
           // Centred rather than sitting on a baseline: a chip holding an icon
           // and a chip holding a letter have different baselines inside them,
           // and a row aligned that way comes out stepped.
@@ -47,8 +58,8 @@ function Key({ children }: KeyProps) {
   );
 }
 
+/** The keys of the reading itself, which say nothing about the screen. */
 const SHORTCUTS: { keys: (string | { Icon: typeof ArrowUp })[]; what: string }[] = [
-  { keys: [`${MOD}B`], what: "map" },
   { keys: ["j", "k", { Icon: ArrowUp }, { Icon: ArrowDown }], what: "file" },
   { keys: ["n"], what: "next unread" },
   { keys: [";", { Icon: Space }], what: "mark read" },
@@ -56,6 +67,6 @@ const SHORTCUTS: { keys: (string | { Icon: typeof ArrowUp })[]; what: string }[]
   { keys: ["?"], what: "help" },
 ];
 
-type KeyBarProps = { theme: Theme; onTheme: (theme: Theme) => void };
+type KeyBarProps = { theme: Theme; onTheme: (theme: Theme) => void; mapOpen: boolean };
 
 type KeyProps = { children: React.ReactNode };
