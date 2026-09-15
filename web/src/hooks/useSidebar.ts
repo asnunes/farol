@@ -1,4 +1,5 @@
-import { useCallback, useState, useSyncExternalStore } from "react";
+import { useCallback, useState } from "react";
+import { useNarrow } from "@/hooks/useNarrow";
 
 /** Whether the sidebar is showing, and the two ways it stops.
  *
@@ -41,29 +42,3 @@ export type Sidebar = {
    * that happened — what was focused inside it has gone with it. */
   dismiss: () => boolean;
 };
-
-/** Too narrow to give the sidebar a column of its own.
- *
- * The query is what Tailwind's `max-md:` compiles to, spelled out here so the
- * one line that decides this in JavaScript and the classes that lay it out in
- * CSS cannot drift apart. */
-const NARROW = "not all and (min-width: 48rem)";
-
-function useNarrow(): boolean {
-  return useSyncExternalStore(watch, () => query()?.matches ?? false, () => false);
-}
-
-/** jsdom has no `matchMedia`, and a test that is not about the width should not
- * have to stand one up. Missing, it reads as the wide screen the app was
- * written for. */
-function query(): MediaQueryList | null {
-  return typeof window !== "undefined" && window.matchMedia
-    ? window.matchMedia(NARROW)
-    : null;
-}
-
-function watch(onChange: () => void): () => void {
-  const media = query();
-  media?.addEventListener("change", onChange);
-  return () => media?.removeEventListener("change", onChange);
-}

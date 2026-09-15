@@ -205,9 +205,22 @@
   grid-template-columns: 3.5rem minmax(0, 1fr) 3.5rem minmax(0, 1fr);
 }
 
+/* One column of code with a gutter for each side, which is what side by side
+   becomes where there is only room for one column. `SplitLines` decides which
+   of the two a row is drawn as, because the choice is not a matter of styling:
+   a line the change did not touch is the same line on both sides and is printed
+   once here, and no stylesheet can see that two cells hold one line. */
+@utility stack-row {
+  display: grid;
+  grid-template-columns: 2.75rem 2.75rem minmax(0, 1fr);
+  width: max-content;
+  min-width: 100%;
+}
+
 /* One line per line, in the shape the file has it. Unlayered on purpose: it has
    to beat the utilities that set the same properties. */
-.diff-row .code {
+.diff-row .code,
+.stack-row .code {
   white-space: pre;
 }
 
@@ -220,36 +233,12 @@
   overflow-x: auto;
 }
 
-/* Two columns of code need a screen wide enough for two columns of code. Under
-   `md` there is room for one, so the four cells fall into two rows instead: the
-   old line above the new one, each under its own number and each with the whole
-   width to itself. The pair still reads as a pair, and neither side is a word
-   per line. The side a row does not have is left out rather than drawn as an
-   empty band the width of the screen.
-   
-   Split stays split — the toggle is not touched and nothing is written down.
-   What changes is how two columns are drawn where only one fits. */
+/* Four characters of gutter is a sixth of a 390px screen spent on line numbers.
+   Three is enough for every file anybody reads on one, and the twenty pixels go
+   to the code. The stacked row is already built to that measure. */
 @media (width < 48rem) {
-  /* Four characters of gutter is a sixth of a 390px screen spent on line
-     numbers. Three is enough for every file anybody reads on one, and the
-     twenty pixels go to the code. */
   .diff-row {
     grid-template-columns: 2.75rem minmax(0, 1fr);
-  }
-
-  .split-row {
-    grid-template-columns: 2.75rem minmax(0, 1fr);
-    width: max-content;
-    min-width: 100%;
-  }
-
-  .split-row .absent {
-    display: none;
-  }
-
-  .split-row .code {
-    white-space: pre;
-    overflow-x: visible;
   }
 }
 
