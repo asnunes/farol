@@ -191,6 +191,65 @@ describe("commenting on the diff", () => {
     expect(container.querySelector(".comment")).toBeNull();
   });
 
+  it.each(["unified", "split"] as const)(
+    "raises the plus from the whole line, code included, in %s",
+    (view) => {
+      // The gutter is four characters wide and the reader's pointer is on the
+      // code, so a control that only came up over the numbers was a control
+      // nobody found. jsdom resolves no `:hover`, so what is checked is the
+      // wiring that decides it: the reveal answers to a group, and the element
+      // naming that group holds the line's code as well as its gutter.
+      tokenizer = null;
+      render(
+        <Diff diff={diff()} file={file()} view={view} comments={[]} actions={noComments()} />,
+      );
+
+      const plus = screen.getByLabelText("Comment on new line 2");
+      const line = plus.closest('[class~="group/line"]');
+
+      expect(plus.className).toContain("group-hover/line:opacity-100");
+      expect(plus.className).toContain("focus-visible:opacity-100");
+      expect(line?.querySelector(".code")?.textContent).toContain("// nota");
+    },
+  );
+
+  it("keeps each column of a split row to its own plus", () => {
+    // The two halves are two different lines. Raising the right-hand control
+    // because the pointer is over the left-hand code would offer a comment on
+    // code the reader is not looking at.
+    // A context line is the case that has both: one row, the same line facing
+    // itself, numbered once on each side.
+    tokenizer = null;
+    render(
+      <Diff diff={diff()} file={file()} view="split" comments={[]} actions={noComments()} />,
+    );
+
+    const before = screen.getByLabelText("Comment on old line 1");
+    const after = screen.getByLabelText("Comment on new line 1");
+
+    expect(before.closest(".row")).toBe(after.closest(".row"));
+    expect(before.closest('[class~="group/line"]')).not.toBe(
+      after.closest('[class~="group/line"]'),
+    );
+  });
+
+  it.each([
+    ["down the numbers", 0, 1],
+    ["back up them", 1, 0],
+  ])("picks the passage a drag %s covers", (_way, from, to) => {
+    // The hook is tested on its own; this is about the gutter still being
+    // wired to it, which is what a change to how the `+` is revealed could
+    // quietly undo.
+    const { container } = draw();
+    const gutters = container.querySelectorAll(".ln");
+
+    fireEvent.mouseDown(gutters[from]);
+    fireEvent.mouseOver(gutters[to]);
+    fireEvent.mouseUp(window);
+
+    expect(container.querySelector(".commentbox .lbl")?.textContent).toBe("1–2");
+  });
+
   it("opens the box on the line whose plus was pressed", () => {
     const { container } = draw();
 
