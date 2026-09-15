@@ -155,3 +155,88 @@ describe("picking the lines a comment is about", () => {
     expect(result.current.composing).toBeNull();
   });
 });
+
+describe("picking the lines from the plus, without a mouse", () => {
+  it("opens the box over everything reached, not over the line pressed", () => {
+    const { result } = renderHook(() => useLineSelection());
+
+    act(() => result.current.reach("new", 3, 5));
+    act(() => result.current.open("new", 3));
+
+    expect(result.current.composing).toEqual({ side: "new", from: 3, to: 5 });
+  });
+
+  it("reads a reach upward as the same span as a reach downward", () => {
+    // Shift and the up arrow, from the line that puzzled the reader.
+    const { result } = renderHook(() => useLineSelection());
+
+    act(() => result.current.reach("new", 5, 3));
+    act(() => result.current.open("new", 5));
+
+    expect(result.current.composing).toEqual({ side: "new", from: 3, to: 5 });
+  });
+
+  it("counts a reach on the old side on the old numbers", () => {
+    // The side comes from the `+` that was pressed, and a removed line is only
+    // ever on one of them — including in a file the change deleted whole.
+    const { result } = renderHook(() => useLineSelection());
+
+    act(() => result.current.reach("old", 40, 43));
+
+    expect(result.current.covers({ old: removed(41), new: null })).toBe(true);
+    expect(result.current.covers({ old: null, new: added(41) })).toBe(false);
+    act(() => result.current.open("old", 40));
+    expect(result.current.composing).toEqual({ side: "old", from: 40, to: 43 });
+  });
+
+  it("marks the lines reached so far, the way a drag does", () => {
+    // Without this the reader is choosing a passage blind, and the arrows say
+    // nothing until the box is already open.
+    const { result } = renderHook(() => useLineSelection());
+
+    act(() => result.current.reach("new", 3, 5));
+
+    expect([2, 3, 4, 5, 6].map((n) => result.current.covers(sidesOf(added(n))))).toEqual([
+      false,
+      true,
+      true,
+      true,
+      false,
+    ]);
+  });
+
+  it("leaves a span reached from another plus to that plus", () => {
+    // Every `+` in the file answers to the same selection. Opening one over a
+    // span anchored somewhere else would comment on lines nobody chose from
+    // here.
+    const { result } = renderHook(() => useLineSelection());
+    act(() => result.current.reach("new", 3, 5));
+
+    act(() => result.current.open("new", 9));
+
+    expect(result.current.composing).toEqual({ side: "new", from: 9, to: 9 });
+  });
+
+  it("gives up a span that was reached and walked away from", () => {
+    // Tabbing on leaves the rows lit otherwise, under a reader who is no
+    // longer choosing anything.
+    const { result } = renderHook(() => useLineSelection());
+    act(() => result.current.reach("new", 3, 5));
+
+    act(() => result.current.drop());
+
+    expect(result.current.covers(sidesOf(added(4)))).toBe(false);
+  });
+
+  it("does not give up the span a drag is still holding", () => {
+    // The `+` inside the gutter cell blurs while the pointer is going down the
+    // numbers, and the drag is what owns the span until the mouse comes up.
+    const { result } = renderHook(() => useLineSelection());
+    act(() => result.current.start("new", 3));
+    act(() => result.current.extend(added(5)));
+
+    act(() => result.current.drop());
+
+    expect(result.current.covers(sidesOf(added(4)))).toBe(true);
+  });
+});

@@ -152,6 +152,8 @@ Split view puts the old and new code next to each other.
 
 Click `+` or drag across line numbers to comment on a line or range, on either
 side of the diff — including removed lines, and files that were deleted whole.
+From the keyboard, `Shift` with an arrow on a focused `+` reaches for the rest
+of the passage before `Enter` opens the box.
 Comments stay local until you use **Send review** to publish them to GitHub,
 each on the side it was written on; the page guides you through authorizing the
 destination host.

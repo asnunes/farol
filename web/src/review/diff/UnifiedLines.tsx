@@ -3,7 +3,7 @@ import { Code } from "./Code";
 import { LineNotes } from "./LineNotes";
 import { LineNumber } from "./LineNumber";
 import { AtLine } from "./comment/AtLine";
-import { commentedBy, marker, notedBy, notesAt, sidesOf } from "./line";
+import { commentedBy, marker, notedBy, notesAt, reachOf, sidesOf } from "./line";
 import type { Commentary } from "./line";
 import type { Range } from "./intraline";
 import type { Token } from "@/highlight/tokens";
@@ -16,6 +16,7 @@ export function UnifiedLines({ hunk, file, coloured, marks, commentary }: Unifie
     // The row stands for both sides at once, under whichever numbers the line
     // has. The gutter shows one of them, and which one is what `sideOf` says.
     const at = sidesOf(line);
+    const side = sideOf(line);
 
     return (
       <div key={i}>
@@ -32,7 +33,12 @@ export function UnifiedLines({ hunk, file, coloured, marks, commentary }: Unifie
             commentary.select.covers(at) && "picking bg-comment-dim",
           )}
         >
-          <LineNumber line={line} side={sideOf(line)} commentary={commentary} />
+          <LineNumber
+            line={line}
+            side={side}
+            reach={reachOf(hunk, side)}
+            commentary={commentary}
+          />
           {/* Wraps instead of scrolling sideways: a narrow window would otherwise
               cut the line off, and reading code by dragging a horizontal bar is
               worse than reading it on two lines. */}

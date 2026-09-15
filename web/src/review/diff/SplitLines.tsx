@@ -4,7 +4,7 @@ import { Code } from "./Code";
 import { LineNotes } from "./LineNotes";
 import { LineNumber } from "./LineNumber";
 import { AtLine } from "./comment/AtLine";
-import { commentedBy, marker, notedBy, notesAt } from "./line";
+import { commentedBy, marker, notedBy, notesAt, reachOf } from "./line";
 import { splitRows } from "./split";
 import type { Anchor, Commentary } from "./line";
 import type { Range } from "./intraline";
@@ -97,7 +97,13 @@ function Side({ index, hunk, coloured, marks, side, commentary }: SideProps) {
 
   return (
     <div className="group/line contents">
-      <LineNumber line={line} side={side} tint={tint} commentary={commentary} />
+      <LineNumber
+        line={line}
+        side={side}
+        tint={tint}
+        reach={reachOf(hunk, side)}
+        commentary={commentary}
+      />
       <div className={cn("code break-words whitespace-pre-wrap", tint)}>
         {marker(line)} <Code tokens={coloured?.[index]} plain={line.content} marks={marks[index]} />
       </div>

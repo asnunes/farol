@@ -38,10 +38,14 @@ changed files are assigned and pending note decisions are resolved.
 | `;` or Space | Mark the current file read |
 | `[` / `]` | Move between blocks |
 | `?` | Show shortcuts |
+| `Shift` + `↑` / `↓` on a `+` | Reach for another line to comment on |
 
-Drag down line numbers or click `+` to comment. Expanded context between hunks
-is readable but does not accept comments: GitHub comments must land inside the
-diff.
+Drag down line numbers or click `+` to comment. Without a mouse, tab to the `+`
+on a line and hold `Shift` with the up or down arrow: each press reaches one
+line further, the rows light up as they do under a drag, and `Enter` opens the
+box over everything reached. The reach stays inside the hunk and on the side the
+`+` belongs to. Expanded context between hunks is readable but does not accept
+comments: GitHub comments must land inside the diff.
 
 Both sides of the diff take comments. The numbers on the left are the code the
 change removed, which is the only side a file deleted whole still has; the
