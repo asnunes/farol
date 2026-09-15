@@ -579,15 +579,17 @@ describe("picking the lines a comment is about with the keyboard", () => {
 });
 
 describe("where the keyboard is left when a comment box closes", () => {
-  function open(): HTMLElement {
+  /** The box, opened from the `+` with the keyboard on it — which is the only
+   * way there is a control to hand focus back to. */
+  function open() {
     tokenizer = null;
-    render(
+    const page = render(
       <Diff diff={diff()} file={file()} view="unified" comments={[]} actions={noComments()} />,
     );
     const plus = screen.getByLabelText("Comment on new line 2");
     plus.focus();
     fireEvent.click(plus);
-    return plus;
+    return { ...page, plus };
   }
 
   it("opens ready to type", () => {
@@ -611,10 +613,25 @@ describe("where the keyboard is left when a comment box closes", () => {
     expect(document.getElementById(said ?? "")?.textContent).toContain("⌘↵");
   });
 
+  it("keeps that description inside the box and not off the foot of the page", () => {
+    // `sr-only` is absolute with no offsets, so it lands at its static position
+    // inside the nearest positioned ancestor — and with none, that is the page.
+    // A box opened far down a scrolled pane put a one-pixel span hundreds of
+    // pixels below the screen, and the page grew a scrollbar for it. jsdom does
+    // no layout, so what is checked is the containing block that prevents it.
+    const { container } = open();
+    const box = screen.getByRole("textbox");
+    const said = document.getElementById(box.getAttribute("aria-describedby") ?? "");
+
+    const wrapper = container.querySelector(".commentbox");
+    expect(wrapper?.className).toContain("relative");
+    expect(wrapper?.contains(said)).toBe(true);
+  });
+
   it("hands it back to the plus it was opened from when the box is cancelled", () => {
     // Dropped on BODY instead, the reader is back at the top of the review,
     // a page away from the line they had just read.
-    const plus = open();
+    const { plus } = open();
 
     fireEvent.click(screen.getByText("Cancel"));
 
@@ -622,7 +639,7 @@ describe("where the keyboard is left when a comment box closes", () => {
   });
 
   it("hands it back when the comment has been saved, too", async () => {
-    const plus = open();
+    const { plus } = open();
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "Why this order?" } });
 
     await act(async () => void fireEvent.click(screen.getByText("Comment")));

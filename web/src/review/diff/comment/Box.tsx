@@ -43,7 +43,12 @@ export function Box({ span: lines, onSave, onCancel }: BoxProps) {
   }
 
   return (
-    <div className="commentbox commented border-b border-comment-rule bg-comment-bg py-3 pr-6 pl-16">
+    // `relative` for the description below: `sr-only` is absolute with no
+    // offsets, so it lands at its static position inside the nearest positioned
+    // ancestor. With none, that is the page — and a box opened far down a
+    // scrolled pane hung a one-pixel span hundreds of pixels past the bottom of
+    // the screen, which the page then grew a scrollbar for.
+    <div className="commentbox commented relative border-b border-comment-rule bg-comment-bg py-3 pr-6 pl-16">
       <label htmlFor={field} className="lbl mb-1.5 block font-mono text-xs text-comment-ink">
         {about(lines)}
       </label>
