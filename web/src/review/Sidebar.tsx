@@ -8,7 +8,14 @@ import type { FileLabels } from "@/lib/path";
 import type { BlockView, CommentView, ReviewView } from "@/api";
 
 /** Navigation only, deliberately: no prose here, or the reader would try to
- * read the map instead of the code. */
+ * read the map instead of the code.
+ *
+ * Beside the code where there is room for it, and above the code where there is
+ * not — a column 19rem wide on a 390px screen leaves the diff a word per line.
+ * Above, it is held to a third of the height: the point of opening it is to
+ * reach a file, and a list that fills the screen has stopped being navigation
+ * and become the page. It scrolls inside that third, and picking a file puts it
+ * away, which is the composition's business and not this one's. */
 export function Sidebar({
   review,
   comments,
@@ -23,7 +30,7 @@ export function Sidebar({
   );
 
   return (
-    <aside className="sidebar overflow-y-auto border-r border-rule bg-surface py-3">
+    <aside className="sidebar overflow-y-auto border-rule bg-surface py-3 max-md:max-h-[33dvh] max-md:border-b md:border-r">
       {review.blocks.map((block, i) => (
         <Block
           key={block.slug}

@@ -63,7 +63,7 @@ export function Diff({ diff, file, view, comments, actions }: DiffProps) {
   const tail = below ? opening(below, opened) : null;
 
   return (
-    <div className="diff font-mono text-[0.8125rem] leading-relaxed">
+    <div className="diff overflow-x-auto font-mono text-xs leading-relaxed md:text-[0.8125rem]">
       {diff.hunks.map((hunk, i) => {
         // The gap above this hunk: the leading one for the first hunk, and the
         // one between neighbours after that.

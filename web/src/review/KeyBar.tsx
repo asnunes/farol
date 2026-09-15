@@ -1,4 +1,5 @@
 import { ArrowDown, ArrowUp, Space } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
 import { MOD } from "@/hooks/useShortcuts";
 import { ThemeSwitch } from "@/review/ThemeSwitch";
@@ -20,23 +21,38 @@ import type { Theme } from "@/hooks/useTheme";
  * moves through, and it changes with the sidebar, like the button's own
  * tooltip. It does not say *map*: the map is the whole review, which is what
  * the stale chip up in the top bar is counting commits against — the sidebar
- * is one way of looking at it. */
-export function KeyBar({ theme, onTheme, sidebarOpen }: KeyBarProps) {
+ * is one way of looking at it.
+ *
+ * Under `md` the run does not fit, and a row of chips cut off mid-word is worse
+ * than no row at all: it looks broken and offers nothing to press. One button
+ * stands in for the whole list, which is the only way to reach the keys at all
+ * on a screen with no `?` to press. */
+export function KeyBar({ theme, onTheme, sidebarOpen, onHelp }: KeyBarProps) {
   const shortcuts = [
     { keys: [`${MOD}B`], what: sidebarOpen ? "hide sidebar" : "show sidebar" },
     ...SHORTCUTS,
   ];
 
   return (
-    <nav className="keybar col-span-full flex items-center justify-between border-t border-rule bg-surface px-5 py-1.5 font-sans text-xs text-ink-muted">
+    <nav className="keybar col-span-full flex items-center justify-between gap-3 border-t border-rule bg-surface px-4 py-1.5 font-sans text-xs text-ink-muted md:px-5">
       <ThemeSwitch theme={theme} onChange={onTheme} />
 
-      <div className="flex gap-5">
+      <Button
+        variant="ghost"
+        size="sm"
+        className="keyhelp gap-1.5 font-sans text-xs font-normal text-ink-muted hover:bg-sunken hover:text-ink md:hidden"
+        onClick={onHelp}
+      >
+        <Key>?</Key>
+        keys
+      </Button>
+
+      <div className="keys hidden gap-5 md:flex">
         {shortcuts.map(({ keys, what }) => (
           // Centred rather than sitting on a baseline: a chip holding an icon
           // and a chip holding a letter have different baselines inside them,
           // and a row aligned that way comes out stepped.
-          <span key={what} className="flex items-center gap-1">
+          <span key={what} className="flex items-center gap-1 whitespace-nowrap">
             {keys.map((key, i) => (
               <Key key={i}>{typeof key === "string" ? key : <key.Icon className="size-3" />}</Key>
             ))}
@@ -67,6 +83,12 @@ const SHORTCUTS: { keys: (string | { Icon: typeof ArrowUp })[]; what: string }[]
   { keys: ["?"], what: "help" },
 ];
 
-type KeyBarProps = { theme: Theme; onTheme: (theme: Theme) => void; sidebarOpen: boolean };
+type KeyBarProps = {
+  theme: Theme;
+  onTheme: (theme: Theme) => void;
+  sidebarOpen: boolean;
+  /** Open the list of keys, for the screen that has no room to print it. */
+  onHelp: () => void;
+};
 
 type KeyProps = { children: React.ReactNode };

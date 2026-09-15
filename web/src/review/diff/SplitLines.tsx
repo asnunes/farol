@@ -1,19 +1,23 @@
 import { useMemo } from "react";
 import { cn } from "@/lib/utils";
+import { useNarrow } from "@/hooks/useNarrow";
 import { Code } from "./Code";
 import { LineNotes } from "./LineNotes";
 import { LineNumber } from "./LineNumber";
 import { AtLine } from "./comment/AtLine";
 import { commentedBy, marker, notedBy, notesAt, reachOf } from "./line";
 import { splitRows } from "./split";
+import type { SplitRow } from "./split";
 import type { Anchor, Commentary } from "./line";
 import type { Range } from "./intraline";
 import type { Token } from "@/highlight/tokens";
-import type { FileView, Hunk, Side as DiffSide } from "@/api";
+import type { DiffLine, FileView, Hunk, Side as DiffSide } from "@/api";
 
-/** The old side and the new one, facing each other. */
+/** The old side and the new one, facing each other — or stacked, on a screen
+ * with room for one column of code rather than two. */
 export function SplitLines({ hunk, file, coloured, marks, commentary }: SplitLinesProps) {
   const rows = useMemo(() => splitRows(hunk.lines), [hunk]);
+  const stacked = useNarrow();
 
   return rows.map((row, i) => {
     // A note belongs to the new side, and falls back to the old one for a row
@@ -32,28 +36,41 @@ export function SplitLines({ hunk, file, coloured, marks, commentary }: SplitLin
       <div key={i}>
         <div
           className={cn(
-            "row split-row",
+            "row",
+            stacked ? "stack-row" : "split-row",
             line && notedBy(file, line) && "noted",
             commentedBy(commentary.comments, at) && "commented",
             commentary.select.covers(at) && "picking bg-comment-dim",
           )}
         >
-          <Side
-            index={row.left}
-            hunk={hunk}
-            coloured={coloured}
-            marks={marks}
-            side="old"
-            commentary={commentary}
-          />
-          <Side
-            index={row.right}
-            hunk={hunk}
-            coloured={coloured}
-            marks={marks}
-            side="new"
-            commentary={commentary}
-          />
+          {stacked ? (
+            <Stacked
+              row={row}
+              hunk={hunk}
+              coloured={coloured}
+              marks={marks}
+              commentary={commentary}
+            />
+          ) : (
+            <>
+              <Side
+                index={row.left}
+                hunk={hunk}
+                coloured={coloured}
+                marks={marks}
+                side="old"
+                commentary={commentary}
+              />
+              <Side
+                index={row.right}
+                hunk={hunk}
+                coloured={coloured}
+                marks={marks}
+                side="new"
+                commentary={commentary}
+              />
+            </>
+          )}
         </div>
 
         {line && <LineNotes notes={notesAt(file, line)} file={file} />}
@@ -88,12 +105,7 @@ function Side({ index, hunk, coloured, marks, side, commentary }: SideProps) {
   }
 
   const line = hunk.lines[index];
-  const tint =
-    line.kind === "added"
-      ? "add bg-add-bg text-add-ink"
-      : line.kind === "removed"
-        ? "del bg-del-bg text-del-ink"
-        : "";
+  const tint = tintOf(line);
 
   return (
     <div className="group/line contents">
@@ -104,11 +116,103 @@ function Side({ index, hunk, coloured, marks, side, commentary }: SideProps) {
         reach={reachOf(hunk, side)}
         commentary={commentary}
       />
-      <div className={cn("code break-words whitespace-pre-wrap", tint)}>
+      <div className={cn("code", tint)}>
         {marker(line)} <Code tokens={coloured?.[index]} plain={line.content} marks={marks[index]} />
       </div>
     </div>
   );
+}
+
+/** The same row, where there is width for one column of code rather than two.
+ *
+ * **A line the change did not touch is printed once.** It is the same line on
+ * both sides, and stacked it would arrive twice — the whole unchanged half of a
+ * file read through a second time on the screen with least room for it. It
+ * keeps both its numbers, one in each gutter, so the old and the new numbering
+ * are both there and a comment still has two places to go.
+ *
+ * A line the change did touch keeps its side. Its number sits in its own
+ * gutter and the other gutter is left empty, which is what says which side it
+ * is once the two are above each other instead of beside each other — the
+ * colour says it too, and the empty gutter says it where colour cannot. */
+function Stacked({ row, hunk, coloured, marks, commentary }: StackedProps) {
+  // `splitRows` gives a context line the same index on both sides, which is the
+  // question being asked here: is this one line or two?
+  if (row.left !== null && row.left === row.right) {
+    const line = hunk.lines[row.left];
+
+    return (
+      <div className="group/line contents">
+        <LineNumber line={line} side="old" reach={reachOf(hunk, "old")} commentary={commentary} />
+        <LineNumber line={line} side="new" reach={reachOf(hunk, "new")} commentary={commentary} />
+        <div className="code">
+          {marker(line)}{" "}
+          <Code tokens={coloured?.[row.left]} plain={line.content} marks={marks[row.left]} />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {row.left !== null && (
+        <Stack
+          index={row.left}
+          side="old"
+          hunk={hunk}
+          coloured={coloured}
+          marks={marks}
+          commentary={commentary}
+        />
+      )}
+      {row.right !== null && (
+        <Stack
+          index={row.right}
+          side="new"
+          hunk={hunk}
+          coloured={coloured}
+          marks={marks}
+          commentary={commentary}
+        />
+      )}
+    </>
+  );
+}
+
+/** One changed line on a line of its own: its number under its own side, the
+ * other gutter empty, and the code. Three cells, which is one row of the grid. */
+function Stack({ index, side, hunk, coloured, marks, commentary }: StackProps) {
+  const line = hunk.lines[index];
+  const tint = tintOf(line);
+  const number = (
+    <LineNumber
+      line={line}
+      side={side}
+      tint={tint}
+      reach={reachOf(hunk, side)}
+      commentary={commentary}
+    />
+  );
+  const empty = <div className={cn("ln blank", tint)} aria-hidden="true" />;
+
+  return (
+    <div className="group/line contents">
+      {side === "old" ? number : empty}
+      {side === "old" ? empty : number}
+      <div className={cn("code", tint)}>
+        {marker(line)} <Code tokens={coloured?.[index]} plain={line.content} marks={marks[index]} />
+      </div>
+    </div>
+  );
+}
+
+/** What a line is washed in, which both layouts ask for the same way. */
+function tintOf(line: DiffLine): string {
+  return line.kind === "added"
+    ? "add bg-add-bg text-add-ink"
+    : line.kind === "removed"
+      ? "del bg-del-bg text-del-ink"
+      : "";
 }
 
 type SplitLinesProps = {
@@ -125,5 +229,22 @@ type SideProps = {
   coloured: Token[][] | null;
   marks: (Range[] | undefined)[];
   side: DiffSide;
+  commentary: Commentary;
+};
+
+type StackedProps = {
+  row: SplitRow;
+  hunk: Hunk;
+  coloured: Token[][] | null;
+  marks: (Range[] | undefined)[];
+  commentary: Commentary;
+};
+
+type StackProps = {
+  index: number;
+  side: DiffSide;
+  hunk: Hunk;
+  coloured: Token[][] | null;
+  marks: (Range[] | undefined)[];
   commentary: Commentary;
 };

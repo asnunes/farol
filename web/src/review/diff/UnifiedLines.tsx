@@ -39,10 +39,10 @@ export function UnifiedLines({ hunk, file, coloured, marks, commentary }: Unifie
             reach={reachOf(hunk, side)}
             commentary={commentary}
           />
-          {/* Wraps instead of scrolling sideways: a narrow window would otherwise
-              cut the line off, and reading code by dragging a horizontal bar is
-              worse than reading it on two lines. */}
-          <div className="code break-words whitespace-pre-wrap">
+          {/* How a line that runs past the edge is dealt with belongs to the
+              row's geometry, which is in the stylesheet: the unified row grows
+              to its line and the diff scrolls, the split one wraps. */}
+          <div className="code">
             {marker(line)} <Code tokens={coloured?.[i]} plain={line.content} marks={marks[i]} />
           </div>
         </div>

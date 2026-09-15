@@ -8,10 +8,10 @@ export function BlockBar({ block, number, total }: BlockBarProps) {
     <div
       data-block={block.slug}
       className={cn(
-        "blockbar border-y border-rule bg-surface px-6 py-4",
+        "blockbar border-y border-rule bg-surface px-4 py-3 md:px-6 md:py-4",
         // Air between blocks, so one does not run into the file list of the
         // block before it. Not above the first: nothing precedes it.
-        number > 1 && "mt-10",
+        number > 1 && "mt-6 md:mt-10",
       )}
     >
       <div className="kicker font-mono text-[0.6875rem] tracking-wide text-ink-muted uppercase">

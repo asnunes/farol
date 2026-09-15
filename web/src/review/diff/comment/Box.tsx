@@ -48,7 +48,7 @@ export function Box({ span: lines, onSave, onCancel }: BoxProps) {
     // ancestor. With none, that is the page — and a box opened far down a
     // scrolled pane hung a one-pixel span hundreds of pixels past the bottom of
     // the screen, which the page then grew a scrollbar for.
-    <div className="commentbox commented relative border-b border-comment-rule bg-comment-bg py-3 pr-6 pl-16">
+    <div className="commentbox commented relative border-b border-comment-rule bg-comment-bg py-3 pr-4 pl-8 md:pr-6 md:pl-16">
       <label htmlFor={field} className="lbl mb-1.5 block font-mono text-xs text-comment-ink">
         {about(lines)}
       </label>
