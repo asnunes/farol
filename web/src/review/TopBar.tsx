@@ -25,32 +25,45 @@ export function TopBar({
   onError,
   sidebarOpen,
   onToggleSidebar,
+  toggleRef,
 }: TopBarProps) {
   const done = review.totalFiles > 0 && review.viewedFiles === review.totalFiles;
 
   return (
-    <header className="top col-span-full flex flex-wrap items-center justify-between gap-4 border-b border-rule bg-surface px-5 py-2.5">
-      <div className="left flex items-center gap-3">
-        {/* Over the column it opens and closes, which is where every editor
-            puts it and the only place it cannot be mistaken for chrome
+    // Wrapping and tightening rather than dropping anything: every control here
+    // is one a reviewer needs to finish, and a narrow screen is still a screen
+    // a review gets read on.
+    //
+    // Two full-width rows under `md` rather than two groups sharing a line and
+    // spilling into a third. A group that is only as wide as its contents gets
+    // stranded on the end of the row above it and then wraps inside itself; a
+    // row of its own has the whole width to lay the controls out in, and they
+    // start at the left edge like everything else on the screen.
+    <header className="top col-span-full flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-rule bg-surface px-4 py-2 md:px-5 md:py-2.5">
+      <div className="left flex min-w-0 items-center gap-3 max-md:w-full">
+        {/* Ahead of the sidebar it opens and closes, which is where every
+            editor puts it and the only place it cannot be mistaken for chrome
             belonging to the diff. */}
-        <SidebarToggle open={sidebarOpen} onToggle={onToggleSidebar} />
+        <SidebarToggle open={sidebarOpen} onToggle={onToggleSidebar} toggleRef={toggleRef} />
 
-        <div className="refs flex items-baseline gap-2 font-mono text-[0.8125rem]">
-          <span className="head font-semibold">{review.branch}</span>
-          <span className="text-rule-strong">→</span>
-          <span className="base text-ink-muted">{review.base}</span>
+        {/* The refs give way first: a branch named after a ticket and three
+            words is the one thing here with no natural width, and truncating it
+            costs less than pushing everything else off the bar. */}
+        <div className="refs flex min-w-0 items-baseline gap-2 font-mono text-[0.8125rem]">
+          <span className="head truncate font-semibold">{review.branch}</span>
+          <span className="shrink-0 text-rule-strong">→</span>
+          <span className="base truncate text-ink-muted">{review.base}</span>
           {/* Beside the refs it qualifies: what is behind is this branch's map,
               not anything on the right-hand side of the bar. */}
           {review.commitsBehind > 0 && (
-            <Badge className="stale-chip rounded-full border-transparent bg-highlight-dim font-mono text-xs font-normal text-highlight">
+            <Badge className="stale-chip shrink-0 rounded-full border-transparent bg-highlight-dim font-mono text-xs font-normal text-highlight">
               map {review.commitsBehind} commit{review.commitsBehind === 1 ? "" : "s"} behind
             </Badge>
           )}
         </div>
       </div>
 
-      <div className="flex items-center gap-4">
+      <div className="acts flex min-w-0 flex-wrap items-center gap-2 gap-y-2 max-md:w-full md:justify-end md:gap-4">
         {unreadable.length > 0 && <Unreadable broken={unreadable} />}
         {stale && <Refresh reason={stale} onRefresh={onRefresh} />}
         <ViewToggle view={view} onChange={onView} />
@@ -67,7 +80,7 @@ export function TopBar({
             </span>
           )}
           <Progress
-            className="meter h-1.5 w-28 bg-sunken"
+            className="meter h-1.5 w-10 bg-sunken md:w-28"
             value={review.totalFiles ? (review.viewedFiles / review.totalFiles) * 100 : 0}
             aria-label={`${review.viewedFiles} of ${review.totalFiles} read`}
           />
@@ -86,14 +99,15 @@ export function TopBar({
 }
 
 /** Show or hide the sidebar, for the reader who wants the width back. */
-function SidebarToggle({ open, onToggle }: { open: boolean; onToggle: () => void }) {
+function SidebarToggle({ open, onToggle, toggleRef }: SidebarToggleProps) {
   const what = `${open ? "Hide" : "Show"} the sidebar — ${MOD}B`;
 
   return (
     <Button
+      ref={toggleRef}
       variant="ghost"
       size="icon-xs"
-      className="sidebartoggle text-faint hover:bg-transparent hover:text-ink"
+      className="sidebartoggle shrink-0 text-faint hover:bg-transparent hover:text-ink max-md:size-9"
       aria-expanded={open}
       aria-label={what}
       title={what}
@@ -156,4 +170,12 @@ type TopBarProps = {
   onError: (message: string) => void;
   sidebarOpen: boolean;
   onToggleSidebar: () => void;
+  /** Focus comes back here when the sidebar closes under whoever was in it. */
+  toggleRef: React.Ref<HTMLButtonElement>;
+};
+
+type SidebarToggleProps = {
+  open: boolean;
+  onToggle: () => void;
+  toggleRef: React.Ref<HTMLButtonElement>;
 };

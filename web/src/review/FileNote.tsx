@@ -6,7 +6,7 @@
  * markdown starts a paragraph. */
 export function FileNote({ children }: FileNoteProps) {
   return (
-    <div className="filenote flex items-start gap-2 border-b border-note-rule bg-note-bg px-6 py-2.5 font-serif text-[0.9375rem] leading-relaxed text-ink-soft">
+    <div className="filenote flex items-start gap-2 border-b border-note-rule bg-note-bg px-4 py-2 font-serif text-[0.9375rem] leading-relaxed text-ink-soft md:px-6 md:py-2.5">
       {children}
     </div>
   );

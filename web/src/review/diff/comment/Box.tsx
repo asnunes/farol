@@ -24,7 +24,7 @@ export function Box({ span: lines, onSave, onCancel }: BoxProps) {
   }
 
   return (
-    <div className="commentbox commented border-b border-comment-rule bg-comment-bg py-3 pr-6 pl-16">
+    <div className="commentbox commented border-b border-comment-rule bg-comment-bg py-3 pr-4 pl-8 md:pr-6 md:pl-16">
       <div className="lbl mb-1.5 font-mono text-xs text-comment-ink">
         {span(lines, "–")}
       </div>

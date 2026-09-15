@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { TriangleAlert, X } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import { usePublishing } from "@/hooks/usePublishing";
 import { useTheme } from "@/hooks/useTheme";
 import { useReview } from "@/hooks/useReview";
 import { useShortcuts } from "@/hooks/useShortcuts";
+import { useSidebar } from "@/hooks/useSidebar";
 import { HelpDialog } from "@/review/HelpDialog";
 import { KeyBar } from "@/review/KeyBar";
 import { scrollToFile } from "@/lib/scroll";
@@ -33,11 +34,9 @@ export default function App() {
     generation,
   } = useReview();
   const [helpOpen, setHelpOpen] = useState(false);
-  // The sidebar is chrome, and a wide diff is worth more than it on a narrow
-  // screen. Not remembered between visits: it opens on, which is how a review
-  // starts.
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const toggleSidebar = useCallback(() => setSidebarOpen((open) => !open), []);
+  const { open: sidebarOpen, toggle, dismiss } = useSidebar();
+  // Where focus goes when the sidebar it opens is taken out from under it.
+  const sidebarToggle = useRef<HTMLButtonElement>(null);
   // What the reader just tried and did not get: a comment that would not save,
   // a review the host turned down. Apart from the load failure above, because
   // the review is still on the screen and still worth reading, and blanking it
@@ -48,6 +47,17 @@ export default function App() {
   const [theme, setTheme] = useTheme();
   const comments = useComments(setFailed, generation);
   const publishing = usePublishing();
+
+  // The sidebar can go while the reader is standing in it, and focus has to be
+  // put somewhere before it does — dropped on the document, the next Tab
+  // starts the page over. Only from inside it: ⌘B is deliberately live while a
+  // comment is being typed, and that box keeps the cursor.
+  const toggleSidebar = useCallback(() => {
+    if (document.querySelector(".sidebar")?.contains(document.activeElement)) {
+      sidebarToggle.current?.focus();
+    }
+    toggle();
+  }, [toggle]);
 
   const order = review ? readingOrder(review) : [];
   const index = order.findIndex((f) => f.path === current);
@@ -100,7 +110,7 @@ export default function App() {
     return (
       <Alert
         variant="destructive"
-        className="fatal m-8 w-auto border-rule bg-surface"
+        className="fatal m-4 w-auto border-rule bg-surface md:m-8"
       >
         <TriangleAlert />
         <AlertTitle className="font-sans">
@@ -122,8 +132,13 @@ export default function App() {
     <TooltipProvider>
       <div
         className={cn(
-          "app grid h-screen grid-rows-[auto_minmax(0,1fr)]",
-          sidebarOpen ? "grid-cols-[19rem_minmax(0,1fr)]" : "grid-cols-[minmax(0,1fr)]",
+          // `dvh` and not `vh`: a phone's browser chrome slides in and out over
+          // the bottom of the viewport, and `vh` measures it as if it were
+          // never there — which puts the key bar under it.
+          "app grid h-dvh",
+          sidebarOpen
+            ? "grid-cols-[minmax(0,1fr)] grid-rows-[auto_auto_minmax(0,1fr)] md:grid-cols-[19rem_minmax(0,1fr)] md:grid-rows-[auto_minmax(0,1fr)]"
+            : "grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)]",
         )}
       >
         <TopBar
@@ -138,13 +153,19 @@ export default function App() {
           onError={setFailed}
           sidebarOpen={sidebarOpen}
           onToggleSidebar={toggleSidebar}
+          toggleRef={sidebarToggle}
         />
         {sidebarOpen && (
           <Sidebar
             review={review}
             comments={comments.comments}
             current={current}
-            onPick={goTo}
+            onPick={(path) => {
+              goTo(path);
+              // Over the code, picking is the end of what the sidebar was for,
+              // so it goes — and the row that was clicked goes with it.
+              if (dismiss()) sidebarToggle.current?.focus();
+            }}
           />
         )}
 
@@ -159,7 +180,12 @@ export default function App() {
           comments={comments}
         />
 
-        <KeyBar theme={theme} onTheme={setTheme} sidebarOpen={sidebarOpen} />
+        <KeyBar
+          theme={theme}
+          onTheme={setTheme}
+          sidebarOpen={sidebarOpen}
+          onHelp={() => setHelpOpen(true)}
+        />
         <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
         {failed && <Failed what={failed} onClose={() => setFailed(null)} />}
       </div>
@@ -178,7 +204,7 @@ function Failed({ what, onClose }: { what: string; onClose: () => void }) {
     <Alert
       variant="destructive"
       role="alert"
-      className="failed fixed right-4 bottom-14 z-50 flex w-auto max-w-[34rem] items-start gap-3 border-rule bg-surface shadow-lg"
+      className="failed fixed right-4 bottom-14 left-4 z-50 flex w-auto max-w-[34rem] items-start gap-3 border-rule bg-surface shadow-lg sm:left-auto"
     >
       <TriangleAlert />
       <AlertDescription className="min-w-0 flex-1 font-mono text-sm whitespace-pre-wrap">
