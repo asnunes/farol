@@ -14,7 +14,7 @@ const KEYS: [string, string][] = [
   [";", "mark the current file read"],
   ["Space", "the same"],
   ["[ / ]", "previous and next block"],
-  [`${MOD}B`, "show or hide the map"],
+  [`${MOD}B`, "show or hide the sidebar"],
   ["?", "this list"],
 ];
 

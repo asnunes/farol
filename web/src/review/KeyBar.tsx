@@ -17,13 +17,13 @@ import type { Theme } from "@/hooks/useTheme";
  * it read as one more way to move.
  *
  * It is also the one label that says what the key does rather than what it
- * moves through, and it changes with the map, like the button's own tooltip:
- * `file` and `block` name a thing to walk, and `map` on its own named a thing
- * the key does not take you to. The two words are the same width, so the run
- * does not shift when it flips. */
-export function KeyBar({ theme, onTheme, mapOpen }: KeyBarProps) {
+ * moves through, and it changes with the sidebar, like the button's own
+ * tooltip. It does not say *map*: the map is the whole review, which is what
+ * the stale chip up in the top bar is counting commits against — the sidebar
+ * is one way of looking at it. */
+export function KeyBar({ theme, onTheme, sidebarOpen }: KeyBarProps) {
   const shortcuts = [
-    { keys: [`${MOD}B`], what: mapOpen ? "hide map" : "show map" },
+    { keys: [`${MOD}B`], what: sidebarOpen ? "hide sidebar" : "show sidebar" },
     ...SHORTCUTS,
   ];
 
@@ -67,6 +67,6 @@ const SHORTCUTS: { keys: (string | { Icon: typeof ArrowUp })[]; what: string }[]
   { keys: ["?"], what: "help" },
 ];
 
-type KeyBarProps = { theme: Theme; onTheme: (theme: Theme) => void; mapOpen: boolean };
+type KeyBarProps = { theme: Theme; onTheme: (theme: Theme) => void; sidebarOpen: boolean };
 
 type KeyProps = { children: React.ReactNode };

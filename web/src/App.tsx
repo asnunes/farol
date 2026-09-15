@@ -33,11 +33,11 @@ export default function App() {
     generation,
   } = useReview();
   const [helpOpen, setHelpOpen] = useState(false);
-  // The map is chrome, and a wide diff is worth more than it on a narrow
+  // The sidebar is chrome, and a wide diff is worth more than it on a narrow
   // screen. Not remembered between visits: it opens on, which is how a review
   // starts.
-  const [mapOpen, setMapOpen] = useState(true);
-  const toggleMap = useCallback(() => setMapOpen((open) => !open), []);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const toggleSidebar = useCallback(() => setSidebarOpen((open) => !open), []);
   // What the reader just tried and did not get: a comment that would not save,
   // a review the host turned down. Apart from the load failure above, because
   // the review is still on the screen and still worth reading, and blanking it
@@ -93,7 +93,7 @@ export default function App() {
     goTo,
     toggleViewed: mark,
     setHelpOpen,
-    toggleMap,
+    toggleSidebar,
   });
 
   if (error) {
@@ -123,7 +123,7 @@ export default function App() {
       <div
         className={cn(
           "app grid h-screen grid-rows-[auto_minmax(0,1fr)]",
-          mapOpen ? "grid-cols-[19rem_minmax(0,1fr)]" : "grid-cols-[minmax(0,1fr)]",
+          sidebarOpen ? "grid-cols-[19rem_minmax(0,1fr)]" : "grid-cols-[minmax(0,1fr)]",
         )}
       >
         <TopBar
@@ -136,10 +136,10 @@ export default function App() {
           publishing={publishing}
           comments={comments.comments}
           onError={setFailed}
-          mapOpen={mapOpen}
-          onToggleMap={toggleMap}
+          sidebarOpen={sidebarOpen}
+          onToggleSidebar={toggleSidebar}
         />
-        {mapOpen && (
+        {sidebarOpen && (
           <Sidebar
             review={review}
             comments={comments.comments}
@@ -159,7 +159,7 @@ export default function App() {
           comments={comments}
         />
 
-        <KeyBar theme={theme} onTheme={setTheme} mapOpen={mapOpen} />
+        <KeyBar theme={theme} onTheme={setTheme} sidebarOpen={sidebarOpen} />
         <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
         {failed && <Failed what={failed} onClose={() => setFailed(null)} />}
       </div>

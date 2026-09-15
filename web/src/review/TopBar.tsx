@@ -23,8 +23,8 @@ export function TopBar({
   publishing,
   comments,
   onError,
-  mapOpen,
-  onToggleMap,
+  sidebarOpen,
+  onToggleSidebar,
 }: TopBarProps) {
   const done = review.totalFiles > 0 && review.viewedFiles === review.totalFiles;
 
@@ -34,7 +34,7 @@ export function TopBar({
         {/* Over the column it opens and closes, which is where every editor
             puts it and the only place it cannot be mistaken for chrome
             belonging to the diff. */}
-        <MapToggle open={mapOpen} onToggle={onToggleMap} />
+        <SidebarToggle open={sidebarOpen} onToggle={onToggleSidebar} />
 
         <div className="refs flex items-baseline gap-2 font-mono text-[0.8125rem]">
           <span className="head font-semibold">{review.branch}</span>
@@ -85,15 +85,15 @@ export function TopBar({
   );
 }
 
-/** Show or hide the map, for the reader who wants the width back. */
-function MapToggle({ open, onToggle }: { open: boolean; onToggle: () => void }) {
-  const what = `${open ? "Hide" : "Show"} the map — ${MOD}B`;
+/** Show or hide the sidebar, for the reader who wants the width back. */
+function SidebarToggle({ open, onToggle }: { open: boolean; onToggle: () => void }) {
+  const what = `${open ? "Hide" : "Show"} the sidebar — ${MOD}B`;
 
   return (
     <Button
       variant="ghost"
       size="icon-xs"
-      className="maptoggle text-faint hover:bg-transparent hover:text-ink"
+      className="sidebartoggle text-faint hover:bg-transparent hover:text-ink"
       aria-expanded={open}
       aria-label={what}
       title={what}
@@ -154,6 +154,6 @@ type TopBarProps = {
   publishing: Publishing;
   comments: CommentView[];
   onError: (message: string) => void;
-  mapOpen: boolean;
-  onToggleMap: () => void;
+  sidebarOpen: boolean;
+  onToggleSidebar: () => void;
 };
