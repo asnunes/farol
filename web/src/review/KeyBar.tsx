@@ -11,39 +11,29 @@ import type { Theme } from "@/hooks/useTheme";
  * is drawn. The characters for those, `↵` and `⇞`, come out of a monospace font
  * as two indistinguishable ticks at this size.
  *
- * The keys of the reading sit together on the right. `⌘B` sits on the left,
- * beside the theme, because it is the same kind of thing those two are: what
- * the screen looks like, rather than where the reader is in the review. In the
- * run on the right it read as one more way to move, and was lost among five
- * chips it does not belong to. */
+ * `⌘B` opens the run rather than sitting inside it. It is the one key here
+ * that is about the screen rather than about where the reader is in the
+ * review, and buried between `block` and `help` that difference was invisible:
+ * it read as one more way to move. */
 export function KeyBar({ theme, onTheme }: KeyBarProps) {
   return (
     <nav className="keybar col-span-full flex items-center justify-between border-t border-rule bg-surface px-5 py-1.5 font-sans text-xs text-ink-muted">
-      <div className="chrome flex items-center gap-4">
-        <ThemeSwitch theme={theme} onChange={onTheme} />
-        <Shortcut keys={[`${MOD}B`]} what="map" />
-      </div>
+      <ThemeSwitch theme={theme} onChange={onTheme} />
 
       <div className="flex gap-5">
-        {SHORTCUTS.map((shortcut) => (
-          <Shortcut key={shortcut.what} {...shortcut} />
+        {SHORTCUTS.map(({ keys, what }) => (
+          // Centred rather than sitting on a baseline: a chip holding an icon
+          // and a chip holding a letter have different baselines inside them,
+          // and a row aligned that way comes out stepped.
+          <span key={what} className="flex items-center gap-1">
+            {keys.map((key, i) => (
+              <Key key={i}>{typeof key === "string" ? key : <key.Icon className="size-3" />}</Key>
+            ))}
+            <span className="ml-0.5">{what}</span>
+          </span>
         ))}
       </div>
     </nav>
-  );
-}
-
-function Shortcut({ keys, what }: ShortcutProps) {
-  return (
-    // Centred rather than sitting on a baseline: a chip holding an icon
-    // and a chip holding a letter have different baselines inside them, and
-    // a row aligned that way comes out stepped.
-    <span className="flex items-center gap-1">
-      {keys.map((key, i) => (
-        <Key key={i}>{typeof key === "string" ? key : <key.Icon className="size-3" />}</Key>
-      ))}
-      <span className="ml-0.5">{what}</span>
-    </span>
   );
 }
 
@@ -57,8 +47,8 @@ function Key({ children }: KeyProps) {
   );
 }
 
-/** Moving, marking and asking: the keys the reading itself is done with. */
-const SHORTCUTS: ShortcutProps[] = [
+const SHORTCUTS: { keys: (string | { Icon: typeof ArrowUp })[]; what: string }[] = [
+  { keys: [`${MOD}B`], what: "map" },
   { keys: ["j", "k", { Icon: ArrowUp }, { Icon: ArrowDown }], what: "file" },
   { keys: ["n"], what: "next unread" },
   { keys: [";", { Icon: Space }], what: "mark read" },
@@ -67,7 +57,5 @@ const SHORTCUTS: ShortcutProps[] = [
 ];
 
 type KeyBarProps = { theme: Theme; onTheme: (theme: Theme) => void };
-
-type ShortcutProps = { keys: (string | { Icon: typeof ArrowUp })[]; what: string };
 
 type KeyProps = { children: React.ReactNode };
