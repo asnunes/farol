@@ -52,7 +52,7 @@ export function Gap({ gap, onOpen, children }: GapProps) {
   return (
     <div
       ref={band}
-      className="gap flex items-center gap-1 bg-sunken px-3 py-1 text-xs text-faint"
+      className="gap flex items-center gap-1 bg-sunken px-3 py-1 text-xs text-ink-muted"
     >
       {fitsInOneStep(gap) ? (
         <Pull label={`Open the ${gap.to - gap.from + 1} lines hidden here`} onPull={() => pull(whole)}>

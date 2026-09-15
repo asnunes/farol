@@ -41,7 +41,7 @@ export function Sidebar({
           <div className="blk-head flex items-center gap-2 px-2">
             <div
               aria-hidden="true"
-              className="num loose grid size-5 shrink-0 place-items-center rounded-full bg-sunken font-mono text-[0.6875rem] text-faint"
+              className="num loose grid size-5 shrink-0 place-items-center rounded-full bg-sunken font-mono text-[0.6875rem] text-ink-muted"
             >
               ~
             </div>

@@ -97,7 +97,7 @@ export function FileSection({
             </div>
           ) : error ? (
             <div role="alert" className="broken px-6 py-6 font-sans text-sm text-ink-muted">
-              <span className="font-mono text-faint">{error}</span>{" "}
+              <span className="font-mono text-ink-muted">{error}</span>{" "}
               <Button variant="link" size="xs" className="px-0 text-highlight" onClick={onRetry}>
                 Try again
               </Button>
@@ -105,7 +105,7 @@ export function FileSection({
           ) : diff ? (
             <Diff diff={diff} file={file} view={view} comments={comments} actions={commentActions} />
           ) : (
-            <div className="loading px-6 py-6 font-mono text-sm text-faint">Loading diff…</div>
+            <div className="loading px-6 py-6 font-mono text-sm text-ink-muted">Loading diff…</div>
           )}
         </>
       )}
