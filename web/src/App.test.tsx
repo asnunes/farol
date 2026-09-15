@@ -137,6 +137,29 @@ function serve(state: { review: ReviewView }) {
   return viewedCalls;
 }
 
+/** A screen of a given width, as the page is able to ask about it.
+ *
+ * jsdom has no layout, so `matchMedia` is the whole of what the component can
+ * see — which is also why the page decides this with a query rather than by
+ * measuring. The returned function drags the window, the way a real one fires
+ * the listener the page subscribed with. */
+function screenIs(px: number) {
+  const listeners = new Set<() => void>();
+  let width = px;
+
+  vi.stubGlobal("matchMedia", (query: string) => ({
+    // The one query the page asks: Tailwind's `md`, read backwards.
+    matches: query.includes("48rem") ? width < 768 : false,
+    addEventListener: (_: string, fn: () => void) => listeners.add(fn),
+    removeEventListener: (_: string, fn: () => void) => listeners.delete(fn),
+  }));
+
+  return (next: number) => {
+    width = next;
+    act(() => listeners.forEach((fn) => fn()));
+  };
+}
+
 beforeEach(() => {
   // jsdom has neither of these, and the page is built on both: it scrolls to
   // move and watches sections to know where the reader is.
@@ -1169,5 +1192,100 @@ describe("hiding the sidebar", () => {
 
     fireEvent.keyDown(window, { key: "b" });
     expect(document.querySelector(".sidebar")).toBeTruthy();
+  });
+});
+
+describe("the sidebar on a screen too narrow to hold it", () => {
+  it("starts folded away, so the review opens on the code and not on its index", async () => {
+    // 19rem of chrome on a 390px screen leaves the diff a word per line. The
+    // list is a keystroke away; the code is what the reader came for.
+    screenIs(390);
+    serve({ review: review() });
+    render(<App />);
+    await waitForReading("a.rs");
+
+    expect(document.querySelector(".sidebar")).toBeNull();
+    expect(document.querySelector(".keybar")?.textContent).toContain("show sidebar");
+  });
+
+  it("goes away again once a file has been picked, handing focus back to the button", async () => {
+    // Above the code, the sidebar is in the way of the file it was used to
+    // reach — and the row that was clicked goes with it, so focus has to be
+    // put somewhere rather than dropped on the document.
+    screenIs(390);
+    serve({ review: review() });
+    render(<App />);
+    await waitForReading("a.rs");
+
+    const button = screen.getByTitle(/the sidebar —/);
+    fireEvent.click(button);
+    await waitFor(() => expect(document.querySelector(".sidebar")).toBeTruthy());
+
+    const row = screen.getByRole("button", { name: "src/c.rs" });
+    row.focus();
+    fireEvent.click(row);
+
+    await waitFor(() => expect(document.querySelector(".sidebar")).toBeNull());
+    expect(reading()).toContain("c.rs");
+    expect(document.activeElement).toBe(screen.getByTitle(/the sidebar —/));
+  });
+
+  it("hands focus back when the key takes it out from under the reader", async () => {
+    screenIs(390);
+    serve({ review: review() });
+    render(<App />);
+    await waitForReading("a.rs");
+
+    fireEvent.click(screen.getByTitle(/the sidebar —/));
+    await waitFor(() => expect(document.querySelector(".sidebar")).toBeTruthy());
+
+    screen.getByRole("button", { name: "src/c.rs" }).focus();
+    fireEvent.keyDown(window, { key: "b", metaKey: true });
+
+    await waitFor(() => expect(document.querySelector(".sidebar")).toBeNull());
+    expect(document.activeElement).toBe(screen.getByTitle(/the sidebar —/));
+  });
+
+  it("stays where it is when a file is picked beside the code", async () => {
+    // The other half of the same rule: having picked a file is no reason to
+    // lose the list it was picked from when the list costs nothing.
+    screenIs(1440);
+    serve({ review: review() });
+    render(<App />);
+    await waitForReading("a.rs");
+
+    const row = screen.getByRole("button", { name: "src/c.rs" });
+    row.focus();
+    fireEvent.click(row);
+
+    await waitForScrollTo("second");
+    expect(document.querySelector(".sidebar")).toBeTruthy();
+    expect(document.activeElement).toBe(row);
+  });
+
+  it("is decided again when the window crosses the width, and the reading survives it", async () => {
+    // Dragging a window narrow would otherwise leave the column sitting on top
+    // of the code it was beside. What the reader has done does not move with
+    // it: the file they are on and the files they have read are the review's,
+    // not the layout's.
+    const drag = screenIs(1440);
+    serve({ review: review({ viewedFiles: 1, blocks: [
+      { slug: "first", title: "The change itself", context: "why it exists",
+        files: [file("src/a.rs", { viewed: true }), file("src/b.rs")] },
+      { slug: "second", title: "The wiring", context: "", files: [file("src/c.rs")] },
+    ] }) });
+    render(<App />);
+    await waitForReading("b.rs");
+
+    expect(document.querySelector(".sidebar")).toBeTruthy();
+
+    drag(390);
+    await waitFor(() => expect(document.querySelector(".sidebar")).toBeNull());
+    expect(reading()).toContain("b.rs");
+
+    drag(1440);
+    await waitFor(() => expect(document.querySelector(".sidebar")).toBeTruthy());
+    expect(reading()).toContain("b.rs");
+    expect(document.querySelector('.fileitem[data-seen="true"]')?.textContent).toContain("a.rs");
   });
 });
