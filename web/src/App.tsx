@@ -125,7 +125,12 @@ export default function App() {
           comments={comments.comments}
           onError={setFailed}
         />
-        <Sidebar review={review} current={current} onPick={goTo} />
+        <Sidebar
+          review={review}
+          comments={comments.comments}
+          current={current}
+          onPick={goTo}
+        />
 
         <Reading
           key={generation}

@@ -2,7 +2,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Sidebar } from "./Sidebar";
-import type { BlockView, FileView, ReviewView } from "@/api";
+import type { BlockView, CommentView, FileView, ReviewView } from "@/api";
 
 describe("telling the files in the sidebar apart", () => {
   // Radix measures what it is about to place, and jsdom has no observer to
@@ -84,6 +84,23 @@ describe("telling the files in the sidebar apart", () => {
     expect(within(await tooltip()).getByText("src/map/domain/mod.rs")).toBeTruthy();
   });
 
+  it("counts the reader's own comments on the row of the file they are on", () => {
+    // The count is the only place an open question shows before the file is
+    // opened, so it has to be the real number and it has to be per file.
+    show(
+      review([block("first", ["src/map/mod.rs", "src/diff/mod.rs"])]),
+      vi.fn(),
+      [
+        comment("src/map/mod.rs", "a"),
+        comment("src/map/mod.rs", "b"),
+        comment("src/other.rs", "c"),
+      ],
+    );
+
+    expect(named("src/map/mod.rs").querySelector(".asked")?.textContent).toBe("2");
+    expect(named("src/diff/mod.rs").querySelector(".asked")).toBeNull();
+  });
+
   it("still picks the file it was clicked on", () => {
     const onPick = vi.fn();
     show(review([block("first", ["src/map/mod.rs"])]), onPick);
@@ -94,12 +111,16 @@ describe("telling the files in the sidebar apart", () => {
   });
 });
 
-function show(view: ReviewView, onPick = vi.fn()) {
+function show(view: ReviewView, onPick = vi.fn(), comments: CommentView[] = []) {
   render(
     <TooltipProvider>
-      <Sidebar review={view} current={null} onPick={onPick} />
+      <Sidebar review={view} comments={comments} current={null} onPick={onPick} />
     </TooltipProvider>,
   );
+}
+
+function comment(path: string, id: string): CommentView {
+  return { id, path, side: "new", from: 1, to: 1, body: "why?", published: null };
 }
 
 /** The row for a path, found the way a screen reader would name it. */
