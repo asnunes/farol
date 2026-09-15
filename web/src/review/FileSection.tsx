@@ -23,12 +23,15 @@ export function FileSection({
   comments,
   commentActions,
 }: FileSectionProps) {
-  const heavy = file.additions + file.deletions > BIG;
+  const gone = file.status === "deleted";
+  const heavy = gone || file.additions + file.deletions > BIG;
   const [asked, setAsked] = useState(false);
   const box = useRef<HTMLDivElement>(null);
 
   // Fetched as the reader gets near, a screenful ahead, so the code is there
-  // by the time they arrive. A heavy file waits to be asked for by hand.
+  // by the time they arrive. A heavy file waits to be asked for by hand, and so
+  // does a deleted one: the fact of the deletion is the whole of what it says,
+  // and the rest is a screenful of red nobody needs to scroll past to learn it.
   useEffect(() => {
     const el = box.current;
     // A closed file is not worth fetching: it has been read, or the reader
@@ -82,14 +85,14 @@ export function FileSection({
 
           {heavy && !asked ? (
             <div className="heavy px-6 py-6 font-sans text-sm text-ink-muted">
-              {file.additions + file.deletions} changed lines.{" "}
+              {gone ? "File deleted." : `${file.additions + file.deletions} changed lines.`}{" "}
               <Button
                 variant="link"
                 size="xs"
                 className="px-0 text-highlight"
                 onClick={() => setAsked(true)}
               >
-                Load the diff
+                {gone ? `Show the ${file.deletions} removed lines` : "Load the diff"}
               </Button>
             </div>
           ) : error ? (
