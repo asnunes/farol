@@ -1289,3 +1289,34 @@ describe("the sidebar on a screen too narrow to hold it", () => {
     expect(document.querySelector('.fileitem[data-seen="true"]')?.textContent).toContain("a.rs");
   });
 });
+
+describe("the key bar on a screen too narrow to print it", () => {
+  it("offers the keys as a button rather than a run of chips cut off mid-word", async () => {
+    // The run is six chips wide and the bar is 390px. Scrolled, it read as
+    // broken chrome; this is one press, and the only way to the list at all on
+    // a screen with no `?` key to hit.
+    screenIs(390);
+    serve({ review: review() });
+    render(<App />);
+    await waitForReading("a.rs");
+
+    fireEvent.click(screen.getByRole("button", { name: /keys/i }));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog.textContent).toContain("Keys");
+  });
+});
+
+describe("the room under the last file", () => {
+  it("is scrollable content, so a short pane cannot grow past the row it was given", async () => {
+    // It was the pane's own bottom padding. A pane shorter than the padding —
+    // a narrow screen with the sidebar open — grew past its grid row and drew
+    // over the key bar, and the page picked up a scrollbar of its own.
+    serve({ review: review() });
+    render(<App />);
+    await waitForReading("a.rs");
+
+    const pane = document.querySelector(".pane");
+    expect(pane?.lastElementChild?.classList.contains("tail")).toBe(true);
+  });
+});
