@@ -789,6 +789,46 @@ describe("a long review", () => {
 
     await waitFor(() => expect(asked).toContain("src/a.rs"));
   });
+
+  it("holds a deleted file back the same way, whatever its size", async () => {
+    // A deleted file is a screenful of red that says one thing, and the line
+    // says it without the scrolling.
+    const r = review();
+    r.blocks[0].files[0] = file("src/a.rs", {
+      status: "deleted",
+      additions: 0,
+      deletions: 30,
+    });
+    const asked: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        const noComments = aside(url);
+        if (noComments) return noComments;
+        if (url.startsWith("/api/review")) {
+          return new Response(JSON.stringify(r), {
+            headers: { "content-type": "application/json" },
+          });
+        }
+        asked.push(new URL(url, "http://x").searchParams.get("path") ?? "");
+        return new Response(JSON.stringify(emptyDiff), {
+          headers: { "content-type": "application/json" },
+        });
+      }),
+    );
+
+    render(<App />);
+    await waitFor(() => expect(asked).toContain("src/b.rs"));
+
+    expect(asked).not.toContain("src/a.rs");
+    expect(section("src/a.rs").textContent).toContain("File deleted.");
+    expect(section("src/a.rs").textContent).toContain("Show the 30 removed lines");
+
+    fireEvent.click(section("src/a.rs").querySelector(".heavy button")!);
+
+    await waitFor(() => expect(asked).toContain("src/a.rs"));
+  });
 });
 
 describe("a comment file that cannot be read", () => {
