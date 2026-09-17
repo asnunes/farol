@@ -36,13 +36,15 @@ pub enum CommentError {
     #[error("this repository has no remote, so there is no pull request to publish to")]
     NoRemote,
 
-    #[error("farol has no token for GitHub yet")]
+    #[error(
+        "no token available from GitHub CLI for this host\nRun `gh auth login --hostname HOST` with the repository host, then try again."
+    )]
     NoToken,
 
     #[error(
-        "the credential host changed\nRefresh the review and authorize the displayed host before saving a token."
+        "cannot run gh\nInstall GitHub CLI and authenticate with `gh auth login --hostname HOST` for the repository host."
     )]
-    CredentialHostChanged,
+    GitHubCliUnavailable,
 
     #[error("a review that asks for something has to say what — write the summary first")]
     NoSummary,

@@ -5,12 +5,10 @@ import { Progress } from "@/components/ui/progress";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { RefreshReason } from "@/hooks/useReview";
 import { Refresh } from "@/review/Refresh";
-import { Publish } from "@/review/publish/Publish";
 import { ViewToggle } from "@/review/ViewToggle";
 import { MOD } from "@/hooks/useShortcuts";
 import type { DiffView } from "@/hooks/useDiffView";
-import type { Publishing } from "@/hooks/usePublishing";
-import type { CommentView, ReviewView, Unreadable as UnreadableView } from "@/api";
+import type { ReviewView, Unreadable as UnreadableView } from "@/api";
 
 /** Where you are and how far through you are. */
 export function TopBar({
@@ -20,9 +18,6 @@ export function TopBar({
   stale,
   onRefresh,
   unreadable,
-  publishing,
-  comments,
-  onError,
   sidebarOpen,
   onToggleSidebar,
   toggleRef,
@@ -85,14 +80,6 @@ export function TopBar({
             aria-label={`${review.viewedFiles} of ${review.totalFiles} read`}
           />
         </div>
-        {/* Last on the bar, because it is the last thing done: everything to
-            its left is the reading, and this is what closes it. */}
-        <Publish
-          publishing={publishing}
-          comments={comments}
-          read={review.viewedFiles}
-          onError={onError}
-        />
       </div>
     </header>
   );
@@ -165,9 +152,6 @@ type TopBarProps = {
   onRefresh: () => void;
   /** Comment files that could not be parsed, in the reviewer's terms. */
   unreadable: UnreadableView[];
-  publishing: Publishing;
-  comments: CommentView[];
-  onError: (message: string) => void;
   sidebarOpen: boolean;
   onToggleSidebar: () => void;
   /** Focus comes back here when the sidebar closes under whoever was in it. */

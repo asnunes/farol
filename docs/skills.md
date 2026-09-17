@@ -1,7 +1,7 @@
 # Farol skills
 
 Install the executable first using the [installation guide](install.md).
-Skill installation uses Node/npm through `npx`; PR context additionally requires
+Skill installation uses Node/npm through `npx`; PR context and publication additionally require
 Git, an authenticated GitHub CLI (`gh`), and Bash.
 
 ## Install the complete set
@@ -52,8 +52,10 @@ Examples:
 
 Map explanations give the reviewer context; they do not judge the code.
 Publishing preserves the reviewer's comments and severity, and requires
-approval of the content and destination. The author of a PR can publish only
-the comment verdict on their own PR.
+approval of the content and destination. The author is told that it is their own PR and chooses between publishing
+comments with read marks or synchronizing only read marks. Publishing on their
+own PR uses the comment verdict. The skill checks authentication with `gh`;
+the app has no publication or token-configuration UI.
 
 Export and import are separate workflows on the author's and reviewer's
 machines. Export gives the author the full absolute path of the JSON as plain

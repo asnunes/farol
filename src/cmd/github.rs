@@ -1,7 +1,6 @@
 //! Sending the review to the pull request, from the terminal.
 //!
-//! The same two questions the browser asks, for a session driving farol without
-//! one: can this go, and send it.
+//! Used by the publication skill after the reader approves the destination and content.
 
 use clap::{Args, Subcommand};
 
@@ -15,6 +14,8 @@ pub(super) enum GithubAction {
     /// Whether the review can be sent, and what is in the way when it cannot.
     /// Exits non-zero while it cannot.
     Status,
+    /// Synchronize current file-read marks without publishing comments.
+    Ticks,
     /// Send the review to the pull request.
     Review(ReviewArgs),
 }
@@ -32,6 +33,11 @@ impl Action for GithubAction {
                     flush();
                     std::process::exit(1);
                 }
+                Ok(())
+            }
+            GithubAction::Ticks => {
+                let read = ctx.publish_review.ticks_only()?;
+                println!("{read} file(s) ticked as read on the pull request.");
                 Ok(())
             }
             GithubAction::Review(args) => {

@@ -8,7 +8,6 @@ import { cn } from "@/lib/utils";
 import { useComments } from "@/hooks/useComments";
 import { useDiffView } from "@/hooks/useDiffView";
 import { useOpenFiles } from "@/hooks/useOpenFiles";
-import { usePublishing } from "@/hooks/usePublishing";
 import { useTheme } from "@/hooks/useTheme";
 import { useReview } from "@/hooks/useReview";
 import { useShortcuts } from "@/hooks/useShortcuts";
@@ -46,7 +45,6 @@ export default function App() {
   const files = useOpenFiles();
   const [theme, setTheme] = useTheme();
   const comments = useComments(setFailed, generation);
-  const publishing = usePublishing();
 
   // The sidebar can go while the reader is standing in it, and focus has to be
   // put somewhere before it does — dropped on the document, the next Tab
@@ -148,9 +146,6 @@ export default function App() {
           stale={stale}
           onRefresh={() => void refresh()}
           unreadable={comments.unreadable}
-          publishing={publishing}
-          comments={comments.comments}
-          onError={setFailed}
           sidebarOpen={sidebarOpen}
           onToggleSidebar={toggleSidebar}
           toggleRef={sidebarToggle}

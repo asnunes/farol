@@ -1407,3 +1407,74 @@ fn a_side_that_is_neither_is_refused_before_anything_is_written() {
 
     assert!(err.contains("'old' or 'new'"), "{err}");
 }
+
+#[test]
+fn github_publication_explains_when_gh_is_not_installed() {
+    let repo = Repo::new();
+    repo.feature();
+    repo.git(&[
+        "remote",
+        "add",
+        "origin",
+        "https://github.example.test/owner/repo.git",
+    ]);
+    let empty = tempfile::tempdir().unwrap();
+    let output = repo
+        .command(&["github", "status"])
+        .env("PATH", empty.path())
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("Install GitHub CLI"));
+    assert!(
+        !repo
+            .path()
+            .join(".farol-config/farol/github-credential.json")
+            .exists()
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn github_status_uses_the_remote_host_and_guides_gh_login_without_leaking_output() {
+    use std::os::unix::fs::PermissionsExt;
+    let repo = Repo::new();
+    repo.feature();
+    repo.git(&[
+        "remote",
+        "add",
+        "origin",
+        "https://github.example.test/owner/repo.git",
+    ]);
+    let bin = tempfile::tempdir().unwrap();
+    let gh = bin.path().join("gh");
+    std::fs::write(
+        &gh,
+        "#!/bin/sh\nprintf '%s\\n' \"$@\" > gh-args.txt\necho fixture-secret >&2\nexit 1\n",
+    )
+    .unwrap();
+    std::fs::set_permissions(&gh, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let output = repo
+        .command(&["github", "status"])
+        .env("PATH", bin.path())
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("gh auth login --hostname github.example.test"));
+    assert!(!stdout.contains("fixture-secret"));
+    assert!(!String::from_utf8_lossy(&output.stderr).contains("fixture-secret"));
+    assert_eq!(
+        std::fs::read_to_string(repo.path().join("gh-args.txt")).unwrap(),
+        "auth\ntoken\n--hostname\ngithub.example.test\n"
+    );
+}
+
+#[test]
+fn marks_only_is_an_explicit_cli_action() {
+    let repo = Repo::new();
+    repo.feature();
+    let output = repo.farol(&["github", "ticks"]);
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("no remote"));
+}

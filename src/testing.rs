@@ -615,10 +615,17 @@ impl crate::comments::domain::ReviewPublisher for FakePublisher {
     }
 }
 
-/// A token that never touches the disk, so a test cannot read the real one.
+/// Host-scoped credentials for publisher tests; never consults the real gh login.
 #[derive(Default)]
 pub struct FakeCredentials {
     token: Mutex<Option<(String, String)>>,
+}
+
+impl FakeCredentials {
+    pub fn set(&self, host: &str, token: &str) -> Result<()> {
+        *self.token.lock().unwrap() = Some((host.to_string(), token.to_string()));
+        Ok(())
+    }
 }
 
 impl crate::comments::domain::Credentials for FakeCredentials {
@@ -628,13 +635,8 @@ impl crate::comments::domain::Credentials for FakeCredentials {
             .lock()
             .unwrap()
             .as_ref()
-            .filter(|(saved_host, _)| saved_host == host)
+            .filter(|(saved, _)| saved == host)
             .map(|(_, token)| token.clone()))
-    }
-
-    fn set(&self, host: &str, token: &str) -> Result<()> {
-        *self.token.lock().unwrap() = Some((host.to_string(), token.to_string()));
-        Ok(())
     }
 }
 
