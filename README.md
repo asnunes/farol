@@ -10,7 +10,7 @@ Farol is a local code-review app. It turns a branch diff into a guided walkthrou
 **files ordered to help you understand the feature, not alphabetically by path.**
 The map puts the core implementation first and builds on it, with explanations
 from the coding session that made the change. Read the code, leave comments,
-and send the finished review to GitHub.
+and ask your agent to publish the finished review to GitHub.
 
 ![A Farol review with reading-order blocks, implementation context, skim markers, and the code diff.](docs/review.jpg)
 
@@ -122,10 +122,11 @@ Use farol-map-from-review for PR <URL>, which has no map.
 The skill organizes the changes using the code and documented PR context. It
 cannot recover undocumented decisions from the author's session.
 
-In either case, read the code and leave your own comments. Use **Send review**
-in the app, or ask `farol-publish-review` to prepare your existing review for
-approval and publication. Your comments and reading progress stay local until
-you choose to publish.
+In either case, read the code and leave your own comments. Ask your agent to
+use `farol-publish-review` when you are ready to publish. It checks your `gh`
+authentication, confirms the destination and asks how you want to send the review.
+For your own PR, choose between publishing comments with the read marks or
+synchronizing only the read marks. Nothing is sent until you approve.
 
 ## Review
 
@@ -154,9 +155,9 @@ Click `+` or drag across line numbers to comment on a line or range, on either
 side of the diff — including removed lines, and files that were deleted whole.
 From the keyboard, `Shift` with an arrow on a focused `+` reaches for the rest
 of the passage before `Enter` opens the box.
-Comments stay local until you use **Send review** to publish them to GitHub,
-each on the side it was written on; the page guides you through authorizing the
-destination host.
+Comments and reading progress stay local. Use the `farol-publish-review` skill
+to publish through your authenticated GitHub CLI account after approving the
+content and destination; the app does not ask for a GitHub token.
 
 ![A local example comment beside the changed line and its implementation context.](docs/review-comments.jpg)
 

@@ -1,81 +1,80 @@
 ---
 name: farol-publish-review
-description: Gather an existing Farol review and publish the reviewer-approved comments, file-read marks, summary, and verdict to GitHub.
+description: Publish an existing Farol review or synchronize its file-read marks through the authenticated GitHub CLI account, after the reader approves the destination and action.
 ---
 
 # Publish an existing review
 
-## Prerequisites
+## Prerequisites and destination
 
-This workflow requires [farol](../farol/SKILL.md). Read its instructions before
-proceeding. If it is missing, guide the user to install the complete Farol set.
+Read [farol](../farol/SKILL.md) first. If it is missing, guide the user to
+install the complete Farol set.
 
-## Gather the review
+This workflow requires GitHub CLI (`gh`). Check `gh --version`, identify the
+repository's GitHub host, and run `gh auth status --hostname HOST` for that host.
+If authentication is missing, guide the user through `gh auth login --hostname
+HOST` in their terminal. Never request a token in the conversation.
 
-Collect the pending reviewer comments and the existing file-read marks.
+Run `farol github status` with the intended comparison options. It reports the
+PR number, its commit, whether it belongs to the authenticated account, the
+host, and the current file-read marks. Verify the repository and destination
+PR with `gh pr view` in that repository (or with an explicit `--repo`). Stop on
+missing prerequisites or a mismatch; do not switch revisions to force publication.
 
-Preserve the comments and any severity already assigned by the reviewer.
-Do not search for new defects, assign severity, rewrite findings, or
-infer that an unmarked file has been read.
+Farol obtains credentials for that host from `gh`; it does not configure or
+store a separate token. Local reading and commenting do not require `gh`.
 
-Keep map explanations separate from reviewer comments. The map is not
-material to publish as review findings.
+## Gather what the reader already wrote
 
-## Complete the publication choices
+Use `farol comment list` to collect pending comments, including their old/new
+side and line ranges. Preserve their text and any severity the reader supplied.
+Use the existing read marks reported by `farol github status`; never infer that
+an unmarked file has been read.
 
-Use the summary and verdict supplied by the reviewer. Ask for missing
-choices needed to publish; do not invent them.
+Do not find new defects, rewrite findings, or publish the map's explanations
+as review comments.
 
-If the reviewer is the PR author, only the comment verdict is available.
-Explain that limitation when necessary, preserving the reviewer's
-comments and their assigned severity.
+## Ask which action to take
 
-For another person's PR, use the reviewer-selected comment, approval,
-or request-changes verdict.
+If the authenticated account is the PR author, explicitly say that this is
+their own PR and ask them to choose:
 
-## Check the destination
+- Publish their comments and synchronize file-read marks, using the comment
+  verdict. Do not offer approval or request-changes on their own PR.
+- Synchronize only file-read marks, leaving local comments unpublished.
 
-Run `farol github status` with the intended comparison options.
+For another author's PR, ask whether to publish a comment, approval, or request
+for changes. Obtain the reader's summary when needed; do not invent a verdict
+or summary. If they request only file-read synchronization, use that action.
 
-Confirm that the destination is the pull request the reviewer intends
-to publish to. If Farol reports a missing prerequisite or a mismatch,
-explain it before proceeding.
+## Confirm the concrete result
 
-If authentication is needed, direct the user to the Farol interface.
-Do not ask them to paste a token into the conversation.
+Present the full destination PR URL, pending comments with their severity and
+line/side locations, file-read marks, and the chosen summary/verdict or the
+marks-only action. Obtain approval for that content and action. Reuse explicit
+approval already given for the same content and destination.
 
-## Confirm the publication
+Creating a map or conducting a local review does not authorize publication.
 
-Present the destination PR, pending comments with their existing
-severity, file-read marks, and the supplied summary and verdict.
+## Execute through Farol
 
-Obtain authorization for that content and action before sending.
-Reuse explicit authorization already given for the same content
-and destination.
+For comments and a verdict, use `farol github review` with exactly one of
+`--comment`, `--approve`, or `--request-changes`, and the supplied `--summary`
+when applicable. Farol also synchronizes current file-read marks.
 
-Approval to create a map, import one, or conduct a local review does
-not authorize publication to GitHub.
+For marks only, run `farol github ticks` with the same comparison options.
+This does not publish or close local comments.
 
-## Publish through Farol
+Farol validates the PR commit and comment paths, sides and ranges. If it refuses,
+report the reason; do not relocate or drop comments, alter the reviewed revision,
+or bypass validation by posting them directly with `gh`.
 
-Use `farol github review` with the reviewer-selected verdict and
-the supplied summary.
+## Report what happened
 
-Let Farol validate the current PR revision and comment locations.
-If it refuses publication, report the reason. Do not silently change
-the reviewed revision, relocate comments, or remove comments to make
-the request succeed.
+Show the full published review URL as plain text, the number of comments sent,
+and the number of files marked as read. For marks only, show the PR URL and
+number of marks synchronized, and say that the comments remain local.
 
-## Report the result
-
-Display the full URL of the published review as plain text.
-Report how many comments were sent and how many files were marked
-as read.
-
-If the review was published but file-read synchronization failed,
-state both outcomes clearly. Do not send the review again merely
-because its reading marks were not synchronized.
-
-If publication fails or its outcome is unclear, inspect the available
-result before attempting another send. Do not claim success without
-confirmation.
+If the review was published but marking files failed, state both outcomes.
+Do not publish the review again to retry its marks. If any result is unclear,
+inspect its state before attempting another send.

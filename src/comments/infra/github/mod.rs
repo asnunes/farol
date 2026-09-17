@@ -1,13 +1,6 @@
 //! Speaking to GitHub over its REST API.
 //!
-//! The API and not the `gh` command line: the API has a version header and an
-//! announced deprecation policy, while the output of a CLI is free to change
-//! whenever its authors like — and a machine that reviews code is not obliged
-//! to be a machine that has `gh` installed and logged in.
-//!
-//! What we ask and what we make of each answer is here; the asking itself is
-//! in `http`. Nothing in either logs: the token is a secret that would
-//! otherwise end up in a server log file that outlives it.
+//! Request validation and payloads stay in Farol; authentication comes from gh.
 
 mod http;
 

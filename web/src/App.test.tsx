@@ -42,21 +42,10 @@ function review(over: Partial<ReviewView> = {}): ReviewView {
   };
 }
 
-/** The two things the page asks for that these tests are not about: the
- * comment list and whether the review can be published.
- *
- * Every stub answers them the same way, because without it either request
- * falls through to the branch that serves diffs and hands the page an object
- * where it expects something else. A test that is about comments, or about
- * publishing, stubs that one itself. */
+/** Unrelated tests still need the local comment list. */
 function aside(url: string): Response | null {
   if (url.startsWith("/api/comments")) {
     return new Response('{"comments":[],"unreadable":[]}', {
-      headers: { "content-type": "application/json" },
-    });
-  }
-  if (url.startsWith("/api/publish")) {
-    return new Response('{"state":"noToken","branch":"feature/x"}', {
       headers: { "content-type": "application/json" },
     });
   }
@@ -194,6 +183,17 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+});
+
+it("keeps publication and credentials outside the local review page", async () => {
+  vi.stubGlobal("fetch", vi.fn(async (input: string) => {
+    const url = String(input);
+    return aside(url) ?? new Response(JSON.stringify(url === "/api/review" ? review() : emptyDiff));
+  }));
+  render(<App />);
+  await screen.findByRole("progressbar");
+  expect(screen.queryByRole("button", { name: /Send review/ })).toBeNull();
+  expect(vi.mocked(fetch).mock.calls.some(([url]) => /\/api\/(publish|token)/.test(String(url)))).toBe(false);
 });
 
 describe("landing", () => {

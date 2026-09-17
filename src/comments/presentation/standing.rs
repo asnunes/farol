@@ -2,7 +2,6 @@ use std::fmt::{self, Display};
 
 use crate::comments::application::Standing;
 use crate::comments::domain::Readiness;
-use crate::shared::short;
 
 /// Where the review stands, for the terminal.
 ///
@@ -20,17 +19,29 @@ impl Display for StandingLine<'_> {
         let branch = &self.0.branch;
         match &self.0.readiness {
             Readiness::Ready {
-                pull_request, head, ..
+                pull_request,
+                head,
+                mine,
+                ..
             } => writeln!(
                 f,
-                "ready: pull request #{pull_request}, showing {}",
-                short(head)
+                "ready: pull request #{pull_request}, showing {}\n{}",
+                head,
+                if *mine {
+                    "This is your own pull request: publish comments or sync read marks only."
+                } else {
+                    "This pull request belongs to another author: choose a review verdict."
+                }
             ),
             Readiness::NoRemote => writeln!(
                 f,
                 "no remote: this repository has nowhere to send a review to"
             ),
-            Readiness::NoToken => writeln!(f, "no token: farol has no token for GitHub yet"),
+            Readiness::NoToken => writeln!(
+                f,
+                "no token: GitHub CLI is not authenticated for this host\nRun `gh auth login --hostname {}`.",
+                self.0.host.as_deref().unwrap_or("github.com")
+            ),
             Readiness::TokenRefused => writeln!(
                 f,
                 "token refused: it expired, or it is missing Pull requests: Read and write or Contents: Read on this repository"
@@ -42,7 +53,15 @@ impl Display for StandingLine<'_> {
                 f,
                 "no pull request: '{branch}' is on GitHub with nothing open on it\n{open_at}"
             ),
+        }?;
+        if let Some(host) = &self.0.host {
+            writeln!(f, "host: {host}")?;
         }
+        writeln!(f, "{} current file(s) marked as read:", self.0.read.len())?;
+        for path in &self.0.read {
+            writeln!(f, "  {path}")?;
+        }
+        Ok(())
     }
 }
 
@@ -55,7 +74,24 @@ mod tests {
             host: Some("github.com".into()),
             branch: "feat/x".into(),
             readiness,
+            read: vec![],
         }
+    }
+
+    #[test]
+    fn status_tells_the_skill_when_the_pr_belongs_to_the_reader() {
+        let mut standing = at(Readiness::Ready {
+            pull_request: 12,
+            id: "id".into(),
+            mine: true,
+            head: "head".into(),
+        });
+        standing.read = vec!["src/a.rs".into()];
+        let text = StandingLine(&standing).to_string();
+        assert!(text.contains("your own pull request"));
+        assert!(text.contains("host: github.com"));
+        assert!(text.contains("1 current file(s)"));
+        assert!(text.contains("src/a.rs"));
     }
 
     #[test]
@@ -90,7 +126,7 @@ mod tests {
     }
 
     #[test]
-    fn the_commit_the_pull_request_shows_is_named_short() {
+    fn the_complete_commit_is_available_for_the_skill_to_verify() {
         // It is the sha a refused publish will compare against, so it belongs
         // in the answer, at the length every other tool prints.
         let said = StandingLine(&at(Readiness::Ready {
@@ -103,7 +139,7 @@ mod tests {
 
         assert!(said.contains("#12"), "{said}");
         assert!(said.contains("abc1234"), "{said}");
-        assert!(!said.contains("def5678"), "{said}");
+        assert!(said.contains("abc1234def5678"), "{said}");
     }
 
     #[test]

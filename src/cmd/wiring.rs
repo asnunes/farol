@@ -7,9 +7,9 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use crate::comments::application::{Comments, PublishReview, ReviewReadiness, SaveToken};
+use crate::comments::application::{Comments, PublishReview, ReviewReadiness};
 use crate::comments::domain::ReviewPublisher;
-use crate::comments::infra::{GitHub, MarkdownComments, TokenFile, Unhosted};
+use crate::comments::infra::{GhCredentials, GitHub, MarkdownComments, Unhosted};
 use crate::diff::application::{CommitHistory, FileDiffs, ReviewScope};
 use crate::diff::infra::{GixSource, ScopeRequest};
 use crate::error::Result;
@@ -76,9 +76,6 @@ pub struct ServerUseCases {
     pub mark_viewed: MarkViewed,
     pub unmark_viewed: UnmarkViewed,
     pub comments: Comments,
-    pub readiness: ReviewReadiness,
-    pub publish_review: Arc<PublishReview>,
-    pub save_token: Arc<SaveToken>,
 }
 
 impl Ctx {
@@ -108,7 +105,7 @@ impl Ctx {
         let history = CommitHistory::new(source);
 
         let host = remote.as_ref().map(|remote| remote.host.clone());
-        let credentials = Arc::new(TokenFile::here()?);
+        let credentials = Arc::new(GhCredentials::new("gh"));
         let publisher: Arc<dyn ReviewPublisher> = match remote {
             Some(remote) => Arc::new(GitHub::new(remote, credentials.clone())),
             None => Arc::new(Unhosted),
@@ -133,6 +130,7 @@ impl Ctx {
             publisher.clone(),
             scope_for_publishing.clone(),
             host.clone(),
+            progress.clone(),
         );
         let publish_review = Arc::new(PublishReview::new(
             comment_store,
@@ -172,9 +170,7 @@ impl Ctx {
 
             comments: comments.clone(),
 
-            // Built once and shared: the terminal and the browser ask the same
-            // two questions of the same host, and a second instance would be a
-            // second agent and a second connection pool for no reason.
+            // Only the CLI can reach publication; serving a review never authenticates.
             readiness: readiness.clone(),
             publish_review: publish_review.clone(),
 
@@ -186,9 +182,6 @@ impl Ctx {
                 mark_viewed: MarkViewed::new(progress.clone()),
                 unmark_viewed: UnmarkViewed::new(progress),
                 comments,
-                readiness,
-                publish_review,
-                save_token: Arc::new(SaveToken::new(credentials, host)),
             },
             git_dir,
             root,

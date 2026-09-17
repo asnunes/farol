@@ -24,6 +24,18 @@ impl ProgressStore {
         self.repo.load()
     }
 
+    /// Only current, in-scope marks can be offered for GitHub synchronization.
+    pub fn current_paths(&self, files: &[crate::diff::domain::FileChange]) -> Result<Vec<String>> {
+        let progress = self.load()?;
+        let mut paths = Vec::new();
+        for file in files {
+            if progress.is_current(&file.path, &self.content_hash(&file.path)?) {
+                paths.push(file.path.clone());
+            }
+        }
+        Ok(paths)
+    }
+
     fn save(&self, progress: &Progress) -> Result<()> {
         self.repo.save(progress)
     }
@@ -84,6 +96,26 @@ mod tests {
             ProgressStore::new(repo.clone(), FileDiffs::new(Arc::new(source))),
             repo,
         )
+    }
+
+    #[test]
+    fn publication_marks_exclude_stale_and_out_of_scope_files() {
+        let source = FakeDiffSource::with_paths(&["current.rs", "changed.rs"]);
+        let scope =
+            crate::diff::application::ReviewScope::new(Arc::new(FakeDiffSource::with_paths(&[
+                "current.rs",
+                "changed.rs",
+            ])));
+        let (store, repo) = store(source);
+        let mut progress = Progress::default();
+        progress.mark("current.rs", "hash-of-current.rs", "now");
+        progress.mark("changed.rs", "old-content", "before");
+        progress.mark("gone.rs", "hash-of-gone.rs", "before");
+        repo.save(&progress).unwrap();
+        assert_eq!(
+            store.current_paths(&scope.get().unwrap().files).unwrap(),
+            vec!["current.rs"]
+        );
     }
 
     #[test]

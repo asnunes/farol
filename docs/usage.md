@@ -71,24 +71,32 @@ closing asks for confirmation because local comments are not recoverable from Gi
 
 ## Send to GitHub
 
-Use **Send review** in the browser. Farol explains any missing token, push, or
-pull request. From the CLI:
+Ask your agent to use `farol-publish-review`. It verifies GitHub CLI (`gh`)
+authentication, identifies the PR and its author, and presents the comments and
+current file-read marks for approval. On your own PR, choose between publishing
+comments with the marks or synchronizing only the marks. For another author's
+PR, choose a comment, approval, or request-changes verdict.
+
+The CLI operations used by the skill are:
 
 ```bash
 farol github status
+farol comment list
 farol github review --comment
 farol github review --request-changes --summary "The retry window needs a bound."
+farol github ticks
 ```
 
-`status` exits nonzero while publishing is unavailable. Configure the token in
-the browser, where the destination host is shown. Authorize only a host you trust.
+`status` is read-only and exits nonzero while publishing is unavailable.
+`review` publishes pending comments and synchronizes current read marks.
+`ticks` sends only read marks and leaves comments local. Both require the PR's
+commit to match the reviewed commit.
 
-The credential is saved with that host in
-`$XDG_CONFIG_HOME/farol/github-credential.json` (default: `~/.config/farol`).
-Farol stores one credential at a time, and never uses it for another host,
-including during readiness checks. A changed remote requires refreshing the
-form before saving. An old `github-token` file has no host authorization and is
-not loaded; save the token again through the form.
+Authenticate in your terminal with `gh auth login --hostname HOST`, using the
+repository's host, and check with `gh auth status --hostname HOST`. Farol reads
+the host's credential through `gh auth token --hostname HOST` internally; it
+neither stores a separate token nor accepts one through the web interface.
+Local reading and commenting need no GitHub authentication.
 
 ## Share a map
 

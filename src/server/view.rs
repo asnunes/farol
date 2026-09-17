@@ -7,7 +7,7 @@
 
 use serde::Serialize;
 
-use crate::comments::domain::{Comment, Found, Readiness};
+use crate::comments::domain::{Comment, Found};
 use crate::comments::presentation::says;
 use crate::diff::domain::{FileChange, FileDiff, Hunk, Line, LineKind, Side};
 use crate::map::application::ReviewSnapshot;
@@ -198,74 +198,6 @@ pub struct CommentView {
 pub struct CommentsView {
     pub comments: Vec<CommentView>,
     pub unreadable: Vec<UnreadableView>,
-}
-
-/// Whether the review can be sent, and when it cannot, what is in the way.
-///
-/// One object with a `state` the page switches on, because the difference
-/// between the states is the whole content of the panel: each is a different
-/// thing for the reader to go and do. `openAt` rides along on the one state
-/// that has somewhere to send them.
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ReadinessView {
-    pub host: Option<String>,
-    pub state: &'static str,
-    /// The branch, in every state: the panel spells out commands with it in
-    /// them, and it should not have to go and ask a second route for the name.
-    pub branch: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub pull_request: Option<u32>,
-    /// Whether the pull request is the reviewer's own, which decides what
-    /// verdicts the screen can offer at all.
-    pub mine: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub open_at: Option<String>,
-}
-
-impl ReadinessView {
-    pub fn of(readiness: &Readiness, branch: &str, host: Option<&str>) -> Self {
-        let mut view = Self {
-            host: host.map(str::to_string),
-            state: match readiness {
-                Readiness::Ready { .. } => "ready",
-                Readiness::NoRemote => "noRemote",
-                Readiness::NoToken => "noToken",
-                Readiness::TokenRefused => "tokenRefused",
-                Readiness::BranchNotPushed => "branchNotPushed",
-                Readiness::NoPullRequest { .. } => "noPullRequest",
-            },
-            branch: branch.to_string(),
-            pull_request: None,
-            mine: false,
-            open_at: None,
-        };
-        match readiness {
-            Readiness::Ready {
-                pull_request, mine, ..
-            } => {
-                view.pull_request = Some(*pull_request);
-                view.mine = *mine;
-            }
-            Readiness::NoPullRequest { open_at } => view.open_at = Some(open_at.clone()),
-            _ => {}
-        }
-        view
-    }
-}
-
-/// What a published review left behind: where it can be read, and how many
-/// comments went with it.
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SentView {
-    pub url: String,
-    pub comments: usize,
-    /// Files ticked as read on the pull request, and what stopped it when
-    /// something did. The review went in both cases, which is why the screen
-    /// says this beside the address rather than instead of it.
-    pub read: usize,
-    pub read_failed: Option<String>,
 }
 
 /// A comment the store could not read, in the terms the page speaks: the file

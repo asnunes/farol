@@ -6,15 +6,13 @@ use crate::error::Result;
 
 /// Ask whether the review could be sent, and if not, what is in the way.
 ///
-/// A question rather than a command, and the only one the screen asks on its
-/// own: the answer changes outside farol — a token pasted into a file, a branch
-/// pushed from a terminal, a pull request opened in a browser — so the reader
-/// has to be able to ask again without doing anything irreversible.
+/// Read-only preparation for the publication skill, including the marks it will send.
 #[derive(Clone)]
 pub struct ReviewReadiness {
     publisher: Arc<dyn ReviewPublisher>,
     scope: ReviewScope,
     host: Option<String>,
+    progress: crate::progress::application::ProgressStore,
 }
 
 impl ReviewReadiness {
@@ -22,20 +20,24 @@ impl ReviewReadiness {
         publisher: Arc<dyn ReviewPublisher>,
         scope: ReviewScope,
         host: Option<String>,
+        progress: crate::progress::application::ProgressStore,
     ) -> Self {
         Self {
             publisher,
             scope,
             host,
+            progress,
         }
     }
 
     pub fn execute(&self) -> Result<Standing> {
-        let branch = self.scope.get()?.branch.clone();
+        let scope = self.scope.get()?;
+        let branch = scope.branch.clone();
         Ok(Standing {
             host: self.host.clone(),
             readiness: self.publisher.readiness(&branch)?,
             branch,
+            read: self.progress.current_paths(&scope.files)?,
         })
     }
 }
@@ -50,4 +52,5 @@ pub struct Standing {
     pub host: Option<String>,
     pub branch: String,
     pub readiness: Readiness,
+    pub read: Vec<String>,
 }

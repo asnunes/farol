@@ -1,8 +1,6 @@
 //! Sending the review somewhere the rest of the team will read it.
 //!
-//! Two questions, because they are asked at different moments and one of them
-//! is asked constantly: *can this be sent* is answered while the reviewer is
-//! still reading, and *send this* once, at the end.
+//! The publication skill checks readiness before asking the reader to authorize a send.
 
 use crate::comments::domain::Comment;
 use crate::error::Result;
@@ -60,7 +58,7 @@ pub enum Readiness {
     /// step on the way to being ready — a different situation entirely.
     NoRemote,
 
-    /// farol has no token to speak with.
+    /// GitHub CLI has no credential for this host.
     NoToken,
 
     /// It has one and the host would not take it.
@@ -118,14 +116,12 @@ impl Verdict {
     }
 }
 
-/// A credential is available only for the host its owner authorized.
+/// Credentials are read only for the selected host; authentication is managed externally.
 ///
 /// A port for one reason: publishing is tested against a fake, and a fake that
-/// reached for the real file would read the person's actual token.
+/// consulted the real login would read the person's actual token.
 pub trait Credentials: Send + Sync {
     fn token(&self, host: &str) -> Result<Option<String>>;
-
-    fn set(&self, host: &str, token: &str) -> Result<()>;
 }
 
 #[cfg(test)]

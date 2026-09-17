@@ -146,15 +146,7 @@ impl PublishReview {
     /// Taken from the review window, which also means every path sent is one
     /// the pull request knows.
     fn already_read(&self) -> Result<Vec<String>> {
-        let progress = self.progress.load()?;
-        let mut read = Vec::new();
-        for file in &self.scope.get()?.files {
-            let hash = self.diffs.content_hash(&file.path)?;
-            if progress.is_current(&file.path, &hash) {
-                read.push(file.path.clone());
-            }
-        }
-        Ok(read)
+        self.progress.current_paths(&self.scope.get()?.files)
     }
 
     /// The ticks, and nothing else.
@@ -162,12 +154,14 @@ impl PublishReview {
     /// Wanted on its own because a review is not always possible: on your own
     /// pull request GitHub takes a comment and nothing more, and a reader who
     /// has no comment to leave still wants the next round to show what changed.
-    /// Nothing is posted here, so none of the refusals that guard publishing
-    /// apply.
+    /// The same commit must be under review before its file marks can be sent.
     pub fn ticks_only(&self) -> Result<usize> {
         let scope = self.scope.get()?;
-        let id = match self.publisher.readiness(&scope.branch)? {
-            Readiness::Ready { id, .. } => id,
+        if scope.dirty {
+            return Err(CommentError::Uncommitted.into());
+        }
+        let (id, head) = match self.publisher.readiness(&scope.branch)? {
+            Readiness::Ready { id, head, .. } => (id, head),
             Readiness::NoRemote => return Err(CommentError::NoRemote.into()),
             Readiness::NoToken => return Err(CommentError::NoToken.into()),
             Readiness::TokenRefused => return Err(CommentError::TokenRefused.into()),
@@ -184,6 +178,14 @@ impl PublishReview {
                 .into());
             }
         };
+        if head != scope.head_sha {
+            return Err(CommentError::HeadMoved {
+                theirs: short(&head),
+                ours: short(&scope.head_sha),
+                behind: !self.history.is_ancestor(&head)?,
+            }
+            .into());
+        }
         self.publisher.mark_read(&id, &self.already_read()?)
     }
 
@@ -315,6 +317,36 @@ mod tests {
         assert_eq!(publish.ticks_only().unwrap(), 1);
         assert_eq!(publisher.marked(), vec!["src/a.rs".to_string()]);
         assert!(publisher.nothing_sent(), "no review was asked for");
+    }
+
+    #[test]
+    fn marks_only_refuses_a_different_pr_commit_without_sending_marks() {
+        let publisher = Arc::new(FakePublisher::ready_at("another-head").mine());
+        let publish = publish_with(publisher.clone(), &[]);
+        assert!(
+            publish
+                .ticks_only()
+                .unwrap_err()
+                .to_string()
+                .contains("pull request is at")
+        );
+        assert!(publisher.marked().is_empty());
+        assert!(publisher.nothing_sent());
+    }
+
+    #[test]
+    fn marks_only_refuses_uncommitted_work() {
+        let publisher = Arc::new(FakePublisher::ready_at("head"));
+        let source = Arc::new(FakeDiffSource::with_paths(&["src/a.rs"]).dirty());
+        let publish = over(publisher.clone(), source);
+        assert!(
+            publish
+                .ticks_only()
+                .unwrap_err()
+                .to_string()
+                .contains("uncommitted")
+        );
+        assert!(publisher.marked().is_empty());
     }
 
     #[test]
