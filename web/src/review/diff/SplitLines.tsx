@@ -15,8 +15,18 @@ import type { DiffLine, FileView, Hunk, Side as DiffSide } from "@/api";
 
 /** The old side and the new one, facing each other — or stacked, on a screen
  * with room for one column of code rather than two. */
-export function SplitLines({ hunk, file, coloured, marks, commentary }: SplitLinesProps) {
-  const rows = useMemo(() => splitRows(hunk.lines), [hunk]);
+export function SplitLines({
+  hunk,
+  file,
+  coloured,
+  marks,
+  commentary,
+  rows: suppliedRows,
+}: SplitLinesProps) {
+  const rows = useMemo(
+    () => suppliedRows ?? splitRows(hunk.lines),
+    [hunk, suppliedRows],
+  );
   const stacked = useNarrow();
 
   return rows.map((row, i) => {
@@ -117,7 +127,12 @@ function Side({ index, hunk, coloured, marks, side, commentary }: SideProps) {
         commentary={commentary}
       />
       <div className={cn("code", tint)}>
-        {marker(line)} <Code tokens={coloured?.[index]} plain={line.content} marks={marks[index]} />
+        {marker(line)}{" "}
+        <Code
+          tokens={coloured?.[index]}
+          plain={line.content}
+          marks={marks[index]}
+        />
       </div>
     </div>
   );
@@ -143,11 +158,25 @@ function Stacked({ row, hunk, coloured, marks, commentary }: StackedProps) {
 
     return (
       <div className="group/line contents">
-        <LineNumber line={line} side="old" reach={reachOf(hunk, "old")} commentary={commentary} />
-        <LineNumber line={line} side="new" reach={reachOf(hunk, "new")} commentary={commentary} />
+        <LineNumber
+          line={line}
+          side="old"
+          reach={reachOf(hunk, "old")}
+          commentary={commentary}
+        />
+        <LineNumber
+          line={line}
+          side="new"
+          reach={reachOf(hunk, "new")}
+          commentary={commentary}
+        />
         <div className="code">
           {marker(line)}{" "}
-          <Code tokens={coloured?.[row.left]} plain={line.content} marks={marks[row.left]} />
+          <Code
+            tokens={coloured?.[row.left]}
+            plain={line.content}
+            marks={marks[row.left]}
+          />
         </div>
       </div>
     );
@@ -200,7 +229,12 @@ function Stack({ index, side, hunk, coloured, marks, commentary }: StackProps) {
       {side === "old" ? number : empty}
       {side === "old" ? empty : number}
       <div className={cn("code", tint)}>
-        {marker(line)} <Code tokens={coloured?.[index]} plain={line.content} marks={marks[index]} />
+        {marker(line)}{" "}
+        <Code
+          tokens={coloured?.[index]}
+          plain={line.content}
+          marks={marks[index]}
+        />
       </div>
     </div>
   );
@@ -216,6 +250,7 @@ function tintOf(line: DiffLine): string {
 }
 
 type SplitLinesProps = {
+  rows?: SplitRow[];
   hunk: Hunk;
   file: FileView;
   coloured: Token[][] | null;

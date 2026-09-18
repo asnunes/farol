@@ -1,3 +1,4 @@
+import { usePageVisible } from "./usePageVisible";
 import { useEffect, useState } from "react";
 import { isBundled, load, tokenizerFor } from "@/highlight/highlighter";
 import { languageOf } from "@/highlight/language";
@@ -9,11 +10,12 @@ import type { Tokenize } from "@/highlight/tokens";
  * farol cannot name — both of which the diff draws the same way, plain. The
  * page is never held up waiting for colour. */
 export function useHighlight(path: string | null): Tokenize | null {
+  const visible = usePageVisible();
   const [ready, setReady] = useState(0);
   const language = path ? languageOf(path, isBundled) : null;
 
   useEffect(() => {
-    if (!language) return;
+    if (!language || !visible) return;
 
     let watching = true;
     void load(language).then(() => {
@@ -24,9 +26,9 @@ export function useHighlight(path: string | null): Tokenize | null {
     return () => {
       watching = false;
     };
-  }, [language]);
+  }, [language, visible]);
 
   // `ready` is not read: it exists to make the arrival of a grammar a render.
   void ready;
-  return language ? tokenizerFor(language) : null;
+  return language && visible ? tokenizerFor(language) : null;
 }

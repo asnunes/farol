@@ -22,8 +22,12 @@ describe("loading a grammar", () => {
     expect(lines[0][0].content).toBe("// nota");
     // Both palettes ride on the token, which is what lets the stylesheet pick
     // one without anything being tokenized twice.
-    expect(lines[0][0].style).toMatchObject({ "--shiki-light": expect.any(String) });
-    expect(lines[0][0].style).toMatchObject({ "--shiki-dark": expect.any(String) });
+    expect(lines[0][0].style).toMatchObject({
+      "--shiki-light": expect.any(String),
+    });
+    expect(lines[0][0].style).toMatchObject({
+      "--shiki-dark": expect.any(String),
+    });
   });
 
   it("says nothing for a language it was never asked to load", () => {
@@ -34,4 +38,23 @@ describe("loading a grammar", () => {
     expect(isBundled("rust")).toBe(true);
     expect(isBundled("nao-existe")).toBe(false);
   });
+});
+
+it("reuses the tokenizer identity so unrelated renders do not invalidate hunk colouring", async () => {
+  await load("go");
+  expect(tokenizerFor("go")).toBe(tokenizerFor("go"));
+});
+
+it("colours a window inside a multiline comment like the complete syntax stream", async () => {
+  await load("rust");
+  const tokenize = tokenizerFor("rust")!;
+  const lines = [
+    "/* begin",
+    ...Array.from({ length: 180 }, () => "still inside the comment"),
+    "end */",
+    "pub fn x() {}",
+  ];
+  const complete = tokenize(lines.join("\n"));
+  expect(tokenize.range!(lines, 100, 110)).toEqual(complete.slice(100, 110));
+  expect(tokenize.range!(lines, 178, 184)).toEqual(complete.slice(178, 184));
 });

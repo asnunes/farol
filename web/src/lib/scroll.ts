@@ -4,17 +4,50 @@
  * folds the file they were on, and scrolling before React has redrawn measures
  * the page as it was, landing halfway down the file it was aiming at. */
 export function scrollToFile(path: string) {
+  stopAnchoring?.();
   settling = Date.now() + SETTLES_IN;
   requestAnimationFrame(() => {
-    const file = document.querySelector<HTMLElement>(`[data-path="${CSS.escape(path)}"]`);
+    const file = document.querySelector<HTMLElement>(
+      `[data-path="${CSS.escape(path)}"]`,
+    );
     file?.scrollIntoView({ block: "start" });
 
     // A file that opens a block is reached through the block. The band above it
     // carries the title and the paragraph saying what the next few files are
     // for, and it was written to be read before them — landing on the file
     // scrolls straight past it, and the reader only meets it by going back up.
-    opens(file)?.scrollIntoView({ block: "start" });
+    const anchor = opens(file) ?? file;
+    anchor?.scrollIntoView({ block: "start" });
+    if (anchor) holdPosition(anchor);
   });
+}
+
+/** Nearby lazy diffs can grow above a jump after its first scroll lands. */
+function holdPosition(anchor: HTMLElement) {
+  const pane = anchor.closest<HTMLElement>(".pane");
+  if (!pane || typeof ResizeObserver === "undefined") return;
+  const top = anchor.getBoundingClientRect().top;
+  const observer = new ResizeObserver(() => {
+    if (!anchor.isConnected) {
+      release();
+      return;
+    }
+    const movement = anchor.getBoundingClientRect().top - top;
+    if (Math.abs(movement) > 1) pane.scrollTop += movement;
+  });
+  // The pane's viewport stays the same size when its children grow.
+  for (const child of pane.children) observer.observe(child);
+  const timer = window.setTimeout(release, SETTLES_IN);
+  const events = ["wheel", "touchstart", "pointerdown", "keydown"] as const;
+  for (const event of events)
+    window.addEventListener(event, release, { passive: true });
+  function release() {
+    observer.disconnect();
+    window.clearTimeout(timer);
+    for (const event of events) window.removeEventListener(event, release);
+    if (stopAnchoring === release) stopAnchoring = undefined;
+  }
+  stopAnchoring = release;
 }
 
 /** Whether a move is still landing.
@@ -33,9 +66,12 @@ export function isSettling() {
  * block has one before it. */
 function opens(file: HTMLElement | null | undefined) {
   const before = file?.previousElementSibling;
-  return before?.classList.contains("blockbar") ? (before as HTMLElement) : null;
+  return before?.classList.contains("blockbar")
+    ? (before as HTMLElement)
+    : null;
 }
 
 let settling = 0;
+let stopAnchoring: (() => void) | undefined;
 
 const SETTLES_IN = 400;

@@ -1,4 +1,3 @@
-import { useHighlight } from "@/hooks/useHighlight";
 import { useOpened } from "@/hooks/useOpened";
 import { DiffHunk } from "./DiffHunk";
 import { Gap } from "./Gap";
@@ -20,7 +19,6 @@ import type { CommentView, FileDiff, FileView } from "@/api";
  * that open them, and what comes back sits in the reading order it has in the
  * file, above or below whatever is still closed. */
 export function Diff({ diff, file, view, comments, actions }: DiffProps) {
-  const tokenize = useHighlight(diff.binary ? null : diff.path);
   const { opened, open } = useOpened(file.path);
 
   // One selection per file: the reader writes one comment at a time, and a
@@ -46,14 +44,14 @@ export function Diff({ diff, file, view, comments, actions }: DiffProps) {
 
   const gaps = gapsOf(diff);
   const last = diff.hunks.at(-1);
-  const below = last && gaps.find((g) => g.from === last.newStart + last.newLines);
+  const below =
+    last && gaps.find((g) => g.from === last.newStart + last.newLines);
 
   const stretch = (range: OpenedRange, gap: GapRange) => (
     <Opened
       key={`open-${range.from}`}
       range={range}
       file={file}
-      tokenize={tokenize}
       view={view}
       shift={gap.shift}
     />
@@ -93,7 +91,6 @@ export function Diff({ diff, file, view, comments, actions }: DiffProps) {
             <DiffHunk
               hunk={hunk}
               file={file}
-              tokenize={tokenize}
               view={view}
               commentary={commentary}
               gap={joined && closed ? { gap: closed, onOpen: open } : undefined}
