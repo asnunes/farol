@@ -41,4 +41,7 @@ export function colourHunk(hunk: Hunk, tokenize: Tokenize): Token[][] {
 export type Token = { content: string; style?: Record<string, string> };
 
 /** Turns a block of code into one array of tokens per line. */
-export type Tokenize = (code: string) => Token[][];
+export type Tokenize = ((code: string) => Token[][]) & {
+  /** Half-open line window, preserving the grammar state of preceding lines. */
+  range?: (lines: string[], from: number, to: number) => Token[][];
+};

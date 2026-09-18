@@ -1,4 +1,8 @@
-import { createHighlighterCore, type HighlighterCore } from "shiki/core";
+import {
+  createHighlighterCore,
+  type GrammarState,
+  type HighlighterCore,
+} from "shiki/core";
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
 import { bundledLanguages } from "shiki/langs";
 import { dark, light } from "./theme";
@@ -15,6 +19,7 @@ import type { Token, Tokenize } from "./tokens";
 let core: Promise<HighlighterCore> | null = null;
 let built: HighlighterCore | null = null;
 const loaded = new Map<string, Promise<void>>();
+const tokenizers = new Map<string, Tokenize>();
 
 /** The highlighter once it exists, and a promise for it before that.
  *
@@ -62,10 +67,55 @@ export function tokenizerFor(id: string): Tokenize | null {
   const engine = built;
   if (!engine || !engine.getLoadedLanguages().includes(id)) return null;
 
-  return (code: string) =>
-    engine
-      .codeToTokens(code, { lang: id, themes: { light: light.name!, dark: dark.name! }, defaultColor: false })
-      .tokens.map((line) =>
-        line.map((token): Token => ({ content: token.content, style: token.htmlStyle })),
-      );
+  const existing = tokenizers.get(id);
+  if (existing) return existing;
+
+  const options = {
+    lang: id,
+    themes: { light: light.name!, dark: dark.name! },
+    defaultColor: false as const,
+  };
+  const convert = (
+    tokens: ReturnType<typeof engine.codeToTokens>["tokens"],
+  ): Token[][] =>
+    tokens.map((line) =>
+      line.map((token) => ({ content: token.content, style: token.htmlStyle })),
+    );
+  const tokenize: Tokenize = (code) =>
+    convert(engine.codeToTokens(code, options).tokens);
+
+  // Keep grammar checkpoints, not highlighted text for every file ever read.
+  // The line array belongs to its hunk; releasing the diff also releases these.
+  const checkpoints = new WeakMap<
+    string[],
+    Map<number, GrammarState | undefined>
+  >();
+  tokenize.range = (lines, from, to) => {
+    let states = checkpoints.get(lines);
+    if (!states) {
+      states = new Map([[0, undefined]]);
+      checkpoints.set(lines, states);
+    }
+    const start = Math.floor(from / CHECKPOINT_LINES) * CHECKPOINT_LINES;
+    let cursor = start;
+    while (!states.has(cursor)) cursor -= CHECKPOINT_LINES;
+    while (cursor < start) {
+      const next = Math.min(cursor + CHECKPOINT_LINES, lines.length);
+      const result = engine.codeToTokens(lines.slice(cursor, next).join("\n"), {
+        ...options,
+        grammarState: states.get(cursor),
+      });
+      states.set(next, result.grammarState);
+      cursor = next;
+    }
+    const result = engine.codeToTokens(lines.slice(start, to).join("\n"), {
+      ...options,
+      grammarState: states.get(start),
+    });
+    return convert(result.tokens).slice(from - start, to - start);
+  };
+  tokenizers.set(id, tokenize);
+  return tokenize;
 }
+
+const CHECKPOINT_LINES = 80;

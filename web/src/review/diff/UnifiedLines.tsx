@@ -3,7 +3,14 @@ import { Code } from "./Code";
 import { LineNotes } from "./LineNotes";
 import { LineNumber } from "./LineNumber";
 import { AtLine } from "./comment/AtLine";
-import { commentedBy, marker, notedBy, notesAt, reachOf, sidesOf } from "./line";
+import {
+  commentedBy,
+  marker,
+  notedBy,
+  notesAt,
+  reachOf,
+  sidesOf,
+} from "./line";
 import type { Commentary } from "./line";
 import type { Range } from "./intraline";
 import type { Token } from "@/highlight/tokens";
@@ -11,8 +18,16 @@ import type { DiffLine, FileView, Hunk, Side } from "@/api";
 
 /** One line under another, the way a diff is written down: removals first,
  * then the additions that replaced them. */
-export function UnifiedLines({ hunk, file, coloured, marks, commentary }: UnifiedLinesProps) {
-  return hunk.lines.map((line, i) => {
+export function UnifiedLines({
+  hunk,
+  file,
+  coloured,
+  marks,
+  commentary,
+  indices,
+}: UnifiedLinesProps) {
+  return (indices ?? hunk.lines.map((_, i) => i)).map((i) => {
+    const line = hunk.lines[i];
     // The row stands for both sides at once, under whichever numbers the line
     // has. The gutter shows one of them, and which one is what `sideOf` says.
     const at = sidesOf(line);
@@ -43,7 +58,12 @@ export function UnifiedLines({ hunk, file, coloured, marks, commentary }: Unifie
               row's geometry, which is in the stylesheet: the unified row grows
               to its line and the diff scrolls, the split one wraps. */}
           <div className="code">
-            {marker(line)} <Code tokens={coloured?.[i]} plain={line.content} marks={marks[i]} />
+            {marker(line)}{" "}
+            <Code
+              tokens={coloured?.[i]}
+              plain={line.content}
+              marks={marks[i]}
+            />
           </div>
         </div>
 
@@ -64,6 +84,7 @@ function sideOf(line: DiffLine): Side {
 }
 
 type UnifiedLinesProps = {
+  indices?: number[];
   hunk: Hunk;
   file: FileView;
   coloured: Token[][] | null;

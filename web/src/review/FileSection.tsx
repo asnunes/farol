@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { usePageVisible } from "@/hooks/usePageVisible";
 import { Button } from "@/components/ui/button";
 import { Diff } from "@/review/diff/Diff";
 import { FileHeader } from "@/review/FileHeader";
@@ -23,10 +24,13 @@ export function FileSection({
   comments,
   commentActions,
 }: FileSectionProps) {
+  const visible = usePageVisible();
   const gone = file.status === "deleted";
   const heavy = gone || file.additions + file.deletions > BIG;
   const [asked, setAsked] = useState(false);
   const box = useRef<HTMLDivElement>(null);
+  const reach = useRef(onReach);
+  reach.current = onReach;
 
   // Fetched as the reader gets near, a screenful ahead, so the code is there
   // by the time they arrive. A heavy file waits to be asked for by hand, and so
@@ -36,12 +40,12 @@ export function FileSection({
     const el = box.current;
     // A closed file is not worth fetching: it has been read, or the reader
     // folded it away.
-    if (!el || !open || (heavy && !asked)) return;
+    if (!el || !visible || !open || (heavy && !asked)) return;
 
     // No observer means no reason to hold anything back: it is a browser too
     // old to be running this, or a test.
     if (typeof IntersectionObserver === "undefined") {
-      onReach();
+      reach.current();
       return;
     }
 
@@ -49,13 +53,13 @@ export function FileSection({
       (entries) => {
         if (!entries.some((e) => e.isIntersecting)) return;
         watching.disconnect();
-        onReach();
+        reach.current();
       },
       { root: el.closest(".pane"), rootMargin: "800px 0px" },
     );
     watching.observe(el);
     return () => watching.disconnect();
-  }, [open, heavy, asked, onReach]);
+  }, [visible, open, heavy, asked]);
 
   return (
     <div ref={box} className="filesection" data-path={file.path}>
@@ -69,7 +73,9 @@ export function FileSection({
 
       {!open ? null : (
         <>
-          {file.skim && file.skimReason && <FileNote>Safe to skim — {file.skimReason}</FileNote>}
+          {file.skim && file.skimReason && (
+            <FileNote>Safe to skim — {file.skimReason}</FileNote>
+          )}
           {file.notes.map((note, i) => (
             <FileNote key={i}>
               {/* Which block the note came from, and only when the file is read
@@ -85,27 +91,47 @@ export function FileSection({
 
           {heavy && !asked ? (
             <div className="heavy px-6 py-6 font-sans text-sm text-ink-muted">
-              {gone ? "File deleted." : `${file.additions + file.deletions} changed lines.`}{" "}
+              {gone
+                ? "File deleted."
+                : `${file.additions + file.deletions} changed lines.`}{" "}
               <Button
                 variant="link"
                 size="xs"
                 className="px-0 text-highlight"
                 onClick={() => setAsked(true)}
               >
-                {gone ? `Show the ${file.deletions} removed lines` : "Load the diff"}
+                {gone
+                  ? `Show the ${file.deletions} removed lines`
+                  : "Load the diff"}
               </Button>
             </div>
           ) : error ? (
-            <div role="alert" className="broken px-6 py-6 font-sans text-sm text-ink-muted">
+            <div
+              role="alert"
+              className="broken px-6 py-6 font-sans text-sm text-ink-muted"
+            >
               <span className="font-mono text-ink-muted">{error}</span>{" "}
-              <Button variant="link" size="xs" className="px-0 text-highlight" onClick={onRetry}>
+              <Button
+                variant="link"
+                size="xs"
+                className="px-0 text-highlight"
+                onClick={onRetry}
+              >
                 Try again
               </Button>
             </div>
           ) : diff ? (
-            <Diff diff={diff} file={file} view={view} comments={comments} actions={commentActions} />
+            <Diff
+              diff={diff}
+              file={file}
+              view={view}
+              comments={comments}
+              actions={commentActions}
+            />
           ) : (
-            <div className="loading px-6 py-6 font-mono text-sm text-ink-muted">Loading diff…</div>
+            <div className="loading px-6 py-6 font-mono text-sm text-ink-muted">
+              Loading diff…
+            </div>
           )}
         </>
       )}

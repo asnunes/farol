@@ -1,11 +1,13 @@
 import { useMemo } from "react";
+import { DiffWindow } from "./DiffWindow";
+import { WINDOW_LINES } from "./hunkWindows";
+import { useHighlight } from "@/hooks/useHighlight";
 import { cn } from "@/lib/utils";
 import { Code } from "./Code";
 import { LineNotes } from "./LineNotes";
 import { LineNumber } from "./LineNumber";
 import { notedBy, notesAt } from "./line";
 import type { Opened as Range } from "@/hooks/useOpened";
-import type { Tokenize } from "@/highlight/tokens";
 import type { DiffView } from "@/hooks/useDiffView";
 import type { DiffLine, FileView } from "@/api";
 
@@ -19,17 +21,52 @@ import type { DiffLine, FileView } from "@/api";
  *
  * The session's line notes do show. A note can be pinned anywhere in the file,
  * and one pinned outside the diff has been written and invisible until now. */
-export function Opened({ range, file, tokenize, view, shift }: OpenedProps) {
+export function Opened({ range, file, view, shift }: OpenedProps) {
+  const chunks = Array.from(
+    { length: Math.ceil(range.lines.length / WINDOW_LINES) },
+    (_, i) => i * WINDOW_LINES,
+  );
+  return chunks.map((from) => (
+    <DiffWindow
+      key={from}
+      rows={Math.min(WINDOW_LINES, range.lines.length - from)}
+      layout={view}
+    >
+      <OpenedChunk
+        range={range}
+        file={file}
+        view={view}
+        shift={shift}
+        from={from}
+      />
+    </DiffWindow>
+  ));
+}
+
+function OpenedChunk({
+  range,
+  file,
+  view,
+  shift,
+  from,
+}: OpenedProps & { from: number }) {
+  const tokenize = useHighlight(file.path);
+  const to = Math.min(from + WINDOW_LINES, range.lines.length);
   const coloured = useMemo(
     // A whole stretch at a time, not line by line: a tokenizer carries state
     // across lines, and a block comment read one line at a time comes out as
     // code.
-    () => (tokenize ? tokenize(range.lines.join("\n")) : null),
-    [range.lines, tokenize],
+    () =>
+      !tokenize
+        ? null
+        : tokenize.range
+          ? tokenize.range(range.lines, from, to)
+          : tokenize(range.lines.slice(0, to).join("\n")).slice(from, to),
+    [range.lines, tokenize, from, to],
   );
 
-  return range.lines.map((content, i) => {
-    const line = at(range.from + i, shift, content);
+  return range.lines.slice(from, to).map((content, i) => {
+    const line = at(range.from + from + i, shift, content);
     const marked = notedBy(file, line) && "noted";
 
     return (
@@ -76,7 +113,6 @@ function at(number: number, shift: number, content: string): DiffLine {
 type OpenedProps = {
   range: Range;
   file: FileView;
-  tokenize: Tokenize | null;
   view: DiffView;
   /** Old number minus new number, constant across the gap this came from. */
   shift: number;
