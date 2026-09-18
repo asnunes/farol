@@ -1,6 +1,6 @@
 [package]
 name = "farol"
-version = "1.0.0-rc.1"
+version = "1.0.0-rc.2"
 edition = "2024"
 description = "A local code-review app with guided reading order and implementation context"
 repository = "https://github.com/asnunes/farol"
