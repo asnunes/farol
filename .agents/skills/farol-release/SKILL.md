@@ -1,6 +1,6 @@
 ---
 name: farol-release
-description: Prepare a Farol release version PR, or publish an explicitly authorized prerelease and verify its artifacts. Use when asked to prepare, cut, or publish a Farol release.
+description: Prepare a Farol release version PR, or publish an explicitly authorized release and verify its artifacts. Use when asked to prepare, cut, or publish a Farol release.
 ---
 
 # Release Farol
@@ -16,7 +16,7 @@ publication behavior; use the existing workflow for building and publishing.
   and releases, and any version PR already in progress. Fetch the remote state
   before selecting the release commit.
 - Use the version the user specified or already approved. If none was chosen,
-  ask for it before changing version files. Do not invent the first alpha number.
+  ask for it before changing version files. Do not invent a version.
 - Prepare the version change on a dedicated branch from current `origin/main`.
   Update the root package version in `Cargo.toml` and its matching entry in
   `Cargo.lock`, keeping dependency versions unchanged.
@@ -46,8 +46,9 @@ publication behavior; use the existing workflow for building and publishing.
 
 - Follow the `release packages` run triggered by that tag. If it fails, inspect
   the logs and report the failed step before attempting another publication.
-- Verify that the GitHub release is a prerelease for the expected tag and contains
-  all three platform archives plus `SHA256SUMS`.
+- Verify the expected tag and release type: a version with a prerelease suffix
+  must be a prerelease; a version without one must be stable and marked latest.
+  Require all three platform archives plus `SHA256SUMS`.
 - Download those assets into a temporary directory and verify every checksum.
   Use the workflow's native smoke results as evidence that each package runs on
   its target platform.
