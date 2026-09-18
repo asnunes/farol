@@ -6,8 +6,10 @@ the frontend is embedded in the executable.
 
 Pushes to `main` and manual workflow runs upload build artifacts only. Pull
 requests run the code checks without building release packages. A pushed
-`v*` tag publishes a GitHub prerelease after every package passes its smoke
-check. No stable-release promotion or signing is automated here.
+`v*` tag publishes a GitHub release after every package passes its smoke
+check. Versions with a prerelease suffix (such as `v1.0.0-rc.2`) are marked as
+prereleases; versions without one (such as `v1.0.0`) become the latest stable
+release. Signing is not automated.
 
 For agent-assisted releases, use `$farol-release` in a Codex session in this
 repository. The project skill lives at `.agents/skills/farol-release/SKILL.md`.
@@ -60,12 +62,11 @@ just smoke-package dist/farol-vVERSION-TARGET.tar.gz
 a failed dependency resolution must be fixed in the lockfile, not silently
 replaced during release packaging.
 
-## Publish a prerelease
+## Publish a release
 
-Publishing is a separate maintainer action after the packaging PR is merged.
-The first version has not been selected or tagged by this change.
+Publishing is a separate maintainer action after the version PR is merged.
 
-1. Choose the version, for example `0.1.0-alpha.1`, with the maintainer.
+1. Choose the version, for example `1.0.0` or `1.1.0-rc.1`, with the maintainer.
 2. Update the root package version in `Cargo.toml` and its root entry in
    `Cargo.lock`. Merge that version change after checks pass.
 3. Confirm the license/publication checklist is ready. This workflow does not
@@ -73,9 +74,10 @@ The first version has not been selected or tagged by this change.
 4. Create and push a tag whose name is exactly `v` followed by the Cargo version.
    A mismatch fails packaging and prevents publication.
 5. The workflow builds and tests all packages, combines their checksums into
-   `SHA256SUMS`, verifies them, and publishes the archives as a prerelease.
+   `SHA256SUMS`, verifies them, and publishes the archives with the release type
+   determined by the version.
 6. Inspect the release page and download a package to verify the published assets.
 
-Do not point a prerelease tag at a binary that reports a different version.
+Do not point a release tag at a binary that reports a different version.
 macOS archives are not Developer ID signed or notarized; document this condition
 when announcing the release. Checksums are not a replacement for signing.

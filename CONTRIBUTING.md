@@ -1,6 +1,6 @@
 # Contributing to Farol
 
-Farol is in alpha. Bug reports, documentation improvements, and focused
+Bug reports, documentation improvements, and focused
 pull requests are welcome.
 
 ## Get started

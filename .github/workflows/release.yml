@@ -69,8 +69,9 @@ jobs:
           pattern: farol-*
           path: dist
           merge-multiple: true
-      - name: Publish the verified prerelease
+      - name: Publish the verified release
         working-directory: dist
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -78,6 +79,10 @@ jobs:
         run: |
           cat ./*.sha256 > SHA256SUMS
           sha256sum --check SHA256SUMS
+          release_flags=(--latest)
+          if [[ "$RELEASE_TAG" == *-* ]]; then
+            release_flags=(--prerelease)
+          fi
           gh release create "$RELEASE_TAG" ./*.tar.gz SHA256SUMS \
-            --verify-tag --prerelease --title "$RELEASE_TAG" \
-            --notes "Preview release. See the packaged README for installation and supported platforms. macOS packages are not Developer ID signed or notarized."
+            --verify-tag "${release_flags[@]}" --title "$RELEASE_TAG" \
+            --notes "See the packaged README for installation and supported platforms. macOS packages are not Developer ID signed or notarized."
