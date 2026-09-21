@@ -88,12 +88,11 @@ export function commentedBy(comments: CommentView[], at: Anchor): boolean {
   });
 }
 
-/** The comments that belong under this row, oldest first — questions read in
- * the order they were asked. Ids carry the clock, so sorting by id is sorting
- * by when. */
+/** The comments that belong under this row.
+ *
+ * They arrive oldest first and stay that way: the order is the server's to
+ * decide, like the grouping that put them on this file in the first place. */
 export function commentsAt(comments: CommentView[], at: Anchor): CommentView[] {
-  return comments
-    .filter((c) => numberOn(at[c.side], c.side) === c.to)
-    .sort((a, b) => a.id.localeCompare(b.id));
+  return comments.filter((c) => numberOn(at[c.side], c.side) === c.to);
 }
 

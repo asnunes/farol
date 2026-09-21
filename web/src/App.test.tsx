@@ -45,7 +45,7 @@ function review(over: Partial<ReviewView> = {}): ReviewView {
 /** Unrelated tests still need the local comment list. */
 function aside(url: string): Response | null {
   if (url.startsWith("/api/comments")) {
-    return new Response('{"comments":[],"unreadable":[]}', {
+    return new Response('{"files":{},"unreadable":[]}', {
       headers: { "content-type": "application/json" },
     });
   }
@@ -477,7 +477,7 @@ describe("refreshing an open review", () => {
     const announce = notifications();
     serve({ review: review() });
     const files = vi.spyOn(api, "file").mockResolvedValue(diff("OLD_CONTENT"));
-    const comments = vi.spyOn(api, "comments").mockResolvedValue({ comments: [], unreadable: [] });
+    const comments = vi.spyOn(api, "comments").mockResolvedValue({ files: {}, unreadable: [] });
     render(<App />);
     await waitFor(() => expect(section("src/a.rs").textContent).toContain("OLD_CONTENT"));
     const beforeComments = comments.mock.calls.length;
@@ -865,7 +865,7 @@ describe("a comment file that cannot be read", () => {
         if (url.startsWith("/api/comments")) {
           return new Response(
             JSON.stringify({
-              comments: [],
+              files: {},
               unreadable: [
                 {
                   file: ".git/farol/feature-x/comments/18cb-3731.md",

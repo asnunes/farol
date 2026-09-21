@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type CommentsView, type CommentView, type Side } from "@/api";
 import { onNudge } from "@/lib/watch";
 import { said } from "@/lib/utils";
@@ -11,7 +11,7 @@ import { said } from "@/lib/utils";
  * patching the list in place is the same choice `useReview` makes for the tick
  * boxes — the server is what decides, here as there. */
 export function useComments(onError: (message: string) => void, generation = 0) {
-  const [found, setFound] = useState<CommentsView>({ comments: [], unreadable: [] });
+  const [found, setFound] = useState<CommentsView>({ files: {}, unreadable: [] });
   const latest = useRef(0);
 
   const load = useCallback(async () => {
@@ -25,7 +25,7 @@ export function useComments(onError: (message: string) => void, generation = 0) 
   }, [onError]);
 
   useEffect(() => {
-    setFound({ comments: [], unreadable: [] });
+    setFound({ files: {}, unreadable: [] });
     void load();
     return () => { latest.current++; };
   }, [load, generation]);
@@ -48,26 +48,11 @@ export function useComments(onError: (message: string) => void, generation = 0) 
     [load, onError],
   );
 
-  // Grouped once, here, because every consumer wants the same cut of it: the
-  // sidebar counts a file's questions, the header counts them again over the
-  // code, and the diff draws them. Narrowed separately in each — which is what
-  // this replaces — "how many comments does this file have" had four answers
-  // and no way to notice when they stopped agreeing.
-  const byPath = useMemo(() => {
-    const grouped = new Map<string, CommentView[]>();
-    for (const comment of found.comments) {
-      const here = grouped.get(comment.path);
-      if (here) here.push(comment);
-      else grouped.set(comment.path, [comment]);
-    }
-    return grouped;
-  }, [found.comments]);
-
   return {
-    comments: found.comments,
     /** This file's comments: what is counted beside it and what is drawn under
-     * its lines, which have to be the same list or the margin lies. */
-    on: useCallback((path: string) => byPath.get(path) ?? NONE, [byPath]),
+     * its lines, which are the same array because the server sent them as one.
+     * A lookup and not a filter — the cut was decided before it got here. */
+    on: useCallback((path: string) => found.files[path] ?? NONE, [found.files]),
     unreadable: found.unreadable,
     add: (path: string, side: Side, from: number, to: number, body: string) =>
       write(api.addComment(path, side, from, to, body)),

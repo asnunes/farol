@@ -118,7 +118,10 @@ export type DiffLine = {
  * their absence shows: a comment whose markdown got broken by hand stops
  * rendering, and silence there reads as never having written it. */
 export type CommentsView = {
-  comments: CommentView[];
+  /** The comments of one file, under its path, oldest first. Shaped by the
+   * server like every other answer, so the browser looks a file up instead of
+   * grouping the list again wherever it needs the cut. */
+  files: Record<string, CommentView[]>;
   unreadable: Unreadable[];
 };
 

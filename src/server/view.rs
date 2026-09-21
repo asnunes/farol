@@ -5,6 +5,8 @@
 //! notes from *every* block travel with it, and the tags say which stories it
 //! belongs to.
 
+use std::collections::BTreeMap;
+
 use serde::Serialize;
 
 use crate::comments::domain::{Comment, Found};
@@ -188,15 +190,27 @@ pub struct CommentView {
     pub published: Option<String>,
 }
 
-/// The comment list, and what the store could not read.
+/// The comments, under the file each one is about, and what the store could not
+/// read at all.
 ///
-/// An object rather than a bare array because the unreadable files travel with
-/// it: the page has to be able to say a comment went missing, and a list has
-/// nowhere to put that.
+/// Keyed by path rather than handed over as one flat list, for the reason every
+/// other answer here is shaped before it goes: the screen asks one question of
+/// this — what is on *this* file — and asking it of a flat list means grouping
+/// in the browser, in as many places as ask. The count beside a file and the
+/// boxes under its lines then come from the same array without anyone having to
+/// keep two derivations agreeing.
+///
+/// Within a file they are oldest first. Ids carry the clock, so ordering by id
+/// is ordering by when the question was asked, and that is the order a reader
+/// works through them in.
+///
+/// An object rather than a bare map because the unreadable files travel with
+/// it: the page has to be able to say a comment went missing, and a map keyed
+/// by reviewed path has nowhere to put one whose path is exactly what broke.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CommentsView {
-    pub comments: Vec<CommentView>,
+    pub files: BTreeMap<String, Vec<CommentView>>,
     pub unreadable: Vec<UnreadableView>,
 }
 
@@ -326,8 +340,19 @@ impl ReviewView {
 
 impl CommentsView {
     pub fn of(found: &Found) -> Self {
+        let mut files: BTreeMap<String, Vec<CommentView>> = BTreeMap::new();
+        for comment in &found.comments {
+            files
+                .entry(comment.path.clone())
+                .or_default()
+                .push(CommentView::of(comment));
+        }
+        for here in files.values_mut() {
+            here.sort_by(|a, b| a.id.cmp(&b.id));
+        }
+
         Self {
-            comments: found.comments.iter().map(CommentView::of).collect(),
+            files,
             unreadable: found
                 .unreadable
                 .iter()
@@ -424,6 +449,57 @@ mod tests {
     use crate::diff::domain::ReviewScopeSource;
     use crate::map::domain::{LineRange, Position};
     use crate::testing::{FakeDiffSource, slug};
+
+    #[test]
+    fn comments_go_out_under_the_file_they_are_about() {
+        // Shaped here so the browser looks a file up. Handed over flat, every
+        // place that wants one file's comments groups the list again, and the
+        // count beside a file stops being the array drawn under its lines.
+        let found = Found {
+            comments: vec![
+                comment("18cb-0002", "src/a.rs"),
+                comment("18cb-0003", "src/b.rs"),
+                comment("18cb-0001", "src/a.rs"),
+            ],
+            unreadable: Vec::new(),
+        };
+
+        let view = CommentsView::of(&found);
+
+        assert_eq!(view.files.len(), 2);
+        assert_eq!(
+            ids(&view, "src/a.rs"),
+            vec!["18cb-0001", "18cb-0002"],
+            "oldest first: the id carries the clock, and the reader works \
+             through the questions in the order they were asked"
+        );
+        assert_eq!(ids(&view, "src/b.rs"), vec!["18cb-0003"]);
+    }
+
+    #[test]
+    fn a_file_nobody_commented_on_is_simply_absent() {
+        // The page asks for a key that is not there and gets nothing, which is
+        // what "no questions on this file" has to look like.
+        let view = CommentsView::of(&Found::default());
+
+        assert!(view.files.is_empty());
+    }
+
+    fn comment(id: &str, path: &str) -> Comment {
+        Comment {
+            id: id.into(),
+            path: path.into(),
+            side: Side::New,
+            from: 1,
+            to: 1,
+            body: "Por que essa ordem?".into(),
+            published: None,
+        }
+    }
+
+    fn ids<'a>(view: &'a CommentsView, path: &str) -> Vec<&'a str> {
+        view.files[path].iter().map(|c| c.id.as_str()).collect()
+    }
 
     /// Assemble the snapshot the way the use case would, from a fake.
     fn built(map: &ReviewMap, source: FakeDiffSource, progress: &Progress) -> ReviewView {

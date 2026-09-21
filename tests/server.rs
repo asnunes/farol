@@ -91,6 +91,25 @@ impl Serving {
         serde_json::from_str(&self.get(path)).expect("the body should be json")
     }
 
+    /// The comments on one file, which is the only cut the page ever asks for
+    /// and therefore the shape they go out in.
+    fn comments_on(&self, path: &str) -> Vec<Value> {
+        match self.json("/api/comments")["files"].get(path) {
+            Some(here) => here.as_array().expect("a file holds a list").clone(),
+            None => Vec::new(),
+        }
+    }
+
+    /// How many are open across the whole review.
+    fn comment_count(&self) -> usize {
+        self.json("/api/comments")["files"]
+            .as_object()
+            .expect("the comments go out keyed by file")
+            .values()
+            .map(|here| here.as_array().unwrap().len())
+            .sum()
+    }
+
     /// Status code and body, for the requests that are meant to be refused.
     fn probe(&self, method: &str, path: &str, body: Option<&str>) -> (u32, String) {
         self.probe_headers(method, path, body, &[])
@@ -297,12 +316,7 @@ fn foreign_origins_cannot_change_state_or_start_publication() {
         before,
         "rejected requests must not change the review or session"
     );
-    assert!(
-        s.json("/api/comments")["comments"]
-            .as_array()
-            .unwrap()
-            .is_empty()
-    );
+    assert_eq!(s.comment_count(), 0);
     assert!(
         !s.repo
             .path()
@@ -631,13 +645,7 @@ fn a_comment_written_from_the_page_can_be_read_and_closed() {
     // The whole life of a comment over the wire, in one go: each step is only
     // worth anything if the one before it stuck.
     let s = Serving::new();
-    assert_eq!(
-        s.json("/api/comments")["comments"]
-            .as_array()
-            .unwrap()
-            .len(),
-        0
-    );
+    assert_eq!(s.comment_count(), 0);
 
     let (status, body) = s.probe(
         "POST",
@@ -650,7 +658,7 @@ fn a_comment_written_from_the_page_can_be_read_and_closed() {
         .expect("the new comment comes back with the id to address it by")
         .to_string();
 
-    let all = s.json("/api/comments")["comments"].clone();
+    let all = s.comments_on("src/a.rs");
     assert_eq!(all[0]["path"], "src/a.rs");
     assert_eq!(all[0]["from"], 10);
     assert_eq!(all[0]["to"], 12);
@@ -660,13 +668,7 @@ fn a_comment_written_from_the_page_can_be_read_and_closed() {
     // back is the list of what is still waiting.
     let (status, _) = s.probe("DELETE", &format!("/api/comments/{id}"), None);
     assert_eq!(status, 204);
-    assert_eq!(
-        s.json("/api/comments")["comments"]
-            .as_array()
-            .unwrap()
-            .len(),
-        0
-    );
+    assert_eq!(s.comment_count(), 0);
 }
 
 #[test]
@@ -719,13 +721,7 @@ fn a_comment_the_review_cannot_hold_is_refused() {
 
     assert_eq!(outside, 400);
     assert_eq!(past_end, 400);
-    assert_eq!(
-        s.json("/api/comments")["comments"]
-            .as_array()
-            .unwrap()
-            .len(),
-        0
-    );
+    assert_eq!(s.comment_count(), 0);
 }
 
 #[test]
@@ -750,7 +746,7 @@ fn a_comment_file_edited_into_nonsense_is_reported_to_the_page() {
 
     let answer = s.json("/api/comments");
 
-    assert_eq!(answer["comments"].as_array().unwrap().len(), 0);
+    assert!(answer["files"].as_object().unwrap().is_empty());
     let unreadable = answer["unreadable"].as_array().unwrap();
     assert_eq!(unreadable.len(), 1);
     // Named the way the review is read. The header is gone here, so all that
@@ -788,7 +784,7 @@ fn a_comment_on_a_removed_line_survives_the_page_being_reloaded() {
     );
     assert_eq!(status, 200, "{body}");
 
-    let all = s.json("/api/comments")["comments"].clone();
+    let all = s.comments_on("src/gone.rs");
     assert_eq!(all[0]["path"], "src/gone.rs");
     assert_eq!(all[0]["side"], "old");
     assert_eq!(all[0]["from"], 2);
@@ -838,10 +834,9 @@ fn the_same_numbers_on_the_two_sides_are_two_different_comments() {
         assert_eq!(status, 200, "{body}");
     }
 
-    let all = s.json("/api/comments")["comments"].clone();
-    let all = all.as_array().unwrap();
+    let all = s.comments_on("src/keep.rs");
     assert_eq!(all.len(), 2);
-    for one in all {
+    for one in &all {
         assert_eq!(one["from"], 5);
         assert_eq!(
             one["body"],
@@ -862,13 +857,7 @@ fn a_side_the_review_has_never_heard_of_is_refused() {
     );
 
     assert!(status >= 400, "{status}");
-    assert_eq!(
-        s.json("/api/comments")["comments"]
-            .as_array()
-            .unwrap()
-            .len(),
-        0
-    );
+    assert_eq!(s.comment_count(), 0);
 }
 
 #[test]
