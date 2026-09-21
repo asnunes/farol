@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { blockOf, readingOrder, type FileView, type ReviewView } from "./api";
+import { blockOf, readingOrder, readingRows, type FileView, type ReviewView } from "./api";
 
 function file(path: string, viewed = false): FileView {
   return {
@@ -52,6 +52,27 @@ describe("reading order", () => {
     const order = readingOrder(review());
     const next = order.slice(1).find((f) => !f.viewed);
     expect(next?.path).toBe("b.rs");
+  });
+
+  it("announces each block above the files it holds, and ends on loose skim", () => {
+    // What the pane draws. It used to assemble this itself, and the comment on
+    // the test above — that the keys and the screen have to agree — was a hope
+    // rather than something the code held to.
+    expect(
+      readingRows(review()).map((row) => ("file" in row ? row.file.path : `[${row.block.slug}]`)),
+    ).toEqual(["[one]", "a.rs", "b.rs", "[two]", "c.rs", "Cargo.lock"]);
+  });
+
+  it("walks the keys through exactly the files the page draws", () => {
+    const drawn = readingRows(review()).flatMap((row) => ("file" in row ? [row.file.path] : []));
+
+    expect(readingOrder(review()).map((f) => f.path)).toEqual(drawn);
+  });
+
+  it("numbers the blocks in the order they are met", () => {
+    const bands = readingRows(review()).flatMap((row) => ("block" in row ? [row.number] : []));
+
+    expect(bands).toEqual([1, 2]);
   });
 });
 

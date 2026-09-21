@@ -8,7 +8,8 @@ import { Unmapped } from "@/review/Unmapped";
 import type { CommentActions } from "@/hooks/useComments";
 import type { DiffView } from "@/hooks/useDiffView";
 import type { OpenFiles } from "@/hooks/useOpenFiles";
-import type { BlockView, FileView, ReviewView } from "@/api";
+import { readingRows } from "@/api";
+import type { ReviewView } from "@/api";
 
 /** The whole review, in one scroll.
  *
@@ -50,7 +51,7 @@ export function Reading({
 
   return (
     <main ref={pane} className="pane overflow-y-auto bg-ground" data-current={current ?? ""}>
-      {inReadingOrder(review).map((row) =>
+      {readingRows(review).map((row) =>
         "block" in row ? (
           <BlockBar
             key={row.block.slug}
@@ -93,20 +94,6 @@ export function Reading({
     </main>
   );
 }
-
-/** The page, top to bottom: each block announced, then the files it holds, then
- * the files that belong to no block at all. */
-function inReadingOrder(review: ReviewView): Row[] {
-  return [
-    ...review.blocks.flatMap((block, i): Row[] => [
-      { block, number: i + 1 },
-      ...block.files.map((file) => ({ file })),
-    ]),
-    ...review.looseSkim.map((file) => ({ file })),
-  ];
-}
-
-type Row = { block: BlockView; number: number } | { file: FileView };
 
 type ReadingProps = {
   review: ReviewView;
