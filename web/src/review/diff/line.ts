@@ -97,7 +97,3 @@ export function commentsAt(comments: CommentView[], at: Anchor): CommentView[] {
     .sort((a, b) => a.id.localeCompare(b.id));
 }
 
-/** The comments left on one file. */
-export function commentsOn(comments: CommentView[], path: string): CommentView[] {
-  return comments.filter((c) => c.path === path);
-}

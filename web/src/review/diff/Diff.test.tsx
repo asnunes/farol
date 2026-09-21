@@ -182,15 +182,6 @@ describe("commenting on the diff", () => {
     expect(railed).toEqual([true, true]);
   });
 
-  it("leaves the comments of other files alone", () => {
-    // Every comment in the review is handed down; the diff shows its own.
-    const { container } = draw([
-      comment({ path: "src/elsewhere.rs", from: 1, to: 1 }),
-    ]);
-
-    expect(container.querySelector(".comment")).toBeNull();
-  });
-
   it.each(["unified", "split"] as const)(
     "raises the plus from the whole line, code included, in %s",
     (view) => {

@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::comments::application::reached;
 use crate::comments::domain::{
     Comment, CommentError, CommentStore, Readiness, Review, ReviewPublisher, Verdict,
 };
@@ -196,22 +197,17 @@ impl PublishReview {
     /// The ones that drifted are named together rather than one at a time: the
     /// reviewer has to go and look at each, and being sent back for the next
     /// one after every fix is the worse version of the same information.
+    ///
+    /// Asked of `reached` rather than worked out here, so that what publishing
+    /// refuses and what the list shows cannot drift apart from each other.
     fn still_in_the_diff(&self, comments: &[Comment]) -> Result<()> {
-        let scope = self.scope.get()?;
-        let mut drifted = Vec::new();
-        for comment in comments {
-            let shown = scope.contains(&comment.path)
-                && self
-                    .diffs
-                    .of(&comment.path)?
-                    .shows(comment.side, comment.from, comment.to);
-            if !shown {
-                drifted.push(comment.at());
-            }
-        }
+        let drifted = reached(self.scope.get()?, &self.diffs, comments.to_vec())?.drifted;
         match drifted.is_empty() {
             true => Ok(()),
-            false => Err(CommentError::NoLongerInDiff { comments: drifted }.into()),
+            false => Err(CommentError::NoLongerInDiff {
+                comments: drifted.iter().map(Comment::at).collect(),
+            }
+            .into()),
         }
     }
 }

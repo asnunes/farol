@@ -7,6 +7,7 @@ import type { CommentView, FileView } from "@/api";
 export function noComments(): CommentActions {
   return {
     comments: [],
+    on: () => [],
     unreadable: [],
     add: vi.fn().mockResolvedValue(undefined),
     close: vi.fn().mockResolvedValue(undefined),

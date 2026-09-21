@@ -3,7 +3,6 @@ import { DiffHunk } from "./DiffHunk";
 import { Gap } from "./Gap";
 import { Opened } from "./Opened";
 import { gapsOf, opening } from "./gaps";
-import { commentsOn } from "./line";
 import { useLineSelection } from "./useLineSelection";
 import type { Opened as OpenedRange } from "@/hooks/useOpened";
 import type { Gap as GapRange, Opening } from "./gaps";
@@ -37,7 +36,7 @@ export function Diff({ diff, file, view, comments, actions }: DiffProps) {
 
   const commentary = {
     path: file.path,
-    comments: commentsOn(comments, file.path),
+    comments,
     actions,
     select,
   };

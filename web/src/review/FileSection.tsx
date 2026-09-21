@@ -157,7 +157,8 @@ type FileSectionProps = {
   onToggleOpen: () => void;
   onReach: () => void;
   onToggleViewed: () => void;
-  /** Every comment in the review; the diff picks out this file's own. */
+  /** This file's comments, already narrowed: the number in the header and the
+   * boxes under the lines are the same list. */
   comments: CommentView[];
   commentActions: CommentActions;
 };

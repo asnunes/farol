@@ -3,7 +3,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CopyPath } from "@/review/CopyPath";
-import { commentsOn } from "@/review/diff/line";
 import { splitPath } from "@/lib/path";
 import type { CommentView, FileView } from "@/api";
 
@@ -15,7 +14,7 @@ import type { CommentView, FileView } from "@/api";
  * would spend the top of the screen on prose the reader has already finished. */
 export function FileHeader({ file, open, onToggleOpen, onToggleViewed, comments }: FileHeaderProps) {
   const { dir, name } = splitPath(file.path);
-  const unanswered = commentsOn(comments, file.path).length;
+  const unanswered = comments.length;
 
   return (
     <div className="filehead sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-rule bg-surface px-4 py-2 md:gap-4 md:px-6 md:py-2.5">

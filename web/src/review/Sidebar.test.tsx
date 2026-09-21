@@ -112,9 +112,10 @@ describe("telling the files in the sidebar apart", () => {
 });
 
 function show(view: ReviewView, onPick = vi.fn(), comments: CommentView[] = []) {
+  const on = (path: string) => comments.filter((c) => c.path === path);
   render(
     <TooltipProvider>
-      <Sidebar review={view} comments={comments} current={null} onPick={onPick} />
+      <Sidebar review={view} comments={on} current={null} onPick={onPick} />
     </TooltipProvider>,
   );
 }

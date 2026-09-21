@@ -153,7 +153,7 @@ export default function App() {
         {sidebarOpen && (
           <Sidebar
             review={review}
-            comments={comments.comments}
+            comments={comments.on}
             current={current}
             onPick={(path) => {
               goTo(path);
