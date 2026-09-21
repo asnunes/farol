@@ -16,8 +16,15 @@ const buttonVariants = cva(
           "border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
         secondary:
           "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-        ghost:
-          "hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50",
+        // No `dark:hover:bg-accent/50` here, which is what shadcn ships. Its
+        // modifiers are not the ones a caller writes — `hover:bg-sunken` is
+        // `hover:`, this is `dark:hover:` — so tailwind-merge does not see the
+        // two as the same class and keeps both, and in the dark the `dark:` one
+        // wins. Every ghost button in this app that sets its own hover
+        // background had it quietly taken away, and the armed close button, whose
+        // text is dark because its background is light, ended up as near-black on
+        // near-black at 1.1:1. The light half already behaved; now both do.
+        ghost: "hover:bg-accent hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {
