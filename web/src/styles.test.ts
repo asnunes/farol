@@ -26,8 +26,11 @@ const UNDER = [
 ];
 
 /** The surfaces an icon-only control sits on. Fewer, because an icon is never
- * put on a diff row or on a selected row. */
-const BEHIND_ICONS = ["surface", "ground", "sunken", "comment-bg"];
+ * put on a diff row or on a selected row.
+ *
+ * `comment-bg` is not among them any more: the comment row draws its controls
+ * in an ink of its own, held higher than this. See below for why. */
+const BEHIND_ICONS = ["surface", "ground", "sunken"];
 
 describe.each(["light", "dark"] as const)("the %s palette", (theme) => {
   it.each(UNDER)("reads meaningful small text against %s", (bg) => {
@@ -43,6 +46,29 @@ describe.each(["light", "dark"] as const)("the %s palette", (theme) => {
     // brightening these to 4.5:1 would flatten the one distinction the two
     // tokens exist to draw.
     expect(ratio(token("faint", theme), token(bg, theme))).toBeGreaterThanOrEqual(3);
+  });
+
+  it("shows the comment row's own controls against the row", () => {
+    // Held at 4.5:1 and not at the 3:1 an icon is otherwise allowed. The floor
+    // is written against the surfaces the rest of the app is drawn on; the
+    // comment row is tinted, and the grey that clears 3:1 everywhere else
+    // cleared it by nothing here — 3.6:1 in the dark, 3.3:1 in the light, under
+    // a 14px glyph with a thin stroke. It passed this file and could not be
+    // found on the screen, which is the number being right and the bar being
+    // wrong.
+    expect(
+      ratio(token("comment-faint", theme), token("comment-bg", theme)),
+    ).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("keeps the comment row quieter than what it is saying", () => {
+    // The copy, the link and the close are parts of the comment, not chrome:
+    // lifting them until they compete with the prose would be the other way of
+    // getting this wrong.
+    const on = token("comment-bg", theme);
+    expect(ratio(token("comment-ink", theme), on)).toBeGreaterThan(
+      ratio(token("comment-faint", theme), on),
+    );
   });
 
   it("keeps the quiet inks in the order the design reads them in", () => {

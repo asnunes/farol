@@ -37,6 +37,7 @@
   --color-comment-rule: var(--farol-comment-rule);
   --color-comment-ink: var(--farol-comment-ink);
   --color-comment-dim: var(--farol-comment-dim);
+  --color-comment-faint: var(--farol-comment-faint);
 }
 
 /* Prefixed because shadcn's components define `--muted` and `--accent` for
@@ -98,6 +99,16 @@
   /* The wash under the lines being picked, deeper than the comment's own so a
      drag reads as a choice being made rather than a comment already there. */
   --farol-comment-dim: light-dark(#d5e4f6, #1c2f47);
+  /* `faint` for the row's own controls, because `faint` itself is not for this
+     ground. It is calibrated against the surfaces the rest of the app is drawn
+     on and sits at 3:1 there on purpose; the comment row is tinted, and the
+     same grey lands at 3.6:1 in the dark and 3.3:1 in the light — the floor,
+     under a 14px icon with a thin stroke, which is where the floor stops being
+     a number and starts being a control nobody can find. Dimmed from the row's
+     own ink rather than brightened from the grey, so the copy, the link and the
+     close still read as quiet parts of the comment and not as chrome that
+     wandered in. 4.6:1 light, 5.3:1 dark. */
+  --farol-comment-faint: light-dark(#4a7099, #6f93bf);
 }
 
 /* The reader's choice, when they have made one. Nothing else in the sheet
