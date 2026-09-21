@@ -52,6 +52,11 @@ export type BlockView = {
   title: string;
   context: string;
   files: FileView[];
+  /** What the block holds, which is more than it renders: a file it shares with
+   * an earlier block is read there and listed in neither list. Counted by the
+   * server, which is the only side that knows the membership. Never zero. */
+  totalFiles: number;
+  viewedFiles: number;
 };
 
 export type FileView = {

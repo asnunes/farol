@@ -82,8 +82,12 @@ function Block({
   current,
   onPick,
 }: BlockProps) {
+  // Read, not worked out: the rendered list is not what the block holds, and
+  // counting it was how a block that renders nothing stayed unfinishable while
+  // one that renders half its files reported done. Which file the reader is on
+  // stays here, because the server has no way to know it.
   const state =
-    block.files.length > 0 && block.files.every((f) => f.viewed)
+    block.viewedFiles === block.totalFiles
       ? "done"
       : block.files.some((f) => f.path === current)
         ? "current"

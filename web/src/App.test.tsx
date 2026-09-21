@@ -31,8 +31,11 @@ function review(over: Partial<ReviewView> = {}): ReviewView {
         title: "The change itself",
         context: "why it exists",
         files: [file("src/a.rs"), file("src/b.rs")],
+        totalFiles: 2,
+        viewedFiles: 0,
       },
-      { slug: "second", title: "The wiring", context: "", files: [file("src/c.rs")] },
+      { slug: "second", title: "The wiring", context: "", files: [file("src/c.rs")],
+        totalFiles: 1, viewedFiles: 0 },
     ],
     looseSkim: [],
     unmapped: [],
@@ -406,8 +409,13 @@ describe("a file that belongs to two blocks", () => {
                 ],
               }),
             ],
+            totalFiles: 1,
+            viewedFiles: 0,
           },
-          { slug: "second", title: "Second", context: "", files: [] },
+          // Renders nothing and holds the shared file, which is the case the
+          // rendered list could never report as finished.
+          { slug: "second", title: "Second", context: "", files: [],
+            totalFiles: 1, viewedFiles: 0 },
         ],
         totalFiles: 1,
       }),
@@ -1271,8 +1279,10 @@ describe("the sidebar on a screen too narrow to hold it", () => {
     const drag = screenIs(1440);
     serve({ review: review({ viewedFiles: 1, blocks: [
       { slug: "first", title: "The change itself", context: "why it exists",
-        files: [file("src/a.rs", { viewed: true }), file("src/b.rs")] },
-      { slug: "second", title: "The wiring", context: "", files: [file("src/c.rs")] },
+        files: [file("src/a.rs", { viewed: true }), file("src/b.rs")],
+        totalFiles: 2, viewedFiles: 1 },
+      { slug: "second", title: "The wiring", context: "", files: [file("src/c.rs")],
+        totalFiles: 1, viewedFiles: 0 },
     ] }) });
     render(<App />);
     await waitForReading("b.rs");

@@ -109,11 +109,38 @@ describe("telling the files in the sidebar apart", () => {
 
     expect(onPick).toHaveBeenCalledWith("src/map/mod.rs");
   });
+
+  it("marks a block done from what it holds, not from what it renders", () => {
+    // Its file is rendered under an earlier block, so this one renders nothing.
+    // Counted off the rendered list it could never be finished at all — the
+    // reader would be left with a block they have no way to tick off.
+    const { container } = show(
+      review([
+        block("first", ["src/shared.rs"]),
+        block("second", [], { totalFiles: 1, viewedFiles: 1 }),
+      ]),
+    );
+
+    const blocks = container.querySelectorAll(".blk");
+    expect(blocks[1].getAttribute("data-state")).toBe("done");
+  });
+
+  it("leaves a block unfinished while a file it holds elsewhere is unread", () => {
+    const { container } = show(
+      review([
+        block("first", ["src/shared.rs"]),
+        block("second", ["src/own.rs"], { totalFiles: 2, viewedFiles: 1 }),
+      ]),
+    );
+
+    const blocks = container.querySelectorAll(".blk");
+    expect(blocks[1].getAttribute("data-state")).toBe("todo");
+  });
 });
 
 function show(view: ReviewView, onPick = vi.fn(), comments: CommentView[] = []) {
   const on = (path: string) => comments.filter((c) => c.path === path);
-  render(
+  return render(
     <TooltipProvider>
       <Sidebar review={view} comments={on} current={null} onPick={onPick} />
     </TooltipProvider>,
@@ -151,8 +178,20 @@ function file(path: string, over: Partial<FileView> = {}): FileView {
   };
 }
 
-function block(slug: string, paths: string[]): BlockView {
-  return { slug, title: slug, context: "", files: paths.map((p) => file(p)) };
+/** The counts default to the rendered list, which is what they are whenever a
+ * file belongs to one block only. The test about a block that renders nothing
+ * passes its own. */
+function block(slug: string, paths: string[], over: Partial<BlockView> = {}): BlockView {
+  const files = paths.map((p) => file(p));
+  return {
+    slug,
+    title: slug,
+    context: "",
+    files,
+    totalFiles: files.length,
+    viewedFiles: files.filter((f) => f.viewed).length,
+    ...over,
+  };
 }
 
 function review(blocks: BlockView[], looseSkim: FileView[] = []): ReviewView {

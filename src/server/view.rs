@@ -5,7 +5,7 @@
 //! notes from *every* block travel with it, and the tags say which stories it
 //! belongs to.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde::Serialize;
 
@@ -150,6 +150,15 @@ pub struct BlockView {
     pub title: String,
     pub context: String,
     pub files: Vec<FileView>,
+    /// What the block *holds*, which is not what it renders: a file it shares
+    /// with an earlier block is read under that one and listed here on neither.
+    /// Counted where the membership is known, because a screen counting the
+    /// rendered list instead calls a block finished while a file of its own is
+    /// still unread — and calls one that renders nothing unfinishable.
+    ///
+    /// Never zero: a block with no path left in the comparison is not sent.
+    pub total_files: usize,
+    pub viewed_files: usize,
 }
 
 #[derive(Debug, Serialize)]
@@ -283,11 +292,27 @@ impl ReviewView {
                 ));
             }
 
+            // Over everything the block accounts for, read files and skim
+            // alike, and each path once however many roles it plays in here.
+            let held: BTreeSet<&str> = map
+                .paths_in(&block.slug)
+                .filter(|path| scope.contains(path))
+                .collect();
+            let viewed_files = held
+                .iter()
+                .filter_map(|path| scope.change(path))
+                // The same question `FileView` asks of a row: read, and still
+                // the same file.
+                .filter(|change| progress.is_current(&change.path, &change.content_hash))
+                .count();
+
             blocks.push(BlockView {
                 slug: block.slug.to_string(),
                 title: block.title.clone(),
                 context: block.context.clone(),
                 files,
+                total_files: held.len(),
+                viewed_files,
             });
         }
 
@@ -621,6 +646,79 @@ mod tests {
         assert!(view.blocks.is_empty(), "{:?}", view.blocks);
         assert!(view.loose_skim.is_empty());
         assert_eq!((view.total_files, view.viewed_files), (0, 0));
+    }
+
+    #[test]
+    fn a_block_that_renders_nothing_is_still_finished_by_the_file_it_holds() {
+        // Its only file is rendered under the block before it, so this one has
+        // an empty list and no row of its own to tick. Counted off that list it
+        // could never be finished at all: the sidebar would show it unread for
+        // the whole review, with nothing the reader could do about it.
+        let map = map_of(&[("first", "shared.rs"), ("second", "shared.rs")]);
+        let mut progress = Progress::new();
+        progress.mark("shared.rs", "hash-of-shared.rs", "now");
+
+        let view = built(&map, FakeDiffSource::with_paths(&["shared.rs"]), &progress);
+
+        assert!(view.blocks[1].files.is_empty(), "renders nothing");
+        assert_eq!(
+            (view.blocks[1].total_files, view.blocks[1].viewed_files),
+            (1, 1)
+        );
+    }
+
+    #[test]
+    fn a_block_is_unfinished_while_a_file_it_shares_with_an_earlier_one_is_unread() {
+        // The other way the rendered list lies. Here the block does render
+        // something, and reading only that would report the whole story done
+        // while the file it shares — the reason the author wrote it twice — has
+        // not been opened.
+        let map = map_of(&[
+            ("first", "shared.rs"),
+            ("second", "shared.rs"),
+            ("second", "own.rs"),
+        ]);
+        let mut progress = Progress::new();
+        progress.mark("own.rs", "hash-of-own.rs", "now");
+
+        let view = built(
+            &map,
+            FakeDiffSource::with_paths(&["shared.rs", "own.rs"]),
+            &progress,
+        );
+
+        let second = &view.blocks[1];
+        assert_eq!(
+            second
+                .files
+                .iter()
+                .map(|f| f.path.as_str())
+                .collect::<Vec<_>>(),
+            vec!["own.rs"],
+            "the shared file is rendered under the first block"
+        );
+        assert_eq!((second.total_files, second.viewed_files), (2, 1));
+    }
+
+    #[test]
+    fn skim_attached_to_a_block_counts_towards_finishing_it() {
+        // A skimmed file is still a file the reader ticks off, and the progress
+        // over the whole review counts it. A block that left it out would sit
+        // at done while a row under it was unticked.
+        let mut map = map_of(&[("one", "a.rs")]);
+        map.add_skim("gen.lock", "generated", Some(slug("one")))
+            .unwrap();
+
+        let view = built(
+            &map,
+            FakeDiffSource::with_paths(&["a.rs", "gen.lock"]),
+            &Progress::new(),
+        );
+
+        assert_eq!(
+            (view.blocks[0].total_files, view.blocks[0].viewed_files),
+            (2, 0)
+        );
     }
 
     #[test]
