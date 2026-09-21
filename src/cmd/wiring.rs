@@ -7,7 +7,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use crate::comments::application::{Comments, PublishReview, ReviewReadiness};
+use crate::comments::application::{CommentReach, Comments, PublishReview, ReviewReadiness};
 use crate::comments::domain::ReviewPublisher;
 use crate::comments::infra::{GhCredentials, GitHub, MarkdownComments, Unhosted};
 use crate::diff::application::{CommitHistory, FileDiffs, ReviewScope};
@@ -111,10 +111,11 @@ impl Ctx {
             None => Arc::new(Unhosted),
         };
 
+        let reach = CommentReach::new(scope.clone(), diffs.clone());
         let comments = Comments::new(
             comment_store.clone(),
             GetScope::new(scope.clone()),
-            diffs.clone(),
+            reach.clone(),
         );
         let reconciler = MapReconciler::new(scope.clone(), diffs.clone());
         let versions = MapVersions::new(scope.clone(), history.clone(), maps.clone());
@@ -124,7 +125,6 @@ impl Ctx {
         let progress = ProgressStore::new(progress_repo, diffs.clone());
         let scope_for_publishing = scope.clone();
         let scope_for_lines = scope.clone();
-        let diffs_for_publishing = diffs.clone();
 
         let readiness = ReviewReadiness::new(
             publisher.clone(),
@@ -136,7 +136,7 @@ impl Ctx {
             comment_store,
             publisher,
             scope_for_publishing,
-            diffs_for_publishing,
+            reach,
             history,
             progress.clone(),
         ));

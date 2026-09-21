@@ -1,14 +1,13 @@
+mod reach;
 mod use_case;
 
+pub use reach::*;
 pub use use_case::*;
 
-use std::collections::HashMap;
-use std::collections::hash_map::Entry;
 use std::sync::Arc;
 
 use crate::comments::domain::{Comment, CommentError, CommentStore, Found};
-use crate::diff::application::FileDiffs;
-use crate::diff::domain::{FileDiff, Scope, Side};
+use crate::diff::domain::Side;
 use crate::error::Result;
 use crate::map::application::GetScope;
 use crate::map::domain::LineRange;
@@ -17,16 +16,19 @@ use crate::map::domain::LineRange;
 #[derive(Clone)]
 pub struct Comments {
     store: Arc<dyn CommentStore>,
+    /// Kept beside the reach rather than reached through it: what this needs it
+    /// for is turning a raw path into a proven one, which is a different
+    /// question from what the diff shows.
     scope: GetScope,
-    diffs: FileDiffs,
+    reach: CommentReach,
 }
 
 impl Comments {
-    pub fn new(store: Arc<dyn CommentStore>, scope: GetScope, diffs: FileDiffs) -> Self {
+    pub fn new(store: Arc<dyn CommentStore>, scope: GetScope, reach: CommentReach) -> Self {
         Self {
             store,
             scope,
-            diffs,
+            reach,
         }
     }
 
@@ -45,9 +47,8 @@ impl Comments {
     /// and the list in `farol comment list` are the same list or they are two
     /// answers to one question.
     pub fn all(&self) -> Result<Found> {
-        let scope = self.scope.execute()?;
         let mut found = self.store.list()?;
-        found.comments = reached(&scope, &self.diffs, std::mem::take(&mut found.comments))?.live;
+        found.comments = self.reach.split(std::mem::take(&mut found.comments))?.live;
         Ok(found)
     }
 
@@ -78,7 +79,7 @@ impl Comments {
         if side == Side::New {
             range.require_within(&path)?;
         }
-        if !self.diffs.of(path.as_str())?.shows(side, from, to) {
+        if !self.reach.shows(&path, side, from, to)? {
             return Err(CommentError::OutsideDiff {
                 path: path.as_str().to_string(),
                 side,
@@ -114,43 +115,6 @@ impl Comments {
     }
 }
 
-/// Split comments by whether the diff still reaches the lines they sit on.
-///
-/// The one place that rule lives. It is asked at three moments — writing a
-/// comment, listing what is open, and sending the review — and worked out
-/// separately at each is how the list and the screen came to disagree about how
-/// many questions a file has.
-///
-/// A path that left the review window has no diff to ask for; asking would
-/// fail rather than answer, so it is decided before the question is put.
-///
-/// One diff per file, not one per comment: a file with a dozen questions on it
-/// would otherwise be diffed a dozen times.
-fn reached(scope: &Scope, diffs: &FileDiffs, comments: Vec<Comment>) -> Result<Reached> {
-    let mut seen: HashMap<String, Option<FileDiff>> = HashMap::new();
-    let mut split = Reached::default();
-
-    for comment in comments {
-        let diff = match seen.entry(comment.path.clone()) {
-            Entry::Occupied(e) => e.into_mut(),
-            Entry::Vacant(e) => e.insert(match scope.contains(&comment.path) {
-                true => Some(diffs.of(&comment.path)?),
-                false => None,
-            }),
-        };
-
-        match diff
-            .as_ref()
-            .is_some_and(|d| d.shows(comment.side, comment.from, comment.to))
-        {
-            true => split.live.push(comment),
-            false => split.drifted.push(comment),
-        }
-    }
-
-    Ok(split)
-}
-
 /// An id that survives leaving this machine.
 ///
 /// Comments are meant to travel: the reviewer's come back to the author, and
@@ -163,17 +127,6 @@ fn fresh_id() -> String {
         .map(|d| d.as_nanos())
         .unwrap_or_default();
     format!("{now:x}-{:x}", std::process::id())
-}
-
-/// Comments the diff still prints, and comments it has stopped printing.
-///
-/// Both halves are wanted, by different callers: listing keeps the first, and
-/// publishing names the second so the reviewer is told which of their questions
-/// drifted rather than being refused without one.
-#[derive(Debug, Default)]
-struct Reached {
-    live: Vec<Comment>,
-    drifted: Vec<Comment>,
 }
 
 #[cfg(test)]
@@ -216,10 +169,11 @@ mod tests {
     fn over_at(dir: &std::path::Path, source: FakeDiffSource) -> Comments {
         let store = Store::new(dir, "feature/x");
         let source = Arc::new(source);
+        let scope = ReviewScope::new(source.clone());
         Comments::new(
             Arc::new(MarkdownComments::new(&store, dir)),
-            GetScope::new(ReviewScope::new(source.clone())),
-            FileDiffs::new(source),
+            GetScope::new(scope.clone()),
+            CommentReach::new(scope, crate::diff::application::FileDiffs::new(source)),
         )
     }
 

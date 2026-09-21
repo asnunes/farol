@@ -266,7 +266,7 @@ pub(super) mod tests {
 
     use super::*;
     use crate::cmd::ServerUseCases;
-    use crate::comments::application::Comments;
+    use crate::comments::application::{CommentReach, Comments};
     use crate::progress::application::ProgressStore;
     use crate::server::{Registry, ServerEntry};
     use crate::testing::{FakeDiffSource, InMemoryProgressRepository};
@@ -315,11 +315,11 @@ pub(super) mod tests {
         let dir = tempfile::tempdir().unwrap();
         let store = crate::shared::paths::Store::new(dir.path(), "feature/x");
         let source = Arc::new(FakeDiffSource::with_paths(paths));
-        let scope = GetScope::new(ReviewScope::new(source.clone()));
+        let scope = ReviewScope::new(source.clone());
         let comments = Comments::new(
             Arc::new(MarkdownComments::new(&store, dir.path())),
-            scope,
-            FileDiffs::new(source),
+            GetScope::new(scope.clone()),
+            CommentReach::new(scope, FileDiffs::new(source)),
         );
         (dir, comments)
     }

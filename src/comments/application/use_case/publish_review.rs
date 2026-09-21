@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
-use crate::comments::application::reached;
+use crate::comments::application::CommentReach;
 use crate::comments::domain::{
     Comment, CommentError, CommentStore, Readiness, Review, ReviewPublisher, Verdict,
 };
-use crate::diff::application::{CommitHistory, FileDiffs, ReviewScope};
+use crate::diff::application::{CommitHistory, ReviewScope};
 use crate::error::Result;
 use crate::progress::application::ProgressStore;
 use crate::shared::short;
@@ -21,7 +21,7 @@ pub struct PublishReview {
     store: Arc<dyn CommentStore>,
     publisher: Arc<dyn ReviewPublisher>,
     scope: ReviewScope,
-    diffs: FileDiffs,
+    reach: CommentReach,
     history: CommitHistory,
     progress: ProgressStore,
 }
@@ -31,7 +31,7 @@ impl PublishReview {
         store: Arc<dyn CommentStore>,
         publisher: Arc<dyn ReviewPublisher>,
         scope: ReviewScope,
-        diffs: FileDiffs,
+        reach: CommentReach,
         history: CommitHistory,
         progress: ProgressStore,
     ) -> Self {
@@ -39,7 +39,7 @@ impl PublishReview {
             store,
             publisher,
             scope,
-            diffs,
+            reach,
             history,
             progress,
         }
@@ -103,7 +103,7 @@ impl PublishReview {
             .into_iter()
             .filter(|c| c.published.is_none())
             .collect();
-        self.still_in_the_diff(&waiting)?;
+        let waiting = self.still_in_the_diff(waiting)?;
 
         let url = self.publisher.publish(&Review {
             pull_request,
@@ -198,14 +198,15 @@ impl PublishReview {
     /// reviewer has to go and look at each, and being sent back for the next
     /// one after every fix is the worse version of the same information.
     ///
-    /// Asked of `reached` rather than worked out here, so that what publishing
-    /// refuses and what the list shows cannot drift apart from each other.
-    fn still_in_the_diff(&self, comments: &[Comment]) -> Result<()> {
-        let drifted = reached(self.scope.get()?, &self.diffs, comments.to_vec())?.drifted;
-        match drifted.is_empty() {
-            true => Ok(()),
+    /// Asked of `CommentReach` rather than worked out here, so that what
+    /// publishing refuses and what the list shows cannot drift apart from each
+    /// other.
+    fn still_in_the_diff(&self, comments: Vec<Comment>) -> Result<Vec<Comment>> {
+        let split = self.reach.split(comments)?;
+        match split.drifted.is_empty() {
+            true => Ok(split.live),
             false => Err(CommentError::NoLongerInDiff {
-                comments: drifted.iter().map(Comment::at).collect(),
+                comments: split.drifted.iter().map(Comment::at).collect(),
             }
             .into()),
         }
@@ -228,6 +229,7 @@ pub struct Sent {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::diff::application::FileDiffs;
     use crate::diff::domain::{Hunk, Side};
     use crate::progress::application::MarkViewed;
     use crate::progress::domain::{Progress, ProgressRepository};
@@ -586,7 +588,10 @@ mod tests {
             Arc::new(InMemoryComments::default()),
             publisher,
             ReviewScope::new(source.clone()),
-            FileDiffs::new(source.clone()),
+            CommentReach::new(
+                ReviewScope::new(source.clone()),
+                FileDiffs::new(source.clone()),
+            ),
             CommitHistory::new(source.clone()),
             ProgressStore::new(repo, FileDiffs::new(source)),
         );
@@ -637,7 +642,10 @@ mod tests {
             Arc::new(InMemoryComments::default()),
             publisher,
             ReviewScope::new(source.clone()),
-            FileDiffs::new(source.clone()),
+            CommentReach::new(
+                ReviewScope::new(source.clone()),
+                FileDiffs::new(source.clone()),
+            ),
             CommitHistory::new(source),
             progress.clone(),
         );
