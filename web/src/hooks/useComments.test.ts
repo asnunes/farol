@@ -40,10 +40,17 @@ describe("a file's comments", () => {
     expect(on("src/quiet.rs")).toBe(on("src/other.rs"));
   });
 
-  /** The hook over the answer the server gave. */
+  /** The hook over the answer the server gave.
+   *
+   * The error callback is made once, outside the render: the hook rebuilds its
+   * loader whenever that identity changes, and the effect that fetches hangs
+   * off the loader. A fresh `vi.fn()` per render would set state, re-render,
+   * and go round until the heap gave out — which is what it did.
+   */
   async function loaded(files: Record<string, CommentView[]>) {
     vi.spyOn(api, "comments").mockResolvedValue({ files, unreadable: [] });
-    const { result } = renderHook(() => useComments(vi.fn()));
+    const onError = vi.fn();
+    const { result } = renderHook(() => useComments(onError));
     const first = Object.keys(files)[0];
     await waitFor(() => expect(result.current.on(first)).not.toHaveLength(0));
     return result.current.on;
