@@ -59,6 +59,8 @@ export default function App() {
 
   const order = review ? readingOrder(review) : [];
   const index = order.findIndex((f) => f.path === current);
+  const reading = useRef(order);
+  reading.current = order;
 
   // Moving names the file *and* scrolls to it. Naming it only through the
   // scroll would mean waiting for the observer to answer, and two presses in a
@@ -68,19 +70,25 @@ export default function App() {
       setCurrent(path);
       // Going to a file opens it. Being taken to one that stayed folded away
       // because it had been read would look like arriving nowhere.
-      files.set(path, true);
+      //
+      // Through the ref because this function is handed to the keyboard effect
+      // and has to keep its identity across renders, while the order it looks
+      // the file up in is a new array on every one of them.
+      const file = reading.current.find((f) => f.path === path);
+      if (file) files.set(file, true);
       scrollToFile(path);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [setCurrent],
   );
 
-  // Marking a file read folds it away, and unmarking opens it again: the two
-  // states are separate and this is where they meet. One function for both
-  // ways of marking, or the keyboard and the tick box behave differently.
+  // Marking a file read folds it away, and unmarking opens it again — both by
+  // the mark itself, without a choice being recorded here. Folding ahead of the
+  // server would be this side deciding a file is read before it is, and the tick
+  // box and the block counts already wait for the answer; a fold that did not
+  // would be the one thing on the row moving early.
   const mark = useCallback(
     (path: string, viewed: boolean) => {
-      files.set(path, !viewed);
       // Marking one read folds it away, which leaves the reader looking at
       // whatever was underneath. Take them to the next file instead.
       if (viewed) {

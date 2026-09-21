@@ -48,6 +48,21 @@ function review(over: Partial<ReviewView> = {}): ReviewView {
   return built;
 }
 
+/** Tick a file off, and bring the counts with it — the server recomputes them
+ * from the marks, so a stub that moved one without the others would hand the
+ * page a review no server would ever send. */
+function markViewed(review: ReviewView, path: string, viewed: boolean) {
+  for (const file of [...review.blocks.flatMap((b) => b.files), ...review.looseSkim]) {
+    if (file.path === path) file.viewed = viewed;
+  }
+  for (const block of review.blocks) {
+    block.viewedFiles = block.files.filter((f) => f.viewed).length;
+  }
+  review.viewedFiles = [...review.blocks.flatMap((b) => b.files), ...review.looseSkim].filter(
+    (f) => f.viewed,
+  ).length;
+}
+
 /** The first file in reading order nobody has read: blocks in order, then the
  * loose skim under them, which is the walk the server makes. */
 function firstUnread(review: ReviewView): string | null {
@@ -133,7 +148,12 @@ function serve(state: { review: ReviewView }) {
         });
       }
       if (url.startsWith("/api/viewed")) {
-        viewedCalls.push(JSON.parse(String(init?.body)));
+        const body = JSON.parse(String(init?.body));
+        viewedCalls.push(body);
+        // Kept, the way the server keeps it: the next `/api/review` is what the
+        // page folds and counts from, so a stub that took the mark and forgot
+        // it would leave the page answering to nothing.
+        markViewed(state.review, body.path, body.viewed);
         return new Response(null, { status: 204 });
       }
       throw new Error(`unexpected request to ${url}`);
