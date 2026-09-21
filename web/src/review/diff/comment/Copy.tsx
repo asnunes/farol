@@ -12,7 +12,7 @@ export function Copy({ comment }: CopyProps) {
     <Button
       variant="ghost"
       size="icon-xs"
-      className="text-faint hover:bg-sunken hover:text-comment-ink"
+      className="text-comment-faint hover:bg-sunken hover:text-comment-ink"
       aria-label={copied ? "Comment copied" : "Copy this comment"}
       title="Copy this comment"
       onClick={() => void copy(quoted(comment))}

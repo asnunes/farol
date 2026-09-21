@@ -16,7 +16,7 @@ export function Published({ comment }: { comment: CommentView }) {
       asChild
       variant="ghost"
       size="icon-xs"
-      className="published text-faint hover:bg-sunken hover:text-comment-ink"
+      className="published text-comment-faint hover:bg-sunken hover:text-comment-ink"
       title="Published — read it on the pull request"
     >
       <a
