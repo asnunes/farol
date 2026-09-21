@@ -26,53 +26,70 @@ describe("opening what the diff did not print", () => {
     expect(within(gapAt(container, 1)).getAllByRole("button")).toHaveLength(3);
   });
 
-  it("leaves out the direction with no hunk to walk away from", () => {
-    // The gap after the last hunk has nothing below it, so opening from the
-    // bottom would be walking away from nowhere. Same at the top of the file,
-    // the other way round.
+  it("leaves out the direction with no hunk to walk from", () => {
+    // The gap after the last hunk has no hunk below it, so there is nothing for
+    // an up arrow to walk up from. Only the way down out of the hunk above.
     const { container } = render(<Diff {...props(twoHunks(100))} />);
     const tail = gapAt(container, 2);
 
-    expect(within(tail).getByLabelText("Open lines 62–81, above")).toBeTruthy();
-    expect(within(tail).queryByLabelText("Open lines 81–100, below")).toBeNull();
+    expect(
+      within(tail).getByLabelText("Open lines 62–81, down from the hunk above"),
+    ).toBeTruthy();
+    expect(
+      within(tail).queryByLabelText("Open lines 81–100, up from the hunk below"),
+    ).toBeNull();
   });
 
-  it("opens twenty lines under the hunk above, and puts them over the band", async () => {
-    // The chevron points up because that is the side the code comes out on.
-    // The lines it opens are the ones the hunk above runs into, and they are
-    // drawn between that hunk and the band.
+  it("walks down out of the hunk above, taking the lines it runs into", async () => {
+    // The down chevron names the hunk it leaves, not the side of the band the
+    // code lands on: those lines are drawn between that hunk and the band,
+    // which is above the band, whichever way the arrow points.
     const { container } = render(<Diff {...props(twoHunks(100))} />);
 
-    pull(container, "Open lines 11–30, above");
+    pull(container, "Open lines 11–30, down from the hunk above");
 
     await waitFor(() => expect(lines).toHaveBeenCalledWith("src/a.rs", 11, 30));
     expect(await screen.findByText("line 11")).toBeTruthy();
   });
 
-  it("opens the last twenty of the gap under the band, where the arrow points", async () => {
+  it("walks up into the hunk below, taking the lines that run into it", async () => {
     const { container } = render(<Diff {...props(twoHunks(100))} />);
 
-    pull(container, "Open lines 40–59, below");
+    pull(container, "Open lines 40–59, up from the hunk below");
 
     await waitFor(() => expect(lines).toHaveBeenCalledWith("src/a.rs", 40, 59));
   });
 
-  it("draws each step on the side its arrow points at", async () => {
-    // The whole meaning of the two chevrons. The stretch that is still closed
-    // has no height, so the band stands where all of it is: what is taken off
-    // its top can only come out over the band, and what is taken off its
-    // bottom under it. An arrow pointing the other way sends the reader
-    // looking for twenty lines at the far end of the file.
+  it("draws each step against the hunk its arrow walked from", async () => {
+    // The whole meaning of the two chevrons. What the down arrow takes is drawn
+    // against the hunk above, and what the up arrow takes against the hunk
+    // below, with what is still closed between them. The band sits at the far
+    // end of the stretch rather than in the middle of it, so which side of the
+    // band the code lands on says nothing and is not what is asserted.
     const { container } = render(<Diff {...props(twoHunks(100))} />);
 
-    pull(container, "Open lines 11–30, above");
+    pull(container, "Open lines 11–30, down from the hunk above");
     await screen.findByText("line 11");
     expect(side("line 11", gapAt(container, 1))).toBe("above");
 
-    pull(container, "Open lines 40–59, below");
+    pull(container, "Open lines 40–59, up from the hunk below");
     await screen.findByText("line 40");
     expect(side("line 40", gapAt(container, 1))).toBe("below");
     expect(side("line 11", gapAt(container, 1))).toBe("above");
+  });
+
+  it("keeps offering the same way in, so a long gap is walked a step at a time", async () => {
+    // Twenty lines is a step, not a limit. Pressing down again takes the next
+    // twenty, and the arrow has to survive the first press for that to be how
+    // anyone reads a long stretch.
+    const { container } = render(<Diff {...props(twoHunks(100))} />);
+
+    pull(container, "Open lines 11–30, down from the hunk above");
+    await screen.findByText("line 11");
+
+    pull(container, "Open lines 31–50, down from the hunk above");
+
+    await waitFor(() => expect(lines).toHaveBeenCalledWith("src/a.rs", 31, 50));
   });
 
   it("numbers an opened line on both sides", async () => {
@@ -80,7 +97,7 @@ describe("opening what the diff did not print", () => {
     // comparing against another checkout needs the number that side uses.
     const { container } = render(<Diff {...props(twoHunks(100), "split")} />);
 
-    pull(container, "Open lines 11–30, above");
+    pull(container, "Open lines 11–30, down from the hunk above");
 
     // Twice over, because a context line is the same on both sides. Which is
     // the point of the test: the two numbers beside it are not.
@@ -98,7 +115,7 @@ describe("opening what the diff did not print", () => {
     // definition of where it does not.
     const { container } = render(<Diff {...props(twoHunks(100))} />);
 
-    pull(container, "Open lines 11–30, above");
+    pull(container, "Open lines 11–30, down from the hunk above");
     await screen.findByText("line 11");
 
     const row = [...container.querySelectorAll(".diff-row")].find((r) =>
@@ -116,7 +133,7 @@ describe("opening what the diff did not print", () => {
     const { container } = render(<Diff {...props(twoHunks(100), "unified", hidden)} />);
     expect(screen.queryByText("vale ler junto")).toBeNull();
 
-    pull(container, "Open lines 11–30, above");
+    pull(container, "Open lines 11–30, down from the hunk above");
 
     expect(await screen.findByText("vale ler junto")).toBeTruthy();
   });
