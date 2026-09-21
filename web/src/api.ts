@@ -18,10 +18,37 @@ export const api = {
   closeComment: (id: string) => send(`/api/comments/${encodeURIComponent(id)}`, "DELETE"),
 };
 
-/** Flat reading order across blocks — what j/k and "next unread" walk. */
-export function readingOrder(review: ReviewView): FileView[] {
-  return [...review.blocks.flatMap((b) => b.files), ...review.looseSkim];
+/** The page, top to bottom: each block announced, then the files it holds, then
+ * the files that belong to no block at all.
+ *
+ * The one place the browser says what that order is. It was said twice — here
+ * for the keys and again in the pane for the rows — and nothing held the two
+ * together: a group added to one and not the other leaves `j` walking to a file
+ * that is not the one below, and the scroll naming a third.
+ *
+ * The server states it once as well, to answer where the reading resumes. The
+ * two meet at `firstUnread`, and `a review resumes at the file the page puts
+ * first` is the test that keeps them meeting. */
+export function readingRows(review: ReviewView): ReadingRow[] {
+  return [
+    ...review.blocks.flatMap((block, i): ReadingRow[] => [
+      { block, number: i + 1 },
+      ...block.files.map((file) => ({ file })),
+    ]),
+    ...review.looseSkim.map((file) => ({ file })),
+  ];
 }
+
+/** The files alone, in that same order — what j/k and "next unread" walk.
+ *
+ * Taken off the rows rather than assembled again, so the list the keys move
+ * through is the list on the screen by construction. */
+export function readingOrder(review: ReviewView): FileView[] {
+  return readingRows(review).flatMap((row) => ("file" in row ? [row.file] : []));
+}
+
+/** One line of the page: a block's band, or a file under it. */
+export type ReadingRow = { block: BlockView; number: number } | { file: FileView };
 
 /** The block a file is rendered under, for the band above the diff. */
 export function blockOf(review: ReviewView, path: string): FileHome | null {
