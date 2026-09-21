@@ -68,7 +68,7 @@ export function Reading({
             onRetry={() => retry(row.file.path)}
             view={view}
             open={files.isOpen(row.file)}
-            onToggleOpen={() => files.set(row.file.path, !files.isOpen(row.file))}
+            onToggleOpen={() => files.set(row.file, !files.isOpen(row.file))}
             onReach={() => request(row.file.path)}
             onToggleViewed={() => onToggleViewed(row.file.path, !row.file.viewed)}
             comments={comments.on(row.file.path)}
