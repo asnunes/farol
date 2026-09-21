@@ -205,5 +205,6 @@ function review(blocks: BlockView[], looseSkim: FileView[] = []): ReviewView {
     unmapped: [],
     totalFiles: blocks.flatMap((b) => b.files).length + looseSkim.length,
     viewedFiles: 0,
+    firstUnread: [...blocks.flatMap((b) => b.files), ...looseSkim][0]?.path ?? null,
   };
 }

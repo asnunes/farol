@@ -32,6 +32,7 @@ function review(): ReviewView {
     unmapped: [],
     totalFiles: 4,
     viewedFiles: 1,
+    firstUnread: "b.rs",
   };
 }
 

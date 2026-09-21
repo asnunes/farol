@@ -176,6 +176,16 @@ pub struct ReviewView {
     pub unmapped: Vec<String>,
     pub total_files: usize,
     pub viewed_files: usize,
+    /// The first file in reading order nobody has read yet, and nothing once
+    /// they all have been.
+    ///
+    /// Answered here because it is a fact about the review — the order the
+    /// author arranged and what the reader has got through — and both of those
+    /// are already known on this side. Worked out in the browser it was worked
+    /// out twice, once to decide where to put the reader when the map arrives
+    /// and once to wrap the key that walks to the next unread file, each with
+    /// its own idea of what to do when there is none left.
+    pub first_unread: Option<String>,
 }
 
 /// One comment, for the wire.
@@ -341,13 +351,22 @@ impl ReviewView {
             .filter(|p| !placed.contains(p))
             .collect();
 
+        // The order the reader meets the files in: the blocks as the author
+        // arranged them, then the skim that belongs to no block. Written once
+        // and walked twice, because the count and where to resume are two
+        // questions about the same walk.
+        let in_reading_order = || {
+            blocks
+                .iter()
+                .flat_map(|b| b.files.iter())
+                .chain(loose_skim.iter())
+        };
+
         let total_files = placed.len();
-        let viewed_files = blocks
-            .iter()
-            .flat_map(|b| b.files.iter())
-            .chain(loose_skim.iter())
-            .filter(|f| f.viewed)
-            .count();
+        let viewed_files = in_reading_order().filter(|f| f.viewed).count();
+        let first_unread = in_reading_order()
+            .find(|f| !f.viewed)
+            .map(|f| f.path.clone());
 
         ReviewView {
             branch: scope.branch.clone(),
@@ -359,6 +378,7 @@ impl ReviewView {
             unmapped,
             total_files,
             viewed_files,
+            first_unread,
         }
     }
 }
@@ -646,6 +666,54 @@ mod tests {
         assert!(view.blocks.is_empty(), "{:?}", view.blocks);
         assert!(view.loose_skim.is_empty());
         assert_eq!((view.total_files, view.viewed_files), (0, 0));
+    }
+
+    #[test]
+    fn where_to_resume_is_the_first_file_in_reading_order_nobody_has_read() {
+        // The order the author arranged, not the order git lists paths in.
+        let map = map_of(&[("one", "b.rs"), ("one", "a.rs")]);
+        let mut progress = Progress::new();
+        progress.mark("b.rs", "hash-of-b.rs", "now");
+
+        let view = built(
+            &map,
+            FakeDiffSource::with_paths(&["a.rs", "b.rs"]),
+            &progress,
+        );
+
+        assert_eq!(view.first_unread.as_deref(), Some("a.rs"));
+    }
+
+    #[test]
+    fn a_review_read_to_the_end_has_nowhere_left_to_resume() {
+        // Not the first file as a fallback: the key that walks to the next
+        // unread file would then jump to the top of a finished review instead
+        // of leaving the reader where they are.
+        let map = map_of(&[("one", "a.rs")]);
+        let mut progress = Progress::new();
+        progress.mark("a.rs", "hash-of-a.rs", "now");
+
+        let view = built(&map, FakeDiffSource::with_paths(&["a.rs"]), &progress);
+
+        assert_eq!(view.first_unread, None);
+    }
+
+    #[test]
+    fn loose_skim_is_reached_last_and_can_be_where_the_reader_resumes() {
+        // It sits at the bottom of the page, so it is the last thing left to
+        // read — and the only thing left once the blocks are done.
+        let mut map = map_of(&[("one", "a.rs")]);
+        map.add_skim("Cargo.lock", "generated", None).unwrap();
+        let mut progress = Progress::new();
+        progress.mark("a.rs", "hash-of-a.rs", "now");
+
+        let view = built(
+            &map,
+            FakeDiffSource::with_paths(&["a.rs", "Cargo.lock"]),
+            &progress,
+        );
+
+        assert_eq!(view.first_unread.as_deref(), Some("Cargo.lock"));
     }
 
     #[test]

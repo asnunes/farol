@@ -45,6 +45,10 @@ export type ReviewView = {
   unmapped: string[];
   totalFiles: number;
   viewedFiles: number;
+  /** The first file in reading order nobody has read yet, and null once they
+   * all have been. Where the reader is put when the map arrives, and where the
+   * key that walks to the next unread file wraps round to. */
+  firstUnread: string | null;
 };
 
 export type BlockView = {

@@ -20,7 +20,7 @@ function file(path: string, over: Partial<FileView> = {}): FileView {
 }
 
 function review(over: Partial<ReviewView> = {}): ReviewView {
-  return {
+  const built: ReviewView = {
     branch: "feature/x",
     base: "main",
     generatedAt: "abc1234",
@@ -41,8 +41,18 @@ function review(over: Partial<ReviewView> = {}): ReviewView {
     unmapped: [],
     totalFiles: 3,
     viewedFiles: 0,
+    firstUnread: null,
     ...over,
   };
+
+  return built;
+}
+
+/** The first file in reading order nobody has read: blocks in order, then the
+ * loose skim under them, which is the walk the server makes. */
+function firstUnread(review: ReviewView): string | null {
+  const order = [...review.blocks.flatMap((b) => b.files), ...review.looseSkim];
+  return order.find((f) => !f.viewed)?.path ?? null;
 }
 
 /** Unrelated tests still need the local comment list. */
@@ -108,9 +118,13 @@ function serve(state: { review: ReviewView }) {
       const noComments = aside(url);
       if (noComments) return noComments;
       if (url.startsWith("/api/review")) {
-        return new Response(JSON.stringify(state.review), {
-          headers: { "content-type": "application/json" },
-        });
+        // Derived when the answer goes out, not when the fixture was built:
+        // tests tick files off by hand afterwards, and the server would be
+        // answering for the review as it stands at the request.
+        return new Response(
+          JSON.stringify({ ...state.review, firstUnread: firstUnread(state.review) }),
+          { headers: { "content-type": "application/json" } },
+        );
       }
       if (url.startsWith("/api/file")) {
         const path = new URL(url, "http://x").searchParams.get("path") ?? "";
@@ -303,6 +317,41 @@ describe("keyboard navigation", () => {
     fireEvent.keyDown(window, { key: "n" });
     await waitForScrollTo("second");
     expect(reading()).toContain("c.rs");
+  });
+
+  it("n wraps to where the server says the reading resumes", async () => {
+    // The last unread file can be behind you after marking things read, and
+    // the file to come back to is the same one the landing uses. Answered on
+    // the server, so the key and the landing cannot end up with two ideas of
+    // which file that is.
+    const r = review();
+    r.blocks[0].files[1].viewed = true; // b.rs
+    r.blocks[1].files[0].viewed = true; // c.rs, the last file
+    serve({ review: r });
+
+    render(<App />);
+    await waitForReading("a.rs");
+    fireEvent.keyDown(window, { key: "ArrowDown" });
+    await waitForScrollTo("b.rs");
+
+    fireEvent.keyDown(window, { key: "n" });
+
+    // a.rs opens the first block, so the reader is put down on the band.
+    await waitForScrollTo("first");
+  });
+
+  it("n does nothing once there is nothing left unread", async () => {
+    const r = review();
+    r.blocks.forEach((b) => b.files.forEach((f) => (f.viewed = true)));
+    serve({ review: r });
+
+    render(<App />);
+    await waitForReading("a.rs");
+    scrolls.length = 0;
+
+    fireEvent.keyDown(window, { key: "n" });
+
+    expect(scrolls).toEqual([]);
   });
 
   it("puts the reader on the block when the file opens one", async () => {
