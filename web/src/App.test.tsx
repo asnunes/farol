@@ -31,8 +31,11 @@ function review(over: Partial<ReviewView> = {}): ReviewView {
         title: "The change itself",
         context: "why it exists",
         files: [file("src/a.rs"), file("src/b.rs")],
+        totalFiles: 2,
+        viewedFiles: 0,
       },
-      { slug: "second", title: "The wiring", context: "", files: [file("src/c.rs")] },
+      { slug: "second", title: "The wiring", context: "", files: [file("src/c.rs")],
+        totalFiles: 1, viewedFiles: 0 },
     ],
     looseSkim: [],
     unmapped: [],
@@ -45,7 +48,7 @@ function review(over: Partial<ReviewView> = {}): ReviewView {
 /** Unrelated tests still need the local comment list. */
 function aside(url: string): Response | null {
   if (url.startsWith("/api/comments")) {
-    return new Response('{"comments":[],"unreadable":[]}', {
+    return new Response('{"files":{},"unreadable":[]}', {
       headers: { "content-type": "application/json" },
     });
   }
@@ -406,8 +409,13 @@ describe("a file that belongs to two blocks", () => {
                 ],
               }),
             ],
+            totalFiles: 1,
+            viewedFiles: 0,
           },
-          { slug: "second", title: "Second", context: "", files: [] },
+          // Renders nothing and holds the shared file, which is the case the
+          // rendered list could never report as finished.
+          { slug: "second", title: "Second", context: "", files: [],
+            totalFiles: 1, viewedFiles: 0 },
         ],
         totalFiles: 1,
       }),
@@ -477,7 +485,7 @@ describe("refreshing an open review", () => {
     const announce = notifications();
     serve({ review: review() });
     const files = vi.spyOn(api, "file").mockResolvedValue(diff("OLD_CONTENT"));
-    const comments = vi.spyOn(api, "comments").mockResolvedValue({ comments: [], unreadable: [] });
+    const comments = vi.spyOn(api, "comments").mockResolvedValue({ files: {}, unreadable: [] });
     render(<App />);
     await waitFor(() => expect(section("src/a.rs").textContent).toContain("OLD_CONTENT"));
     const beforeComments = comments.mock.calls.length;
@@ -865,7 +873,7 @@ describe("a comment file that cannot be read", () => {
         if (url.startsWith("/api/comments")) {
           return new Response(
             JSON.stringify({
-              comments: [],
+              files: {},
               unreadable: [
                 {
                   file: ".git/farol/feature-x/comments/18cb-3731.md",
@@ -1271,8 +1279,10 @@ describe("the sidebar on a screen too narrow to hold it", () => {
     const drag = screenIs(1440);
     serve({ review: review({ viewedFiles: 1, blocks: [
       { slug: "first", title: "The change itself", context: "why it exists",
-        files: [file("src/a.rs", { viewed: true }), file("src/b.rs")] },
-      { slug: "second", title: "The wiring", context: "", files: [file("src/c.rs")] },
+        files: [file("src/a.rs", { viewed: true }), file("src/b.rs")],
+        totalFiles: 2, viewedFiles: 1 },
+      { slug: "second", title: "The wiring", context: "", files: [file("src/c.rs")],
+        totalFiles: 1, viewedFiles: 0 },
     ] }) });
     render(<App />);
     await waitForReading("b.rs");

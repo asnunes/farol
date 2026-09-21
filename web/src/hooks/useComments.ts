@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, type CommentsView, type Side } from "@/api";
+import { api, type CommentsView, type CommentView, type Side } from "@/api";
 import { onNudge } from "@/lib/watch";
 import { said } from "@/lib/utils";
 
@@ -11,7 +11,7 @@ import { said } from "@/lib/utils";
  * patching the list in place is the same choice `useReview` makes for the tick
  * boxes — the server is what decides, here as there. */
 export function useComments(onError: (message: string) => void, generation = 0) {
-  const [found, setFound] = useState<CommentsView>({ comments: [], unreadable: [] });
+  const [found, setFound] = useState<CommentsView>({ files: {}, unreadable: [] });
   const latest = useRef(0);
 
   const load = useCallback(async () => {
@@ -25,7 +25,7 @@ export function useComments(onError: (message: string) => void, generation = 0) 
   }, [onError]);
 
   useEffect(() => {
-    setFound({ comments: [], unreadable: [] });
+    setFound({ files: {}, unreadable: [] });
     void load();
     return () => { latest.current++; };
   }, [load, generation]);
@@ -49,7 +49,10 @@ export function useComments(onError: (message: string) => void, generation = 0) 
   );
 
   return {
-    comments: found.comments,
+    /** This file's comments: what is counted beside it and what is drawn under
+     * its lines, which are the same array because the server sent them as one.
+     * A lookup and not a filter — the cut was decided before it got here. */
+    on: useCallback((path: string) => found.files[path] ?? NONE, [found.files]),
     unreadable: found.unreadable,
     add: (path: string, side: Side, from: number, to: number, body: string) =>
       write(api.addComment(path, side, from, to, body)),
@@ -59,3 +62,13 @@ export function useComments(onError: (message: string) => void, generation = 0) 
 
 /** Everything the screen can do to a comment, handed down to the diff. */
 export type CommentActions = ReturnType<typeof useComments>;
+
+/** A file's comments, asked for by path.
+ *
+ * Handed around as this rather than as the whole list plus a filter at each
+ * stop: a consumer that cannot narrow cannot narrow differently. */
+export type CommentsOn = (path: string) => CommentView[];
+
+/** One array for every file without a comment, so a row that has none is not
+ * handed a fresh one on each render. */
+const NONE: CommentView[] = [];

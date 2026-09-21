@@ -23,8 +23,10 @@ function review(): ReviewView {
     generatedAt: "abc1234",
     commitsBehind: 0,
     blocks: [
-      { slug: "one", title: "First", context: "", files: [file("a.rs", true), file("b.rs")] },
-      { slug: "two", title: "Second", context: "", files: [file("c.rs")] },
+      { slug: "one", title: "First", context: "", files: [file("a.rs", true), file("b.rs")],
+        totalFiles: 2, viewedFiles: 1 },
+      { slug: "two", title: "Second", context: "", files: [file("c.rs")],
+        totalFiles: 1, viewedFiles: 0 },
     ],
     looseSkim: [file("Cargo.lock")],
     unmapped: [],

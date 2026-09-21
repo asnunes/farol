@@ -1,11 +1,12 @@
+mod reach;
 mod use_case;
 
+pub use reach::*;
 pub use use_case::*;
 
 use std::sync::Arc;
 
 use crate::comments::domain::{Comment, CommentError, CommentStore, Found};
-use crate::diff::application::FileDiffs;
 use crate::diff::domain::Side;
 use crate::error::Result;
 use crate::map::application::GetScope;
@@ -15,23 +16,40 @@ use crate::map::domain::LineRange;
 #[derive(Clone)]
 pub struct Comments {
     store: Arc<dyn CommentStore>,
+    /// Kept beside the reach rather than reached through it: what this needs it
+    /// for is turning a raw path into a proven one, which is a different
+    /// question from what the diff shows.
     scope: GetScope,
-    diffs: FileDiffs,
+    reach: CommentReach,
 }
 
 impl Comments {
-    pub fn new(store: Arc<dyn CommentStore>, scope: GetScope, diffs: FileDiffs) -> Self {
+    pub fn new(store: Arc<dyn CommentStore>, scope: GetScope, reach: CommentReach) -> Self {
         Self {
             store,
             scope,
-            diffs,
+            reach,
         }
     }
 
     /// Everything still waiting for an answer, and the files that could not be
     /// read at all.
+    ///
+    /// Held to the same rule `add` writes under: a comment exists where the
+    /// diff reaches it, and nothing keeps that true afterwards. The branch
+    /// moves, the line it sat on goes away, and what is left is counted in the
+    /// margin beside the file and drawn on no row — because there is no row
+    /// left to draw it on. A question the reader is told about, cannot read,
+    /// and cannot close is worse than one that is simply gone.
+    ///
+    /// Checked on the read rather than in each caller, because this is the one
+    /// the browser and the terminal both come through: the count in the sidebar
+    /// and the list in `farol comment list` are the same list or they are two
+    /// answers to one question.
     pub fn all(&self) -> Result<Found> {
-        self.store.list()
+        let mut found = self.store.list()?;
+        found.comments = self.reach.split(std::mem::take(&mut found.comments))?.live;
+        Ok(found)
     }
 
     /// Written against the review, not against a path someone typed: a file
@@ -61,7 +79,7 @@ impl Comments {
         if side == Side::New {
             range.require_within(&path)?;
         }
-        if !self.diffs.of(path.as_str())?.shows(side, from, to) {
+        if !self.reach.shows(&path, side, from, to)? {
             return Err(CommentError::OutsideDiff {
                 path: path.as_str().to_string(),
                 side,
@@ -142,14 +160,21 @@ mod tests {
     /// scope and the diffs coming off the one source.
     fn over(source: FakeDiffSource) -> (tempfile::TempDir, Comments) {
         let dir = tempfile::tempdir().unwrap();
-        let store = Store::new(dir.path(), "feature/x");
-        let source = Arc::new(source);
-        let comments = Comments::new(
-            Arc::new(MarkdownComments::new(&store, dir.path())),
-            GetScope::new(ReviewScope::new(source.clone())),
-            FileDiffs::new(source),
-        );
+        let comments = over_at(dir.path(), source);
         (dir, comments)
+    }
+
+    /// The same, onto a folder the caller already has — which is how a test
+    /// puts one review's comments in front of a later review's diff.
+    fn over_at(dir: &std::path::Path, source: FakeDiffSource) -> Comments {
+        let store = Store::new(dir, "feature/x");
+        let source = Arc::new(source);
+        let scope = ReviewScope::new(source.clone());
+        Comments::new(
+            Arc::new(MarkdownComments::new(&store, dir)),
+            GetScope::new(scope.clone()),
+            CommentReach::new(scope, crate::diff::application::FileDiffs::new(source)),
+        )
     }
 
     fn hunk(start: u32, lines: u32) -> Hunk {
@@ -207,6 +232,41 @@ mod tests {
 
         assert!(err.to_string().contains("200"), "{err}");
         assert!(comments.all().unwrap().comments.is_empty());
+    }
+
+    #[test]
+    fn a_comment_the_diff_has_stopped_reaching_is_not_listed() {
+        // `add` proves the rule once and nothing holds it afterwards: the
+        // reviewer pulls, the hunk the comment sat in is rewritten, and the
+        // line it was anchored to is not printed any more.
+        //
+        // Left in the list it is the worst of both — counted in the margin
+        // beside the file, drawn on no row because there is no row left, and so
+        // impossible to read or to close.
+        let dir = tempfile::tempdir().unwrap();
+        let when_written = over_at(dir.path(), a_file());
+        when_written
+            .add("src/a.rs", Side::New, 12, 12, "Why this order?")
+            .unwrap();
+        assert_eq!(when_written.all().unwrap().comments.len(), 1);
+
+        let after_pulling = over_at(dir.path(), a_file().showing("src/a.rs", vec![hunk(40, 3)]));
+
+        assert!(after_pulling.all().unwrap().comments.is_empty());
+    }
+
+    #[test]
+    fn a_comment_on_a_file_that_left_the_review_is_not_listed() {
+        // The file has no diff to ask for at all. Asking would fail rather
+        // than answer, and failing here would take the whole list down with it.
+        let dir = tempfile::tempdir().unwrap();
+        over_at(dir.path(), a_file())
+            .add("src/a.rs", Side::New, 12, 12, "Why this order?")
+            .unwrap();
+
+        let elsewhere = over_at(dir.path(), FakeDiffSource::with_paths(&["src/b.rs"]));
+
+        assert!(elsewhere.all().unwrap().comments.is_empty());
     }
 
     #[test]

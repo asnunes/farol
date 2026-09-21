@@ -70,7 +70,7 @@ export function Reading({
             onToggleOpen={() => files.set(row.file.path, !files.isOpen(row.file))}
             onReach={() => request(row.file.path)}
             onToggleViewed={() => onToggleViewed(row.file.path, !row.file.viewed)}
-            comments={comments.comments}
+            comments={comments.on(row.file.path)}
             commentActions={comments}
           />
         ),

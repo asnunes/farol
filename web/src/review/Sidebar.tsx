@@ -2,10 +2,10 @@ import { useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { fileLabels } from "@/lib/path";
 import { FileRow } from "./FileRow";
-import { commentsOn } from "./diff/line";
 import { readingOrder } from "@/api";
+import type { CommentsOn } from "@/hooks/useComments";
 import type { FileLabels } from "@/lib/path";
-import type { BlockView, CommentView, ReviewView } from "@/api";
+import type { BlockView, ReviewView } from "@/api";
 
 /** Navigation only, deliberately: no prose here, or the reader would try to
  * read the map instead of the code.
@@ -62,7 +62,7 @@ export function Sidebar({
                 key={f.path}
                 file={f}
                 label={label(f.path)}
-                comments={commentsOn(comments, f.path).length}
+                comments={comments(f.path).length}
                 current={current}
                 onPick={onPick}
               />
@@ -82,8 +82,12 @@ function Block({
   current,
   onPick,
 }: BlockProps) {
+  // Read, not worked out: the rendered list is not what the block holds, and
+  // counting it was how a block that renders nothing stayed unfinishable while
+  // one that renders half its files reported done. Which file the reader is on
+  // stays here, because the server has no way to know it.
   const state =
-    block.files.length > 0 && block.files.every((f) => f.viewed)
+    block.viewedFiles === block.totalFiles
       ? "done"
       : block.files.some((f) => f.path === current)
         ? "current"
@@ -118,7 +122,7 @@ function Block({
             key={f.path}
             file={f}
             label={label(f.path)}
-            comments={commentsOn(comments, f.path).length}
+            comments={comments(f.path).length}
             current={current}
             onPick={onPick}
           />
@@ -130,7 +134,8 @@ function Block({
 
 type SidebarProps = {
   review: ReviewView;
-  comments: CommentView[];
+  /** A file's comments, from the one place they are grouped. */
+  comments: CommentsOn;
   current: string | null;
   onPick: (path: string) => void;
 };
@@ -138,7 +143,7 @@ type SidebarProps = {
 type BlockProps = {
   block: BlockView;
   label: FileLabels;
-  comments: CommentView[];
+  comments: CommentsOn;
   number: number;
   current: string | null;
   onPick: (path: string) => void;

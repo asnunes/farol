@@ -6,7 +6,7 @@ import type { CommentView, FileView } from "@/api";
  * about what reaches the screen rather than what reaches the server. */
 export function noComments(): CommentActions {
   return {
-    comments: [],
+    on: () => [],
     unreadable: [],
     add: vi.fn().mockResolvedValue(undefined),
     close: vi.fn().mockResolvedValue(undefined),
