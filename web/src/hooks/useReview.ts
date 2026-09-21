@@ -24,8 +24,11 @@ export function useReview() {
       setCurrent((prev) => {
         // Stay where the reader is, unless the file they were on is gone.
         if (prev && readingOrder(next).some((f) => f.path === prev)) return prev;
-        const first = readingOrder(next).find((f) => !f.viewed) ?? readingOrder(next)[0];
-        return first?.path ?? null;
+        // A review read to the end has no unread file to land on, and the top
+        // is the sensible place to arrive at one. That fallback is a landing
+        // decision and stays here; which file is first unread is not, and does
+        // not.
+        return next.firstUnread ?? readingOrder(next)[0]?.path ?? null;
       });
     } catch (e) {
       setError(said(e));
