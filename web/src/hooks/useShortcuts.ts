@@ -15,6 +15,7 @@ export function useShortcuts({
   index,
   current,
   goTo,
+  nextUnread,
   toggleViewed,
   setHelpOpen,
   toggleSidebar,
@@ -59,16 +60,9 @@ export function useShortcuts({
           e.preventDefault();
           go(index - 1);
           break;
-        case "n": {
-          // Where the cursor is, is the browser's to know, so the search from
-          // it happens here. Wrapping round is not: the last unread file may be
-          // behind you after marking things read, and the one to wrap to is the
-          // same first-unread the server hands over for the landing.
-          const ahead = order.slice(index + 1).find((f) => !f.viewed)?.path;
-          const next = ahead ?? review.firstUnread;
-          if (next) goTo(next);
+        case "n":
+          nextUnread();
           break;
-        }
         case ";":
         case " ": {
           // Space scrolls by default, and it cannot do both.
@@ -99,7 +93,7 @@ export function useShortcuts({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [review, order, index, current, goTo, toggleViewed, setHelpOpen, toggleSidebar]);
+  }, [review, order, index, current, goTo, nextUnread, toggleViewed, setHelpOpen, toggleSidebar]);
 }
 
 type Shortcuts = {
@@ -108,6 +102,8 @@ type Shortcuts = {
   index: number;
   current: string | null;
   goTo: (path: string) => void;
+  /** Onward to the next file not yet read — shared with the progress count. */
+  nextUnread: () => void;
   toggleViewed: (path: string, viewed: boolean) => Promise<void>;
   setHelpOpen: (fn: (open: boolean) => boolean) => void;
   toggleSidebar: () => void;

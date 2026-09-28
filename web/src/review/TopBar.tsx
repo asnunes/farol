@@ -21,6 +21,7 @@ export function TopBar({
   sidebarOpen,
   onToggleSidebar,
   toggleRef,
+  onNextUnread,
 }: TopBarProps) {
   const done = review.totalFiles > 0 && review.viewedFiles === review.totalFiles;
 
@@ -70,9 +71,17 @@ export function TopBar({
               🎉
             </span>
           ) : (
-            <span>
+            // The count is what is left, so pressing it goes to what is left:
+            // the same walk as `n`, for the reader who is on the mouse.
+            <Button
+              variant="ghost"
+              size="xs"
+              className="next-unread h-auto px-1 font-mono text-xs font-normal text-ink-muted hover:text-ink"
+              title="Go to the next unread file — n"
+              onClick={onNextUnread}
+            >
               {review.viewedFiles} / {review.totalFiles}
-            </span>
+            </Button>
           )}
           <Progress
             className="meter h-1.5 w-10 bg-sunken md:w-28"
@@ -156,6 +165,7 @@ type TopBarProps = {
   onToggleSidebar: () => void;
   /** Focus comes back here when the sidebar closes under whoever was in it. */
   toggleRef: React.Ref<HTMLButtonElement>;
+  onNextUnread: () => void;
 };
 
 type SidebarToggleProps = {
