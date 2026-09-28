@@ -21,7 +21,9 @@ export function FileRow({
 }: FileRowProps) {
   return (
     <li>
-      <Tooltip>
+      {/* Not hoverable: moving up to the row above passed through a tooltip
+          that stayed open to be hovered, and the click landed on it. */}
+      <Tooltip disableHoverableContent>
         <TooltipTrigger asChild>
           <Button
             variant="ghost"
@@ -89,7 +91,9 @@ export function FileRow({
         {/* A real tooltip rather than `title`: the browser's own waits a second,
             never opens on keyboard focus, and would drop the skim reason that
             used to be the only thing it carried. */}
-        <TooltipContent className="max-w-[28rem]">
+        {/* To the right, over the diff, and never over the list: above the
+            row it covered the neighbour the reader was reaching for. */}
+        <TooltipContent side="right" sideOffset={8} className="max-w-[28rem]">
           <div className="font-mono text-[0.6875rem]">{file.path}</div>
           {file.skimReason && <div className="font-sans opacity-80">{file.skimReason}</div>}
           {/* The button is labelled with the path, which is what a screen
