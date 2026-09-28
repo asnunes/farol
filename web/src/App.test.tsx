@@ -360,6 +360,19 @@ describe("keyboard navigation", () => {
     await waitForScrollTo("first");
   });
 
+  it("pressing the progress count walks to the next unread file, like n", async () => {
+    const r = review();
+    r.blocks[0].files[1].viewed = true; // b.rs already read
+    serve({ review: r });
+
+    render(<App />);
+    await waitForReading("a.rs");
+
+    fireEvent.click(document.querySelector(".next-unread")!);
+    await waitForScrollTo("second");
+    expect(reading()).toContain("c.rs");
+  });
+
   it("n does nothing once there is nothing left unread", async () => {
     const r = review();
     r.blocks.forEach((b) => b.files.forEach((f) => (f.viewed = true)));

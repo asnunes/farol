@@ -82,6 +82,16 @@ export default function App() {
     [setCurrent],
   );
 
+  // Where the cursor is, is the browser's to know, so the search from it
+  // happens here. Wrapping round is not: the last unread file may be behind
+  // you after marking things read, and the one to wrap to is the same
+  // first-unread the server hands over for the landing.
+  const nextUnread = () => {
+    const ahead = order.slice(index + 1).find((f) => !f.viewed)?.path;
+    const next = ahead ?? review?.firstUnread;
+    if (next) goTo(next);
+  };
+
   // Marking a file read folds it away, and unmarking opens it again — both by
   // the mark itself, without a choice being recorded here. Folding ahead of the
   // server would be this side deciding a file is read before it is, and the tick
@@ -107,6 +117,7 @@ export default function App() {
     index,
     current,
     goTo,
+    nextUnread,
     toggleViewed: mark,
     setHelpOpen,
     toggleSidebar,
@@ -157,6 +168,7 @@ export default function App() {
           sidebarOpen={sidebarOpen}
           onToggleSidebar={toggleSidebar}
           toggleRef={sidebarToggle}
+          onNextUnread={nextUnread}
         />
         {sidebarOpen && (
           <Sidebar

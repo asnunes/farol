@@ -1,3 +1,4 @@
+import { Circle, CircleCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -25,21 +26,30 @@ export function FileRow({
           <Button
             variant="ghost"
             className={cn(
-              "fileitem h-auto w-full justify-start gap-2 px-2 py-1 font-mono text-[0.8125rem] font-normal text-ink-soft",
-              "hover:bg-sunken hover:text-ink-soft",
+              "fileitem h-auto w-full justify-start gap-2 px-2 py-1 font-mono text-[0.8125rem] font-normal text-ink",
+              "hover:bg-sunken hover:text-ink",
               "aria-[current=true]:bg-highlight-dim aria-[current=true]:text-ink",
-              file.skim && "skim text-ink-muted",
+              // Skim is said by its badge, not by a paler name: pale is what
+              // read looks like, and the two were impossible to tell apart.
+              file.skim && "skim",
             )}
             data-seen={file.viewed ? "true" : undefined}
             aria-current={file.path === current ? "true" : undefined}
             aria-label={file.path}
             onClick={() => onPick(file.path)}
           >
-            <span className="chk w-3 shrink-0 text-add-ink">{file.viewed ? "✓" : ""}</span>
+            {/* A mark on both sides, not a tick against an empty slot: the
+                gap was the only thing saying unread, and a gap is easy to miss
+                down a column of them. */}
+            {file.viewed ? (
+              <CircleCheck className="chk size-3.5 shrink-0 text-add-ink" aria-hidden="true" />
+            ) : (
+              <Circle className="chk size-3.5 shrink-0 text-faint" aria-hidden="true" />
+            )}
             <span
               className={cn(
                 "nm truncate",
-                file.viewed && "text-ink-muted line-through",
+                file.viewed && "text-faint line-through",
                 file.path === current && "font-semibold",
               )}
             >
