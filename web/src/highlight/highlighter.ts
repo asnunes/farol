@@ -3,18 +3,20 @@ import {
   type GrammarState,
   type HighlighterCore,
 } from "shiki/core";
-import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
+import { createOnigurumaEngine } from "shiki/engine/oniguruma";
 import { bundledLanguages } from "shiki/langs";
 import { dark, light } from "./theme";
 import type { Token, Tokenize } from "./tokens";
 
 /** Shiki, loaded a grammar at a time.
  *
- * The regex engine in JavaScript rather than the WebAssembly one: it costs a
- * few exotic grammars and saves half a megabyte that every reader would carry
- * to read one language. Every grammar Shiki ships is reachable, and each is its
- * own file — the page starts with none of them and fetches the one the file in
- * front of you needs. */
+ * The WebAssembly regex engine, not the JavaScript one. The JavaScript engine
+ * saved half a megabyte, but its translation of the Go grammar backtracked
+ * forever on an anonymous struct literal — and a regex on the main thread
+ * cannot be interrupted, so the whole review froze. The WASM is fetched once,
+ * with the first grammar. Every grammar Shiki ships is reachable, and each is
+ * its own file — the page starts with none of them and fetches the one the
+ * file in front of you needs. */
 
 let core: Promise<HighlighterCore> | null = null;
 let built: HighlighterCore | null = null;
@@ -31,7 +33,7 @@ function highlighter(): Promise<HighlighterCore> {
   core ??= createHighlighterCore({
     langs: [],
     themes: [light, dark],
-    engine: createJavaScriptRegexEngine(),
+    engine: createOnigurumaEngine(import("shiki/wasm")),
   }).then((made) => (built = made));
   return core;
 }

@@ -58,3 +58,20 @@ it("colours a window inside a multiline comment like the complete syntax stream"
   expect(tokenize.range!(lines, 100, 110)).toEqual(complete.slice(100, 110));
   expect(tokenize.range!(lines, 178, 184)).toEqual(complete.slice(178, 184));
 });
+
+it("colours an anonymous Go struct literal without locking up the page", async () => {
+  // Shiki's JavaScript regex engine backtracked forever on this shape, and a
+  // regex running on the main thread cannot be interrupted: the review froze
+  // the moment the window holding it scrolled near.
+  await load("go");
+  const tokenize = tokenizerFor("go")!;
+  const lines = [
+    "func handler(w http.ResponseWriter) {",
+    "\trequire.NoError(t, json.NewEncoder(w).Encode(struct {",
+    '\t\tItems []contracts.Fact `json:"items"`',
+    '\t}{Items: []contracts.Fact{{Candidate: contracts.Candidate{Reference: reference, ChatID: "conversation", BusinessObjectID: "appointment", SourceFlow: "reminder"}, Eligible: true, Revision: "rev"}}}))',
+    "}",
+  ];
+
+  expect(tokenize(lines.join("\n"))).toHaveLength(5);
+}, 2_000);
