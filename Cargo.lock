@@ -519,7 +519,7 @@ dependencies = [
 
 [[package]]
 name = "farol"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "async-stream",
  "axum",
