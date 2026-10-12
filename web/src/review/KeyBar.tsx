@@ -37,8 +37,8 @@ export function KeyBar({ theme, onTheme, sidebarOpen, onHelp }: KeyBarProps) {
   return (
     <nav className="keybar col-span-full flex items-center justify-between gap-3 border-t border-rule bg-surface px-4 py-1.5 font-sans text-xs text-ink-muted md:px-5">
       <div className="flex items-center gap-2">
-        <ThemeSwitch theme={theme} onChange={onTheme} />
         <Settings />
+        <ThemeSwitch theme={theme} onChange={onTheme} />
       </div>
 
       <Button

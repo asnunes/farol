@@ -10,9 +10,15 @@ export function Settings() {
 
   return (
     <>
-      <Button variant="ghost" size="sm" className="gap-1.5 text-xs font-normal text-ink-muted" onClick={() => setOpen(true)}>
-        <SettingsIcon className="size-3.5" />
-        Settings
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        className="text-ink-muted hover:bg-transparent hover:text-ink max-md:size-9"
+        onClick={() => setOpen(true)}
+        aria-label="Settings"
+        title="Settings"
+      >
+        <SettingsIcon className="size-3.5" aria-hidden="true" />
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="border-rule bg-surface sm:max-w-md">
