@@ -49,7 +49,7 @@ pub(super) fn router(state: Arc<AppState>) -> Router {
 
 async fn get_config(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     match state.preferences.get.execute() {
-        Ok(config) => Json(config).into_response(),
+        Ok(config) => Json(ConfigView::from(config)).into_response(),
         Err(error) => fail(error),
     }
 }
@@ -63,8 +63,23 @@ async fn set_config(
         .set_open_browser
         .execute(config.open_browser)
     {
-        Ok(config) => Json(config).into_response(),
+        Ok(config) => Json(ConfigView::from(config)).into_response(),
         Err(error) => fail(error),
+    }
+}
+
+#[derive(serde::Serialize)]
+struct ConfigView {
+    open_browser: bool,
+    show_open_browser: bool,
+}
+
+impl From<crate::config::domain::Config> for ConfigView {
+    fn from(config: crate::config::domain::Config) -> Self {
+        Self {
+            open_browser: config.open_browser,
+            show_open_browser: cfg!(target_os = "macos"),
+        }
     }
 }
 

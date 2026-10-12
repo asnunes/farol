@@ -199,7 +199,7 @@ export type CommentView = {
  * block is, which is what the band above the diff counts off. */
 export type FileHome = { block: BlockView; index: number };
 
-export type Config = { open_browser: boolean };
+export type Config = { open_browser: boolean; show_open_browser: boolean };
 
 async function json<T>(res: Response): Promise<T> {
   if (!res.ok) throw new Error(await res.text());

@@ -8,9 +8,7 @@ export function useConfig(open: boolean) {
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    if (!open) return;
     let active = true;
-    setConfig(null);
     setError(null);
     setSaved(false);
     api.config().then(
@@ -26,7 +24,7 @@ export function useConfig(open: boolean) {
     setError(null);
     try {
       await api.setOpenBrowser(value);
-      setConfig({ open_browser: value });
+      setConfig((current) => current && { ...current, open_browser: value });
       setSaved(true);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Could not save settings.");

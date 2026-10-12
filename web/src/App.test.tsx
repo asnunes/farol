@@ -70,8 +70,11 @@ function firstUnread(review: ReviewView): string | null {
   return order.find((f) => !f.viewed)?.path ?? null;
 }
 
-/** Unrelated tests still need the local comment list. */
+/** Keep supporting requests out of assertions about review and diff loading. */
 function aside(url: string): Response | null {
+  if (url === "/api/config") {
+    return new Response(JSON.stringify({ open_browser: true, show_open_browser: true }));
+  }
   if (url.startsWith("/api/comments")) {
     return new Response('{"files":{},"unreadable":[]}', {
       headers: { "content-type": "application/json" },

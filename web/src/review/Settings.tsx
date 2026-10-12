@@ -8,6 +8,8 @@ export function Settings() {
   const [open, setOpen] = useState(false);
   const { config, error, saving, saved, setOpenBrowser } = useConfig(open);
 
+  if (!config?.show_open_browser) return null;
+
   return (
     <>
       <Button
@@ -34,7 +36,7 @@ export function Settings() {
               <span>
                 Open browser automatically
                 <span id="open-browser-description" className="mt-1 block text-xs leading-relaxed text-ink-muted">
-                  Applies the next time you run Farol on macOS. Linux always prints the URL only.
+                  Applies the next time you run Farol.
                 </span>
               </span>
             </label>
