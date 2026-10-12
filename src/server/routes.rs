@@ -57,16 +57,23 @@ async fn get_config(State(state): State<Arc<AppState>>) -> impl IntoResponse {
 
 async fn set_config(
     State(state): State<Arc<AppState>>,
-    Json(config): Json<crate::config::domain::Config>,
+    Json(setting): Json<SettingBody>,
 ) -> impl IntoResponse {
-    match state
-        .preferences
-        .set_open_browser
-        .execute(config.open_browser)
-    {
+    let key = match crate::config::domain::SettingKey::parse(&setting.key) {
+        Ok(key) => key,
+        Err(error) => return fail(error.into()),
+    };
+    match state.preferences.set_setting.execute(key, setting.value) {
         Ok(config) => Json(ConfigView::from(config)).into_response(),
         Err(error) => fail(error),
     }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SettingBody {
+    key: String,
+    value: bool,
 }
 
 /// Who is answering on this port.

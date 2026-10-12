@@ -212,14 +212,14 @@ pub fn config_cases() -> Result<ConfigUseCases> {
 #[derive(Clone)]
 pub struct ConfigUseCases {
     pub get: crate::config::application::GetConfig,
-    pub set_open_browser: crate::config::application::SetOpenBrowser,
+    pub set_setting: crate::config::application::SetSetting,
 }
 
 impl ConfigUseCases {
     pub fn new(repo: Arc<dyn crate::config::domain::ConfigRepository>) -> Self {
         Self {
             get: crate::config::application::GetConfig::new(repo.clone()),
-            set_open_browser: crate::config::application::SetOpenBrowser::new(repo),
+            set_setting: crate::config::application::SetSetting::new(repo),
         }
     }
 }

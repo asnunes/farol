@@ -30,7 +30,7 @@ impl ConfigRepository for JsonConfigRepository {
             }
         };
         serde_json::from_slice(&body).map_err(|error| Error::msg(format!(
-            "invalid configuration at {}: {error}. Set open_browser to true or false in this JSON file.", path.display()
+            "invalid configuration at {}: {error}. Use boolean values and keys listed by farol config list.", path.display()
         )))
     }
 

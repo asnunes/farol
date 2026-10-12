@@ -130,9 +130,11 @@ mod tests {
     #[test]
     fn explicit_browser_flags_override_the_saved_preference() {
         for saved in [true, false] {
-            let config = crate::config::domain::Config {
-                open_browser: saved,
-            };
+            let mut config = crate::config::domain::Config::default();
+            config.set(
+                crate::config::domain::SettingKey::parse("open_browser").unwrap(),
+                saved,
+            );
             for (flags, expected) in [
                 (vec![], saved),
                 (vec!["--open"], true),

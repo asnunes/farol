@@ -1611,20 +1611,48 @@ fn the_health_route_says_which_server_is_answering() {
 #[test]
 fn browser_and_cli_share_preferences_without_restarting_the_server() {
     let s = Serving::new();
-    assert_eq!(
-        s.json("/api/config")["show_open_browser"],
-        cfg!(target_os = "macos")
-    );
-    assert_eq!(s.json("/api/config")["open_browser"], true);
+    let response = s.json("/api/config");
+    let fields = response["settings"].as_array().unwrap();
+    assert_eq!(fields.len(), usize::from(cfg!(target_os = "macos")));
+    if cfg!(target_os = "macos") {
+        assert_eq!(fields[0]["key"], "open_browser");
+        assert_eq!(fields[0]["type"], "boolean");
+        assert_eq!(fields[0]["title"], "Open browser automatically");
+        assert_eq!(fields[0]["description"], Value::Null);
+        assert_eq!(fields[0]["default"], true);
+        assert_eq!(fields[0]["value"], true);
+    }
+    let listed: Value = serde_json::from_str(&s.repo.ok(&["config", "list"])).unwrap();
+    assert_eq!(listed, response, "CLI and browser read the same catalog");
     s.repo.ok(&["config", "set", "open-browser", "false"]);
-    assert_eq!(s.json("/api/config")["open_browser"], false);
+    if cfg!(target_os = "macos") {
+        assert_eq!(s.json("/api/config")["settings"][0]["value"], false);
+    }
 
-    let (status, _) = s.probe("PUT", "/api/config", Some(r#"{"open_browser":true}"#));
+    let (status, _) = s.probe(
+        "PUT",
+        "/api/config",
+        Some(r#"{"key":"open_browser","value":true}"#),
+    );
     assert_eq!(status, 200);
     let config: Value = serde_json::from_str(&s.repo.ok(&["config", "show"])).unwrap();
     assert_eq!(config["open_browser"], true);
 
-    let (status, _) = s.probe("PUT", "/api/config", Some(r#"{"open_browser":"false"}"#));
+    let (status, _) = s.probe(
+        "PUT",
+        "/api/config",
+        Some(r#"{"key":"open_browser","value":"false"}"#),
+    );
     assert_eq!(status, 422);
-    assert_eq!(s.json("/api/config")["open_browser"], true);
+    let (status, _) = s.probe(
+        "PUT",
+        "/api/config",
+        Some(r#"{"key":"unknown","value":false}"#),
+    );
+    assert_eq!(status, 400);
+    let config: Value = serde_json::from_str(&s.repo.ok(&["config", "show"])).unwrap();
+    assert_eq!(
+        config["open_browser"], true,
+        "invalid writes leave stored values alone"
+    );
 }

@@ -12,6 +12,7 @@
 //! depended on.
 
 use crate::comments::domain::CommentError;
+use crate::config::domain::ConfigError;
 use crate::diff::domain::ScopeError;
 use crate::map::domain::MapError;
 
@@ -34,6 +35,9 @@ pub enum Error {
     // ---- refusals that belong to a layer --------------------------------
     #[error(transparent)]
     Map(#[from] MapError),
+
+    #[error(transparent)]
+    Config(#[from] ConfigError),
 
     #[error(transparent)]
     Scope(#[from] ScopeError),

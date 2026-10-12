@@ -6,9 +6,9 @@ import { useConfig } from "@/hooks/useConfig";
 
 export function Settings() {
   const [open, setOpen] = useState(false);
-  const { config, error, saving, saved, setOpenBrowser } = useConfig(open);
+  const { config, error, saving, saved, setSetting } = useConfig(open);
 
-  if (!config?.show_open_browser) return null;
+  if (!config?.settings.length && !error) return null;
 
   return (
     <>
@@ -30,12 +30,27 @@ export function Settings() {
               For all repositories on this machine, under your user account.
             </DialogDescription>
           </DialogHeader>
-          {config ? (
-            <label className="flex items-center gap-3 text-sm text-ink">
-              <input type="checkbox" className="size-4 accent-current" checked={config.open_browser} disabled={saving} onChange={(event) => void setOpenBrowser(event.target.checked)} />
-              <span>Open browser automatically</span>
+          {config?.settings.map((setting) => (
+            <label key={setting.key} className="flex items-start gap-3 text-sm text-ink">
+              <input
+                type="checkbox"
+                className="mt-0.5 size-4 accent-current"
+                checked={setting.value}
+                disabled={saving}
+                onChange={(event) => void setSetting(setting.key, event.target.checked)}
+                aria-labelledby={`setting-${setting.key}-title`}
+                aria-describedby={setting.description ? `setting-${setting.key}-description` : undefined}
+              />
+              <span>
+                <span id={`setting-${setting.key}-title`}>{setting.title}</span>
+                {setting.description && (
+                  <span id={`setting-${setting.key}-description`} className="mt-1 block text-xs leading-relaxed text-ink-muted">
+                    {setting.description}
+                  </span>
+                )}
+              </span>
             </label>
-          ) : !error && <p role="status" className="text-sm text-ink-muted">Loading settings…</p>}
+          ))}
           {error && <p role="alert" className="text-sm text-ink">{error}</p>}
           <p role="status" className="min-h-4 text-xs text-ink-muted">{saving ? "Saving…" : saved ? "Saved" : ""}</p>
         </DialogContent>

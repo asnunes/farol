@@ -131,11 +131,16 @@ browser by default. Linux only prints the URL.
 ### Global preferences
 
 ```bash
+farol config list
 farol config show
 farol config set open-browser false
 farol serve --open
 farol serve --no-open
 ```
+
+`farol config list` shows the settings available on this system, including their
+titles, optional descriptions, defaults and current values. `farol config show`
+shows the stored values. Both the CLI and the review page use the backend catalog.
 
 Preferences live in `$XDG_CONFIG_HOME/farol/config.json`, or
 `~/.config/farol/config.json` when that variable is unset. They apply to all

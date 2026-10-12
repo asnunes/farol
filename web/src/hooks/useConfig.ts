@@ -18,13 +18,12 @@ export function useConfig(open: boolean) {
     return () => { active = false; };
   }, [open]);
 
-  async function setOpenBrowser(value: boolean) {
+  async function setSetting(key: string, value: boolean) {
     setSaving(true);
     setSaved(false);
     setError(null);
     try {
-      await api.setOpenBrowser(value);
-      setConfig((current) => current && { ...current, open_browser: value });
+      setConfig(await api.setSetting(key, value));
       setSaved(true);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Could not save settings.");
@@ -33,5 +32,5 @@ export function useConfig(open: boolean) {
     }
   }
 
-  return { config, error, saving, saved, setOpenBrowser };
+  return { config, error, saving, saved, setSetting };
 }

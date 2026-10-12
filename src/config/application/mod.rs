@@ -1,5 +1,5 @@
 mod get_config;
-mod set_open_browser;
+mod set_setting;
 
 pub use get_config::GetConfig;
-pub use set_open_browser::SetOpenBrowser;
+pub use set_setting::SetSetting;
