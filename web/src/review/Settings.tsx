@@ -31,14 +31,9 @@ export function Settings() {
             </DialogDescription>
           </DialogHeader>
           {config ? (
-            <label className="flex items-start gap-3 text-sm text-ink">
-              <input type="checkbox" className="mt-1 size-4 accent-current" checked={config.open_browser} disabled={saving} onChange={(event) => void setOpenBrowser(event.target.checked)} aria-describedby="open-browser-description" />
-              <span>
-                Open browser automatically
-                <span id="open-browser-description" className="mt-1 block text-xs leading-relaxed text-ink-muted">
-                  Applies the next time you run Farol.
-                </span>
-              </span>
+            <label className="flex items-center gap-3 text-sm text-ink">
+              <input type="checkbox" className="size-4 accent-current" checked={config.open_browser} disabled={saving} onChange={(event) => void setOpenBrowser(event.target.checked)} />
+              <span>Open browser automatically</span>
             </label>
           ) : !error && <p role="status" className="text-sm text-ink-muted">Loading settings…</p>}
           {error && <p role="alert" className="text-sm text-ink">{error}</p>}
