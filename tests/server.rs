@@ -1607,3 +1607,20 @@ fn the_health_route_says_which_server_is_answering() {
     assert_eq!(health["pid"], d.pid_on(d.port));
     assert_eq!(health["branch"], "feature/x");
 }
+
+#[test]
+fn browser_and_cli_share_preferences_without_restarting_the_server() {
+    let s = Serving::new();
+    assert_eq!(s.json("/api/config")["open_browser"], true);
+    s.repo.ok(&["config", "set", "open-browser", "false"]);
+    assert_eq!(s.json("/api/config")["open_browser"], false);
+
+    let (status, _) = s.probe("PUT", "/api/config", Some(r#"{"open_browser":true}"#));
+    assert_eq!(status, 200);
+    let config: Value = serde_json::from_str(&s.repo.ok(&["config", "show"])).unwrap();
+    assert_eq!(config["open_browser"], true);
+
+    let (status, _) = s.probe("PUT", "/api/config", Some(r#"{"open_browser":"false"}"#));
+    assert_eq!(status, 422);
+    assert_eq!(s.json("/api/config")["open_browser"], true);
+}

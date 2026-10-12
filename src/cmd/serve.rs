@@ -21,8 +21,11 @@ pub(super) struct ServeArgs {
     #[arg(long)]
     port: Option<u16>,
     /// Do not open a browser on macOS. Linux always prints the URL only.
-    #[arg(long)]
+    #[arg(long, conflicts_with = "open")]
     no_open: bool,
+    /// Open a browser on macOS, overriding the saved preference.
+    #[arg(long)]
+    open: bool,
     /// Do not watch the repository for changes.
     #[arg(long)]
     no_watch: bool,
@@ -34,6 +37,9 @@ pub(super) struct ServeArgs {
 
 impl ServeArgs {
     pub(super) fn run(self) -> Result<()> {
+        let preferences = super::wiring::config_cases()?;
+        let config = preferences.get.execute()?;
+        let open_browser = config.should_open(self.open, self.no_open);
         let workspace = Workspace::here()?;
         let root = workspace.root().canonicalize()?;
         let registry = Registry::open()?;
@@ -43,14 +49,14 @@ impl ServeArgs {
             if self.port.is_some() {
                 println!("Reused the existing port {}.", entry.port);
             }
-            #[cfg(target_os = "macos")]
-            if !self.no_open {
+            if open_browser {
+                #[cfg(target_os = "macos")]
                 let _ = std::process::Command::new("open").arg(entry.url()).spawn();
             }
             return Ok(());
         }
         if self.foreground {
-            return self.serve();
+            return self.serve(preferences, open_browser);
         }
 
         let entry = detach::spawn(&registry)?;
@@ -69,7 +75,7 @@ impl ServeArgs {
         }
     }
 
-    fn serve(self) -> Result<()> {
+    fn serve(self, preferences: super::ConfigUseCases, open_browser: bool) -> Result<()> {
         let session = self.session();
         let workspace = Workspace::here()?;
         let root = workspace.root().canonicalize()?;
@@ -92,7 +98,8 @@ impl ServeArgs {
                 0 => Port::Ephemeral,
                 p => Port::Exactly(p),
             }),
-            open_browser: !self.no_open,
+            open_browser,
+            preferences,
             git_dir: ctx.git_dir().clone(),
             common_dir: workspace.common_dir().to_path_buf(),
             repo: root,
@@ -118,6 +125,24 @@ mod tests {
         Serve::try_parse_from(["farol"].into_iter().chain(extra.iter().copied()))
             .expect("serve should parse")
             .args
+    }
+
+    #[test]
+    fn explicit_browser_flags_override_the_saved_preference() {
+        for saved in [true, false] {
+            let config = crate::config::domain::Config {
+                open_browser: saved,
+            };
+            for (flags, expected) in [
+                (vec![], saved),
+                (vec!["--open"], true),
+                (vec!["--no-open"], false),
+            ] {
+                let args = args(&flags);
+                assert_eq!(config.should_open(args.open, args.no_open), expected);
+            }
+        }
+        assert!(Serve::try_parse_from(["farol", "--open", "--no-open"]).is_err());
     }
 
     #[test]

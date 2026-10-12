@@ -34,6 +34,7 @@ pub(super) fn router(state: Arc<AppState>) -> Router {
         .route("/api/comments", get(comments).post(write_comment))
         .route("/api/comments/{id}", delete(close_comment))
         .route_layer(middleware::from_fn_with_state(state.clone(), resolve))
+        .route("/api/config", get(get_config).put(set_config))
         .route("/api/session", put(configure))
         .route("/api/watch", get(watch))
         .route("/health", get(health))
@@ -44,6 +45,27 @@ pub(super) fn router(state: Arc<AppState>) -> Router {
             super::local_request::local_request,
         ))
         .with_state(state)
+}
+
+async fn get_config(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    match state.preferences.get.execute() {
+        Ok(config) => Json(config).into_response(),
+        Err(error) => fail(error),
+    }
+}
+
+async fn set_config(
+    State(state): State<Arc<AppState>>,
+    Json(config): Json<crate::config::domain::Config>,
+) -> impl IntoResponse {
+    match state
+        .preferences
+        .set_open_browser
+        .execute(config.open_browser)
+    {
+        Ok(config) => Json(config).into_response(),
+        Err(error) => fail(error),
+    }
 }
 
 /// Who is answering on this port.
@@ -400,6 +422,9 @@ pub(super) mod tests {
         };
         let (state, _) = AppState::new(
             session(use_cases, _dir.path()),
+            crate::cmd::ConfigUseCases::new(Arc::new(
+                crate::testing::InMemoryConfigRepository::default(),
+            )),
             tokio::sync::watch::channel(false).1,
         );
 

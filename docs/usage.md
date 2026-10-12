@@ -126,7 +126,26 @@ farol servers stop 4600
 
 Use the port shown for the review you want to stop. `farol serve` runs in the
 background and reuses the server for the current worktree. On macOS it opens a
-browser unless `--no-open` is passed. Linux only prints the URL.
+browser by default. Linux only prints the URL.
+
+### Global preferences
+
+```bash
+farol config show
+farol config set open-browser false
+farol serve --open
+farol serve --no-open
+```
+
+Preferences live in `$XDG_CONFIG_HOME/farol/config.json`, or
+`~/.config/farol/config.json` when that variable is unset. They apply to all
+repositories for your user on this machine. No file means automatic browser
+opening stays enabled on macOS.
+
+The review's **Settings** button reads and writes the same preference. Changes
+apply to future `farol serve` invocations, including when reusing a running
+server. `--open` and `--no-open` override the saved value for one invocation;
+they cannot be combined. Configuration commands work outside a repository.
 
 Each invocation replaces the previous comparison options. `--port` chooses a
 port only for a new server; `--foreground` holds the terminal when starting one.
