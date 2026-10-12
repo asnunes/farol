@@ -20,6 +20,7 @@ use tokio::sync::broadcast;
 
 use super::{AppState, SessionConfig, assets, view};
 use crate::cmd::ServerUseCases;
+use crate::config::presentation::ConfigView;
 use crate::diff::domain::Side;
 use crate::error::Error;
 
@@ -65,21 +66,6 @@ async fn set_config(
     {
         Ok(config) => Json(ConfigView::from(config)).into_response(),
         Err(error) => fail(error),
-    }
-}
-
-#[derive(serde::Serialize)]
-struct ConfigView {
-    open_browser: bool,
-    show_open_browser: bool,
-}
-
-impl From<crate::config::domain::Config> for ConfigView {
-    fn from(config: crate::config::domain::Config) -> Self {
-        Self {
-            open_browser: config.open_browser,
-            show_open_browser: cfg!(target_os = "macos"),
-        }
     }
 }
 
