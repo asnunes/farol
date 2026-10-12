@@ -20,6 +20,7 @@ use tokio::sync::broadcast;
 
 use super::{AppState, SessionConfig, assets, view};
 use crate::cmd::ServerUseCases;
+use crate::config::presentation::ConfigView;
 use crate::diff::domain::Side;
 use crate::error::Error;
 
@@ -34,6 +35,7 @@ pub(super) fn router(state: Arc<AppState>) -> Router {
         .route("/api/comments", get(comments).post(write_comment))
         .route("/api/comments/{id}", delete(close_comment))
         .route_layer(middleware::from_fn_with_state(state.clone(), resolve))
+        .route("/api/config", get(get_config).put(set_config))
         .route("/api/session", put(configure))
         .route("/api/watch", get(watch))
         .route("/health", get(health))
@@ -44,6 +46,34 @@ pub(super) fn router(state: Arc<AppState>) -> Router {
             super::local_request::local_request,
         ))
         .with_state(state)
+}
+
+async fn get_config(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    match state.preferences.get.execute() {
+        Ok(config) => Json(ConfigView::from(config)).into_response(),
+        Err(error) => fail(error),
+    }
+}
+
+async fn set_config(
+    State(state): State<Arc<AppState>>,
+    Json(setting): Json<SettingBody>,
+) -> impl IntoResponse {
+    let key = match crate::config::domain::SettingKey::parse(&setting.key) {
+        Ok(key) => key,
+        Err(error) => return fail(error.into()),
+    };
+    match state.preferences.set_setting.execute(key, setting.value) {
+        Ok(config) => Json(ConfigView::from(config)).into_response(),
+        Err(error) => fail(error),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SettingBody {
+    key: String,
+    value: bool,
 }
 
 /// Who is answering on this port.
@@ -400,6 +430,9 @@ pub(super) mod tests {
         };
         let (state, _) = AppState::new(
             session(use_cases, _dir.path()),
+            crate::cmd::ConfigUseCases::new(Arc::new(
+                crate::testing::InMemoryConfigRepository::default(),
+            )),
             tokio::sync::watch::channel(false).1,
         );
 

@@ -78,7 +78,10 @@ Open it from the repository:
 farol serve
 ```
 
-On macOS the browser opens automatically. On Linux, open the printed URL.
+On macOS the browser opens automatically. Save your preference with
+`farol config set open-browser false`, or change **Open browser automatically**
+in the review's **Settings**. Use `--open` or `--no-open` with `farol serve` to
+override it for one invocation. On Linux, open the printed URL.
 Farol needs a map before it can serve a review. You can also
 [write one by hand](docs/usage.md#write-a-map).
 

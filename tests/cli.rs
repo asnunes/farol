@@ -1478,3 +1478,45 @@ fn marks_only_is_an_explicit_cli_action() {
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("no remote"));
 }
+
+#[test]
+fn global_preferences_work_outside_a_repository_and_reject_invalid_values() {
+    let directory = tempfile::tempdir().unwrap();
+    let run = |args: &[&str]| {
+        std::process::Command::new(common::BIN)
+            .args(args)
+            .current_dir(directory.path())
+            .env("XDG_CONFIG_HOME", directory.path())
+            .output()
+            .unwrap()
+    };
+    let show = run(&["config", "show"]);
+    assert!(show.status.success());
+    assert!(String::from_utf8_lossy(&show.stdout).contains("true"));
+    assert!(!directory.path().join("farol/config.json").exists());
+
+    assert!(
+        run(&["config", "set", "open-browser", "false"])
+            .status
+            .success()
+    );
+    let stored = directory.path().join("farol/config.json");
+    let original = std::fs::read_to_string(&stored).unwrap();
+    assert!(original.contains("false"));
+    assert!(
+        !run(&["config", "set", "open-browser", "maybe"])
+            .status
+            .success()
+    );
+    assert!(!run(&["config", "set", "unknown", "true"]).status.success());
+    assert_eq!(std::fs::read_to_string(&stored).unwrap(), original);
+
+    std::fs::write(&stored, "not json").unwrap();
+    let invalid = run(&["config", "set", "open-browser", "true"]);
+    assert!(
+        !invalid.status.success(),
+        "invalid settings must not be overwritten"
+    );
+    assert!(String::from_utf8_lossy(&invalid.stderr).contains("config.json"));
+    assert_eq!(std::fs::read_to_string(stored).unwrap(), "not json");
+}

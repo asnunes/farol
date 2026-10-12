@@ -1,5 +1,12 @@
 /** Everything the browser asks the server for. */
 export const api = {
+  config: () => fetch("/api/config").then(json<Config>),
+  setSetting: (key: string, value: boolean) =>
+    fetch("/api/config", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ key, value }),
+    }).then(json<Config>),
   review: () => fetch("/api/review").then(json<ReviewView>),
   file: (path: string) =>
     fetch(`/api/file?path=${encodeURIComponent(path)}`).then(json<FileDiff>),
@@ -195,6 +202,17 @@ export type CommentView = {
 /** Where a file sits: the block it is read under and how far down the map that
  * block is, which is what the band above the diff counts off. */
 export type FileHome = { block: BlockView; index: number };
+
+export type Config = { settings: BooleanSetting[] };
+
+export type BooleanSetting = {
+  key: string;
+  title: string;
+  description: string | null;
+  type: "boolean";
+  default: boolean;
+  value: boolean;
+};
 
 async function json<T>(res: Response): Promise<T> {
   if (!res.ok) throw new Error(await res.text());

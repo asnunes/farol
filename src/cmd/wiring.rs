@@ -202,6 +202,28 @@ impl Ctx {
     }
 }
 
+pub fn config_cases() -> Result<ConfigUseCases> {
+    let repo = Arc::new(crate::config::infra::JsonConfigRepository::new(
+        crate::shared::paths::config_dir()?,
+    ));
+    Ok(ConfigUseCases::new(repo))
+}
+
+#[derive(Clone)]
+pub struct ConfigUseCases {
+    pub get: crate::config::application::GetConfig,
+    pub set_setting: crate::config::application::SetSetting,
+}
+
+impl ConfigUseCases {
+    pub fn new(repo: Arc<dyn crate::config::domain::ConfigRepository>) -> Self {
+        Self {
+            get: crate::config::application::GetConfig::new(repo.clone()),
+            set_setting: crate::config::application::SetSetting::new(repo),
+        }
+    }
+}
+
 pub fn check_head(root: &Path) -> Result<crate::diff::application::CheckHead> {
     let workspace = Workspace::discover(root)?;
     Ok(crate::diff::application::CheckHead::new(Arc::new(

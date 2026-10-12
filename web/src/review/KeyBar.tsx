@@ -2,6 +2,7 @@ import { ArrowDown, ArrowUp, Space } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
 import { MOD } from "@/hooks/useShortcuts";
+import { Settings } from "@/review/Settings";
 import { ThemeSwitch } from "@/review/ThemeSwitch";
 import type { Theme } from "@/hooks/useTheme";
 
@@ -35,7 +36,10 @@ export function KeyBar({ theme, onTheme, sidebarOpen, onHelp }: KeyBarProps) {
 
   return (
     <nav className="keybar col-span-full flex items-center justify-between gap-3 border-t border-rule bg-surface px-4 py-1.5 font-sans text-xs text-ink-muted md:px-5">
-      <ThemeSwitch theme={theme} onChange={onTheme} />
+      <div className="flex items-center gap-2">
+        <Settings />
+        <ThemeSwitch theme={theme} onChange={onTheme} />
+      </div>
 
       <Button
         variant="ghost"

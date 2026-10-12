@@ -692,3 +692,17 @@ impl crate::diff::domain::HeadSource for FakeDiffSource {
         })
     }
 }
+
+#[derive(Default)]
+pub struct InMemoryConfigRepository(std::sync::Mutex<crate::config::domain::Config>);
+
+impl crate::config::domain::ConfigRepository for InMemoryConfigRepository {
+    fn read(&self) -> crate::error::Result<crate::config::domain::Config> {
+        Ok(self.0.lock().unwrap().clone())
+    }
+
+    fn write(&self, config: &crate::config::domain::Config) -> crate::error::Result<()> {
+        *self.0.lock().unwrap() = config.clone();
+        Ok(())
+    }
+}

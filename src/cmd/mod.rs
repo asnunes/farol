@@ -4,6 +4,7 @@ use clap::{Args, Parser, Subcommand};
 
 mod block;
 mod comment;
+mod config;
 mod file;
 mod github;
 mod line;
@@ -25,7 +26,7 @@ use serve::ServeArgs;
 use servers::ServersArgs;
 use skim::SkimAction;
 
-pub use wiring::{Ctx, ServerUseCaseFactory, ServerUseCases, server_factory};
+pub use wiring::{ConfigUseCases, Ctx, ServerUseCaseFactory, ServerUseCases, server_factory};
 
 use crate::diff::infra::ScopeRequest;
 use crate::error::Result;
@@ -122,6 +123,11 @@ impl Reporting for Ctx {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Preferences shared by all repositories on this machine.
+    Config {
+        #[command(subcommand)]
+        action: config::ConfigAction,
+    },
     /// Serve the review in a browser.
     Serve(ServeArgs),
     /// The reviews open on this machine.
@@ -182,6 +188,7 @@ enum Command {
 impl Command {
     fn run(self) -> Result<()> {
         match self {
+            Command::Config { action } => action.run(),
             // Serve is the one that does not fit: it takes its refs
             // positionally and hands the use cases to a long-lived server.
             Command::Serve(args) => args.run(),

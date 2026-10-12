@@ -53,6 +53,7 @@ pub const FIRST_PORT: u16 = 4600;
 const PORTS_TO_TRY: u16 = 64;
 
 pub struct ServeConfig {
+    pub preferences: crate::cmd::ConfigUseCases,
     pub check_head: crate::diff::application::CheckHead,
     pub factory: Arc<dyn ServerUseCaseFactory>,
     pub session: SessionConfig,
@@ -68,6 +69,7 @@ pub struct ServeConfig {
 }
 
 struct AppState {
+    preferences: crate::cmd::ConfigUseCases,
     /// Transport holds use cases and nothing else: the routes translate HTTP
     /// into a call and back, and own no business logic of their own.
     session: Arc<session::Session>,
@@ -84,11 +86,13 @@ struct AppState {
 impl AppState {
     fn new(
         session: session::Session,
+        preferences: crate::cmd::ConfigUseCases,
         stopping: signal::Receiver<bool>,
     ) -> (Arc<Self>, broadcast::Sender<String>) {
         let (changes, _) = broadcast::channel(16);
         let state = Arc::new(Self {
             session: Arc::new(session),
+            preferences,
             changes: changes.clone(),
             stopping,
         });
@@ -140,7 +144,7 @@ async fn serve(config: ServeConfig) -> Result<()> {
         entry.clone(),
         registry.clone(),
     );
-    let (state, changes) = AppState::new(session, stops);
+    let (state, changes) = AppState::new(session, config.preferences, stops);
     watch::spawn(
         config.git_dir,
         config.common_dir,
@@ -244,6 +248,9 @@ mod tests {
         let (_dir, use_cases) = routes::tests::use_cases();
         let (state, changes) = AppState::new(
             routes::tests::session(use_cases, _dir.path()),
+            crate::cmd::ConfigUseCases::new(Arc::new(
+                crate::testing::InMemoryConfigRepository::default(),
+            )),
             signal::channel(false).1,
         );
 
