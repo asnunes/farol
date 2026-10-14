@@ -433,22 +433,28 @@ Leave unrelated reviews alone.
 Let Farol choose an available port for a new instance. Do not stop
 another review to free a preferred port.
 
-### Browser opening requires an explicit request
+### Respect the user's browser preference
 
-The default command is `farol serve`, with the intended comparison options
-but no browser flags. Return the URL printed by the command. Do not add
-`--open` or `--no-open`, change browser preferences, or separately open the
-browser as part of starting the server.
+Use `farol serve` with the intended comparison options and no browser flags
+by default. Return the URL printed by the command. Browser opening follows
+the user's saved preference, configurable through `farol config set
+open-browser true|false` or **Open browser automatically** in the browser's
+**Settings**.
 
-Only open the browser when the user explicitly asks to open the browser,
-for example: "suba o farol e abra o browser". Treat that as a separate
-action. Never infer this permission from "start Farol", "open Farol",
-"show the review", "subir", "visualizar", or any other wording or context
-that does not explicitly request opening the browser.
+The flags override that saved preference for the current invocation:
 
-Do not ask whether to open the browser when the user has not mentioned it.
-An explicit request not to open the browser leaves the server command
-unchanged. These rules also apply when reusing or restarting a review.
+- `--open` requests opening the browser even when the saved preference disables it.
+- `--no-open` prevents opening the browser even when the saved preference enables it.
+
+Use either flag only when the user explicitly requests the corresponding
+browser behavior, such as "start Farol and open the browser" or "start Farol
+without opening the browser". Never infer an override from "start Farol",
+"open Farol", "show the review", or other wording that does not explicitly
+mention opening or not opening the browser.
+
+Do not ask about browser opening when it was not mentioned. Do not change
+the saved preference or open the browser separately unless explicitly
+requested. Apply the same rule when reusing or restarting a review.
 
 ## Stop only the intended instance
 
