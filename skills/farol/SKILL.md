@@ -433,8 +433,22 @@ Leave unrelated reviews alone.
 Let Farol choose an available port for a new instance. Do not stop
 another review to free a preferred port.
 
-Use the URL printed by the command. macOS opens the browser unless
-`--no-open` is supplied; Linux prints the URL without opening it.
+### Browser opening requires an explicit request
+
+The default command is `farol serve`, with the intended comparison options
+but no browser flags. Return the URL printed by the command. Do not add
+`--open` or `--no-open`, change browser preferences, or separately open the
+browser as part of starting the server.
+
+Only open the browser when the user explicitly asks to open the browser,
+for example: "suba o farol e abra o browser". Treat that as a separate
+action. Never infer this permission from "start Farol", "open Farol",
+"show the review", "subir", "visualizar", or any other wording or context
+that does not explicitly request opening the browser.
+
+Do not ask whether to open the browser when the user has not mentioned it.
+An explicit request not to open the browser leaves the server command
+unchanged. These rules also apply when reusing or restarting a review.
 
 ## Stop only the intended instance
 
