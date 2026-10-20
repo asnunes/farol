@@ -29,8 +29,19 @@ src/
 ├── shared/      errors, workspace and store paths
 ├── diff/        derived from git, never persisted
 ├── map/         blocks, order, notes — written by the skill
-└── progress/    what has been read — written by the server
+├── progress/    what has been read — written by the server
+├── comments/    what the reviewer wrote back
+├── config/      preferences for the user, across repositories
+└── agent/       reaching the session that implemented the branch
 ```
+
+`agent` has only `domain` and `infra`. It holds the `AgentChannel` port and one
+adapter per harness; what gets sent, and when, belongs to the part that owns the
+subject, so sending a comment is `comments/application/use_case/send_comment.rs`,
+which depends on `agent::domain` the way `comments/application` already depends
+on `map`. The session's address is read from the environment the harness
+exports, once per `farol serve`, and travels in `SessionConfig` so a reused
+server follows the session that last asked for it.
 
 The parts were chosen by **who writes them**: the skill writes `map`, the server
 writes `progress`, nobody writes `diff`. That is the same line that separates the

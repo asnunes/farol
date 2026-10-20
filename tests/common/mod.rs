@@ -114,6 +114,15 @@ impl Repo {
             .current_dir(self.path())
             .env("FAROL_STATE_DIR", self.state_dir())
             .env("XDG_CONFIG_HOME", self.path().join(".farol-config"));
+        // And never the session of whoever runs the suite: a test that sends a
+        // comment would otherwise land in their agent's conversation.
+        for harness in [
+            "CLAUDE_CODE_MESSAGING_SOCKET",
+            "CLAUDE_CODE_MESSAGING_TOKEN",
+            "CODEX_THREAD_ID",
+        ] {
+            cmd.env_remove(harness);
+        }
         cmd
     }
 

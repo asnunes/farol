@@ -3,10 +3,11 @@ import { Settings as SettingsIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useConfig } from "@/hooks/useConfig";
+import { TextField } from "./TextField";
 
 export function Settings() {
   const [open, setOpen] = useState(false);
-  const { config, error, saving, saved, setSetting } = useConfig(open);
+  const { config, error, saving, saved, setSetting, resetSetting } = useConfig(open);
 
   if (!config?.settings.length && !error) return null;
 
@@ -30,27 +31,37 @@ export function Settings() {
               For all repositories on this machine, under your user account.
             </DialogDescription>
           </DialogHeader>
-          {config?.settings.map((setting) => (
-            <label key={setting.key} className="flex items-start gap-3 text-sm text-ink">
-              <input
-                type="checkbox"
-                className="mt-0.5 size-4 accent-current"
-                checked={setting.value}
-                disabled={saving}
-                onChange={(event) => void setSetting(setting.key, event.target.checked)}
-                aria-labelledby={`setting-${setting.key}-title`}
-                aria-describedby={setting.description ? `setting-${setting.key}-description` : undefined}
+          {config?.settings.map((setting) =>
+            setting.type === "text" ? (
+              <TextField
+                key={`${setting.key}:${setting.value}`}
+                setting={setting}
+                saving={saving}
+                onSave={(value) => setSetting(setting.key, value)}
+                onReset={() => resetSetting(setting.key)}
               />
-              <span>
-                <span id={`setting-${setting.key}-title`}>{setting.title}</span>
-                {setting.description && (
-                  <span id={`setting-${setting.key}-description`} className="mt-1 block text-xs leading-relaxed text-ink-muted">
-                    {setting.description}
-                  </span>
-                )}
-              </span>
-            </label>
-          ))}
+            ) : (
+              <label key={setting.key} className="flex items-start gap-3 text-sm text-ink">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 size-4 accent-current"
+                  checked={setting.value}
+                  disabled={saving}
+                  onChange={(event) => void setSetting(setting.key, event.target.checked)}
+                  aria-labelledby={`setting-${setting.key}-title`}
+                  aria-describedby={setting.description ? `setting-${setting.key}-description` : undefined}
+                />
+                <span>
+                  <span id={`setting-${setting.key}-title`}>{setting.title}</span>
+                  {setting.description && (
+                    <span id={`setting-${setting.key}-description`} className="mt-1 block text-xs leading-relaxed text-ink-muted">
+                      {setting.description}
+                    </span>
+                  )}
+                </span>
+              </label>
+            ),
+          )}
           {error && <p role="alert" className="text-sm text-ink">{error}</p>}
           <p role="status" className="min-h-4 text-xs text-ink-muted">{saving ? "Saving…" : saved ? "Saved" : ""}</p>
         </DialogContent>

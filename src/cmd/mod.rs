@@ -26,7 +26,9 @@ use serve::ServeArgs;
 use servers::ServersArgs;
 use skim::SkimAction;
 
-pub use wiring::{ConfigUseCases, Ctx, ServerUseCaseFactory, ServerUseCases, server_factory};
+pub use wiring::{
+    ConfigUseCases, Ctx, ServerUseCaseFactory, ServerUseCases, Serving, server_factory,
+};
 
 use crate::diff::infra::ScopeRequest;
 use crate::error::Result;

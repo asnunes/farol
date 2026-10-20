@@ -231,6 +231,9 @@ pub struct CommentView {
 pub struct CommentsView {
     pub files: BTreeMap<String, Vec<CommentView>>,
     pub unreadable: Vec<UnreadableView>,
+    /// The harness a Send would reach, or null — and then there is no button.
+    /// Carried here because the only reader is the comment's own row.
+    pub agent: Option<&'static str>,
 }
 
 /// A comment the store could not read, in the terms the page speaks: the file
@@ -384,7 +387,7 @@ impl ReviewView {
 }
 
 impl CommentsView {
-    pub fn of(found: &Found) -> Self {
+    pub fn of(found: &Found, agent: Option<&'static str>) -> Self {
         let mut files: BTreeMap<String, Vec<CommentView>> = BTreeMap::new();
         for comment in &found.comments {
             files
@@ -408,6 +411,7 @@ impl CommentsView {
                     why: says(one.why),
                 })
                 .collect(),
+            agent,
         }
     }
 }
@@ -509,7 +513,7 @@ mod tests {
             unreadable: Vec::new(),
         };
 
-        let view = CommentsView::of(&found);
+        let view = CommentsView::of(&found, None);
 
         assert_eq!(view.files.len(), 2);
         assert_eq!(
@@ -525,7 +529,7 @@ mod tests {
     fn a_file_nobody_commented_on_is_simply_absent() {
         // The page asks for a key that is not there and gets nothing, which is
         // what "no questions on this file" has to look like.
-        let view = CommentsView::of(&Found::default());
+        let view = CommentsView::of(&Found::default(), None);
 
         assert!(view.files.is_empty());
     }

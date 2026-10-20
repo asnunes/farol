@@ -1520,3 +1520,65 @@ fn global_preferences_work_outside_a_repository_and_reject_invalid_values() {
     assert!(String::from_utf8_lossy(&invalid.stderr).contains("config.json"));
     assert_eq!(std::fs::read_to_string(stored).unwrap(), "not json");
 }
+
+#[test]
+fn the_send_instruction_is_text_and_can_be_put_back_to_its_default() {
+    let directory = tempfile::tempdir().unwrap();
+    let run = |args: &[&str]| {
+        std::process::Command::new(common::BIN)
+            .args(args)
+            .current_dir(directory.path())
+            .env("XDG_CONFIG_HOME", directory.path())
+            .output()
+            .unwrap()
+    };
+    let stored = directory.path().join("farol/config.json");
+    let read = || -> serde_json::Value {
+        serde_json::from_str(&std::fs::read_to_string(&stored).unwrap()).unwrap()
+    };
+
+    let multiline = "First, answer.\n\n- then close it";
+    assert!(
+        run(&["config", "set", "send-instruction", multiline])
+            .status
+            .success()
+    );
+    assert_eq!(read()["send_instruction"], multiline, "kept byte for byte");
+
+    assert!(
+        run(&["config", "set", "send-instruction", "false"])
+            .status
+            .success()
+    );
+    assert_eq!(
+        read()["send_instruction"],
+        "false",
+        "a text setting takes text as it came"
+    );
+
+    assert!(
+        run(&["config", "set", "send-instruction", ""])
+            .status
+            .success()
+    );
+    assert_eq!(read()["send_instruction"], "");
+
+    assert!(
+        run(&["config", "reset", "send-instruction"])
+            .status
+            .success()
+    );
+    assert_eq!(
+        read(),
+        serde_json::json!({}),
+        "a reset forgets the choice instead of writing the default down"
+    );
+    let shown: serde_json::Value =
+        serde_json::from_slice(&run(&["config", "show"]).stdout).unwrap();
+    assert!(
+        shown["send_instruction"]
+            .as_str()
+            .unwrap()
+            .starts_with("Answer it")
+    );
+}

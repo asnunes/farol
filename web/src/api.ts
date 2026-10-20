@@ -1,12 +1,15 @@
 /** Everything the browser asks the server for. */
 export const api = {
   config: () => fetch("/api/config").then(json<Config>),
-  setSetting: (key: string, value: boolean) =>
+  setSetting: (key: string, value: SettingValue) =>
     fetch("/api/config", {
       method: "PUT",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ key, value }),
     }).then(json<Config>),
+  /** Back to the default, answered with the configuration as it now stands. */
+  resetSetting: (key: string) =>
+    fetch(`/api/config/${encodeURIComponent(key)}`, { method: "DELETE" }).then(json<Config>),
   review: () => fetch("/api/review").then(json<ReviewView>),
   file: (path: string) =>
     fetch(`/api/file?path=${encodeURIComponent(path)}`).then(json<FileDiff>),
@@ -23,6 +26,9 @@ export const api = {
   addComment: (path: string, side: Side, from: number, to: number, body: string) =>
     send("/api/comments", "POST", { path, side, from, to, body }),
   closeComment: (id: string) => send(`/api/comments/${encodeURIComponent(id)}`, "DELETE"),
+  /** Only the id goes: the server builds the message from the comment it holds. */
+  sendComment: (id: string) =>
+    send(`/api/comments/${encodeURIComponent(id)}/send`, "POST"),
 };
 
 /** The page, top to bottom: each block announced, then the files it holds, then
@@ -166,6 +172,9 @@ export type CommentsView = {
    * grouping the list again wherever it needs the cut. */
   files: Record<string, CommentView[]>;
   unreadable: Unreadable[];
+  /** The harness a Send reaches — "Claude Code", "Codex" — or null, and then
+   * there is no Send to offer. */
+  agent: string | null;
 };
 
 /** A comment the store could not read.
@@ -203,7 +212,13 @@ export type CommentView = {
  * block is, which is what the band above the diff counts off. */
 export type FileHome = { block: BlockView; index: number };
 
-export type Config = { settings: BooleanSetting[] };
+export type Config = { settings: Setting[] };
+
+/** One preference, told apart by `type`: the screen draws a switch or a text
+ * box from it without knowing which preference it is. */
+export type Setting = BooleanSetting | TextSetting;
+
+export type SettingValue = boolean | string;
 
 export type BooleanSetting = {
   key: string;
@@ -212,6 +227,15 @@ export type BooleanSetting = {
   type: "boolean";
   default: boolean;
   value: boolean;
+};
+
+export type TextSetting = {
+  key: string;
+  title: string;
+  description: string | null;
+  type: "text";
+  default: string;
+  value: string;
 };
 
 async function json<T>(res: Response): Promise<T> {

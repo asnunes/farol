@@ -69,6 +69,24 @@ old side are the line numbers of the file before the change.
 `farol comment close ID` removes a comment once it is answered. In the browser,
 closing asks for confirmation because local comments are not recoverable from Git.
 
+### Send a comment to the agent
+
+When the review was opened by `farol serve` from inside a Claude Code or Codex
+session, each comment gets a **Send** button next to **Copy**. It hands the
+comment to that session: Claude Code receives it on its session socket between
+tool calls, and Codex queues it with `codex queue` until the current turn ends.
+Neither interrupts the agent. The tick means the harness took the message, not
+that the agent has read it.
+
+The message always says it comes from farol and carries the comment's id,
+location and text. After that comes the instruction set in `send-instruction`,
+which by default asks the agent to answer or change the code and to close the
+comment once it is resolved.
+
+Running `farol serve` again from another session points the open review at that
+session. A `farol serve` run from a plain terminal keeps the session already
+known. Without a session there is no Send button, and **Copy** works as before.
+
 ## Send to GitHub
 
 Ask your agent to use `farol-publish-review`. It verifies GitHub CLI (`gh`)
@@ -134,20 +152,30 @@ browser by default. Linux only prints the URL.
 farol config list
 farol config show
 farol config set open-browser false
+farol config set send-instruction "Answer it. Leave it open."
+farol config reset send-instruction
 farol serve --open
 farol serve --no-open
 ```
 
 `farol config list` shows the settings available on this system, including their
-titles, optional descriptions, defaults and current values. `farol config show`
-shows the stored values. Both the CLI and the review page use the backend catalog.
+titles, types, optional descriptions, defaults and current values. `farol config
+show` shows the values in effect, defaults included. Both the CLI and the review
+page use the backend catalog.
+
+`config set` reads the value the way the setting reads it: `true` or `false` for
+a switch, the text as written for a text setting, including an empty string.
+`config reset` puts a setting back to its default. The file keeps only what you
+set, so a default improved in a later release still reaches you.
 
 Preferences live in `$XDG_CONFIG_HOME/farol/config.json`, or
 `~/.config/farol/config.json` when that variable is unset. They apply to all
 repositories for your user on this machine. No file means automatic browser
-opening stays enabled on macOS.
+opening stays enabled on macOS, and Send uses the default instruction.
 
-The review's **Settings** button reads and writes the same preference. Changes
+The review's **Settings** button reads and writes the same preferences; a text
+setting is saved with its **Save** button. The send instruction is read on every
+Send, so a change counts on the next press. Changes to opening the browser
 apply to future `farol serve` invocations, including when reusing a running
 server. `--open` and `--no-open` override the saved value for one invocation;
 they cannot be combined. Configuration commands work outside a repository.

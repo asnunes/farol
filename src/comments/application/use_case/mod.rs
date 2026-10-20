@@ -6,6 +6,8 @@
 
 mod publish_review;
 mod review_readiness;
+mod send_comment;
 
 pub use publish_review::*;
 pub use review_readiness::*;
+pub use send_comment::*;

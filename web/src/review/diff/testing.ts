@@ -10,6 +10,8 @@ export function noComments(): CommentActions {
     unreadable: [],
     add: vi.fn().mockResolvedValue(undefined),
     close: vi.fn().mockResolvedValue(undefined),
+    agent: null,
+    send: vi.fn().mockResolvedValue(true),
   };
 }
 

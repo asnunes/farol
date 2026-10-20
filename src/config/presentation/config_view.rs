@@ -1,6 +1,6 @@
 use serde::Serialize;
 
-use crate::config::domain::{Config, SettingDefinition};
+use crate::config::domain::{Config, SettingDefinition, SettingValue};
 
 #[derive(Serialize)]
 pub struct ConfigView {
@@ -17,8 +17,8 @@ impl From<Config> for ConfigView {
                     key: definition.key,
                     title: definition.title,
                     description: definition.description,
-                    kind: "boolean",
-                    default: definition.default,
+                    kind: definition.kind.name(),
+                    default: definition.kind.default(),
                     value: config.value(definition),
                 })
                 .collect(),
@@ -33,6 +33,6 @@ struct SettingView {
     description: Option<&'static str>,
     #[serde(rename = "type")]
     kind: &'static str,
-    default: bool,
-    value: bool,
+    default: SettingValue,
+    value: SettingValue,
 }

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { Comment } from "./Comment";
 import { quoted } from "./quoted";
@@ -50,6 +50,33 @@ describe("a comment on the page", () => {
     // shape `farol comment` writes on the terminal.
     expect(quoted(comment({ from: 82, to: 116 }))).toBe("src/a.rs:82-116\n\nWhy this order?");
     expect(quoted(comment({ from: 9, to: 9 }))).toBe("src/a.rs:9\n\nWhy this order?");
+  });
+
+  it("offers no Send when no agent session is connected", () => {
+    render(<Comment comment={comment()} actions={noComments()} />);
+
+    expect(screen.queryByLabelText(/^Send to/)).toBeNull();
+    expect(screen.getByLabelText("Copy this comment")).toBeTruthy();
+  });
+
+  it("names the harness on Send and hands over only the comment's id", async () => {
+    const actions = { ...noComments(), agent: "Claude Code" };
+    render(<Comment comment={comment()} actions={actions} />);
+
+    fireEvent.click(screen.getByLabelText("Send to Claude Code"));
+
+    expect(actions.send).toHaveBeenCalledWith("18cb-3731");
+    expect(await screen.findByLabelText("Sent to Claude Code")).toBeTruthy();
+  });
+
+  it("shows no tick when the harness did not take it", async () => {
+    const actions = { ...noComments(), agent: "Codex", send: vi.fn().mockResolvedValue(false) };
+    render(<Comment comment={comment()} actions={actions} />);
+
+    fireEvent.click(screen.getByLabelText("Send to Codex"));
+
+    await waitFor(() => expect(actions.send).toHaveBeenCalled());
+    expect(screen.queryByLabelText("Sent to Codex")).toBeNull();
   });
 
   it("puts it on the clipboard when the button is pressed", async () => {

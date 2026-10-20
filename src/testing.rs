@@ -676,6 +676,7 @@ impl crate::cmd::ServerUseCaseFactory for FixedServerUseCases {
     fn build(
         &self,
         _: crate::diff::infra::ScopeRequest,
+        _: Option<crate::agent::infra::AgentAddress>,
     ) -> crate::error::Result<crate::cmd::ServerUseCases> {
         Ok(self.0.clone())
     }
@@ -703,6 +704,44 @@ impl crate::config::domain::ConfigRepository for InMemoryConfigRepository {
 
     fn write(&self, config: &crate::config::domain::Config) -> crate::error::Result<()> {
         *self.0.lock().unwrap() = config.clone();
+        Ok(())
+    }
+}
+
+/// A configuration file that is there and cannot be read, for the callers that
+/// have to refuse rather than fall back to defaults.
+pub struct BrokenConfigRepository;
+
+impl crate::config::domain::ConfigRepository for BrokenConfigRepository {
+    fn read(&self) -> crate::error::Result<crate::config::domain::Config> {
+        Err(crate::error::Error::msg(
+            "invalid configuration at config.json: broken on purpose",
+        ))
+    }
+
+    fn write(&self, _: &crate::config::domain::Config) -> crate::error::Result<()> {
+        Err(crate::error::Error::msg("not writable"))
+    }
+}
+
+/// A session that takes every message and keeps it, which is the whole
+/// contract: the real ones answer nothing back either.
+#[derive(Default)]
+pub struct RecordingChannel(Mutex<Vec<String>>);
+
+impl RecordingChannel {
+    pub fn sent(&self) -> Vec<String> {
+        self.0.lock().unwrap().clone()
+    }
+}
+
+impl crate::agent::domain::AgentChannel for RecordingChannel {
+    fn harness(&self) -> &'static str {
+        "Claude Code"
+    }
+
+    fn send(&self, text: &str) -> std::result::Result<(), crate::agent::domain::AgentError> {
+        self.0.lock().unwrap().push(text.to_string());
         Ok(())
     }
 }

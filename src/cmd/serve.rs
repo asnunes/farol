@@ -72,6 +72,7 @@ impl ServeArgs {
                 .with_base(self.base.clone())
                 .request(self.head.clone()),
             watch: !self.no_watch,
+            agent: super::wiring::agent_here(),
         }
     }
 
@@ -89,7 +90,7 @@ impl ServeArgs {
         let scope = ctx.scope.execute()?;
 
         crate::server::Server::new(crate::server::ServeConfig {
-            factory: server_factory(root.clone()),
+            factory: server_factory(root.clone())?,
             check_head: super::wiring::check_head(&root)?,
             session,
             branch: scope.branch,
@@ -131,10 +132,12 @@ mod tests {
     fn explicit_browser_flags_override_the_saved_preference() {
         for saved in [true, false] {
             let mut config = crate::config::domain::Config::default();
-            config.set(
-                crate::config::domain::SettingKey::parse("open_browser").unwrap(),
-                saved,
-            );
+            config
+                .set(
+                    crate::config::domain::SettingKey::parse("open_browser").unwrap(),
+                    crate::config::domain::SettingValue::Boolean(saved),
+                )
+                .unwrap();
             for (flags, expected) in [
                 (vec![], saved),
                 (vec!["--open"], true),

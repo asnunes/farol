@@ -11,7 +11,7 @@ import { said } from "@/lib/utils";
  * patching the list in place is the same choice `useReview` makes for the tick
  * boxes — the server is what decides, here as there. */
 export function useComments(onError: (message: string) => void, generation = 0) {
-  const [found, setFound] = useState<CommentsView>({ files: {}, unreadable: [] });
+  const [found, setFound] = useState<CommentsView>(EMPTY);
   const latest = useRef(0);
 
   const load = useCallback(async () => {
@@ -25,7 +25,7 @@ export function useComments(onError: (message: string) => void, generation = 0) 
   }, [onError]);
 
   useEffect(() => {
-    setFound({ files: {}, unreadable: [] });
+    setFound(EMPTY);
     void load();
     return () => { latest.current++; };
   }, [load, generation]);
@@ -57,6 +57,19 @@ export function useComments(onError: (message: string) => void, generation = 0) 
     add: (path: string, side: Side, from: number, to: number, body: string) =>
       write(api.addComment(path, side, from, to, body)),
     close: (id: string) => write(api.closeComment(id)),
+    /** Which harness a Send reaches, or null when no session is connected. */
+    agent: found.agent,
+    /** True once the harness took it. Nothing to reload: sending changes no
+     * comment, and the one the agent closes comes back through the watcher. */
+    send: async (id: string) => {
+      try {
+        await api.sendComment(id);
+        return true;
+      } catch (e) {
+        onError(said(e));
+        return false;
+      }
+    },
   };
 }
 
@@ -72,3 +85,5 @@ export type CommentsOn = (path: string) => CommentView[];
 /** One array for every file without a comment, so a row that has none is not
  * handed a fresh one on each render. */
 const NONE: CommentView[] = [];
+
+const EMPTY: CommentsView = { files: {}, unreadable: [], agent: null };

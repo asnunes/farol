@@ -3,6 +3,7 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use tokio::sync::watch;
 
+use crate::agent::infra::AgentAddress;
 use crate::cmd::{ServerUseCaseFactory, ServerUseCases};
 use crate::diff::infra::ScopeRequest;
 use crate::error::Result;
@@ -34,13 +35,21 @@ impl Session {
 
     pub fn open(&self) -> Result<ServerUseCases> {
         let config = self.config.borrow().clone();
-        let cases = self.factory.build(config.scope)?;
+        let cases = self.factory.build(config.scope, config.agent)?;
         self.record(&cases)?;
         Ok(cases)
     }
 
-    pub fn configure(&self, config: SessionConfig) -> Result<ServerEntry> {
-        let cases = self.factory.build(config.scope.clone())?;
+    /// The latest invocation wins, except where it knows less: a `serve` typed
+    /// in a plain terminal has no session to report to, which is not the same as
+    /// saying there is none, so the one already known is kept.
+    pub fn configure(&self, mut config: SessionConfig) -> Result<ServerEntry> {
+        if config.agent.is_none() {
+            config.agent = self.config.borrow().agent.clone();
+        }
+        let cases = self
+            .factory
+            .build(config.scope.clone(), config.agent.clone())?;
         cases.review.execute()?;
         self.record(&cases)?;
         self.config.send_replace(config);
@@ -74,4 +83,7 @@ pub struct SessionConfig {
     #[serde(flatten)]
     pub scope: ScopeRequest,
     pub watch: bool,
+    /// The session the review reports to, from the invocation that knew one.
+    #[serde(default)]
+    pub agent: Option<AgentAddress>,
 }

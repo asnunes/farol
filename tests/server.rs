@@ -33,6 +33,16 @@ impl Serving {
     /// The same, over a review the test built itself — for the ones that need
     /// something `mapped` does not have, like a file the branch deleted.
     fn over(repo: Repo, extra: &[&str]) -> Self {
+        Self::over_from(repo, extra, &[])
+    }
+
+    /// Started from inside an agent session, which is to say with the
+    /// variables its harness exports.
+    fn from_session(env: &[(&str, &str)]) -> Self {
+        Self::over_from(mapped(), &["--no-watch"], env)
+    }
+
+    fn over_from(repo: Repo, extra: &[&str], env: &[(&str, &str)]) -> Self {
         // No `--port` at all: this is how a reviewer starts one, and it
         // exercises the search. The port comes back off the line the server
         // prints, which is the only account that cannot be stale.
@@ -49,6 +59,7 @@ impl Serving {
 
         let mut child = repo
             .command(&args.iter().map(String::as_str).collect::<Vec<_>>())
+            .envs(env.iter().copied())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
@@ -286,6 +297,13 @@ fn foreign_origins_cannot_change_state_or_start_publication() {
             r#"{"path":"src/a.rs","from":1,"to":1,"body":"unwanted"}"#,
         ),
         ("DELETE", "/api/comments/nonexistent", ""),
+        ("POST", "/api/comments/nonexistent/send", ""),
+        (
+            "PUT",
+            "/api/config",
+            r#"{"key":"send_instruction","value":"unwanted"}"#,
+        ),
+        ("DELETE", "/api/config/send-instruction", ""),
         (
             "POST",
             "/api/publish",
@@ -1613,7 +1631,11 @@ fn browser_and_cli_share_preferences_without_restarting_the_server() {
     let s = Serving::new();
     let response = s.json("/api/config");
     let fields = response["settings"].as_array().unwrap();
-    assert_eq!(fields.len(), usize::from(cfg!(target_os = "macos")));
+    assert_eq!(fields.len(), 1 + usize::from(cfg!(target_os = "macos")));
+    let instruction = fields.last().unwrap();
+    assert_eq!(instruction["key"], "send_instruction");
+    assert_eq!(instruction["type"], "text");
+    assert_eq!(instruction["value"], instruction["default"]);
     if cfg!(target_os = "macos") {
         assert_eq!(fields[0]["key"], "open_browser");
         assert_eq!(fields[0]["type"], "boolean");
@@ -1643,7 +1665,10 @@ fn browser_and_cli_share_preferences_without_restarting_the_server() {
         "/api/config",
         Some(r#"{"key":"open_browser","value":"false"}"#),
     );
-    assert_eq!(status, 422);
+    assert_eq!(
+        status, 400,
+        "a string on a switch is the setting's to refuse"
+    );
     let (status, _) = s.probe(
         "PUT",
         "/api/config",
@@ -1655,4 +1680,214 @@ fn browser_and_cli_share_preferences_without_restarting_the_server() {
         config["open_browser"], true,
         "invalid writes leave stored values alone"
     );
+
+    let (status, body) = s.probe(
+        "PUT",
+        "/api/config",
+        Some(r#"{"key":"send_instruction","value":"Only answer."}"#),
+    );
+    assert_eq!(status, 200, "{body}");
+    let config: Value = serde_json::from_str(&s.repo.ok(&["config", "show"])).unwrap();
+    assert_eq!(config["send_instruction"], "Only answer.");
+
+    let (status, body) = s.probe("DELETE", "/api/config/send-instruction", None);
+    assert_eq!(status, 200, "{body}");
+    let after: Value = serde_json::from_str(&body).unwrap();
+    let instruction = after["settings"]
+        .as_array()
+        .unwrap()
+        .last()
+        .unwrap()
+        .clone();
+    assert_eq!(
+        instruction["value"], instruction["default"],
+        "the reset answers with the configuration as it now stands"
+    );
+}
+
+/// A session's inbox, standing in for Claude Code's: a socket that keeps the
+/// one connection it is sent, whole.
+struct Inbox {
+    _dir: tempfile::TempDir,
+    path: std::path::PathBuf,
+    received: std::sync::mpsc::Receiver<String>,
+}
+
+impl Inbox {
+    fn new() -> Self {
+        use std::io::Read;
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("s.sock");
+        let listener = std::os::unix::net::UnixListener::bind(&path).unwrap();
+        let (tx, received) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            for stream in listener.incoming() {
+                let mut all = String::new();
+                if stream.and_then(|mut s| s.read_to_string(&mut all)).is_ok() {
+                    let _ = tx.send(all);
+                }
+            }
+        });
+        Self {
+            _dir: dir,
+            path,
+            received,
+        }
+    }
+
+    fn env(&self) -> Vec<(&'static str, String)> {
+        vec![
+            (
+                "CLAUDE_CODE_MESSAGING_SOCKET",
+                self.path.display().to_string(),
+            ),
+            ("CLAUDE_CODE_MESSAGING_TOKEN", "test-token".to_string()),
+        ]
+    }
+
+    /// What the session was told, one message per connection.
+    fn next(&self) -> Vec<Value> {
+        let all = self
+            .received
+            .recv_timeout(Duration::from_secs(10))
+            .expect("the session should have been sent something");
+        all.lines()
+            .map(|line| serde_json::from_str(line).unwrap())
+            .collect()
+    }
+}
+
+fn write_comment(s: &Serving) -> String {
+    let (status, body) = s.probe(
+        "POST",
+        "/api/comments",
+        Some(r#"{"path":"src/a.rs","from":10,"to":12,"body":"Why this order?"}"#),
+    );
+    assert_eq!(status, 200, "{body}");
+    serde_json::from_str::<Value>(&body).unwrap()["id"]
+        .as_str()
+        .unwrap()
+        .to_string()
+}
+
+#[test]
+fn a_sent_comment_arrives_on_the_socket_of_the_session_that_served() {
+    let inbox = Inbox::new();
+    let env = inbox.env();
+    let s = Serving::from_session(
+        &env.iter()
+            .map(|(k, v)| (*k, v.as_str()))
+            .collect::<Vec<_>>(),
+    );
+    assert_eq!(s.json("/api/comments")["agent"], "Claude Code");
+    let id = write_comment(&s);
+
+    let (status, body) = s.probe("POST", &format!("/api/comments/{id}/send"), None);
+
+    assert_eq!(status, 204, "{body}");
+    let lines = inbox.next();
+    assert_eq!(
+        lines[0],
+        serde_json::json!({"type": "auth", "token": "test-token"})
+    );
+    let content = lines[1]["message"]["content"].as_str().unwrap();
+    assert!(
+        content.starts_with(&format!(
+            "A reviewer left a comment on this branch in farol (comment {id}):"
+        )),
+        "{content}"
+    );
+    assert!(
+        content.contains("src/a.rs:10-12\n\nWhy this order?"),
+        "{content}"
+    );
+    assert!(
+        content.ends_with("close it with `farol comment close` and its id."),
+        "{content}"
+    );
+}
+
+#[test]
+fn a_send_carries_the_instruction_saved_from_the_cli_without_a_restart() {
+    let inbox = Inbox::new();
+    let env = inbox.env();
+    let s = Serving::from_session(
+        &env.iter()
+            .map(|(k, v)| (*k, v.as_str()))
+            .collect::<Vec<_>>(),
+    );
+    let id = write_comment(&s);
+    s.repo
+        .ok(&["config", "set", "send-instruction", "Only answer."]);
+
+    let (status, body) = s.probe("POST", &format!("/api/comments/{id}/send"), None);
+
+    assert_eq!(status, 204, "{body}");
+    let content = inbox.next()[1]["message"]["content"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert!(
+        content.ends_with("Why this order?\n\nOnly answer."),
+        "{content}"
+    );
+}
+
+#[test]
+fn without_a_session_there_is_no_one_to_send_to() {
+    let s = Serving::new();
+    assert_eq!(s.json("/api/comments")["agent"], Value::Null);
+    let id = write_comment(&s);
+
+    let (status, body) = s.probe("POST", &format!("/api/comments/{id}/send"), None);
+
+    assert_eq!(status, 400);
+    assert!(body.contains("no agent session"), "{body}");
+}
+
+#[test]
+fn a_second_serve_from_another_session_redirects_where_comments_go() {
+    let s = Serving::new();
+    let inbox = Inbox::new();
+    let mut again = s.repo.command(&["serve", "--no-open"]);
+    for (name, value) in inbox.env() {
+        again.env(name, value);
+    }
+    let out = again.output().unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(String::from_utf8_lossy(&out.stdout).contains("updated the review"));
+
+    assert_eq!(s.json("/api/comments")["agent"], "Claude Code");
+    let id = write_comment(&s);
+    let (status, body) = s.probe("POST", &format!("/api/comments/{id}/send"), None);
+    assert_eq!(status, 204, "{body}");
+    assert_eq!(inbox.next()[0]["type"], "auth");
+
+    // A plain terminal knows no session, which is not the same as there being
+    // none: the one already known stays.
+    let plain = s.repo.ok(&["serve", "--no-open"]);
+    assert!(plain.contains("updated the review"));
+    assert_eq!(s.json("/api/comments")["agent"], "Claude Code");
+}
+
+#[test]
+fn a_session_that_is_gone_answers_with_what_to_do() {
+    let dir = tempfile::tempdir().unwrap();
+    let gone = dir.path().join("gone.sock").display().to_string();
+    let s = Serving::from_session(&[
+        ("CLAUDE_CODE_MESSAGING_SOCKET", gone.as_str()),
+        ("CLAUDE_CODE_MESSAGING_TOKEN", "test-token"),
+    ]);
+    let id = write_comment(&s);
+
+    let (status, body) = s.probe("POST", &format!("/api/comments/{id}/send"), None);
+
+    assert_eq!(status, 400);
+    assert!(body.contains("no longer listening"), "{body}");
+    assert!(body.contains("farol serve"), "{body}");
 }

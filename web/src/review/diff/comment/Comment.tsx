@@ -2,6 +2,7 @@ import { Prose } from "@/review/Prose";
 import { Close } from "./Close";
 import { Copy } from "./Copy";
 import { Published } from "./Published";
+import { Send } from "./Send";
 import { span } from "./quoted";
 import type { CommentActions } from "@/hooks/useComments";
 import type { CommentView } from "@/api";
@@ -24,6 +25,7 @@ export function Comment({ comment, actions }: CommentProps) {
 
       <div className="acts flex shrink-0 items-center gap-0.5">
         <Published comment={comment} />
+        {actions.agent && <Send comment={comment} agent={actions.agent} actions={actions} />}
         <Copy comment={comment} />
         <Close comment={comment} actions={actions} />
       </div>

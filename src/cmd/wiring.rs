@@ -7,9 +7,15 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use crate::comments::application::{CommentReach, Comments, PublishReview, ReviewReadiness};
+use crate::agent::domain::AgentChannel;
+use crate::agent::infra::{AgentAddress, ClaudeSocket, CodexQueue};
+use crate::comments::application::{
+    CommentReach, Comments, PublishReview, ReviewReadiness, SendComment,
+};
 use crate::comments::domain::ReviewPublisher;
 use crate::comments::infra::{GhCredentials, GitHub, MarkdownComments, Unhosted};
+use crate::config::domain::ConfigRepository;
+use crate::config::infra::JsonConfigRepository;
 use crate::diff::application::{CommitHistory, FileDiffs, ReviewScope};
 use crate::diff::infra::{GixSource, ScopeRequest};
 use crate::error::Result;
@@ -60,7 +66,9 @@ pub struct Ctx {
     pub readiness: ReviewReadiness,
     pub publish_review: Arc<PublishReview>,
 
-    server: ServerUseCases,
+    /// Only when serving: the CLI never sends to an agent, and building this
+    /// would make every command resolve the configuration folder for nothing.
+    server: Option<ServerUseCases>,
     git_dir: PathBuf,
     root: PathBuf,
 }
@@ -76,6 +84,14 @@ pub struct ServerUseCases {
     pub mark_viewed: MarkViewed,
     pub unmark_viewed: UnmarkViewed,
     pub comments: Comments,
+    pub send_comment: SendComment,
+}
+
+/// What a server adds to a context: the session it reports to, and where the
+/// user's preferences are read from.
+pub struct Serving {
+    pub agent: Option<AgentAddress>,
+    pub config: Arc<dyn ConfigRepository>,
 }
 
 impl Ctx {
@@ -85,6 +101,10 @@ impl Ctx {
     }
 
     pub fn at(root: &Path, request: ScopeRequest) -> Result<Self> {
+        Self::assemble(root, request, None)
+    }
+
+    fn assemble(root: &Path, request: ScopeRequest, serving: Option<Serving>) -> Result<Self> {
         let workspace = Workspace::discover(root)?;
         let git_dir = workspace.git_dir().to_path_buf();
         let root = workspace.root();
@@ -174,22 +194,23 @@ impl Ctx {
             readiness: readiness.clone(),
             publish_review: publish_review.clone(),
 
-            server: ServerUseCases {
+            server: serving.map(|serving| ServerUseCases {
                 scope: GetScope::new(scope.clone()),
                 review: GetReview::new(versions, scope, progress.clone()),
                 file_diff: GetFileDiff::new(diffs),
                 file_lines: GetFileLines::new(scope_for_lines),
                 mark_viewed: MarkViewed::new(progress.clone()),
                 unmark_viewed: UnmarkViewed::new(progress),
+                send_comment: SendComment::new(
+                    comments.clone(),
+                    serving.agent.as_ref().map(channel),
+                    serving.config,
+                ),
                 comments,
-            },
+            }),
             git_dir,
             root,
         })
-    }
-
-    pub fn server(&self) -> &ServerUseCases {
-        &self.server
     }
 
     pub fn git_dir(&self) -> &PathBuf {
@@ -203,23 +224,44 @@ impl Ctx {
 }
 
 pub fn config_cases() -> Result<ConfigUseCases> {
-    let repo = Arc::new(crate::config::infra::JsonConfigRepository::new(
+    Ok(ConfigUseCases::new(config_repository()?))
+}
+
+/// The session this process was started from, read off what its harness
+/// exported. Read here and not by the adapters, which take what they are given.
+pub fn agent_here() -> Option<AgentAddress> {
+    AgentAddress::from_env(|name| std::env::var(name).ok())
+}
+
+/// The one place that knows which harness speaks through which transport.
+fn channel(address: &AgentAddress) -> Arc<dyn AgentChannel> {
+    match address {
+        AgentAddress::ClaudeCode { socket, token } => {
+            Arc::new(ClaudeSocket::new(socket.clone(), token.clone()))
+        }
+        AgentAddress::Codex { thread } => Arc::new(CodexQueue::new("codex", thread.clone())),
+    }
+}
+
+fn config_repository() -> Result<Arc<dyn ConfigRepository>> {
+    Ok(Arc::new(JsonConfigRepository::new(
         crate::shared::paths::config_dir()?,
-    ));
-    Ok(ConfigUseCases::new(repo))
+    )))
 }
 
 #[derive(Clone)]
 pub struct ConfigUseCases {
     pub get: crate::config::application::GetConfig,
     pub set_setting: crate::config::application::SetSetting,
+    pub reset_setting: crate::config::application::ResetSetting,
 }
 
 impl ConfigUseCases {
     pub fn new(repo: Arc<dyn crate::config::domain::ConfigRepository>) -> Self {
         Self {
             get: crate::config::application::GetConfig::new(repo.clone()),
-            set_setting: crate::config::application::SetSetting::new(repo),
+            set_setting: crate::config::application::SetSetting::new(repo.clone()),
+            reset_setting: crate::config::application::ResetSetting::new(repo),
         }
     }
 }
@@ -231,22 +273,32 @@ pub fn check_head(root: &Path) -> Result<crate::diff::application::CheckHead> {
     )))
 }
 
-pub fn server_factory(root: PathBuf) -> Arc<dyn ServerUseCaseFactory> {
-    Arc::new(WorkspaceUseCases { root })
+pub fn server_factory(root: PathBuf) -> Result<Arc<dyn ServerUseCaseFactory>> {
+    Ok(Arc::new(WorkspaceUseCases {
+        root,
+        config: config_repository()?,
+    }))
 }
 
 /// A request gets one Git window, shared by all the use cases it invokes.
 /// Keeping the factory instead of its result lets the next request follow refs.
 pub trait ServerUseCaseFactory: Send + Sync {
-    fn build(&self, request: ScopeRequest) -> Result<ServerUseCases>;
+    fn build(&self, request: ScopeRequest, agent: Option<AgentAddress>) -> Result<ServerUseCases>;
 }
 
 impl ServerUseCaseFactory for WorkspaceUseCases {
-    fn build(&self, request: ScopeRequest) -> Result<ServerUseCases> {
-        Ok(Ctx::at(&self.root, request)?.server)
+    fn build(&self, request: ScopeRequest, agent: Option<AgentAddress>) -> Result<ServerUseCases> {
+        let serving = Serving {
+            agent,
+            config: self.config.clone(),
+        };
+        Ok(Ctx::assemble(&self.root, request, Some(serving))?
+            .server
+            .expect("a serving context always assembles the server's use cases"))
     }
 }
 
 struct WorkspaceUseCases {
     root: PathBuf,
+    config: Arc<dyn ConfigRepository>,
 }

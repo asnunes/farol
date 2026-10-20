@@ -34,8 +34,10 @@ pub(super) fn router(state: Arc<AppState>) -> Router {
         .route("/api/viewed", post(viewed))
         .route("/api/comments", get(comments).post(write_comment))
         .route("/api/comments/{id}", delete(close_comment))
+        .route("/api/comments/{id}/send", post(send_comment))
         .route_layer(middleware::from_fn_with_state(state.clone(), resolve))
         .route("/api/config", get(get_config).put(set_config))
+        .route("/api/config/{key}", delete(reset_config))
         .route("/api/session", put(configure))
         .route("/api/watch", get(watch))
         .route("/health", get(health))
@@ -69,11 +71,29 @@ async fn set_config(
     }
 }
 
+/// Back to the default, answering with the configuration as it now stands so
+/// the page redraws the field from the server rather than guessing.
+async fn reset_config(
+    State(state): State<Arc<AppState>>,
+    Path(key): Path<String>,
+) -> impl IntoResponse {
+    let key = match crate::config::domain::SettingKey::parse(&key) {
+        Ok(key) => key,
+        Err(error) => return fail(error.into()),
+    };
+    match state.preferences.reset_setting.execute(key) {
+        Ok(config) => Json(ConfigView::from(config)).into_response(),
+        Err(error) => fail(error),
+    }
+}
+
+/// The value as JSON wrote it. Whether it suits the key is the setting's to
+/// decide, so a mismatch is refused there and names what the key takes.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct SettingBody {
     key: String,
-    value: bool,
+    value: crate::config::domain::SettingValue,
 }
 
 /// Who is answering on this port.
@@ -107,6 +127,9 @@ async fn configure(
     match away(move || session.configure(config)).await {
         Ok(identity) => {
             let _ = state.changes.send("map".to_string());
+            // The session may have changed, and with it the name on the Send
+            // button, which the page reads off the comments.
+            let _ = state.changes.send("comments".to_string());
             Json(identity).into_response()
         }
         Err(e) => fail(e),
@@ -182,7 +205,9 @@ async fn viewed(
 /// answer: closing a comment removes it, so there is nothing here to filter.
 async fn comments(Extension(cases): Extension<ServerUseCases>) -> impl IntoResponse {
     match cases.comments.all() {
-        Ok(found) => Json(view::CommentsView::of(&found)).into_response(),
+        Ok(found) => {
+            Json(view::CommentsView::of(&found, cases.send_comment.harness())).into_response()
+        }
         Err(e) => fail(e),
     }
 }
@@ -217,6 +242,18 @@ async fn close_comment(
     Path(id): Path<String>,
 ) -> impl IntoResponse {
     match cases.comments.close(&id) {
+        Ok(()) => StatusCode::NO_CONTENT.into_response(),
+        Err(e) => fail(e),
+    }
+}
+
+/// Hand one comment to the agent session. Only the id travels: the text is
+/// built on the server from the comment as stored.
+async fn send_comment(
+    Extension(cases): Extension<ServerUseCases>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    match away(move || cases.send_comment.execute(&id)).await {
         Ok(()) => StatusCode::NO_CONTENT.into_response(),
         Err(e) => fail(e),
     }
@@ -382,6 +419,11 @@ pub(super) mod tests {
                 ))),
                 mark_viewed: MarkViewed::new(progress.clone()),
                 unmark_viewed: UnmarkViewed::new(progress),
+                send_comment: crate::comments::application::SendComment::new(
+                    comments.clone(),
+                    None,
+                    Arc::new(crate::testing::InMemoryConfigRepository::default()),
+                ),
                 comments,
             },
         )
@@ -426,6 +468,11 @@ pub(super) mod tests {
             )))),
             mark_viewed: MarkViewed::new(broken.clone()),
             unmark_viewed: UnmarkViewed::new(broken),
+            send_comment: crate::comments::application::SendComment::new(
+                comments.clone(),
+                None,
+                Arc::new(crate::testing::InMemoryConfigRepository::default()),
+            ),
             comments,
         };
         let (state, _) = AppState::new(

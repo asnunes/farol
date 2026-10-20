@@ -1,3 +1,4 @@
+pub mod agent;
 pub mod cmd;
 pub mod comments;
 pub mod config;
