@@ -88,20 +88,13 @@ export function Box({ span: lines, onSave, onCancel, agent, onSaveAndSend }: Box
         {keysText}
       </span>
 
+      {/* With a session connected, sending is the point, so it is the button
+          that stands out and comes first; saving alone is the quieter one. */}
       <div className="mt-2 flex gap-2">
-        <Button
-          size="xs"
-          className="bg-comment-ink text-surface hover:bg-comment-ink/90"
-          disabled={!text.trim() || saving}
-          onClick={() => void save()}
-        >
-          Comment
-        </Button>
         {agent && (
           <Button
             size="xs"
-            variant="outline"
-            className="border-comment-ink text-comment-ink hover:bg-sunken"
+            className="bg-comment-ink text-surface hover:bg-comment-ink/90"
             title={`Save the comment and send it to ${agent}`}
             disabled={!text.trim() || saving}
             onClick={() => void save(true)}
@@ -109,6 +102,15 @@ export function Box({ span: lines, onSave, onCancel, agent, onSaveAndSend }: Box
             Comment &amp; send
           </Button>
         )}
+        <Button
+          size="xs"
+          variant={agent ? "outline" : "default"}
+          className={agent ? "" : "bg-comment-ink text-surface hover:bg-comment-ink/90"}
+          disabled={!text.trim() || saving}
+          onClick={() => void save()}
+        >
+          Comment
+        </Button>
         <Button size="xs" variant="ghost" className="text-ink-muted" onClick={onCancel}>
           Cancel
         </Button>

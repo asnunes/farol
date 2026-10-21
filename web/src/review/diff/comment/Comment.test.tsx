@@ -107,6 +107,19 @@ describe("a comment on the page", () => {
     expect(screen.getByRole("status").textContent).toContain("Codex is working on it");
   });
 
+  it("offers Reply after the last turn, not among the actions on the question", () => {
+    const { container } = render(
+      <Comment
+        comment={comment({ replies: [{ from: "agent", name: "Claude Code", body: "Because." }] })}
+        actions={noComments()}
+      />,
+    );
+
+    const reply = screen.getByRole("button", { name: "Reply" });
+    expect(container.querySelector(".acts")?.contains(reply)).toBe(false);
+    expect(container.querySelector(".thread")?.lastElementChild).toBe(reply);
+  });
+
   it("holds Send while the agent owes an answer and once it has given one", () => {
     const actions = { ...noComments(), agent: "Claude Code" };
     const { rerender } = render(
@@ -142,7 +155,7 @@ describe("a comment on the page", () => {
     const actions = { ...noComments(), agent: "Claude Code" };
     render(<Comment comment={comment()} actions={actions} />);
 
-    fireEvent.click(screen.getByLabelText("Reply to this comment"));
+    fireEvent.click(screen.getByRole("button", { name: "Reply" }));
     fireEvent.change(screen.getByRole("textbox", { name: "Reply to this comment" }), {
       target: { value: "And the new one?" },
     });
@@ -155,7 +168,7 @@ describe("a comment on the page", () => {
     const actions = noComments();
     render(<Comment comment={comment()} actions={actions} />);
 
-    fireEvent.click(screen.getByLabelText("Reply to this comment"));
+    fireEvent.click(screen.getByRole("button", { name: "Reply" }));
     expect(screen.queryByRole("button", { name: "Reply & send" })).toBeNull();
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "Note to self." } });
     fireEvent.click(screen.getByRole("button", { name: "Reply" }));

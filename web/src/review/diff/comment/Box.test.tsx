@@ -23,6 +23,13 @@ describe("the box a comment is written in", () => {
     expect(onSave).not.toHaveBeenCalled();
   });
 
+  it("puts Comment & send first when a session is connected", () => {
+    render(<Box span={span} onSave={vi.fn()} onCancel={vi.fn()} agent="Claude Code" onSaveAndSend={vi.fn()} />);
+
+    const buttons = screen.getAllByRole("button").map((b) => b.textContent);
+    expect(buttons.slice(0, 2)).toEqual(["Comment & send", "Comment"]);
+  });
+
   it("sends with shift held on the save shortcut, and only saves without it", () => {
     const onSave = vi.fn().mockResolvedValue(undefined);
     const onSaveAndSend = vi.fn().mockResolvedValue(undefined);

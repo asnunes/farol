@@ -38,37 +38,37 @@ export function Comment({ comment, actions }: CommentProps) {
           {actions.agent && (
             <Send comment={comment} agent={actions.agent} actions={actions} held={held(comment)} />
           )}
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            className="text-comment-faint hover:bg-sunken hover:text-comment-ink"
-            aria-label="Reply to this comment"
-            title="Reply"
-            onClick={() => setReplying(true)}
-          >
-            <MessageSquareReply className="size-3.5" aria-hidden="true" />
-          </Button>
           <Copy comment={comment} />
           <Close comment={comment} actions={actions} />
         </div>
       </div>
 
-      {(comment.replies.length > 0 || comment.waiting || replying) && (
-        <div className="thread flex flex-col gap-2 pl-6 md:pl-10">
-          {comment.replies.length > 0 && <Replies replies={comment.replies} />}
-          {comment.waiting && <Status waiting={comment.waiting} />}
-          {replying && (
-            <ReplyBox
-              agent={actions.agent}
-              onReply={async (body, andSend) => {
-                await actions.reply(comment.id, body, andSend);
-                setReplying(false);
-              }}
-              onCancel={() => setReplying(false)}
-            />
-          )}
-        </div>
-      )}
+      {/* Reply sits after the last turn, where the reader is when they decide
+          to answer — not up with the actions on the question. */}
+      <div className="thread flex flex-col gap-2 pl-6 md:pl-10">
+        {comment.replies.length > 0 && <Replies replies={comment.replies} />}
+        {comment.waiting && <Status waiting={comment.waiting} />}
+        {replying ? (
+          <ReplyBox
+            agent={actions.agent}
+            onReply={async (body, andSend) => {
+              await actions.reply(comment.id, body, andSend);
+              setReplying(false);
+            }}
+            onCancel={() => setReplying(false)}
+          />
+        ) : (
+          <Button
+            variant="ghost"
+            size="xs"
+            className="opener self-start text-comment-faint hover:bg-sunken hover:text-comment-ink"
+            onClick={() => setReplying(true)}
+          >
+            <MessageSquareReply className="size-3.5" aria-hidden="true" />
+            Reply
+          </Button>
+        )}
+      </div>
     </div>
   );
 }
