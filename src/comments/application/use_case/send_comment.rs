@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::agent::domain::{AgentChannel, AgentError};
 use crate::comments::application::Comments;
-use crate::comments::domain::{Comment, CommentError};
+use crate::comments::domain::{Author, Comment, CommentError};
 use crate::config::domain::ConfigRepository;
 use crate::error::Result;
 
@@ -53,22 +53,43 @@ impl SendComment {
             .ok_or_else(|| CommentError::Unknown { id: id.into() })?;
         let config = self.config.read()?;
         channel.send(&message(&comment, config.send_instruction()))?;
+        // Only once the transport took it: a comment marked as sent that never
+        // left would sit on screen waiting for an answer nobody was asked for.
+        self.comments.sent(&comment.id, channel.harness())?;
         Ok(())
     }
 }
 
-/// The part farol always writes — naming farol, so the skill is picked up, and
-/// carrying the id, so the instruction never has to — and then whatever the
-/// user chose to add.
+/// The part farol always writes, and then whatever the user chose to add.
+///
+/// Fixed: naming farol, so the skill is picked up; the id, so the instruction
+/// never has to carry it; the conversation so far, so a follow-up stands on its
+/// own; and the two commands that bring the answer back to the screen. Those
+/// last are not the user's to edit — an instruction that dropped them would
+/// leave the comment marked as waiting forever, with the answer only in the
+/// agent's terminal.
 fn message(comment: &Comment, instruction: &str) -> String {
-    let head = format!(
-        "A reviewer left a comment on this branch in farol (comment {}):\n\n{}",
-        comment.id,
+    let id = &comment.id;
+    let mut text = format!(
+        "A reviewer left a comment on this branch in farol (comment {id}):\n\n{}",
         comment.quoted()
     );
+    if !comment.conversation.replies.is_empty() {
+        text.push_str("\n\nThe conversation so far, oldest first:");
+        for reply in &comment.conversation.replies {
+            let who = match &reply.from {
+                Author::Reviewer => "Reviewer",
+                Author::Agent(name) => name,
+            };
+            text.push_str(&format!("\n\n{who}: {}", reply.body));
+        }
+    }
+    text.push_str(&format!(
+        "\n\nBefore you start, run `farol comment ack {id}` so the reviewer sees you are on it. Answer with `farol comment reply {id} --text '…'`, in single quotes: that is where the reviewer reads it."
+    ));
     match instruction.trim() {
-        "" => head,
-        instruction => format!("{head}\n\n{instruction}"),
+        "" => text,
+        instruction => format!("{text}\n\n{instruction}"),
     }
 }
 
@@ -151,8 +172,8 @@ mod tests {
         assert_eq!(
             world.channel.sent(),
             vec![format!(
-                "A reviewer left a comment on this branch in farol (comment {}):\n\nsrc/a.rs:82-116\n\nWhy this order?\n\nAnswer it, or change the code. Once it is resolved, close it with `farol comment close` and its id.",
-                comment.id
+                "A reviewer left a comment on this branch in farol (comment {id}):\n\nsrc/a.rs:82-116\n\nWhy this order?\n\nBefore you start, run `farol comment ack {id}` so the reviewer sees you are on it. Answer with `farol comment reply {id} --text '…'`, in single quotes: that is where the reviewer reads it.\n\nAnswer it, or change the code and say what you changed.",
+                id = comment.id
             )]
         );
     }
@@ -169,15 +190,11 @@ mod tests {
 
         let sent = world.channel.sent();
         assert!(
-            sent[0].ends_with("Why this order?\n\nOnly answer. Leave it open."),
+            sent[0].ends_with("reads it.\n\nOnly answer. Leave it open."),
             "{}",
             sent[0]
         );
-        assert!(
-            sent[1].ends_with("Why this order?\n\nFix it."),
-            "{}",
-            sent[1]
-        );
+        assert!(sent[1].ends_with("reads it.\n\nFix it."), "{}", sent[1]);
     }
 
     #[test]
@@ -188,7 +205,63 @@ mod tests {
 
         world.send().execute(&comment.id).unwrap();
 
-        assert!(world.channel.sent()[0].ends_with("Why this order?"));
+        assert!(world.channel.sent()[0].ends_with("that is where the reviewer reads it."));
+    }
+
+    #[test]
+    fn a_send_marks_the_comment_as_waiting_and_a_follow_up_carries_the_conversation() {
+        use crate::comments::domain::Stage;
+        let world = World::new();
+        let comment = world.comment();
+
+        world.send().execute(&comment.id).unwrap();
+        let waiting = world.comments.all().unwrap().comments[0]
+            .conversation
+            .waiting
+            .clone();
+        assert_eq!(
+            waiting.map(|w| (w.on, w.stage)),
+            Some(("Claude Code".into(), Stage::Sent))
+        );
+
+        world
+            .comments
+            .reply(
+                &comment.id,
+                Author::Agent("Claude Code".into()),
+                "Because of X.",
+            )
+            .unwrap();
+        world
+            .comments
+            .reply(&comment.id, Author::Reviewer, "And Y?")
+            .unwrap();
+        world.send().execute(&comment.id).unwrap();
+
+        let second = &world.channel.sent()[1];
+        assert!(
+            second.contains("Claude Code: Because of X.\n\nReviewer: And Y?"),
+            "a follow-up has to stand on its own: {second}"
+        );
+    }
+
+    #[test]
+    fn a_failed_send_leaves_the_comment_not_waiting() {
+        let world = World::new();
+        let comment = world.comment();
+        let send = SendComment::new(
+            world.comments.clone(),
+            Some(Arc::new(crate::testing::RefusingChannel)),
+            world.config.clone(),
+        );
+
+        assert!(send.execute(&comment.id).is_err());
+        assert_eq!(
+            world.comments.all().unwrap().comments[0]
+                .conversation
+                .waiting,
+            None
+        );
     }
 
     #[test]

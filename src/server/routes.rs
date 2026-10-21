@@ -35,6 +35,7 @@ pub(super) fn router(state: Arc<AppState>) -> Router {
         .route("/api/comments", get(comments).post(write_comment))
         .route("/api/comments/{id}", delete(close_comment))
         .route("/api/comments/{id}/send", post(send_comment))
+        .route("/api/comments/{id}/replies", post(reply_comment))
         .route_layer(middleware::from_fn_with_state(state.clone(), resolve))
         .route("/api/config", get(get_config).put(set_config))
         .route("/api/config/{key}", delete(reset_config))
@@ -243,6 +244,25 @@ async fn close_comment(
 ) -> impl IntoResponse {
     match cases.comments.close(&id) {
         Ok(()) => StatusCode::NO_CONTENT.into_response(),
+        Err(e) => fail(e),
+    }
+}
+
+#[derive(Deserialize)]
+struct NewReply {
+    body: String,
+}
+
+/// The reviewer writing back under a comment. Sending it on is a second call,
+/// the same one the Send button makes.
+async fn reply_comment(
+    Extension(cases): Extension<ServerUseCases>,
+    Path(id): Path<String>,
+    Json(reply): Json<NewReply>,
+) -> impl IntoResponse {
+    let author = crate::comments::domain::Author::Reviewer;
+    match away(move || cases.comments.reply(&id, author, &reply.body)).await {
+        Ok(comment) => Json(view::CommentView::of(&comment)).into_response(),
         Err(e) => fail(e),
     }
 }

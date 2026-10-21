@@ -299,6 +299,11 @@ fn foreign_origins_cannot_change_state_or_start_publication() {
         ("DELETE", "/api/comments/nonexistent", ""),
         ("POST", "/api/comments/nonexistent/send", ""),
         (
+            "POST",
+            "/api/comments/nonexistent/replies",
+            r#"{"body":"unwanted"}"#,
+        ),
+        (
             "PUT",
             "/api/config",
             r#"{"key":"send_instruction","value":"unwanted"}"#,
@@ -1803,7 +1808,15 @@ fn a_sent_comment_arrives_on_the_socket_of_the_session_that_served() {
         "{content}"
     );
     assert!(
-        content.ends_with("close it with `farol comment close` and its id."),
+        content.contains(&format!("farol comment ack {id}")),
+        "{content}"
+    );
+    assert!(
+        content.contains(&format!("farol comment reply {id}")),
+        "{content}"
+    );
+    assert!(
+        content.ends_with("change the code and say what you changed."),
         "{content}"
     );
 }
@@ -1828,10 +1841,7 @@ fn a_send_carries_the_instruction_saved_from_the_cli_without_a_restart() {
         .as_str()
         .unwrap()
         .to_string();
-    assert!(
-        content.ends_with("Why this order?\n\nOnly answer."),
-        "{content}"
-    );
+    assert!(content.ends_with("reads it.\n\nOnly answer."), "{content}");
 }
 
 #[test]
@@ -1890,4 +1900,83 @@ fn a_session_that_is_gone_answers_with_what_to_do() {
     assert_eq!(status, 400);
     assert!(body.contains("no longer listening"), "{body}");
     assert!(body.contains("farol serve"), "{body}");
+}
+
+#[test]
+fn the_agent_acknowledges_and_answers_from_its_shell_and_the_page_reads_the_conversation() {
+    let inbox = Inbox::new();
+    let env = inbox.env();
+    let s = Serving::from_session(
+        &env.iter()
+            .map(|(k, v)| (*k, v.as_str()))
+            .collect::<Vec<_>>(),
+    );
+    let id = write_comment(&s);
+    let (status, body) = s.probe("POST", &format!("/api/comments/{id}/send"), None);
+    assert_eq!(status, 204, "{body}");
+    inbox.next();
+    assert_eq!(s.comments_on("src/a.rs")[0]["waiting"]["stage"], "sent");
+
+    // What the agent runs, from the shell its harness gave it.
+    let agent = |args: &[&str]| {
+        let mut command = s.repo.command(args);
+        for (name, value) in &env {
+            command.env(name, value);
+        }
+        let out = command.output().unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    };
+    agent(&["comment", "ack", &id]);
+    assert_eq!(s.comments_on("src/a.rs")[0]["waiting"]["stage"], "working");
+    assert_eq!(s.comments_on("src/a.rs")[0]["waiting"]["on"], "Claude Code");
+
+    agent(&[
+        "comment",
+        "reply",
+        &id,
+        "--text",
+        "Because the legacy format comes first.",
+    ]);
+    let comment = &s.comments_on("src/a.rs")[0];
+    assert_eq!(
+        comment["waiting"],
+        Value::Null,
+        "an answer settles what was owed"
+    );
+    assert_eq!(comment["replies"][0]["from"], "agent");
+    assert_eq!(comment["replies"][0]["name"], "Claude Code");
+    assert_eq!(
+        comment["replies"][0]["body"],
+        "Because the legacy format comes first."
+    );
+    assert_eq!(comment["body"], "Why this order?");
+
+    let (status, body) = s.probe(
+        "POST",
+        &format!("/api/comments/{id}/replies"),
+        Some(r#"{"body":"And the new one?"}"#),
+    );
+    assert_eq!(status, 200, "{body}");
+    let (status, body) = s.probe("POST", &format!("/api/comments/{id}/send"), None);
+    assert_eq!(status, 204, "{body}");
+    let follow_up = inbox.next()[1]["message"]["content"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert!(
+        follow_up.contains(
+            "Claude Code: Because the legacy format comes first.\n\nReviewer: And the new one?"
+        ),
+        "a follow-up carries the conversation: {follow_up}"
+    );
+
+    let listed = s.repo.ok(&["comment", "list"]);
+    assert!(
+        listed.contains("And the new one?"),
+        "the agent reads the replies too: {listed}"
+    );
 }

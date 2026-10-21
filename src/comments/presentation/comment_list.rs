@@ -1,6 +1,6 @@
 use std::fmt::{self, Display};
 
-use crate::comments::domain::{Found, Unread, Unreadable};
+use crate::comments::domain::{Author, Found, Stage, Unread, Unreadable};
 
 /// The comments, for the terminal and for the session reading its own review.
 pub struct CommentList<'a>(pub &'a Found);
@@ -18,6 +18,26 @@ impl Display for CommentList<'_> {
             writeln!(f, "{}  {}", comment.id, comment.at())?;
             for line in comment.body.lines() {
                 writeln!(f, "    {line}")?;
+            }
+            // The conversation too: an agent asked to answer reads this list,
+            // and answering the question without the replies under it would be
+            // answering a question already settled.
+            for reply in &comment.conversation.replies {
+                let who = match &reply.from {
+                    Author::Reviewer => "reviewer",
+                    Author::Agent(name) => name,
+                };
+                writeln!(f, "    — {who}:")?;
+                for line in reply.body.lines() {
+                    writeln!(f, "      {line}")?;
+                }
+            }
+            if let Some(waiting) = &comment.conversation.waiting {
+                let stage = match waiting.stage {
+                    Stage::Sent => "sent to",
+                    Stage::Working => "being worked on by",
+                };
+                writeln!(f, "    ({stage} {})", waiting.on)?;
             }
             writeln!(f)?;
         }
@@ -80,6 +100,7 @@ mod tests {
             to,
             body: "Why this order?\nIt reads backwards.".into(),
             published: None,
+            conversation: Default::default(),
         }
     }
 

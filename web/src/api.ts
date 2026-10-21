@@ -31,6 +31,13 @@ export const api = {
       body: JSON.stringify({ path, side, from, to, body }),
     }).then(json<CommentView>),
   closeComment: (id: string) => send(`/api/comments/${encodeURIComponent(id)}`, "DELETE"),
+  /** The reviewer writing back under a comment; sending it on is `sendComment`. */
+  replyComment: (id: string, body: string) =>
+    fetch(`/api/comments/${encodeURIComponent(id)}/replies`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ body }),
+    }).then(json<CommentView>),
   /** Only the id goes: the server builds the message from the comment it holds. */
   sendComment: (id: string) =>
     send(`/api/comments/${encodeURIComponent(id)}/send`, "POST"),
@@ -211,7 +218,22 @@ export type CommentView = {
   /** Where it can be read on the pull request, once it has gone. Publishing is
    * not answering: a published comment is still waiting for one. */
   published: string | null;
+  /** The turns after the question, oldest first. */
+  replies: ReplyView[];
+  /** Set while an agent owes an answer. */
+  waiting: WaitingView | null;
 };
+
+/** One turn of a comment's conversation. */
+export type ReplyView = {
+  from: "reviewer" | "agent";
+  /** "You", or the harness that answered. */
+  name: string;
+  body: string;
+};
+
+/** An answer owed: handed over, or acknowledged by the agent as being worked on. */
+export type WaitingView = { on: string; stage: "sent" | "working" };
 
 /** Where a file sits: the block it is read under and how far down the map that
  * block is, which is what the band above the diff counts off. */

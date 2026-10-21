@@ -471,3 +471,22 @@ requested stopping all running reviews.
 
 When restarting an instance, stop only that review and start it again
 from the same worktree with the intended comparison.
+
+## Answer comments sent from Farol
+
+A reviewer can send a comment from the review page straight into your
+session. It arrives as a message that names Farol and carries the
+comment's id, its location and text, and any conversation so far.
+
+Acknowledge it before you start, so the page shows you are on it:
+
+    farol comment ack <id>
+
+Answer through Farol, not only in your own reply, because the reviewer
+reads the answer on the page:
+
+    farol comment reply <id> --text '…'
+
+Use single quotes: inside double quotes a backtick runs a command. Say
+what you changed when you changed code. Do not close the comment unless
+the reviewer asks; the conversation stays open until they close it.

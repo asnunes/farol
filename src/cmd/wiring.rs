@@ -233,6 +233,11 @@ pub fn agent_here() -> Option<AgentAddress> {
     AgentAddress::from_env(|name| std::env::var(name).ok())
 }
 
+/// Which harness this process was started from, by the name the screen uses.
+pub fn harness_here() -> Option<&'static str> {
+    agent_here().map(|address| channel(&address).harness())
+}
+
 /// The one place that knows which harness speaks through which transport.
 fn channel(address: &AgentAddress) -> Arc<dyn AgentChannel> {
     match address {

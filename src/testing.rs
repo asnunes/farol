@@ -724,6 +724,21 @@ impl crate::config::domain::ConfigRepository for BrokenConfigRepository {
     }
 }
 
+/// A session that is gone, for the callers that must not record a send.
+pub struct RefusingChannel;
+
+impl crate::agent::domain::AgentChannel for RefusingChannel {
+    fn harness(&self) -> &'static str {
+        "Claude Code"
+    }
+
+    fn send(&self, _: &str) -> std::result::Result<(), crate::agent::domain::AgentError> {
+        Err(crate::agent::domain::AgentError::Gone {
+            harness: "Claude Code",
+        })
+    }
+}
+
 /// A session that takes every message and keeps it, which is the whole
 /// contract: the real ones answer nothing back either.
 #[derive(Default)]

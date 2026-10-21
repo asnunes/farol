@@ -13,6 +13,7 @@ export function noComments(): CommentActions {
     agent: null,
     send: vi.fn().mockResolvedValue(true),
     addAndSend: vi.fn().mockResolvedValue(undefined),
+    reply: vi.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -25,6 +26,8 @@ export function comment(over: Partial<CommentView> = {}): CommentView {
     to: 1,
     body: "Why this order?",
     published: null,
+    replies: [],
+    waiting: null,
     ...over,
   };
 }

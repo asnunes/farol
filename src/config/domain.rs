@@ -216,7 +216,7 @@ const SEND_INSTRUCTION: SettingDefinition = SettingDefinition {
         "Added after the comment when you press Send. Farol always includes the comment's location, text and id. Leave it empty to send only the comment.",
     ),
     kind: SettingKind::Text {
-        default: "Answer it, or change the code. Once it is resolved, close it with `farol comment close` and its id.",
+        default: "Answer it, or change the code and say what you changed.",
     },
     visible: true,
 };
@@ -248,7 +248,7 @@ mod tests {
         assert!(!config.should_open(false, false));
         assert_eq!(
             config.send_instruction(),
-            "Answer it, or change the code. Once it is resolved, close it with `farol comment close` and its id."
+            "Answer it, or change the code and say what you changed."
         );
     }
 

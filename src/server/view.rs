@@ -9,7 +9,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde::Serialize;
 
-use crate::comments::domain::{Comment, Found};
+use crate::comments::domain::{Author, Comment, Found, Stage};
 use crate::comments::presentation::says;
 use crate::diff::domain::{FileChange, FileDiff, Hunk, Line, LineKind, Side};
 use crate::map::application::ReviewSnapshot;
@@ -207,6 +207,30 @@ pub struct CommentView {
     /// Where it can be read on the pull request, once it has gone. The screen
     /// marks those rather than hiding them: publishing is not answering.
     pub published: Option<String>,
+    /// The turns after the question, oldest first.
+    pub replies: Vec<ReplyView>,
+    /// Set while an agent owes an answer, for the mark on the comment.
+    pub waiting: Option<WaitingView>,
+}
+
+/// One turn of a comment's conversation.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReplyView {
+    /// "reviewer" or "agent", which decides which side of the exchange it reads on.
+    pub from: &'static str,
+    /// Who to name it as: "You" for the reviewer, the harness for an agent.
+    pub name: String,
+    pub body: String,
+}
+
+/// An answer owed, as the screen marks it.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WaitingView {
+    pub on: String,
+    /// "sent" until the agent acknowledges, "working" after.
+    pub stage: &'static str,
 }
 
 /// The comments, under the file each one is about, and what the store could not
@@ -426,6 +450,34 @@ impl CommentView {
             to: comment.to,
             body: comment.body.clone(),
             published: comment.published.clone(),
+            replies: comment
+                .conversation
+                .replies
+                .iter()
+                .map(|reply| match &reply.from {
+                    Author::Reviewer => ReplyView {
+                        from: "reviewer",
+                        name: "You".into(),
+                        body: reply.body.clone(),
+                    },
+                    Author::Agent(name) => ReplyView {
+                        from: "agent",
+                        name: name.clone(),
+                        body: reply.body.clone(),
+                    },
+                })
+                .collect(),
+            waiting: comment
+                .conversation
+                .waiting
+                .as_ref()
+                .map(|waiting| WaitingView {
+                    on: waiting.on.clone(),
+                    stage: match waiting.stage {
+                        Stage::Sent => "sent",
+                        Stage::Working => "working",
+                    },
+                }),
         }
     }
 }
@@ -543,6 +595,7 @@ mod tests {
             to: 1,
             body: "Por que essa ordem?".into(),
             published: None,
+            conversation: Default::default(),
         }
     }
 

@@ -79,6 +79,59 @@ describe("a comment on the page", () => {
     expect(screen.queryByLabelText("Sent to Codex")).toBeNull();
   });
 
+  it("shows the conversation under the question, signed by who wrote each turn", () => {
+    render(
+      <Comment
+        comment={comment({
+          replies: [
+            { from: "agent", name: "Claude Code", body: "Because the **legacy** format comes first." },
+            { from: "reviewer", name: "You", body: "And the new one?" },
+          ],
+        })}
+        actions={noComments()}
+      />,
+    );
+
+    expect(screen.getByText("Claude Code")).toBeTruthy();
+    expect(screen.getByText("legacy").tagName).toBe("STRONG");
+    expect(screen.getByText("And the new one?")).toBeTruthy();
+  });
+
+  it("says what the agent owes: sent, then working once it acknowledges", () => {
+    const { rerender } = render(
+      <Comment comment={comment({ waiting: { on: "Codex", stage: "sent" } })} actions={noComments()} />,
+    );
+    expect(screen.getByRole("status").textContent).toContain("Sent to Codex");
+
+    rerender(<Comment comment={comment({ waiting: { on: "Codex", stage: "working" } })} actions={noComments()} />);
+    expect(screen.getByRole("status").textContent).toContain("Codex is working on it");
+  });
+
+  it("replies and sends the conversation on in one press", async () => {
+    const actions = { ...noComments(), agent: "Claude Code" };
+    render(<Comment comment={comment()} actions={actions} />);
+
+    fireEvent.click(screen.getByLabelText("Reply to this comment"));
+    fireEvent.change(screen.getByRole("textbox", { name: "Reply to this comment" }), {
+      target: { value: "And the new one?" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Reply & send" }));
+
+    await waitFor(() => expect(actions.reply).toHaveBeenCalledWith("18cb-3731", "And the new one?", true));
+  });
+
+  it("only replies when no session is connected", async () => {
+    const actions = noComments();
+    render(<Comment comment={comment()} actions={actions} />);
+
+    fireEvent.click(screen.getByLabelText("Reply to this comment"));
+    expect(screen.queryByRole("button", { name: "Reply & send" })).toBeNull();
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "Note to self." } });
+    fireEvent.click(screen.getByRole("button", { name: "Reply" }));
+
+    await waitFor(() => expect(actions.reply).toHaveBeenCalledWith("18cb-3731", "Note to self.", false));
+  });
+
   it("puts it on the clipboard when the button is pressed", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal("navigator", { clipboard: { writeText } });

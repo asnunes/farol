@@ -33,9 +33,48 @@ pub struct Comment {
     /// second home now, and the answer will come back there. Closing still
     /// removes the comment; this only records that it left.
     pub published: Option<String>,
+    /// What was said after the question, and whether an agent owes an answer.
+    pub conversation: Conversation,
 }
 
 impl Comment {
+    /// Handed to an agent; it owes an answer from here on.
+    pub fn sent(&mut self, to: &str, at: &str) {
+        self.conversation.waiting = Some(Waiting {
+            on: to.to_string(),
+            since: at.to_string(),
+            stage: Stage::Sent,
+        });
+    }
+
+    /// The agent says it has started. Kept even when farol never recorded a
+    /// send — the agent may have been handed the comment some other way, and
+    /// the reviewer is better told it is being worked on than not.
+    pub fn acknowledged(&mut self, by: &str, at: &str) {
+        let on = match &self.conversation.waiting {
+            Some(waiting) => waiting.on.clone(),
+            None => by.to_string(),
+        };
+        self.conversation.waiting = Some(Waiting {
+            on,
+            since: at.to_string(),
+            stage: Stage::Working,
+        });
+    }
+
+    /// Another turn. An agent's turn settles what it owed; the reviewer's does
+    /// not, because writing back is not the same as sending.
+    pub fn reply(&mut self, from: Author, body: &str, at: &str) {
+        if matches!(from, Author::Agent(_)) {
+            self.conversation.waiting = None;
+        }
+        self.conversation.replies.push(Reply {
+            from,
+            body: body.trim().to_string(),
+            at: at.to_string(),
+        });
+    }
+
     /// What lands on the clipboard: enough for the answer to be read somewhere
     /// else without the file open.
     pub fn quoted(&self) -> String {
@@ -58,6 +97,52 @@ impl Comment {
             Side::Old => format!("{}:{lines} (old)", self.path),
         }
     }
+}
+
+/// The exchange under a comment, oldest first, and what is pending.
+///
+/// A conversation rather than one answer: an agent's reply often settles one
+/// thing and raises another, and sending a second comment about the same lines
+/// would split one question across two places.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Conversation {
+    pub replies: Vec<Reply>,
+    /// Set while an agent owes an answer; gone once it gives one.
+    pub waiting: Option<Waiting>,
+}
+
+/// One turn after the question.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Reply {
+    pub from: Author,
+    /// Markdown, as written.
+    pub body: String,
+    /// Seconds since the epoch, as text: the same clock `viewed` is stamped with.
+    pub at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Author {
+    Reviewer,
+    /// The agent, by the name of its harness: "Claude Code", "Codex".
+    Agent(String),
+}
+
+/// An answer owed, and how far along it is as far as farol was told.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Waiting {
+    /// The harness it was sent to.
+    pub on: String,
+    pub since: String,
+    pub stage: Stage,
+}
+
+/// Sent is what farol knows on its own; working is what the agent says when it
+/// acknowledges. Nothing in between can be known: neither harness reports it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Stage {
+    Sent,
+    Working,
 }
 
 /// Where comments are kept. A trait for the same reason the map has one: the
@@ -132,6 +217,7 @@ mod tests {
             to,
             body: "  Why this order?  ".into(),
             published: None,
+            conversation: Conversation::default(),
         }
     }
 
@@ -168,5 +254,26 @@ mod tests {
             .at(),
             "src/a.rs:9 (old)"
         );
+    }
+
+    #[test]
+    fn an_agents_reply_settles_what_it_owed_and_the_reviewers_does_not() {
+        let mut one = comment(1, 1);
+        one.sent("Claude Code", "10");
+        one.acknowledged("Claude Code", "11");
+        assert_eq!(
+            one.conversation.waiting.as_ref().unwrap().stage,
+            Stage::Working
+        );
+
+        one.reply(Author::Reviewer, "And this?", "12");
+        assert!(
+            one.conversation.waiting.is_some(),
+            "writing back is not sending: the agent still owes the first answer"
+        );
+
+        one.reply(Author::Agent("Claude Code".into()), "Because.", "13");
+        assert_eq!(one.conversation.waiting, None);
+        assert_eq!(one.conversation.replies.len(), 2);
     }
 }

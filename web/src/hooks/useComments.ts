@@ -59,6 +59,13 @@ export function useComments(onError: (message: string) => void, generation = 0) 
     close: (id: string) => write(api.closeComment(id)),
     /** Write it and hand it to the agent in one go. A send that fails leaves
      * the comment saved, so nothing typed is lost and Send can be pressed again. */
+    /** Write back under a comment, and with `andSend` hand the conversation on. */
+    reply: (id: string, body: string, andSend: boolean) =>
+      write(
+        api.replyComment(id, body).then((comment) =>
+          andSend ? api.sendComment(comment.id) : undefined,
+        ),
+      ),
     addAndSend: (path: string, side: Side, from: number, to: number, body: string) =>
       write(api.addComment(path, side, from, to, body).then((comment) => api.sendComment(comment.id))),
     /** Which harness a Send reaches, or null when no session is connected. */

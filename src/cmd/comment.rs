@@ -3,6 +3,7 @@
 use clap::Subcommand;
 
 use super::{Action, Ctx};
+use crate::comments::domain::Author;
 use crate::comments::presentation::CommentList;
 use crate::diff::domain::Side;
 use crate::error::Result;
@@ -26,6 +27,15 @@ pub(super) enum CommentAction {
     List,
     /// Answered, so it goes.
     Close { id: String },
+    /// Say you have started on a comment sent from farol, so the reviewer sees it.
+    Ack { id: String },
+    /// Answer a comment. Run from an agent session, it is signed by that
+    /// harness; from a plain terminal, by the reviewer.
+    Reply {
+        id: String,
+        #[arg(long, allow_hyphen_values = true)]
+        text: String,
+    },
 }
 
 impl Action for CommentAction {
@@ -54,6 +64,21 @@ impl Action for CommentAction {
             CommentAction::Close { id } => {
                 ctx.comments.close(&id)?;
                 println!("Closed comment {id}.");
+                Ok(())
+            }
+            CommentAction::Ack { id } => {
+                let by = super::wiring::harness_here().unwrap_or("agent");
+                ctx.comments.acknowledge(&id, by)?;
+                println!("Marked comment {id} as being worked on by {by}.");
+                Ok(())
+            }
+            CommentAction::Reply { id, text } => {
+                let from = match super::wiring::harness_here() {
+                    Some(name) => Author::Agent(name.to_string()),
+                    None => Author::Reviewer,
+                };
+                ctx.comments.reply(&id, from, &text)?;
+                println!("Replied to comment {id}.");
                 Ok(())
             }
         }

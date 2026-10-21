@@ -80,9 +80,16 @@ Neither interrupts the agent. The tick means the harness took the message, not
 that the agent has read it.
 
 The message always says it comes from farol and carries the comment's id,
-location and text. After that comes the instruction set in `send-instruction`,
-which by default asks the agent to answer or change the code and to close the
-comment once it is resolved.
+location, text and the conversation so far, with the two commands the agent
+answers through: `farol comment ack ID` when it starts, which marks the comment
+as being worked on, and `farol comment reply ID --text '…'`, which puts the
+answer under the comment on the page. That part is fixed. After it comes the
+instruction set in `send-instruction`, which by default asks the agent to answer
+or change the code and to say what it changed.
+
+A comment becomes a conversation: **Reply** writes back under it, and **Reply &
+send** hands the whole exchange to the agent again. The page marks a comment
+sent to an agent until the agent answers. Closing is still the reviewer's.
 
 Running `farol serve` again from another session points the open review at that
 session. A `farol serve` run from a plain terminal keeps the session already

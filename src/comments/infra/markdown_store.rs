@@ -1,6 +1,8 @@
 use std::path::{Path, PathBuf};
 
-use crate::comments::domain::{Comment, CommentStore, Found, Unread, Unreadable};
+use crate::comments::domain::{
+    Author, Comment, CommentStore, Conversation, Found, Reply, Stage, Unread, Unreadable, Waiting,
+};
 use crate::diff::domain::Side;
 use crate::error::{Error, Result};
 use crate::shared::paths::Store;
@@ -106,6 +108,25 @@ fn render(comment: &Comment) -> String {
         Some(url) => format!("published: {url}\n"),
         None => String::new(),
     };
+    let waiting = match &comment.conversation.waiting {
+        Some(w) => format!("waiting: {} {} {}\n", stage(w.stage), w.since, w.on),
+        None => String::new(),
+    };
+    let published = format!("{published}{waiting}");
+    // Each turn under a marker a markdown viewer does not draw, so the file
+    // still reads as prose in an editor and the turns stay apart.
+    let replies: String = comment
+        .conversation
+        .replies
+        .iter()
+        .map(|reply| {
+            let who = match &reply.from {
+                Author::Reviewer => format!("reviewer {}", reply.at),
+                Author::Agent(name) => format!("agent {} {name}", reply.at),
+            };
+            format!("\n{REPLY}{who} -->\n\n{}\n", reply.body.trim())
+        })
+        .collect();
     // The side is written every time, including the one that is the default.
     // This is a file somebody opens and edits, and a key that appears only
     // sometimes is a key they have to know about before they can use it.
@@ -116,7 +137,73 @@ fn render(comment: &Comment) -> String {
         comment.from,
         comment.to,
         comment.body.trim()
-    )
+    ) + &replies
+}
+
+/// Where a turn of the conversation starts in the file.
+const REPLY: &str = "<!-- farol:reply ";
+
+fn stage(stage: Stage) -> &'static str {
+    match stage {
+        Stage::Sent => "sent",
+        Stage::Working => "working",
+    }
+}
+
+/// `sent 1734567 Claude Code`: the stage, when, and the harness, which may
+/// have spaces in its name and so goes last.
+fn waiting(raw: &str) -> Option<Waiting> {
+    let mut parts = raw.splitn(3, ' ');
+    let stage = match parts.next()? {
+        "sent" => Stage::Sent,
+        "working" => Stage::Working,
+        _ => return None,
+    };
+    let since = parts.next()?.to_string();
+    let on = parts.next().unwrap_or("agent").trim().to_string();
+    Some(Waiting { on, since, stage })
+}
+
+/// The question, then each turn under its marker. A marker that cannot be read
+/// is kept as part of the turn before it rather than dropping what follows.
+fn conversation(body: &str) -> (String, Vec<Reply>) {
+    let mut question = String::new();
+    let mut replies: Vec<Reply> = Vec::new();
+    for line in body.lines() {
+        let turn = line
+            .strip_prefix(REPLY)
+            .and_then(|rest| rest.strip_suffix("-->"))
+            .and_then(|who| {
+                let mut parts = who.trim().splitn(3, ' ');
+                let kind = parts.next()?;
+                let at = parts.next()?.to_string();
+                let from = match kind {
+                    "reviewer" => Author::Reviewer,
+                    "agent" => Author::Agent(parts.next().unwrap_or("agent").trim().to_string()),
+                    _ => return None,
+                };
+                Some(Reply {
+                    from,
+                    body: String::new(),
+                    at,
+                })
+            });
+        match (turn, replies.last_mut()) {
+            (Some(turn), _) => replies.push(turn),
+            (None, Some(last)) => {
+                last.body.push_str(line);
+                last.body.push('\n');
+            }
+            (None, None) => {
+                question.push_str(line);
+                question.push('\n');
+            }
+        }
+    }
+    for reply in &mut replies {
+        reply.body = reply.body.trim().to_string();
+    }
+    (question.trim().to_string(), replies)
 }
 
 /// The header, then the prose. Written by hand rather than with a yaml crate:
@@ -148,6 +235,7 @@ fn parse(id: &str, file: String, raw: &str) -> std::result::Result<Comment, Unre
     let mut side = None;
     let mut lines = None;
     let mut published = None;
+    let mut pending = None;
     for (key, value) in head.lines().filter_map(|line| line.split_once(':')) {
         match key.trim() {
             "path" => path = Some(value.trim().to_string()),
@@ -156,6 +244,7 @@ fn parse(id: &str, file: String, raw: &str) -> std::result::Result<Comment, Unre
             // The url has its own colons, so the key is split off and the rest
             // is taken whole rather than split again.
             "published" => published = Some(value.trim().to_string()),
+            "waiting" => pending = waiting(value.trim()),
             _ => {}
         }
     }
@@ -184,14 +273,19 @@ fn parse(id: &str, file: String, raw: &str) -> std::result::Result<Comment, Unre
         return Err(unreadable(Unread::NoLines, Some(path), body));
     };
 
+    let (question, replies) = conversation(body);
     Ok(Comment {
         id: id.to_string(),
         path,
         side,
         from,
         to,
-        body: body.trim().to_string(),
+        body: question,
         published,
+        conversation: Conversation {
+            replies,
+            waiting: pending,
+        },
     })
 }
 
@@ -231,6 +325,7 @@ mod tests {
             to: 116,
             body: "Why **this** order?".into(),
             published: None,
+            conversation: Default::default(),
         }
     }
 

@@ -464,6 +464,7 @@ mod tests {
             to,
             body: "Why this order?".into(),
             published: None,
+            conversation: Default::default(),
         }
     }
 
