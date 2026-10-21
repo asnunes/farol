@@ -38,12 +38,7 @@ export function hunkText(hunk: Hunk): HunkText {
   const pairs = new Map<number, [number, number]>();
   for (const segment of segments(hunk.lines)) {
     if ("context" in segment) continue;
-    for (
-      let i = 0;
-      i < Math.min(segment.removed.length, segment.added.length);
-      i++
-    ) {
-      const pair: [number, number] = [segment.removed[i], segment.added[i]];
+    for (const pair of paired(segment.removed, segment.added, hunk)) {
       pairs.set(pair[0], pair);
       pairs.set(pair[1], pair);
     }
@@ -80,3 +75,46 @@ export type HunkText = {
   positions: { old: number | null; fresh: number | null }[];
   pairs: Map<number, [number, number]>;
 };
+
+/** Which removed line is the same line as which added one, within one run of
+ * changes.
+ *
+ * Pairing by position alone shifts every pair after a line that was inserted
+ * or dropped, so a block gofmt realigned around one new name came out with each
+ * line compared against its neighbour. Lines equal but for blank space anchor
+ * the pairing first; only what sits between two anchors is paired by position. */
+function paired(removed: number[], added: number[], hunk: Hunk): [number, number][] {
+  const key = (i: number) => hunk.lines[i].content.replace(/\s+/g, "");
+  const a = removed.map(key);
+  const b = added.map(key);
+  const table: number[][] = Array.from({ length: a.length + 1 }, () =>
+    new Array(b.length + 1).fill(0),
+  );
+  for (let i = a.length - 1; i >= 0; i--)
+    for (let j = b.length - 1; j >= 0; j--)
+      table[i][j] =
+        a[i] === b[j] ? table[i + 1][j + 1] + 1 : Math.max(table[i + 1][j], table[i][j + 1]);
+
+  const pairs: [number, number][] = [];
+  let i = 0;
+  let j = 0;
+  let gapI = 0;
+  let gapJ = 0;
+  const closeGap = () => {
+    for (let k = 0; k < Math.min(i - gapI, j - gapJ); k++)
+      pairs.push([removed[gapI + k], added[gapJ + k]]);
+  };
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) {
+      closeGap();
+      pairs.push([removed[i++], added[j++]]);
+      gapI = i;
+      gapJ = j;
+    } else if (table[i + 1][j] >= table[i][j + 1]) i++;
+    else j++;
+  }
+  i = a.length;
+  j = b.length;
+  closeGap();
+  return pairs;
+}

@@ -52,3 +52,40 @@ it("preserves paired rows and syntax state on both sides across chunk boundaries
     }
   }
 });
+
+it("pairs each realigned line with itself when a line is inserted among them", () => {
+  const before = ["A    = 1", "B    = 2", "C    = 3"];
+  const after = ["A      = 1", "Longer = 9", "B      = 2", "C      = 3"];
+  const hunk: Hunk = {
+    oldStart: 1,
+    oldLines: 3,
+    newStart: 1,
+    newLines: 4,
+    lines: [
+      ...before.map((content, i) => ({
+        kind: "removed" as const,
+        oldNumber: i + 1,
+        newNumber: null,
+        content,
+      })),
+      ...after.map((content, i) => ({
+        kind: "added" as const,
+        oldNumber: null,
+        newNumber: i + 1,
+        content,
+      })),
+    ],
+  };
+
+  const { pairs } = hunkText(hunk);
+
+  expect(
+    [0, 1, 2].map((i) => pairs.get(i)),
+    "pairing by position would compare B with Longer and C with B",
+  ).toEqual([
+    [0, 3],
+    [1, 5],
+    [2, 6],
+  ]);
+  expect(pairs.has(4), "the inserted line has no counterpart").toBe(false);
+});
