@@ -78,3 +78,13 @@ describe("marking what changed inside a line", () => {
     expect(lit("a viewed here", changed.after)).toEqual(["viewed"]);
   });
 });
+
+it("lights the space when realignment is the only change", () => {
+  const before = "Err    = errors.New()";
+  const after = "Err        = errors.New()";
+
+  expect(
+    changedRanges(before, after),
+    "an unmarked pair reads as a rewrite the marks gave up on, not as alignment",
+  ).toEqual({ before: [{ from: 3, to: 7 }], after: [{ from: 3, to: 11 }] });
+});
