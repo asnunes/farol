@@ -12,7 +12,7 @@ const CONFIRM_FOR = 1500;
  * The tick means the harness took it, not that the agent read it — neither
  * harness says that much. A failure goes to the page's alert, and Copy stays
  * beside this for whoever would rather paste it. */
-export function Send({ comment, agent, actions }: SendProps) {
+export function Send({ comment, agent, actions, held }: SendProps) {
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const clearing = useRef<number | undefined>(undefined);
@@ -35,8 +35,8 @@ export function Send({ comment, agent, actions }: SendProps) {
       size="icon-xs"
       className="sender text-comment-faint hover:bg-sunken hover:text-comment-ink"
       aria-label={sent ? `Sent to ${agent}` : `Send to ${agent}`}
-      title={`Send to ${agent}`}
-      disabled={sending}
+      title={held ?? `Send to ${agent}`}
+      disabled={sending || held !== null}
       onClick={() => void press()}
     >
       {sent ? (
@@ -48,4 +48,10 @@ export function Send({ comment, agent, actions }: SendProps) {
   );
 }
 
-type SendProps = { comment: CommentView; agent: string; actions: CommentActions };
+type SendProps = {
+  comment: CommentView;
+  agent: string;
+  actions: CommentActions;
+  /** Why there is nothing to send right now, shown instead of sending. */
+  held: string | null;
+};

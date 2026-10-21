@@ -35,7 +35,9 @@ export function Comment({ comment, actions }: CommentProps) {
 
         <div className="acts flex shrink-0 items-center gap-0.5">
           <Published comment={comment} />
-          {actions.agent && <Send comment={comment} agent={actions.agent} actions={actions} />}
+          {actions.agent && (
+            <Send comment={comment} agent={actions.agent} actions={actions} held={held(comment)} />
+          )}
           <Button
             variant="ghost"
             size="icon-xs"
@@ -69,6 +71,18 @@ export function Comment({ comment, actions }: CommentProps) {
       )}
     </div>
   );
+}
+
+/** Why Send has nothing to do, or null when it has.
+ *
+ * Sending again what the agent already has, or already answered, would only
+ * hand it the same conversation twice. Something new to say goes through
+ * Reply & send, which is always there. */
+function held(comment: CommentView): string | null {
+  if (comment.waiting) return `Already sent to ${comment.waiting.on} — waiting for an answer`;
+  const last = comment.replies[comment.replies.length - 1];
+  if (last?.from === "agent") return `${last.name} answered — reply to continue`;
+  return null;
 }
 
 type CommentProps = { comment: CommentView; actions: CommentActions };

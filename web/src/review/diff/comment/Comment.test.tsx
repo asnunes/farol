@@ -107,6 +107,37 @@ describe("a comment on the page", () => {
     expect(screen.getByRole("status").textContent).toContain("Codex is working on it");
   });
 
+  it("holds Send while the agent owes an answer and once it has given one", () => {
+    const actions = { ...noComments(), agent: "Claude Code" };
+    const { rerender } = render(
+      <Comment comment={comment({ waiting: { on: "Claude Code", stage: "working" } })} actions={actions} />,
+    );
+    const send = () => screen.getByLabelText("Send to Claude Code") as HTMLButtonElement;
+    expect(send().disabled).toBe(true);
+
+    rerender(
+      <Comment
+        comment={comment({ replies: [{ from: "agent", name: "Claude Code", body: "Because." }] })}
+        actions={actions}
+      />,
+    );
+    expect(send().disabled).toBe(true);
+    expect(send().title).toContain("reply to continue");
+
+    rerender(
+      <Comment
+        comment={comment({
+          replies: [
+            { from: "agent", name: "Claude Code", body: "Because." },
+            { from: "reviewer", name: "You", body: "And this?" },
+          ],
+        })}
+        actions={actions}
+      />,
+    );
+    expect(send().disabled).toBe(false);
+  });
+
   it("replies and sends the conversation on in one press", async () => {
     const actions = { ...noComments(), agent: "Claude Code" };
     render(<Comment comment={comment()} actions={actions} />);
