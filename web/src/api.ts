@@ -23,8 +23,13 @@ export const api = {
       .then((answer) => answer.lines),
 
   comments: () => fetch("/api/comments").then(json<CommentsView>),
+  /** Answers with the comment as stored, whose id is what a Send needs. */
   addComment: (path: string, side: Side, from: number, to: number, body: string) =>
-    send("/api/comments", "POST", { path, side, from, to, body }),
+    fetch("/api/comments", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ path, side, from, to, body }),
+    }).then(json<CommentView>),
   closeComment: (id: string) => send(`/api/comments/${encodeURIComponent(id)}`, "DELETE"),
   /** Only the id goes: the server builds the message from the comment it holds. */
   sendComment: (id: string) =>

@@ -39,6 +39,11 @@ export function AtLine({ at, commentary }: AtLineProps) {
             await actions.add(path, span.side, span.from, span.to, body);
             select.close();
           }}
+          agent={actions.agent}
+          onSaveAndSend={async (body) => {
+            await actions.addAndSend(path, span.side, span.from, span.to, body);
+            select.close();
+          }}
           onCancel={select.close}
         />
       )}

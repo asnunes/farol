@@ -57,6 +57,10 @@ export function useComments(onError: (message: string) => void, generation = 0) 
     add: (path: string, side: Side, from: number, to: number, body: string) =>
       write(api.addComment(path, side, from, to, body)),
     close: (id: string) => write(api.closeComment(id)),
+    /** Write it and hand it to the agent in one go. A send that fails leaves
+     * the comment saved, so nothing typed is lost and Send can be pressed again. */
+    addAndSend: (path: string, side: Side, from: number, to: number, body: string) =>
+      write(api.addComment(path, side, from, to, body).then((comment) => api.sendComment(comment.id))),
     /** Which harness a Send reaches, or null when no session is connected. */
     agent: found.agent,
     /** True once the harness took it. Nothing to reload: sending changes no

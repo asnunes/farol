@@ -12,6 +12,7 @@ export function noComments(): CommentActions {
     close: vi.fn().mockResolvedValue(undefined),
     agent: null,
     send: vi.fn().mockResolvedValue(true),
+    addAndSend: vi.fn().mockResolvedValue(undefined),
   };
 }
 

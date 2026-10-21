@@ -7,6 +7,9 @@ import type { Span } from "../useLineSelection";
 /** How the box is worked, which is a description of it and never its name. */
 const KEYS = "Markdown. ⌘↵ to save, esc to close.";
 
+/** The same, when an agent session can take the comment straight away. */
+const KEYS_WITH_SEND = "Markdown. ⌘↵ to save, ⇧⌘↵ to save and send, esc to close.";
+
 /** Where a comment gets written: a plain box under the lines it is about.
  *
  * Markdown goes in as it is typed and is rendered only once it is saved. A
@@ -17,7 +20,7 @@ const KEYS = "Markdown. ⌘↵ to save, esc to close.";
  * it. A box whose only name was its placeholder had no name at all once a word
  * was typed into it, and the placeholder is where the keys live, which is a
  * description of how to use the box and not a name for it. */
-export function Box({ span: lines, onSave, onCancel }: BoxProps) {
+export function Box({ span: lines, onSave, onCancel, agent, onSaveAndSend }: BoxProps) {
   const field = useId();
   const keys = useId();
   const [text, setText] = useState("");
@@ -36,10 +39,12 @@ export function Box({ span: lines, onSave, onCancel }: BoxProps) {
     };
   }, []);
 
-  async function save() {
+  const keysText = agent ? KEYS_WITH_SEND : KEYS;
+
+  async function save(andSend = false) {
     if (!text.trim() || saving) return;
     setSaving(true);
-    await onSave(text);
+    await (andSend && agent ? onSaveAndSend(text) : onSave(text));
   }
 
   return (
@@ -59,7 +64,7 @@ export function Box({ span: lines, onSave, onCancel }: BoxProps) {
         aria-describedby={keys}
         className="resize-y border-rule-strong bg-surface font-sans text-sm text-ink"
         rows={3}
-        placeholder={KEYS}
+        placeholder={keysText}
         value={text}
         disabled={saving}
         onChange={(e) => setText(e.target.value)}
@@ -68,7 +73,7 @@ export function Box({ span: lines, onSave, onCancel }: BoxProps) {
           // worth writing usually runs to a second line.
           if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
             e.preventDefault();
-            void save();
+            void save(e.shiftKey);
           }
           if (e.key === "Escape") {
             e.preventDefault();
@@ -80,7 +85,7 @@ export function Box({ span: lines, onSave, onCancel }: BoxProps) {
           description instead of as its name — and still there once the box has
           something in it and the placeholder has gone. */}
       <span id={keys} className="sr-only">
-        {KEYS}
+        {keysText}
       </span>
 
       <div className="mt-2 flex gap-2">
@@ -92,6 +97,18 @@ export function Box({ span: lines, onSave, onCancel }: BoxProps) {
         >
           Comment
         </Button>
+        {agent && (
+          <Button
+            size="xs"
+            variant="outline"
+            className="border-comment-ink text-comment-ink hover:bg-sunken"
+            title={`Save the comment and send it to ${agent}`}
+            disabled={!text.trim() || saving}
+            onClick={() => void save(true)}
+          >
+            Comment &amp; send
+          </Button>
+        )}
         <Button size="xs" variant="ghost" className="text-ink-muted" onClick={onCancel}>
           Cancel
         </Button>
@@ -115,4 +132,7 @@ type BoxProps = {
   span: Span;
   onSave: (body: string) => Promise<void>;
   onCancel: () => void;
+  /** The harness a send reaches, or null — and then there is only Comment. */
+  agent: string | null;
+  onSaveAndSend: (body: string) => Promise<void>;
 };

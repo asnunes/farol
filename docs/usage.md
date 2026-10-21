@@ -72,8 +72,9 @@ closing asks for confirmation because local comments are not recoverable from Gi
 ### Send a comment to the agent
 
 When the review was opened by `farol serve` from inside a Claude Code or Codex
-session, each comment gets a **Send** button next to **Copy**. It hands the
-comment to that session: Claude Code receives it on its session socket between
+session, each comment gets a **Send** button next to **Copy**, and the box a
+comment is written in gets **Comment & send** (`⇧⌘↵`), which saves it and sends
+it in one press. Either hands the comment to that session: Claude Code receives it on its session socket between
 tool calls, and Codex queues it with `codex queue` until the current turn ends.
 Neither interrupts the agent. The tick means the harness took the message, not
 that the agent has read it.
