@@ -23,10 +23,19 @@ export function changedRanges(before: string, after: string): Changed | null {
   const kept = same.reduce((n, [i]) => n + (i === null ? 0 : solid(a[i])), 0);
   if (kept < Math.max(solid(before), solid(after)) * KEEPS_AT_LEAST) return null;
 
-  return {
+  const raw = {
     before: rangesOf(before, a, same.map(([i]) => i)),
     after: rangesOf(after, b, same.map(([, j]) => j)),
   };
+  const seen = {
+    before: trimmed(before, raw.before),
+    after: trimmed(after, raw.after),
+  };
+
+  // A pair that differs only in blank space, like a block gofmt realigned,
+  // would otherwise come out unmarked, and the reader cannot tell it from a
+  // pair the marks gave up on. There the space is the change, so it stays lit.
+  return seen.before.length || seen.after.length ? seen : raw;
 }
 
 export type Range = { from: number; to: number };
@@ -97,7 +106,7 @@ function rangesOf(text: string, pieces: string[], kept: (number | null)[]): Rang
     at = end;
   }
 
-  return trimmed(text, joined(text, ranges));
+  return joined(text, ranges);
 }
 
 /** Marks with nothing but blank space between them become one mark.
