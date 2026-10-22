@@ -8,7 +8,7 @@ import type { Span } from "../useLineSelection";
 const KEYS = "Markdown. ⌘↵ to save, esc to close.";
 
 /** The same, when an agent session can take the comment straight away. */
-const KEYS_WITH_SEND = "Markdown. ⌘↵ to save, ⇧⌘↵ to save and send, esc to close.";
+const KEYS_WITH_SEND = "Markdown. ⌘↵ to save and send, ⇧⌘↵ to only save, esc to close.";
 
 /** Where a comment gets written: a plain box under the lines it is about.
  *
@@ -78,7 +78,9 @@ export function Box({ span: lines, onSave, onCancel, agent, onSaveAndSend }: Box
           // worth writing usually runs to a second line.
           if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
             e.preventDefault();
-            void save(e.shiftKey);
+            // With a session, the plain shortcut does what the highlighted
+            // button does; saving alone is the one that takes the extra key.
+            void save(!e.shiftKey);
           }
           if (e.key === "Escape") {
             e.preventDefault();

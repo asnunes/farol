@@ -73,8 +73,8 @@ closing asks for confirmation because local comments are not recoverable from Gi
 
 When the review was opened by `farol serve` from inside a Claude Code or Codex
 session, each comment gets a **Send** button next to **Copy**, and the box a
-comment is written in gets **Comment & send** (`⇧⌘↵`), which saves it and sends
-it in one press. Either hands the comment to that session: Claude Code receives it on its session socket between
+comment is written in gets **Comment & send**, which saves it and sends it in one
+press. With a session connected, `⌘↵` does that and `⇧⌘↵` only saves. Either hands the comment to that session: Claude Code receives it on its session socket between
 tool calls, and Codex queues it with `codex queue` until the current turn ends.
 Neither interrupts the agent. The tick means the harness took the message, not
 that the agent has read it.
@@ -89,7 +89,8 @@ or change the code and to say what it changed.
 
 A comment becomes a conversation: **Reply** writes back under it, and **Reply &
 send** hands the whole exchange to the agent again. The page marks a comment
-sent to an agent until the agent answers. Closing is still the reviewer's.
+sent to an agent until the agent answers, and says so when a reply of yours was
+saved but not sent. Closing is still the reviewer's.
 
 Running `farol serve` again from another session points the open review at that
 session. A `farol serve` run from a plain terminal keeps the session already

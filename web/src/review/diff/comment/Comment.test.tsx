@@ -120,6 +120,25 @@ describe("a comment on the page", () => {
     expect(container.querySelector(".thread")?.lastElementChild).toBe(reply);
   });
 
+  it("says a reply was not sent, and sends it from there", async () => {
+    const actions = { ...noComments(), agent: "Codex" };
+    render(
+      <Comment
+        comment={comment({
+          replies: [
+            { from: "agent", name: "Codex", body: "Because." },
+            { from: "reviewer", name: "You", body: "Why not an env key?" },
+          ],
+        })}
+        actions={actions}
+      />,
+    );
+
+    expect(screen.getByRole("status").textContent).toContain("not sent to Codex");
+    fireEvent.click(screen.getByRole("button", { name: "Send it now" }));
+    await waitFor(() => expect(actions.send).toHaveBeenCalledWith("18cb-3731"));
+  });
+
   it("offers no Reply while the agent owes an answer", () => {
     render(
       <Comment comment={comment({ waiting: { on: "Codex", stage: "sent" } })} actions={noComments()} />,

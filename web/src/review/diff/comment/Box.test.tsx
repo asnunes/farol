@@ -43,7 +43,20 @@ describe("the box a comment is written in", () => {
     opener.remove();
   });
 
-  it("sends with shift held on the save shortcut, and only saves without it", () => {
+  it("sends on the plain save shortcut when a session is connected, like the highlighted button", () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    const onSaveAndSend = vi.fn().mockResolvedValue(undefined);
+    render(<Box span={span} onSave={onSave} onCancel={vi.fn()} agent="Codex" onSaveAndSend={onSaveAndSend} />);
+    const box = screen.getByRole("textbox");
+    fireEvent.change(box, { target: { value: "Why?" } });
+
+    fireEvent.keyDown(box, { key: "Enter", metaKey: true });
+
+    expect(onSaveAndSend).toHaveBeenCalledWith("Why?");
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("only saves with shift held", () => {
     const onSave = vi.fn().mockResolvedValue(undefined);
     const onSaveAndSend = vi.fn().mockResolvedValue(undefined);
     render(<Box span={span} onSave={onSave} onCancel={vi.fn()} agent="Codex" onSaveAndSend={onSaveAndSend} />);
@@ -52,7 +65,18 @@ describe("the box a comment is written in", () => {
 
     fireEvent.keyDown(box, { key: "Enter", metaKey: true, shiftKey: true });
 
-    expect(onSaveAndSend).toHaveBeenCalledWith("Why?");
-    expect(onSave).not.toHaveBeenCalled();
+    expect(onSave).toHaveBeenCalledWith("Why?");
+    expect(onSaveAndSend).not.toHaveBeenCalled();
+  });
+
+  it("only saves on the plain shortcut when no session is connected", () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(<Box span={span} onSave={onSave} onCancel={vi.fn()} agent={null} onSaveAndSend={vi.fn()} />);
+    const box = screen.getByRole("textbox");
+    fireEvent.change(box, { target: { value: "Why?" } });
+
+    fireEvent.keyDown(box, { key: "Enter", metaKey: true });
+
+    expect(onSave).toHaveBeenCalledWith("Why?");
   });
 });

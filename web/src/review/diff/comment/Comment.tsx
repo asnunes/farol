@@ -9,6 +9,7 @@ import { Replies } from "./Replies";
 import { ReplyBox } from "./ReplyBox";
 import { Send } from "./Send";
 import { Status } from "./Status";
+import { Unsent } from "./Unsent";
 import { span } from "./quoted";
 import type { CommentActions } from "@/hooks/useComments";
 import type { CommentView } from "@/api";
@@ -50,6 +51,9 @@ export function Comment({ comment, actions }: CommentProps) {
       <div className="thread flex flex-col gap-2 pl-6 md:pl-10">
         {comment.replies.length > 0 && <Replies replies={comment.replies} />}
         {comment.waiting && <Status waiting={comment.waiting} />}
+        {actions.agent && unsent(comment) && (
+          <Unsent agent={actions.agent} onSend={() => actions.send(comment.id)} />
+        )}
         {replying ? (
           <ReplyBox
             agent={actions.agent}
@@ -85,6 +89,14 @@ function held(comment: CommentView): string | null {
   const last = comment.replies[comment.replies.length - 1];
   if (last?.from === "agent") return `${last.name} answered — reply to continue`;
   return null;
+}
+
+/** The reviewer had the last word and it never left: a reply written but not
+ * sent. Said on the comment, because a quiet "Reply" otherwise looks exactly
+ * like one the agent is about to answer. */
+function unsent(comment: CommentView): boolean {
+  const last = comment.replies[comment.replies.length - 1];
+  return !comment.waiting && last?.from === "reviewer";
 }
 
 type CommentProps = { comment: CommentView; actions: CommentActions };

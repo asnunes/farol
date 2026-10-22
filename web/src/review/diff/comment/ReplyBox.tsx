@@ -26,14 +26,15 @@ export function ReplyBox({ agent, onReply, onCancel }: ReplyBoxProps) {
         aria-label="Reply to this comment"
         className="resize-y border-rule-strong bg-surface font-sans text-sm text-ink"
         rows={2}
-        placeholder={agent ? "⌘↵ to reply, ⇧⌘↵ to reply and send, esc to close." : "⌘↵ to reply, esc to close."}
+        placeholder={agent ? "⌘↵ to reply and send, ⇧⌘↵ to only reply, esc to close." : "⌘↵ to reply, esc to close."}
         value={text}
         disabled={saving}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
             e.preventDefault();
-            void save(e.shiftKey);
+            // The plain shortcut does what the highlighted button does.
+            void save(!e.shiftKey);
           }
           if (e.key === "Escape") {
             e.preventDefault();
