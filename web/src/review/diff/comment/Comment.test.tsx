@@ -120,6 +120,14 @@ describe("a comment on the page", () => {
     expect(container.querySelector(".thread")?.lastElementChild).toBe(reply);
   });
 
+  it("offers no Reply while the agent owes an answer", () => {
+    render(
+      <Comment comment={comment({ waiting: { on: "Codex", stage: "sent" } })} actions={noComments()} />,
+    );
+
+    expect(screen.queryByRole("button", { name: "Reply" })).toBeNull();
+  });
+
   it("holds Send while the agent owes an answer and once it has given one", () => {
     const actions = { ...noComments(), agent: "Claude Code" };
     const { rerender } = render(

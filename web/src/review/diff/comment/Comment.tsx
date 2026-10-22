@@ -44,7 +44,9 @@ export function Comment({ comment, actions }: CommentProps) {
       </div>
 
       {/* Reply sits after the last turn, where the reader is when they decide
-          to answer — not up with the actions on the question. */}
+          to answer — not up with the actions on the question. While an agent
+          owes an answer there is no turn to take: a reply then would land in
+          the middle of its work. */}
       <div className="thread flex flex-col gap-2 pl-6 md:pl-10">
         {comment.replies.length > 0 && <Replies replies={comment.replies} />}
         {comment.waiting && <Status waiting={comment.waiting} />}
@@ -57,7 +59,7 @@ export function Comment({ comment, actions }: CommentProps) {
             }}
             onCancel={() => setReplying(false)}
           />
-        ) : (
+        ) : comment.waiting ? null : (
           <Button
             variant="ghost"
             size="xs"
