@@ -139,6 +139,25 @@ describe("a comment on the page", () => {
     await waitFor(() => expect(actions.send).toHaveBeenCalledWith("18cb-3731"));
   });
 
+  it("says a comment saved without sending was not sent", () => {
+    render(<Comment comment={comment()} actions={{ ...noComments(), agent: "Codex" }} />);
+
+    expect(screen.getByRole("status").textContent).toContain("Not sent to Codex");
+  });
+
+  it("says nothing about sending when no session is connected or the agent has answered", () => {
+    const { rerender } = render(<Comment comment={comment()} actions={noComments()} />);
+    expect(screen.queryByRole("status")).toBeNull();
+
+    rerender(
+      <Comment
+        comment={comment({ replies: [{ from: "agent", name: "Codex", body: "Because." }] })}
+        actions={{ ...noComments(), agent: "Codex" }}
+      />,
+    );
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
   it("offers no Reply while the agent owes an answer", () => {
     render(
       <Comment comment={comment({ waiting: { on: "Codex", stage: "sent" } })} actions={noComments()} />,

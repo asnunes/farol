@@ -52,7 +52,11 @@ export function Comment({ comment, actions }: CommentProps) {
         {comment.replies.length > 0 && <Replies replies={comment.replies} />}
         {comment.waiting && <Status waiting={comment.waiting} />}
         {actions.agent && unsent(comment) && (
-          <Unsent agent={actions.agent} onSend={() => actions.send(comment.id)} />
+          <Unsent
+            agent={actions.agent}
+            reply={comment.replies.length > 0}
+            onSend={() => actions.send(comment.id)}
+          />
         )}
         {replying ? (
           <ReplyBox
@@ -91,12 +95,16 @@ function held(comment: CommentView): string | null {
   return null;
 }
 
-/** The reviewer had the last word and it never left: a reply written but not
- * sent. Said on the comment, because a quiet "Reply" otherwise looks exactly
- * like one the agent is about to answer. */
+/** The reviewer had the last word and it never left: a comment saved with
+ * plain Comment, or a reply written but not sent. Said on the comment, because
+ * otherwise it looks exactly like one the agent is about to answer.
+ *
+ * Nothing pending and no answer means it was never sent: a send leaves the
+ * comment waiting until the agent replies, and the reply is a turn. */
 function unsent(comment: CommentView): boolean {
+  if (comment.waiting) return false;
   const last = comment.replies[comment.replies.length - 1];
-  return !comment.waiting && last?.from === "reviewer";
+  return last === undefined || last.from === "reviewer";
 }
 
 type CommentProps = { comment: CommentView; actions: CommentActions };
