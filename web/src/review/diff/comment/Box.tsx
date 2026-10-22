@@ -31,11 +31,16 @@ export function Box({ span: lines, onSave, onCancel, agent, onSaveAndSend }: Box
   // and hands focus back to the control it was opened from when it goes.
   // Saving and cancelling both end here, and both used to leave the keyboard
   // on BODY, at the top of the review, a page away from the line just read.
+  //
+  // Without scrolling to it. A box opened by dragging line numbers takes over
+  // from whatever last held focus, which can be a button a screen away; moving
+  // the page there on save threw the reader off the line they had just
+  // commented on.
   useEffect(() => {
     const opener = document.activeElement as HTMLElement | null;
     box.current?.focus();
     return () => {
-      if (opener?.isConnected) opener.focus();
+      if (opener?.isConnected) opener.focus({ preventScroll: true });
     };
   }, []);
 

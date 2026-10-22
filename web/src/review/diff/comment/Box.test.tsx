@@ -30,6 +30,19 @@ describe("the box a comment is written in", () => {
     expect(buttons.slice(0, 2)).toEqual(["Comment & send", "Comment"]);
   });
 
+  it("hands focus back without moving the page", () => {
+    const opener = document.createElement("button");
+    document.body.appendChild(opener);
+    opener.focus();
+    const focus = vi.spyOn(opener, "focus");
+    const { unmount } = render(<Box span={span} onSave={vi.fn()} onCancel={vi.fn()} agent={null} onSaveAndSend={vi.fn()} />);
+
+    unmount();
+
+    expect(focus).toHaveBeenCalledWith({ preventScroll: true });
+    opener.remove();
+  });
+
   it("sends with shift held on the save shortcut, and only saves without it", () => {
     const onSave = vi.fn().mockResolvedValue(undefined);
     const onSaveAndSend = vi.fn().mockResolvedValue(undefined);
