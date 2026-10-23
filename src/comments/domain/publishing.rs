@@ -92,6 +92,8 @@ pub enum Readiness {
         mine: bool,
         /// Who opened it, which is what decides the review mode.
         author: String,
+        /// Its page, for the reader to open it from the review.
+        url: String,
     },
 
     /// More than one open pull request shows this commit, and farol will not

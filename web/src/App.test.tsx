@@ -94,6 +94,7 @@ const selfReview = {
   number: null,
   mine: false,
   author: null,
+  url: null,
   openAt: null,
   login: "gh auth login --hostname github.com",
   numbers: [],

@@ -71,6 +71,7 @@ function view(connection: PullRequestView["connection"]): PullRequestView {
     number: connection === "ready" ? 7 : null,
     mine: false,
     author: connection === "ready" ? "alice" : null,
+    url: connection === "ready" ? "https://github.com/o/r/pull/7" : null,
     openAt: null,
     login: "gh auth login --hostname github.com",
     numbers: [],

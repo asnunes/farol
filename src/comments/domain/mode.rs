@@ -138,6 +138,7 @@ mod tests {
             head: "abc".into(),
             mine,
             author: "alice".into(),
+            url: "https://example.test/pull/7".into(),
         }
     }
 

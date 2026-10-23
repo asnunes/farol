@@ -274,6 +274,8 @@ pub struct PullRequestView {
     pub number: Option<u32>,
     pub mine: bool,
     pub author: Option<String>,
+    /// The pull request's page, when there is one.
+    pub url: Option<String>,
     /// The page that opens a pull request for the branch, when it is pushed.
     pub open_at: Option<String>,
     /// The command that connects, for the host the repository is on.
@@ -573,6 +575,7 @@ impl PullRequestView {
             number: None,
             mine: false,
             author: None,
+            url: None,
             open_at: None,
             login: format!("gh auth login --hostname {host}"),
             numbers: vec![],
@@ -619,12 +622,14 @@ impl PullRequestView {
                 pull_request,
                 mine,
                 author,
+                url,
                 ..
             } => {
                 view.connection = "ready";
                 view.number = Some(*pull_request);
                 view.mine = *mine;
                 view.author = Some(author.clone());
+                view.url = Some(url.clone());
             }
             Readiness::NoToken | Readiness::TokenRefused => view.connection = "connect",
             Readiness::BranchNotPushed => view.connection = "no-pull-request",

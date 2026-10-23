@@ -565,6 +565,7 @@ impl FakePublisher {
             mine: false,
             head: head.into(),
             author: "alice".into(),
+            url: "https://example.test/pull/12".into(),
         })
     }
 

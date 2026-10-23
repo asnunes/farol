@@ -106,6 +106,7 @@ impl ReviewPublisher for GitHub {
                 id: pull.id,
                 head: pull.head,
                 author: pull.author,
+                url: pull.url,
             });
         }
 
@@ -405,6 +406,11 @@ fn pulls(body: Option<serde_json::Value>) -> Vec<Pull> {
                 id: pull.get("node_id")?.as_str()?.to_string(),
                 head: pull.get("head")?.get("sha")?.as_str()?.to_string(),
                 author: pull.get("user")?.get("login")?.as_str()?.to_string(),
+                url: pull
+                    .get("html_url")
+                    .and_then(|u| u.as_str())
+                    .unwrap_or_default()
+                    .to_string(),
                 open: pull.get("state").and_then(|s| s.as_str()).unwrap_or("open") == "open",
             })
         })
@@ -421,6 +427,8 @@ struct Pull {
     head: String,
     /// Who opened it, which decides whether approving is even on the table.
     author: String,
+    /// Its page.
+    url: String,
     /// The listing by commit includes merged and closed ones.
     open: bool,
 }
@@ -877,6 +885,7 @@ mod tests {
                 "head": {"sha": "abc1234"},
                 "user": {"login": "asnunes"},
                 "state": "open",
+                "html_url": "https://github.com/asnunes/farol/pull/12",
             },
             {
                 "number": 3,
@@ -895,6 +904,7 @@ mod tests {
                 id: "PR_kwDO".into(),
                 head: "abc1234".into(),
                 author: "asnunes".into(),
+                url: "https://github.com/asnunes/farol/pull/12".into(),
                 open: true,
             }
         );

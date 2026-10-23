@@ -8,6 +8,7 @@ import { Refresh } from "@/review/Refresh";
 import { ViewToggle } from "@/review/ViewToggle";
 import { MOD } from "@/hooks/useShortcuts";
 import type { DiffView } from "@/hooks/useDiffView";
+import { GitHubMark } from "@/components/GitHubMark";
 import { Connection } from "@/review/Connection";
 import { ReviewMode } from "@/review/ReviewMode";
 import { SubmitReview } from "@/review/SubmitReview";
@@ -119,6 +120,14 @@ export function TopBar({
             <span className="counts font-mono text-xs text-ink-muted">
               {threads.length} thread{threads.length === 1 ? "" : "s"} · {pending} pending
             </span>
+          )}
+          {pull?.url && (
+            <Button asChild variant="outline" size="xs" className="open-pull font-sans text-xs">
+              <a href={pull.url} target="_blank" rel="noreferrer">
+                <GitHubMark className="size-3.5" />
+                Open PR on GitHub
+              </a>
+            </Button>
           )}
           {pull && peer && pull.connection === "ready" && (
             <SubmitReview pull={pull} threads={threads} onSubmit={github.submit} />

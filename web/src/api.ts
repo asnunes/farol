@@ -274,6 +274,8 @@ export type PullRequestView = {
   number: number | null;
   mine: boolean;
   author: string | null;
+  /** The pull request's page, when there is one. */
+  url: string | null;
   openAt: string | null;
   /** The command that connects, for the host the repository is on. */
   login: string;

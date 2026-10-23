@@ -134,6 +134,7 @@ mod tests {
             mine: true,
             head: "head".into(),
             author: "asnunes".into(),
+            url: "https://example.test/pull/12".into(),
         });
         standing.read = vec!["src/a.rs".into()];
         let text = StandingLine(&standing).to_string();
@@ -156,6 +157,7 @@ mod tests {
                     mine: false,
                     head: "abc1234def".into(),
                     author: "alice".into(),
+                    url: "https://example.test/pull/12".into(),
                 },
                 "ready:",
             ),
@@ -185,6 +187,7 @@ mod tests {
             mine: false,
             head: "abc1234def5678".into(),
             author: "alice".into(),
+            url: "https://example.test/pull/12".into(),
         }))
         .to_string();
 
