@@ -125,11 +125,10 @@ Use farol-map-from-review for PR <URL>, which has no map.
 The skill organizes the changes using the code and documented PR context. It
 cannot recover undocumented decisions from the author's session.
 
-In either case, read the code and leave your own comments. Ask your agent to
-use `farol-publish-review` when you are ready to publish. It checks your `gh`
-authentication, confirms the destination and asks how you want to send the review.
-For your own PR, choose between publishing comments with the read marks or
-synchronizing only the read marks. Nothing is sent until you approve.
+In either case, read the code and open threads on it. In a peer review a thread
+can become a pending comment on the pull request, and **Submit review…** sends
+them with your verdict. Nothing leaves your machine until you write a pending
+comment or submit.
 
 ## Review
 
@@ -158,9 +157,9 @@ Click `+` or drag across line numbers to comment on a line or range, on either
 side of the diff — including removed lines, and files that were deleted whole.
 From the keyboard, `Shift` with an arrow on a focused `+` reaches for the rest
 of the passage before `Enter` opens the box.
-Comments and reading progress stay local. Use the `farol-publish-review` skill
-to publish through your authenticated GitHub CLI account after approving the
-content and destination; the app does not ask for a GitHub token.
+Threads and reading progress stay local. In a peer review, pending comments go
+to your pending review on the pull request through your GitHub CLI login; the
+app does not ask for a GitHub token.
 
 ![A local example comment beside the changed line and its implementation context.](docs/review-comments.jpg)
 

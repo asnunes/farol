@@ -55,75 +55,109 @@ numbering and everything else on the new one. A span stays on one side — a dra
 that reaches the other column stops where its own side stops. The side travels
 with the comment and is published as `LEFT` or `RIGHT`.
 
-Comments can also be managed through the CLI:
+Each comment starts a **thread**: a conversation about those lines, with the
+agent or just to copy. Threads stay local. They can also be managed through the
+CLI:
 
 ```bash
-farol comment list
-farol comment add src/retry.rs 82-116 --text "Why is this ordering deliberate?"
-farol comment add src/gone.rs 2-4 --side old --text "Where did this go?"
+farol thread list
+farol thread add src/retry.rs 82-116 --text "Why is this ordering deliberate?"
+farol thread add src/gone.rs 2-4 --side old --text "Where did this go?"
 ```
 
 `--side` is `new` by default, which is the file as it now reads. Ranges on the
 old side are the line numbers of the file before the change.
 
-`farol comment close ID` removes a comment once it is answered. In the browser,
-closing asks for confirmation because local comments are not recoverable from Git.
+`farol thread close ID` removes a thread once it is answered. In the browser,
+closing asks for confirmation because local threads are not recoverable from Git.
 
-### Send a comment to the agent
+### Ask the agent
 
 When the review was opened by `farol serve` from inside a Claude Code or Codex
-session, each comment gets a **Send** button next to **Copy**, and the box a
-comment is written in gets **Comment & send**, which saves it and sends it in one
-press. With a session connected, `⌘↵` does that and `⇧⌘↵` only saves. Either hands the comment to that session: Claude Code receives it on its session socket between
-tool calls, and Codex queues it with `codex queue` until the current turn ends.
-Neither interrupts the agent. The tick means the harness took the message, not
-that the agent has read it.
+session, the box a thread is written in gets **Ask {agent}**, which saves it and
+sends it in one press, and each thread gets a **Send** button next to **Copy**.
+`⌘↵` asks; `⇧⌘↵` only saves. Claude Code receives the message on its session
+socket between tool calls, and Codex queues it with `codex queue` until the
+current turn ends. Neither interrupts the agent. The tick means the harness took
+the message, not that the agent has read it.
 
-The message always says it comes from farol and carries the comment's id,
+The message always says it comes from farol and carries the thread's id,
 location, text and the conversation so far, with the two commands the agent
-answers through: `farol comment ack ID` when it starts, which marks the comment
-as being worked on, and `farol comment reply ID --text '…'`, which puts the
-answer under the comment on the page. That part is fixed. After it comes the
-instruction set in `send-instruction`, which by default asks the agent to answer
-or change the code and to say what it changed.
+answers through: `farol thread ack ID` when it starts, which marks the thread as
+being worked on, and `farol thread reply ID --text '…'`, which puts the answer
+under it on the page. That part is fixed. After it comes the instruction set in
+`send-instruction`, and last the rule of the review mode, which no instruction
+overrides.
 
-A comment becomes a conversation: **Reply** writes back under it, and **Reply &
-send** hands the whole exchange to the agent again. The page marks a comment
-sent to an agent until the agent answers, and says so when a reply of yours was
-saved but not sent. Closing is still the reviewer's.
+**Reply** writes back under a thread, and **Reply & send** hands the whole
+exchange to the agent again. The page marks a thread sent to an agent until the
+agent answers, and says so when a reply of yours was saved but not sent.
 
 Running `farol serve` again from another session points the open review at that
 session. A `farol serve` run from a plain terminal keeps the session already
 known. Without a session there is no Send button, and **Copy** works as before.
 
+### Self review and peer review
+
+A **self review** is your own branch: the agent is the one that wrote it and may
+change the code. A **peer review** is somebody else's pull request: the agent is
+your assistant, every message tells it not to change, commit or push code, and
+threads can become pending comments.
+
+Farol tells them apart by the pull request's author, and shows the mode and why
+in the top bar, where it can be changed. `farol serve --self-review` or
+`--peer-review` sets it from the terminal. Either choice is remembered for the
+branch. Without a pull request it is a self review.
+
+### Pending comments
+
+In a peer review a thread can have a **pending comment**: the comment for the
+pull request that came out of it. It lives in your pending review on GitHub,
+which only you see until you submit the review, so it also shows on the pull
+request's page and can be edited there. There are three ways to one:
+
+- **Generate pending comment** asks the agent to write it, following
+  `pending-instruction`. The arrow beside it adds an instruction for this one.
+- **Add as pending comment** in the box starts the thread with your own words
+  as its comment.
+- **Use as pending comment** takes the question or a turn of the conversation
+  as it is.
+
+The pending comment sits under its thread with **Edit**, **Regenerate** and
+**Remove**. A new one is written before the old one is taken back. Writing one
+needs the pull request to show the commit you are reading.
+
+```bash
+farol pending write ID --text '…'   # what the agent runs
+farol pending edit ID --text '…'
+farol pending remove ID
+```
+
 ## Send to GitHub
 
-Ask your agent to use `farol-publish-review`. It verifies GitHub CLI (`gh`)
-authentication, identifies the PR and its author, and presents the comments and
-current file-read marks for approval. On your own PR, choose between publishing
-comments with the marks or synchronizing only the marks. For another author's
-PR, choose a comment, approval, or request-changes verdict.
+**Submit review…** in the top bar lists the pending comments that go, says how
+many threads stay in farol, and takes the verdict and an optional summary.
+Asking for changes needs a summary. On your own pull request only **Comment** is
+offered: GitHub does not let an author approve or request changes on their own.
 
-The CLI operations used by the skill are:
+The connection is your GitHub CLI login. Farol asks `gh auth token --hostname
+HOST` at each call, so `GH_TOKEN` and `GITHUB_TOKEN` work too, and never stores a
+token or accepts one through the page. Without a login the top bar says
+**Connect GitHub** with the command to run; threads keep working.
+
+The skill `farol-publish-review` does the same from a session. The CLI it uses:
 
 ```bash
 farol github status
-farol comment list
 farol github review --comment
 farol github review --request-changes --summary "The retry window needs a bound."
 farol github ticks
 ```
 
-`status` is read-only and exits nonzero while publishing is unavailable.
-`review` publishes pending comments and synchronizes current read marks.
-`ticks` sends only read marks and leaves comments local. Both require the PR's
-commit to match the reviewed commit.
-
-Authenticate in your terminal with `gh auth login --hostname HOST`, using the
-repository's host, and check with `gh auth status --hostname HOST`. Farol reads
-the host's credential through `gh auth token --hostname HOST` internally; it
-neither stores a separate token nor accepts one through the web interface.
-Local reading and commenting need no GitHub authentication.
+`status` lists the pull request, the mode and the pending comments, and exits
+nonzero while the pull request cannot be reached. `review` submits the pending
+review and ticks the files you read. `ticks` sends only the read marks, and needs
+the pull request to show the commit you read.
 
 ## Share a map
 

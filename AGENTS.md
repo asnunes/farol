@@ -43,6 +43,15 @@ on `map`. The session's address is read from the environment the harness
 exports, once per `farol serve`, and travels in `SessionConfig` so a reused
 server follows the session that last asked for it.
 
+`comments` holds the threads — the reviewer's conversation about a span, kept
+as markdown beside the map — and, in a peer review, each thread's comment for
+the pull request. That one is **not stored here**: it lives in the reviewer's
+pending review on GitHub from the moment it is written, and farol keeps only its
+id. Text and state are read back from GitHub, so there is no local copy to
+reconcile, and submitting the review is one call on something that already
+exists. The connection is the `gh` login, asked for at each call; there is no
+other way to publish and no agent fallback.
+
 The parts were chosen by **who writes them**: the skill writes `map`, the server
 writes `progress`, nobody writes `diff`. That is the same line that separates the
 files on disk, which is why two processes never contend for one of them.
