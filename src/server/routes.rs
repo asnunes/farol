@@ -18,6 +18,8 @@ use serde::Deserialize;
 
 use tokio::sync::broadcast;
 
+mod github;
+
 use super::{AppState, SessionConfig, assets, view};
 use crate::cmd::ServerUseCases;
 use crate::config::presentation::ConfigView;
@@ -36,14 +38,19 @@ pub(super) fn router(state: Arc<AppState>) -> Router {
         .route("/api/comments/{id}", delete(close_comment))
         .route("/api/comments/{id}/send", post(send_comment))
         .route("/api/comments/{id}/replies", post(reply_comment))
-        .route("/api/comments/{id}/generate", post(generate_pending))
+        .route(
+            "/api/comments/{id}/generate",
+            post(github::generate_pending),
+        )
         .route(
             "/api/comments/{id}/pending",
-            post(write_pending).put(edit_pending).delete(remove_pending),
+            post(github::write_pending)
+                .put(github::edit_pending)
+                .delete(github::remove_pending),
         )
-        .route("/api/github", get(pull_request))
-        .route("/api/github/review", post(submit_review))
-        .route("/api/mode", put(choose_mode))
+        .route("/api/github", get(github::pull_request))
+        .route("/api/github/review", post(github::submit_review))
+        .route("/api/mode", put(github::choose_mode))
         .route_layer(middleware::from_fn_with_state(state.clone(), resolve))
         .route("/api/config", get(get_config).put(set_config))
         .route("/api/config/{key}", delete(reset_config))
@@ -262,131 +269,6 @@ async fn close_comment(
 ) -> impl IntoResponse {
     match away(move || cases.close_thread.execute(&id, q.discard_pending)).await {
         Ok(()) => StatusCode::NO_CONTENT.into_response(),
-        Err(e) => fail(e),
-    }
-}
-
-/// The pull request, its mode and each thread's pending comment. Asked of
-/// GitHub, so off the request thread.
-async fn pull_request(Extension(cases): Extension<ServerUseCases>) -> impl IntoResponse {
-    match away(move || cases.readiness.execute()).await {
-        Ok(standing) => Json(view::PullRequestView::of(&standing)).into_response(),
-        Err(e) => fail(e),
-    }
-}
-
-#[derive(Deserialize)]
-struct PendingBody {
-    body: String,
-}
-
-/// The reviewer's own words for the pull request: written in the box, or
-/// taken from a turn of the conversation. Either way it is the reviewer who
-/// sends them, so they are signed by the reviewer.
-async fn write_pending(
-    Extension(cases): Extension<ServerUseCases>,
-    Path(id): Path<String>,
-    Json(pending): Json<PendingBody>,
-) -> impl IntoResponse {
-    let by = crate::comments::domain::Author::Reviewer;
-    match away(move || cases.write_pending.execute(&id, &pending.body, by)).await {
-        Ok(comment) => Json(view::CommentView::of(&comment)).into_response(),
-        Err(e) => fail(e),
-    }
-}
-
-async fn edit_pending(
-    Extension(cases): Extension<ServerUseCases>,
-    Path(id): Path<String>,
-    Json(pending): Json<PendingBody>,
-) -> impl IntoResponse {
-    match away(move || cases.edit_pending.execute(&id, &pending.body)).await {
-        Ok(()) => StatusCode::NO_CONTENT.into_response(),
-        Err(e) => fail(e),
-    }
-}
-
-async fn remove_pending(
-    Extension(cases): Extension<ServerUseCases>,
-    Path(id): Path<String>,
-) -> impl IntoResponse {
-    match away(move || cases.remove_pending.execute(&id)).await {
-        Ok(()) => StatusCode::NO_CONTENT.into_response(),
-        Err(e) => fail(e),
-    }
-}
-
-#[derive(Deserialize, Default)]
-struct GenerateBody {
-    /// The reviewer's note for this one comment, from "Generate with
-    /// instructions…". Their own words, going to their own agent, the same as
-    /// a reply is.
-    #[serde(default)]
-    instruction: String,
-}
-
-async fn generate_pending(
-    Extension(cases): Extension<ServerUseCases>,
-    Path(id): Path<String>,
-    body: Option<Json<GenerateBody>>,
-) -> impl IntoResponse {
-    let instruction = body.map(|Json(b)| b.instruction).unwrap_or_default();
-    match away(move || cases.generate_pending.execute(&id, &instruction)).await {
-        Ok(()) => StatusCode::NO_CONTENT.into_response(),
-        Err(e) => fail(e),
-    }
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "kebab-case")]
-enum VerdictBody {
-    Comment,
-    RequestChanges,
-    Approve,
-}
-
-#[derive(Deserialize)]
-struct SubmitBody {
-    verdict: VerdictBody,
-    #[serde(default)]
-    summary: String,
-}
-
-/// Only the verdict and the summary travel: what is submitted is the pending
-/// review already on the pull request, never text the request carries.
-async fn submit_review(
-    Extension(cases): Extension<ServerUseCases>,
-    Json(submit): Json<SubmitBody>,
-) -> impl IntoResponse {
-    use crate::comments::domain::Verdict;
-    let verdict = match submit.verdict {
-        VerdictBody::Comment => Verdict::Comment,
-        VerdictBody::RequestChanges => Verdict::RequestChanges,
-        VerdictBody::Approve => Verdict::Approve,
-    };
-    match away(move || cases.publish_review.execute(verdict, &submit.summary)).await {
-        Ok(sent) => Json(view::SentView {
-            url: sent.url,
-            comments: sent.comments,
-            read: sent.read,
-            read_failed: sent.read_failed,
-        })
-        .into_response(),
-        Err(e) => fail(e),
-    }
-}
-
-#[derive(Deserialize)]
-struct ModeBody {
-    mode: crate::comments::domain::ReviewMode,
-}
-
-async fn choose_mode(
-    Extension(cases): Extension<ServerUseCases>,
-    Json(body): Json<ModeBody>,
-) -> impl IntoResponse {
-    match away(move || cases.choose_mode.execute(body.mode)).await {
-        Ok(_) => StatusCode::NO_CONTENT.into_response(),
         Err(e) => fail(e),
     }
 }
