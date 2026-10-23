@@ -538,15 +538,23 @@ pub fn orphaned(
 
 /// A publisher that keeps what it was handed instead of sending it.
 ///
-/// How the assembled review is asserted without a network — and, in the server
-/// tests, how a route reaches every state of readiness without one either.
+/// The pending review lives here as GitHub would keep it: comments by id, each
+/// pending until a review is submitted. That is how a test asserts what is on
+/// the pull request without a network, and how the order of a replace — add
+/// the new one, then take the old one back — can be seen at all.
 pub struct FakePublisher {
     readiness: crate::comments::domain::Readiness,
     sent: Mutex<Option<crate::comments::domain::Review>>,
+    remote: Mutex<Vec<(String, crate::comments::domain::RemoteState)>>,
+    /// Every call that changed the pending review, in order: `add <id>`,
+    /// `edit <id>`, `remove <id>`.
+    calls: Mutex<Vec<String>>,
     marked: Mutex<Vec<String>>,
     /// What `mark_read` answers. `Err` is the case that matters: the review is
     /// already on the pull request when it happens.
     marking: Mutex<Option<String>>,
+    /// What `add_pending` answers instead of adding.
+    adding: Mutex<Option<String>>,
 }
 
 impl FakePublisher {
@@ -556,6 +564,7 @@ impl FakePublisher {
             id: "PR_kwDO".into(),
             mine: false,
             head: head.into(),
+            author: "alice".into(),
         })
     }
 
@@ -563,8 +572,11 @@ impl FakePublisher {
         Self {
             readiness,
             sent: Mutex::new(None),
+            remote: Mutex::new(Vec::new()),
+            calls: Mutex::new(Vec::new()),
             marked: Mutex::new(Vec::new()),
             marking: Mutex::new(None),
+            adding: Mutex::new(None),
         }
     }
 
@@ -583,6 +595,12 @@ impl FakePublisher {
         self
     }
 
+    /// A host that refuses every new pending comment.
+    pub fn adding_fails(self, why: &str) -> Self {
+        *self.adding.lock().unwrap() = Some(why.into());
+        self
+    }
+
     pub fn marked(&self) -> Vec<String> {
         self.marked.lock().unwrap().clone()
     }
@@ -594,15 +612,90 @@ impl FakePublisher {
     pub fn nothing_sent(&self) -> bool {
         self.sent.lock().unwrap().is_none()
     }
+
+    pub fn calls(&self) -> Vec<String> {
+        self.calls.lock().unwrap().clone()
+    }
+
+    /// What the pull request holds under an id, as `remote` would answer.
+    pub fn state_of(&self, id: &str) -> crate::comments::domain::RemoteState {
+        self.remote
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|(known, _)| known == id)
+            .map(|(_, state)| state.clone())
+            .unwrap_or(crate::comments::domain::RemoteState::Gone)
+    }
+
+    /// Put something on the pull request as if it had been written there.
+    pub fn holding(self, id: &str, state: crate::comments::domain::RemoteState) -> Self {
+        self.remote.lock().unwrap().push((id.into(), state));
+        self
+    }
 }
 
 impl crate::comments::domain::ReviewPublisher for FakePublisher {
-    fn readiness(&self, _branch: &str) -> Result<crate::comments::domain::Readiness> {
+    fn readiness(&self, _branch: &str, _head: &str) -> Result<crate::comments::domain::Readiness> {
         Ok(self.readiness.clone())
     }
 
-    fn publish(&self, review: &crate::comments::domain::Review) -> Result<String> {
+    fn add_pending(
+        &self,
+        _pull: &str,
+        _head: &str,
+        _at: &crate::comments::domain::Comment,
+        body: &str,
+    ) -> Result<String> {
+        if let Some(why) = self.adding.lock().unwrap().clone() {
+            return Err(crate::comments::domain::CommentError::Refused { what: why }.into());
+        }
+        let mut remote = self.remote.lock().unwrap();
+        let id = format!("PRRC_{}", remote.len() + 1);
+        remote.push((
+            id.clone(),
+            crate::comments::domain::RemoteState::Pending { body: body.into() },
+        ));
+        self.calls.lock().unwrap().push(format!("add {id}"));
+        Ok(id)
+    }
+
+    fn edit_pending(&self, id: &str, body: &str) -> Result<()> {
+        for (known, state) in self.remote.lock().unwrap().iter_mut() {
+            if known == id {
+                *state = crate::comments::domain::RemoteState::Pending { body: body.into() };
+            }
+        }
+        self.calls.lock().unwrap().push(format!("edit {id}"));
+        Ok(())
+    }
+
+    fn remove_pending(&self, id: &str) -> Result<()> {
+        self.remote.lock().unwrap().retain(|(known, _)| known != id);
+        self.calls.lock().unwrap().push(format!("remove {id}"));
+        Ok(())
+    }
+
+    fn remote(&self, ids: &[String]) -> Result<Vec<crate::comments::domain::RemoteComment>> {
+        Ok(ids
+            .iter()
+            .map(|id| crate::comments::domain::RemoteComment {
+                id: id.clone(),
+                state: self.state_of(id),
+            })
+            .collect())
+    }
+
+    fn submit(&self, review: &crate::comments::domain::Review) -> Result<String> {
         *self.sent.lock().unwrap() = Some(review.clone());
+        for (id, state) in self.remote.lock().unwrap().iter_mut() {
+            if let crate::comments::domain::RemoteState::Pending { body } = state {
+                *state = crate::comments::domain::RemoteState::Published {
+                    body: body.clone(),
+                    url: format!("https://example.test/r1#{id}"),
+                };
+            }
+        }
         Ok("https://example.test/r1".into())
     }
 
@@ -612,6 +705,21 @@ impl crate::comments::domain::ReviewPublisher for FakePublisher {
         }
         self.marked.lock().unwrap().extend_from_slice(paths);
         Ok(paths.len())
+    }
+}
+
+/// The review mode, remembered in memory.
+#[derive(Default)]
+pub struct InMemoryModeStore(Mutex<Option<crate::comments::domain::StoredMode>>);
+
+impl crate::comments::domain::ModeStore for InMemoryModeStore {
+    fn read(&self) -> Result<Option<crate::comments::domain::StoredMode>> {
+        Ok(self.0.lock().unwrap().clone())
+    }
+
+    fn write(&self, mode: &crate::comments::domain::StoredMode) -> Result<()> {
+        *self.0.lock().unwrap() = Some(mode.clone());
+        Ok(())
     }
 }
 

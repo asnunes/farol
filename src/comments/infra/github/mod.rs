@@ -8,7 +8,10 @@ use std::sync::Arc;
 
 use serde::Serialize;
 
-use crate::comments::domain::{CommentError, Credentials, Readiness, Review, ReviewPublisher};
+use crate::comments::domain::{
+    Comment, CommentError, Credentials, Readiness, RemoteComment, RemoteState, Review,
+    ReviewPublisher,
+};
 use crate::error::Result;
 use crate::shared::paths::Remote;
 use http::{Answer, Http, encoded};
@@ -32,25 +35,66 @@ impl GitHub {
 }
 
 impl ReviewPublisher for GitHub {
-    fn readiness(&self, branch: &str) -> Result<Readiness> {
+    fn readiness(&self, branch: &str, head: &str) -> Result<Readiness> {
         let Some(token) = self.credentials.token(&self.remote.host)? else {
             return Ok(Readiness::NoToken);
         };
 
-        let owner = self.owner();
-        let open = self.http.get(
-            &token,
-            &format!(
-                "{}/pulls?state=open&head={}:{}",
-                self.repo(),
-                owner,
-                encoded(branch)
-            ),
-        )?;
-        if open.refused() {
+        // By the commit first: it finds the pull request of a fork, and of a
+        // branch checked out locally under a name of its own, where the branch
+        // name would find nothing. A commit the host has never seen answers
+        // 422, which is not a refusal — it is the next lookup's turn.
+        let by_commit = self
+            .http
+            .get(&token, &format!("{}/commits/{}/pulls", self.repo(), head))?;
+        if by_commit.refused() {
             return Ok(Readiness::TokenRefused);
         }
-        if let Some(pull) = open.json()?.and_then(first_pull) {
+        let open: Vec<Pull> = match by_commit.ok() {
+            true => pulls(by_commit.json()?)
+                .into_iter()
+                .filter(|pull| pull.open)
+                .collect(),
+            false => vec![],
+        };
+        let showing: Vec<&Pull> = open.iter().filter(|pull| pull.head == head).collect();
+        let found = match (showing.as_slice(), open.as_slice()) {
+            ([one], _) => Some((*one).clone()),
+            // It holds this commit and has moved on since: the head check
+            // downstream says which way to move.
+            ([], [one]) => Some(one.clone()),
+            ([], []) => None,
+            _ => {
+                return Ok(Readiness::Ambiguous {
+                    numbers: open.iter().map(|pull| pull.number).collect(),
+                });
+            }
+        };
+
+        // Then by the branch, which is what still finds the pull request when
+        // the local commits are not pushed yet.
+        let found = match found {
+            Some(pull) => Some(pull),
+            None => {
+                let by_branch = self.http.get(
+                    &token,
+                    &format!(
+                        "{}/pulls?state=open&head={}:{}",
+                        self.repo(),
+                        self.owner(),
+                        encoded(branch)
+                    ),
+                )?;
+                if by_branch.refused() {
+                    return Ok(Readiness::TokenRefused);
+                }
+                by_branch
+                    .json()?
+                    .and_then(|body| pulls(Some(body)).into_iter().next())
+            }
+        };
+
+        if let Some(pull) = found {
             // One more call, and only here: the screen has to know whose pull
             // request this is before it offers a verdict, and the answer is
             // the same for every state that is not Ready.
@@ -61,6 +105,7 @@ impl ReviewPublisher for GitHub {
                 pull_request: pull.number,
                 id: pull.id,
                 head: pull.head,
+                author: pull.author,
             });
         }
 
@@ -87,48 +132,120 @@ impl ReviewPublisher for GitHub {
         })
     }
 
-    /// In two calls when there are comments to carry, and in one when there are
-    /// not.
+    /// Into the pending review the reviewer already has, or into a new one.
     ///
-    /// Posting the verdict and the comments together makes the summary
-    /// mandatory: the API asks for a body whenever the event is COMMENT or
-    /// REQUEST_CHANGES. Left as a draft first and submitted after, which is the
-    /// path GitHub's own pages take, the body is optional and the comments are
-    /// allowed to be the whole of what the review says.
-    ///
-    /// With nothing to carry there is nothing to draft, and an empty draft is
-    /// refused at submission anyway, so that case goes straight out.
-    fn publish(&self, review: &Review) -> Result<String> {
+    /// GitHub keeps one pending review per person per pull request, so this
+    /// asks for it before starting one. A new one is anchored at `head`, which
+    /// the use case has checked is the commit the reviewer is reading.
+    fn add_pending(&self, pull: &str, head: &str, at: &Comment, body: &str) -> Result<String> {
         let token = self.token()?;
-
-        let reviews = format!("{}/pulls/{}/reviews", self.repo(), review.pull_request);
-        if review.comments.is_empty() {
-            let alone = serde_json::to_string(&Alone::from(review))?;
-            return where_it_landed(self.read(self.http.post(&token, &reviews, alone)?)?);
-        }
-
-        let drafted = serde_json::to_string(&Drafted::from(review))?;
-        let draft = self.read(self.http.post(&token, &reviews, drafted)?)?;
-        let Some(id) = draft.get("id").and_then(|id| id.as_u64()) else {
-            return Err(CommentError::Refused {
-                what: "the comments were drafted but the host did not name the draft".into(),
+        let review = match self.pending_review(&token, pull)? {
+            Some(review) => review.id,
+            None => {
+                let started = self.graphql_call(
+                    &token,
+                    START_REVIEW,
+                    serde_json::json!({ "pull": pull, "head": head }),
+                )?;
+                string_at(
+                    &started,
+                    &["addPullRequestReview", "pullRequestReview", "id"],
+                )
+                .ok_or_else(|| refused("the host started no pending review"))?
             }
-            .into());
         };
+        let mut thread = Thread::from(at);
+        thread.review = review;
+        thread.body = body.to_string();
+        let added = self.graphql_call(&token, ADD_THREAD, serde_json::to_value(&thread)?)?;
+        added
+            .pointer("/addPullRequestReviewThread/thread/comments/nodes/0/id")
+            .and_then(|id| id.as_str())
+            .map(str::to_string)
+            .ok_or_else(|| refused("the comment was not added to the pending review"))
+    }
 
-        let submitted = serde_json::to_string(&Submitted::from(review))?;
-        match self.read(
-            self.http
-                .post(&token, &format!("{reviews}/{id}/events"), submitted)?,
-        ) {
-            Ok(sent) => where_it_landed(sent),
-            // The draft is already on the pull request and nobody submitted it,
-            // so it would sit there waiting for a reviewer who thinks they sent
-            // it. Taking it back costs one call and leaves the failure looking
-            // like what it is: nothing happened.
-            Err(e) => {
-                let _ = self.http.delete(&token, &format!("{reviews}/{id}"));
-                Err(e)
+    fn edit_pending(&self, id: &str, body: &str) -> Result<()> {
+        let token = self.token()?;
+        self.graphql_call(
+            &token,
+            EDIT_COMMENT,
+            serde_json::json!({ "id": id, "body": body }),
+        )?;
+        Ok(())
+    }
+
+    fn remove_pending(&self, id: &str) -> Result<()> {
+        let token = self.token()?;
+        let answer = self.graphql(&token, DELETE_COMMENT, serde_json::json!({ "id": id }))?;
+        match (refusal(&answer), not_found(&answer)) {
+            (Some(why), false) => Err(refused(&why)),
+            _ => Ok(()),
+        }
+    }
+
+    fn remote(&self, ids: &[String]) -> Result<Vec<RemoteComment>> {
+        if ids.is_empty() {
+            return Ok(vec![]);
+        }
+        let token = self.token()?;
+        // Partial answers are the normal case here: a comment deleted on the
+        // pull request's page comes back as a null node with an error beside
+        // it, and the rest of the answer is still good.
+        let answer = self.graphql(&token, NODES, serde_json::json!({ "ids": ids }))?;
+        let nodes = answer
+            .pointer("/data/nodes")
+            .and_then(|n| n.as_array())
+            .ok_or_else(|| refused(&refusal(&answer).unwrap_or_else(|| "no answer".into())))?;
+        Ok(ids
+            .iter()
+            .map(|id| RemoteComment {
+                id: id.clone(),
+                state: nodes
+                    .iter()
+                    .find(|node| node.get("id").and_then(|i| i.as_str()) == Some(id))
+                    .map(remote_state)
+                    .unwrap_or(RemoteState::Gone),
+            })
+            .collect())
+    }
+
+    /// The pending review, submitted, or the verdict on its own.
+    ///
+    /// A pending review whose comments were all removed is deleted rather
+    /// than submitted, because GitHub refuses an empty one — and it would
+    /// otherwise sit there, invisible to everyone but the reviewer.
+    fn submit(&self, review: &Review) -> Result<String> {
+        let token = self.token()?;
+        match self.pending_review(&token, &review.pull)? {
+            Some(pending) if pending.comments > 0 => {
+                let body = (!review.summary.is_empty()).then_some(review.summary.as_str());
+                let sent = self.graphql_call(
+                    &token,
+                    SUBMIT_REVIEW,
+                    serde_json::json!({ "review": pending.id, "event": event(review), "body": body }),
+                )?;
+                string_at(
+                    &sent,
+                    &["submitPullRequestReview", "pullRequestReview", "url"],
+                )
+                .ok_or_else(|| refused("the review was submitted but the host did not say where"))
+            }
+            leftover => {
+                if let Some(empty) = leftover {
+                    self.graphql_call(
+                        &token,
+                        DELETE_REVIEW,
+                        serde_json::json!({ "id": empty.id }),
+                    )?;
+                }
+                let pull_request = self.number(&token, &review.pull)?;
+                let alone = serde_json::to_string(&Alone::from(review))?;
+                where_it_landed(self.read(self.http.post(
+                    &token,
+                    &format!("{}/pulls/{pull_request}/reviews", self.repo()),
+                    alone,
+                )?)?)
             }
         }
     }
@@ -150,7 +267,7 @@ impl ReviewPublisher for GitHub {
         let token = self.token()?;
         let answer = self.read(self.http.post(
             &token,
-            &self.graphql(),
+            &self.graphql_url(),
             serde_json::to_string(&Mutations::over(pull, paths))?,
         )?)?;
 
@@ -166,6 +283,57 @@ impl ReviewPublisher for GitHub {
 }
 
 impl GitHub {
+    /// The reviewer's pending review on a pull request, if they have one.
+    /// GitHub shows a pending review to its author only, so the first one
+    /// listed is theirs.
+    fn pending_review(&self, token: &str, pull: &str) -> Result<Option<PendingReview>> {
+        let data = self.graphql_call(token, PENDING_REVIEW, serde_json::json!({ "pull": pull }))?;
+        Ok(data.pointer("/node/reviews/nodes/0").and_then(|review| {
+            Some(PendingReview {
+                id: review.get("id")?.as_str()?.to_string(),
+                comments: review.pointer("/comments/totalCount")?.as_u64()?,
+            })
+        }))
+    }
+
+    /// The number REST addresses a pull request by, off the id GraphQL does.
+    fn number(&self, token: &str, pull: &str) -> Result<u64> {
+        let data = self.graphql_call(token, NUMBER, serde_json::json!({ "pull": pull }))?;
+        data.pointer("/node/number")
+            .and_then(|n| n.as_u64())
+            .ok_or_else(|| refused("the host does not know this pull request"))
+    }
+
+    /// A GraphQL request, answered whole: `data` and `errors` side by side,
+    /// for the callers to which a partial answer is still an answer.
+    fn graphql(
+        &self,
+        token: &str,
+        query: &str,
+        variables: serde_json::Value,
+    ) -> Result<serde_json::Value> {
+        let body = serde_json::json!({ "query": query, "variables": variables });
+        self.read(
+            self.http
+                .post(token, &self.graphql_url(), serde_json::to_string(&body)?)?,
+        )
+    }
+
+    /// The same, for the callers to which any error is a refusal. GraphQL
+    /// answers 200 either way, so the status says nothing here.
+    fn graphql_call(
+        &self,
+        token: &str,
+        query: &str,
+        variables: serde_json::Value,
+    ) -> Result<serde_json::Value> {
+        let answer = self.graphql(token, query, variables)?;
+        if let Some(why) = refusal(&answer) {
+            return Err(refused(&why));
+        }
+        Ok(answer.get("data").cloned().unwrap_or_default())
+    }
+
     /// The token, or the refusal that says there is none.
     ///
     /// `readiness` does not use this: without a token it has a state to
@@ -206,7 +374,7 @@ impl GitHub {
 
     /// Where the other language is served. Enterprise puts it beside the REST
     /// root rather than under it: `/api/graphql`, not `/api/v3/graphql`.
-    fn graphql(&self) -> String {
+    fn graphql_url(&self) -> String {
         match self.remote.host.as_str() {
             "github.com" | "www.github.com" => "https://api.github.com/graphql".into(),
             other => format!("https://{other}/api/graphql"),
@@ -224,28 +392,135 @@ impl GitHub {
     }
 }
 
-/// The first open pull request on the branch, as farol needs it.
-fn first_pull(body: serde_json::Value) -> Option<Pull> {
-    let pull = body.as_array()?.first()?;
-    Some(Pull {
-        number: pull.get("number")?.as_u64()? as u32,
-        id: pull.get("node_id")?.as_str()?.to_string(),
-        head: pull.get("head")?.get("sha")?.as_str()?.to_string(),
-        author: pull.get("user")?.get("login")?.as_str()?.to_string(),
-    })
+/// The pull requests a listing names, as farol needs them. Both listings —
+/// by commit and by branch — answer in this shape.
+fn pulls(body: Option<serde_json::Value>) -> Vec<Pull> {
+    let Some(serde_json::Value::Array(all)) = body else {
+        return vec![];
+    };
+    all.iter()
+        .filter_map(|pull| {
+            Some(Pull {
+                number: pull.get("number")?.as_u64()? as u32,
+                id: pull.get("node_id")?.as_str()?.to_string(),
+                head: pull.get("head")?.get("sha")?.as_str()?.to_string(),
+                author: pull.get("user")?.get("login")?.as_str()?.to_string(),
+                open: pull.get("state").and_then(|s| s.as_str()).unwrap_or("open") == "open",
+            })
+        })
+        .collect()
 }
 
-/// What the listing says about the one pull request that matters.
-#[derive(Debug, PartialEq, Eq)]
+/// What the listing says about one pull request.
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct Pull {
     number: u32,
-    /// The host's own name for it, which marking a file as read needs.
+    /// The host's own name for it, which GraphQL addresses it by.
     id: String,
     /// The commit it is showing, which every comment is anchored against.
     head: String,
     /// Who opened it, which decides whether approving is even on the table.
     author: String,
+    /// The listing by commit includes merged and closed ones.
+    open: bool,
 }
+
+/// The reviewer's pending review, and whether anything is in it.
+struct PendingReview {
+    id: String,
+    comments: u64,
+}
+
+/// A new thread in a pending review, in GraphQL's variable names. The side is
+/// sent at both ends of a span, because `line` is read against it and the
+/// host's default is not something to lean on.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Thread {
+    review: String,
+    path: String,
+    body: String,
+    line: u32,
+    side: &'static str,
+    /// Null for a single line: a range of one is a validation error.
+    start_line: Option<u32>,
+    start_side: Option<&'static str>,
+}
+
+impl From<&Comment> for Thread {
+    fn from(comment: &Comment) -> Self {
+        let spans = comment.from != comment.to;
+        let side = sided(comment.side);
+        Self {
+            review: String::new(),
+            path: comment.path.clone(),
+            body: String::new(),
+            line: comment.to,
+            side,
+            start_line: spans.then_some(comment.from),
+            start_side: spans.then_some(side),
+        }
+    }
+}
+
+/// One node of a `nodes(ids:)` answer, as farol reads it.
+fn remote_state(node: &serde_json::Value) -> RemoteState {
+    let body = node
+        .get("body")
+        .and_then(|b| b.as_str())
+        .unwrap_or_default()
+        .to_string();
+    match node.get("state").and_then(|s| s.as_str()) {
+        Some("PENDING") => RemoteState::Pending { body },
+        Some(_) => RemoteState::Published {
+            body,
+            url: node
+                .get("url")
+                .and_then(|u| u.as_str())
+                .unwrap_or_default()
+                .to_string(),
+        },
+        None => RemoteState::Gone,
+    }
+}
+
+fn string_at(data: &serde_json::Value, path: &[&str]) -> Option<String> {
+    path.iter()
+        .try_fold(data, |at, key| at.get(key))?
+        .as_str()
+        .map(str::to_string)
+}
+
+fn refused(what: &str) -> crate::error::Error {
+    CommentError::Refused {
+        what: what.to_string(),
+    }
+    .into()
+}
+
+/// Whether the host's only complaint is that the thing is not there.
+fn not_found(answer: &serde_json::Value) -> bool {
+    answer
+        .get("errors")
+        .and_then(|e| e.as_array())
+        .is_some_and(|errors| {
+            !errors.is_empty()
+                && errors
+                    .iter()
+                    .all(|e| e.get("type").and_then(|t| t.as_str()) == Some("NOT_FOUND"))
+        })
+}
+
+const PENDING_REVIEW: &str = "query($pull: ID!) { node(id: $pull) { ... on PullRequest { reviews(states: [PENDING], first: 1) { nodes { id comments { totalCount } } } } } }";
+const NUMBER: &str = "query($pull: ID!) { node(id: $pull) { ... on PullRequest { number } } }";
+const START_REVIEW: &str = "mutation($pull: ID!, $head: GitObjectID!) { addPullRequestReview(input: {pullRequestId: $pull, commitOID: $head}) { pullRequestReview { id } } }";
+const ADD_THREAD: &str = "mutation($review: ID!, $path: String!, $body: String!, $line: Int!, $side: DiffSide!, $startLine: Int, $startSide: DiffSide) { addPullRequestReviewThread(input: {pullRequestReviewId: $review, path: $path, body: $body, line: $line, side: $side, startLine: $startLine, startSide: $startSide}) { thread { comments(first: 1) { nodes { id } } } } }";
+const EDIT_COMMENT: &str = "mutation($id: ID!, $body: String!) { updatePullRequestReviewComment(input: {pullRequestReviewCommentId: $id, body: $body}) { pullRequestReviewComment { id } } }";
+const DELETE_COMMENT: &str =
+    "mutation($id: ID!) { deletePullRequestReviewComment(input: {id: $id}) { clientMutationId } }";
+const DELETE_REVIEW: &str = "mutation($id: ID!) { deletePullRequestReview(input: {pullRequestReviewId: $id}) { clientMutationId } }";
+const SUBMIT_REVIEW: &str = "mutation($review: ID!, $event: PullRequestReviewEvent!, $body: String) { submitPullRequestReview(input: {pullRequestReviewId: $review, event: $event, body: $body}) { pullRequestReview { url } } }";
+const NODES: &str = "query($ids: [ID!]!) { nodes(ids: $ids) { ... on PullRequestReviewComment { id body url state } } }";
 
 /// Where the review can now be read, off whatever the host answered with.
 fn where_it_landed(answer: serde_json::Value) -> Result<String> {
@@ -332,40 +607,7 @@ fn refusal(answer: &serde_json::Value) -> Option<String> {
     }
 }
 
-/// The comments, as a review nobody has submitted yet. No event: that is what
-/// leaves it pending, and pending is what makes the summary optional.
-#[derive(Serialize)]
-struct Drafted<'a> {
-    commit_id: &'a str,
-    comments: Vec<AtLines<'a>>,
-}
-
-impl<'a> From<&'a Review> for Drafted<'a> {
-    fn from(review: &'a Review) -> Self {
-        Self {
-            commit_id: &review.head,
-            comments: review.comments.iter().map(AtLines::from).collect(),
-        }
-    }
-}
-
-/// The verdict, sent at the draft once it is written.
-#[derive(Serialize)]
-struct Submitted<'a> {
-    event: &'static str,
-    body: &'a str,
-}
-
-impl<'a> From<&'a Review> for Submitted<'a> {
-    fn from(review: &'a Review) -> Self {
-        Self {
-            event: event(review),
-            body: &review.summary,
-        }
-    }
-}
-
-/// A verdict with no comments under it, which needs no draft to sit on.
+/// A verdict with nothing pending under it, posted in one call.
 #[derive(Serialize)]
 struct Alone<'a> {
     commit_id: &'a str,
@@ -392,45 +634,6 @@ fn event(review: &Review) -> &'static str {
     }
 }
 
-/// One comment, anchored. The side is sent with every one of them: `line` is
-/// read against it, so the same number means a different line depending on what
-/// this says, and GitHub's default is not something to lean on.
-///
-/// `RIGHT` is the file as it now reads — additions and the lines around them;
-/// `LEFT` is what the change removed. farol's own word for the two is `new` and
-/// `old`, and this is the one place the host's word is spoken.
-#[derive(Serialize)]
-struct AtLines<'a> {
-    path: &'a str,
-    body: &'a str,
-    line: u32,
-    side: &'static str,
-    /// Left out for a single line: sending `start_line` equal to `line` is a
-    /// validation error rather than a one-line range.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    start_line: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    start_side: Option<&'static str>,
-}
-
-impl<'a> From<&'a crate::comments::domain::Comment> for AtLines<'a> {
-    fn from(comment: &'a crate::comments::domain::Comment) -> Self {
-        let spans = comment.from != comment.to;
-        // Both ends on the one side. A span that crossed from the old side to
-        // the new is not something farol writes, so it is not something this
-        // has to spell.
-        let side = sided(comment.side);
-        Self {
-            path: &comment.path,
-            body: &comment.body,
-            line: comment.to,
-            side,
-            start_line: spans.then_some(comment.from),
-            start_side: spans.then_some(side),
-        }
-    }
-}
-
 /// farol's side in GitHub's vocabulary.
 fn sided(side: crate::diff::domain::Side) -> &'static str {
     use crate::diff::domain::Side;
@@ -445,13 +648,12 @@ mod tests {
     use super::*;
     use crate::comments::domain::{Comment, Verdict};
 
-    fn review(comments: Vec<Comment>) -> Review {
+    fn review() -> Review {
         Review {
-            pull_request: 12,
+            pull: "PR_kwDO".into(),
             head: "abc1234".into(),
             summary: "Reads well.".into(),
             verdict: Verdict::RequestChanges,
-            comments,
         }
     }
 
@@ -463,107 +665,110 @@ mod tests {
             from,
             to,
             body: "Why this order?".into(),
-            published: None,
+            pending: None,
             conversation: Default::default(),
         }
     }
 
     #[test]
     fn a_span_is_sent_as_a_range_and_a_single_line_is_not() {
-        // `start_line` equal to `line` is a validation error at the far end,
-        // not a range of one.
-        let body = serde_json::to_value(Drafted::from(&review(vec![
-            comment(82, 116),
-            comment(9, 9),
-        ])))
-        .unwrap();
-
-        let span = &body["comments"][0];
+        // A range of one is a validation error at the far end, not a range.
+        let span = serde_json::to_value(Thread::from(&comment(82, 116))).unwrap();
         assert_eq!(span["line"], 116);
-        assert_eq!(span["start_line"], 82);
-        assert_eq!(span["start_side"], "RIGHT");
+        assert_eq!(span["startLine"], 82);
+        assert_eq!(span["startSide"], "RIGHT");
 
-        let one = &body["comments"][1];
+        let one = serde_json::to_value(Thread::from(&comment(9, 9))).unwrap();
         assert_eq!(one["line"], 9);
         assert_eq!(one["side"], "RIGHT");
-        assert!(one.get("start_line").is_none(), "{one}");
-        assert!(one.get("start_side").is_none(), "{one}");
+        assert!(one["startLine"].is_null(), "{one}");
+        assert!(one["startSide"].is_null(), "{one}");
     }
 
     #[test]
     fn a_comment_on_the_old_side_goes_out_as_left_at_both_ends() {
         // The numbers are read against the side, so a span sent without
-        // `start_side` would have its first line taken on the right and land
+        // `startSide` would have its first line taken on the right and land
         // somewhere nobody wrote about.
-        let old = |from, to| Comment {
+        let old = Comment {
             side: crate::diff::domain::Side::Old,
-            ..comment(from, to)
+            ..comment(82, 116)
         };
-        let body =
-            serde_json::to_value(Drafted::from(&review(vec![old(82, 116), old(9, 9)]))).unwrap();
-
-        let span = &body["comments"][0];
+        let span = serde_json::to_value(Thread::from(&old)).unwrap();
         assert_eq!(span["side"], "LEFT");
-        assert_eq!(span["start_side"], "LEFT");
-        assert_eq!(span["start_line"], 82);
-        assert_eq!(span["line"], 116);
-
-        let one = &body["comments"][1];
-        assert_eq!(one["side"], "LEFT");
-        assert_eq!(one["line"], 9);
-        assert!(one.get("start_side").is_none(), "{one}");
+        assert_eq!(span["startSide"], "LEFT");
+        assert_eq!(span["startLine"], 82);
     }
 
     #[test]
     fn each_verdict_goes_out_as_the_event_the_api_names() {
-        for (verdict, event) in [
+        for (verdict, name) in [
             (Verdict::Comment, "COMMENT"),
             (Verdict::RequestChanges, "REQUEST_CHANGES"),
             (Verdict::Approve, "APPROVE"),
         ] {
-            let with_comments = serde_json::to_value(Submitted::from(&Review {
-                verdict,
-                ..review(vec![comment(9, 9)])
-            }))
-            .unwrap();
             let alone = serde_json::to_value(Alone::from(&Review {
                 verdict,
-                ..review(vec![])
+                ..review()
             }))
             .unwrap();
-
-            assert_eq!(with_comments["event"], event);
-            assert_eq!(alone["event"], event);
+            assert_eq!(alone["event"], name);
             assert_eq!(alone["commit_id"], "abc1234");
+            assert_eq!(
+                event(&Review {
+                    verdict,
+                    ..review()
+                }),
+                name
+            );
         }
     }
 
     #[test]
-    fn the_draft_carries_no_verdict_and_no_summary() {
-        // Those are what a draft is missing, and missing them is what keeps it
-        // pending: submitted in one call, the API would demand a summary for
-        // every verdict except approve.
-        let body = serde_json::to_value(Drafted::from(&review(vec![comment(9, 9)]))).unwrap();
-
-        assert!(body.get("event").is_none(), "{body}");
-        assert!(body.get("body").is_none(), "{body}");
-        assert_eq!(body["commit_id"], "abc1234");
-    }
-
-    #[test]
     fn a_review_with_nothing_under_it_goes_out_whole() {
-        // An empty draft is refused at submission, so a verdict with no
-        // comments takes the one-call road, where an empty summary is allowed.
         let body = serde_json::to_value(Alone::from(&Review {
             verdict: Verdict::Approve,
             summary: String::new(),
-            ..review(vec![])
+            ..review()
         }))
         .unwrap();
 
         assert_eq!(body["event"], "APPROVE");
         assert_eq!(body["body"], "");
         assert!(body.get("comments").is_none(), "{body}");
+    }
+
+    #[test]
+    fn what_the_host_holds_is_read_as_pending_published_or_gone() {
+        assert_eq!(
+            remote_state(&serde_json::json!({"id": "a", "body": "Hi", "state": "PENDING"})),
+            RemoteState::Pending { body: "Hi".into() }
+        );
+        assert_eq!(
+            remote_state(&serde_json::json!({
+                "id": "a", "body": "Hi", "state": "SUBMITTED", "url": "https://x/1"
+            })),
+            RemoteState::Published {
+                body: "Hi".into(),
+                url: "https://x/1".into()
+            }
+        );
+        assert_eq!(remote_state(&serde_json::json!({})), RemoteState::Gone);
+    }
+
+    #[test]
+    fn a_comment_already_gone_is_not_a_failure_to_remove_it() {
+        // Deleted on the pull request's page first: removing it from here has
+        // nothing left to do, and saying it failed would leave the thread stuck.
+        let gone = serde_json::json!({
+            "data": null,
+            "errors": [{ "type": "NOT_FOUND", "message": "Could not resolve to a node" }],
+        });
+        assert!(not_found(&gone));
+        let forbidden = serde_json::json!({
+            "errors": [{ "type": "FORBIDDEN", "message": "no" }],
+        });
+        assert!(!not_found(&forbidden));
     }
 
     #[test]
@@ -649,11 +854,11 @@ mod tests {
         // Enterprise puts GraphQL beside the REST root rather than under it,
         // so the `/api/v3` of the other calls would be a 404 here.
         assert_eq!(
-            github("github.com").graphql(),
+            github("github.com").graphql_url(),
             "https://api.github.com/graphql"
         );
         assert_eq!(
-            github("github.acme.example").graphql(),
+            github("github.acme.example").graphql_url(),
             "https://github.acme.example/api/graphql"
         );
     }
@@ -662,25 +867,42 @@ mod tests {
     fn the_open_pull_request_is_read_with_the_commit_it_is_showing() {
         // The commit is the whole reason to ask: comments anchor to line
         // numbers, and those only mean anything against one commit. The node id
-        // comes along because marking a file as read needs it, and the author
-        // because approving your own pull request is not a thing GitHub allows.
-        let body = serde_json::json!([{
-            "number": 12,
-            "node_id": "PR_kwDO",
-            "head": {"sha": "abc1234"},
-            "user": {"login": "asnunes"},
-        }]);
+        // comes along because GraphQL addresses the pull request by it, and the
+        // author because approving your own pull request is not a thing GitHub
+        // allows.
+        let body = serde_json::json!([
+            {
+                "number": 12,
+                "node_id": "PR_kwDO",
+                "head": {"sha": "abc1234"},
+                "user": {"login": "asnunes"},
+                "state": "open",
+            },
+            {
+                "number": 3,
+                "node_id": "PR_old",
+                "head": {"sha": "abc1234"},
+                "user": {"login": "asnunes"},
+                "state": "closed",
+            },
+        ]);
 
+        let all = pulls(Some(body));
         assert_eq!(
-            first_pull(body),
-            Some(Pull {
+            all[0],
+            Pull {
                 number: 12,
                 id: "PR_kwDO".into(),
                 head: "abc1234".into(),
                 author: "asnunes".into(),
-            })
+                open: true,
+            }
         );
-        assert_eq!(first_pull(serde_json::json!([])), None);
+        assert!(
+            !all[1].open,
+            "a merged or closed one is listed by commit too"
+        );
+        assert!(pulls(Some(serde_json::json!([]))).is_empty());
     }
 
     #[test]
@@ -697,18 +919,21 @@ mod tests {
             credentials,
         );
 
-        assert_eq!(github.readiness("feature/x").unwrap(), Readiness::NoToken);
-        let error = github
-            .publish(&Review {
-                pull_request: 1,
-                head: "head".into(),
-                summary: "summary".into(),
-                verdict: crate::comments::domain::Verdict::Comment,
-                comments: vec![],
-            })
-            .unwrap_err();
+        assert_eq!(
+            github.readiness("feature/x", "head").unwrap(),
+            Readiness::NoToken
+        );
+        let error = github.submit(&review()).unwrap_err();
         assert!(error.to_string().contains("no token"), "{error}");
         assert!(github.mark_read("pull", &["a.rs".into()]).is_err());
+        assert!(
+            github
+                .add_pending("pull", "head", &comment(1, 1), "hi")
+                .is_err()
+        );
+        assert!(github.edit_pending("id", "hi").is_err());
+        assert!(github.remove_pending("id").is_err());
+        assert!(github.remote(&["id".into()]).is_err());
         assert_eq!(
             listener.accept().unwrap_err().kind(),
             std::io::ErrorKind::WouldBlock,

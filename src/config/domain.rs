@@ -26,6 +26,11 @@ impl Config {
         self.text(&SEND_INSTRUCTION)
     }
 
+    /// What the agent follows when it writes a pending comment.
+    pub fn pending_instruction(&self) -> &str {
+        self.text(&PENDING_INSTRUCTION)
+    }
+
     pub fn value(&self, definition: &SettingDefinition) -> SettingValue {
         self.0
             .get(definition.key)
@@ -137,7 +142,7 @@ pub struct SettingDefinition {
 
 impl SettingDefinition {
     pub fn all() -> &'static [Self] {
-        &[OPEN_BROWSER, SEND_INSTRUCTION]
+        &[OPEN_BROWSER, SEND_INSTRUCTION, PENDING_INSTRUCTION]
     }
 }
 
@@ -213,10 +218,22 @@ const SEND_INSTRUCTION: SettingDefinition = SettingDefinition {
     key: "send_instruction",
     title: "Instruction sent with each comment",
     description: Some(
-        "Added after the comment when you press Send. Farol always includes the comment's location, text and id. Leave it empty to send only the comment.",
+        "Added after the comment when you press Send or Ask. Farol always includes the comment's location, text and id. Leave it empty to send only the comment.",
     ),
     kind: SettingKind::Text {
         default: "Answer it, or change the code and say what you changed.",
+    },
+    visible: true,
+};
+
+const PENDING_INSTRUCTION: SettingDefinition = SettingDefinition {
+    key: "pending_instruction",
+    title: "Instruction for generated pending comments",
+    description: Some(
+        "What the agent follows when you press Generate pending comment. Farol always includes the thread and how to write the comment.",
+    ),
+    kind: SettingKind::Text {
+        default: "Write it as a review comment for the author of the pull request: say what to change and why, kindly and briefly, without repeating the conversation.",
     },
     visible: true,
 };

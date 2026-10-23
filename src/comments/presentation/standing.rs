@@ -1,7 +1,7 @@
 use std::fmt::{self, Display};
 
 use crate::comments::application::Standing;
-use crate::comments::domain::Readiness;
+use crate::comments::domain::{ModeReason, Readiness, RemoteState, ReviewMode};
 
 /// Where the review stands, for the terminal.
 ///
@@ -33,6 +33,15 @@ impl Display for StandingLine<'_> {
                     "This pull request belongs to another author: choose a review verdict."
                 }
             ),
+            Readiness::Ambiguous { numbers } => writeln!(
+                f,
+                "ambiguous: more than one open pull request shows this commit: {}",
+                numbers
+                    .iter()
+                    .map(|n| format!("#{n}"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
             Readiness::NoRemote => writeln!(
                 f,
                 "no remote: this repository has nowhere to send a review to"
@@ -57,6 +66,42 @@ impl Display for StandingLine<'_> {
         if let Some(host) = &self.0.host {
             writeln!(f, "host: {host}")?;
         }
+        let mode = match self.0.mode.mode {
+            ReviewMode::SelfReview => "self review",
+            ReviewMode::PeerReview => "peer review",
+        };
+        match &self.0.mode.why {
+            ModeReason::Chosen => writeln!(f, "mode: {mode}, chosen")?,
+            ModeReason::Author { login, .. } => {
+                writeln!(f, "mode: {mode}, the pull request is by {login}")?
+            }
+            ModeReason::NoPullRequest => writeln!(f, "mode: {mode}, no pull request to tell")?,
+        }
+        // The pending comments, because the skill that publishes reads this to
+        // show the reader what is about to go.
+        let waiting: Vec<_> = self
+            .0
+            .pending
+            .iter()
+            .filter_map(|one| match &one.state {
+                RemoteState::Pending { body } => Some((one, body)),
+                _ => None,
+            })
+            .collect();
+        writeln!(
+            f,
+            "{} pending comment(s) on the pull request:",
+            waiting.len()
+        )?;
+        for (one, body) in waiting {
+            writeln!(f, "  {} (thread {})", one.at, one.thread)?;
+            for line in body.lines() {
+                writeln!(f, "    {line}")?;
+            }
+        }
+        if let Some(why) = &self.0.pending_failed {
+            writeln!(f, "the pending comments could not be read: {why}")?;
+        }
         writeln!(f, "{} current file(s) marked as read:", self.0.read.len())?;
         for path in &self.0.read {
             writeln!(f, "  {path}")?;
@@ -74,6 +119,9 @@ mod tests {
             host: Some("github.com".into()),
             branch: "feat/x".into(),
             readiness,
+            mode: crate::comments::domain::ModeChoice::resolve(None, None),
+            pending: vec![],
+            pending_failed: None,
             read: vec![],
         }
     }
@@ -85,6 +133,7 @@ mod tests {
             id: "id".into(),
             mine: true,
             head: "head".into(),
+            author: "asnunes".into(),
         });
         standing.read = vec!["src/a.rs".into()];
         let text = StandingLine(&standing).to_string();
@@ -106,6 +155,7 @@ mod tests {
                     id: "PR_kwDO".into(),
                     mine: false,
                     head: "abc1234def".into(),
+                    author: "alice".into(),
                 },
                 "ready:",
             ),
@@ -134,6 +184,7 @@ mod tests {
             id: "PR_kwDO".into(),
             mine: false,
             head: "abc1234def5678".into(),
+            author: "alice".into(),
         }))
         .to_string();
 

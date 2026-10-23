@@ -10,10 +10,11 @@ use std::sync::Arc;
 use crate::agent::domain::AgentChannel;
 use crate::agent::infra::{AgentAddress, ClaudeSocket, CodexQueue};
 use crate::comments::application::{
-    CommentReach, Comments, PublishReview, ReviewReadiness, SendComment,
+    ChooseMode, CloseThread, CommentReach, Comments, EditPending, GeneratePending, PublishReview,
+    PullRequestGate, RemovePending, ReviewModes, ReviewReadiness, SendComment, WritePending,
 };
 use crate::comments::domain::ReviewPublisher;
-use crate::comments::infra::{GhCredentials, GitHub, MarkdownComments, Unhosted};
+use crate::comments::infra::{GhCredentials, GitHub, JsonModeStore, MarkdownComments, Unhosted};
 use crate::config::domain::ConfigRepository;
 use crate::config::infra::JsonConfigRepository;
 use crate::diff::application::{CommitHistory, FileDiffs, ReviewScope};
@@ -63,8 +64,13 @@ pub struct Ctx {
     pub scope: GetScope,
 
     pub comments: Comments,
+    pub close_thread: CloseThread,
+    pub write_pending: WritePending,
+    pub edit_pending: EditPending,
+    pub remove_pending: RemovePending,
+    pub choose_mode: ChooseMode,
     pub readiness: ReviewReadiness,
-    pub publish_review: Arc<PublishReview>,
+    pub publish_review: PublishReview,
 
     /// Only when serving: the CLI never sends to an agent, and building this
     /// would make every command resolve the configuration folder for nothing.
@@ -84,7 +90,15 @@ pub struct ServerUseCases {
     pub mark_viewed: MarkViewed,
     pub unmark_viewed: UnmarkViewed,
     pub comments: Comments,
+    pub close_thread: CloseThread,
     pub send_comment: SendComment,
+    pub generate_pending: GeneratePending,
+    pub write_pending: WritePending,
+    pub edit_pending: EditPending,
+    pub remove_pending: RemovePending,
+    pub choose_mode: ChooseMode,
+    pub readiness: ReviewReadiness,
+    pub publish_review: PublishReview,
 }
 
 /// What a server adds to a context: the session it reports to, and where the
@@ -115,6 +129,7 @@ impl Ctx {
         let remote = workspace.remote();
 
         let comment_store = Arc::new(MarkdownComments::new(&workspace.store(), &root));
+        let modes = ReviewModes::new(Arc::new(JsonModeStore::new(workspace.store())));
         let maps = Arc::new(JsonMapRepository::new(workspace.store()));
         let maps_for_sharing = maps.clone();
         let progress_repo = Arc::new(JsonProgressRepository::new(workspace.store()));
@@ -146,20 +161,28 @@ impl Ctx {
         let scope_for_publishing = scope.clone();
         let scope_for_lines = scope.clone();
 
+        let gate = PullRequestGate::new(publisher.clone(), scope.clone(), history.clone());
         let readiness = ReviewReadiness::new(
+            gate.clone(),
+            modes.clone(),
+            comments.clone(),
             publisher.clone(),
             scope_for_publishing.clone(),
             host.clone(),
             progress.clone(),
         );
-        let publish_review = Arc::new(PublishReview::new(
-            comment_store,
-            publisher,
+        let publish_review = PublishReview::new(
+            comments.clone(),
+            gate.clone(),
+            publisher.clone(),
             scope_for_publishing,
-            reach,
-            history,
             progress.clone(),
-        ));
+        );
+        let close_thread = CloseThread::new(comments.clone(), publisher.clone());
+        let write_pending = WritePending::new(comments.clone(), gate, publisher.clone());
+        let edit_pending = EditPending::new(comments.clone(), publisher.clone());
+        let remove_pending = RemovePending::new(comments.clone(), publisher.clone());
+        let choose_mode = ChooseMode::new(modes.clone());
 
         Ok(Self {
             add_block: AddBlock::new(editor.clone()),
@@ -189,8 +212,11 @@ impl Ctx {
             scope: GetScope::new(scope.clone()),
 
             comments: comments.clone(),
-
-            // Only the CLI can reach publication; serving a review never authenticates.
+            close_thread: close_thread.clone(),
+            write_pending: write_pending.clone(),
+            edit_pending: edit_pending.clone(),
+            remove_pending: remove_pending.clone(),
+            choose_mode: choose_mode.clone(),
             readiness: readiness.clone(),
             publish_review: publish_review.clone(),
 
@@ -204,9 +230,24 @@ impl Ctx {
                 send_comment: SendComment::new(
                     comments.clone(),
                     serving.agent.as_ref().map(channel),
+                    serving.config.clone(),
+                    modes.clone(),
+                ),
+                generate_pending: GeneratePending::new(
+                    comments.clone(),
+                    serving.agent.as_ref().map(channel),
                     serving.config,
+                    modes,
+                    publisher,
                 ),
                 comments,
+                close_thread,
+                write_pending,
+                edit_pending,
+                remove_pending,
+                choose_mode,
+                readiness,
+                publish_review,
             }),
             git_dir,
             root,

@@ -1278,7 +1278,7 @@ fn a_comment_can_be_written_on_the_old_side_of_a_file_that_is_gone() {
     let repo = removing();
 
     let wrote = repo.ok(&[
-        "comment",
+        "thread",
         "add",
         "src/gone.rs",
         "2-4",
@@ -1287,7 +1287,7 @@ fn a_comment_can_be_written_on_the_old_side_of_a_file_that_is_gone() {
         "--text",
         "Where did this go?",
     ]);
-    let list = repo.ok(&["comment", "list"]);
+    let list = repo.ok(&["thread", "list"]);
 
     assert!(wrote.contains("src/gone.rs:2-4 (old)"), "{wrote}");
     assert!(list.contains("src/gone.rs:2-4 (old)"), "{list}");
@@ -1300,15 +1300,8 @@ fn a_comment_defaults_to_the_side_the_reviewer_is_reading() {
     // there was a choice meant — and what the unmarked form goes on meaning.
     let repo = removing();
 
-    repo.ok(&[
-        "comment",
-        "add",
-        "src/keep.rs",
-        "5-5",
-        "--text",
-        "Why this?",
-    ]);
-    let list = repo.ok(&["comment", "list"]);
+    repo.ok(&["thread", "add", "src/keep.rs", "5-5", "--text", "Why this?"]);
+    let list = repo.ok(&["thread", "list"]);
 
     assert!(list.contains("src/keep.rs:5\n"), "{list}");
     assert!(!list.contains("(old)"), "{list}");
@@ -1321,7 +1314,7 @@ fn the_two_sides_of_one_line_are_two_separate_comments() {
     let repo = removing();
 
     repo.ok(&[
-        "comment",
+        "thread",
         "add",
         "src/keep.rs",
         "5-5",
@@ -1331,7 +1324,7 @@ fn the_two_sides_of_one_line_are_two_separate_comments() {
         "Why was this here?",
     ]);
     repo.ok(&[
-        "comment",
+        "thread",
         "add",
         "src/keep.rs",
         "5-5",
@@ -1340,7 +1333,7 @@ fn the_two_sides_of_one_line_are_two_separate_comments() {
         "--text",
         "Why is this here?",
     ]);
-    let list = repo.ok(&["comment", "list"]);
+    let list = repo.ok(&["thread", "list"]);
 
     assert!(list.contains("src/keep.rs:5 (old)"), "{list}");
     assert!(list.contains("Why was this here?"), "{list}");
@@ -1354,7 +1347,7 @@ fn a_comment_off_the_diff_is_refused_in_the_terms_of_the_side_it_was_asked_on() 
     let repo = removing();
 
     let err = repo.fails(&[
-        "comment",
+        "thread",
         "add",
         "src/keep.rs",
         "18-18",
@@ -1366,7 +1359,7 @@ fn a_comment_off_the_diff_is_refused_in_the_terms_of_the_side_it_was_asked_on() 
 
     assert!(err.contains("old side"), "{err}");
     assert!(err.contains("src/keep.rs"), "{err}");
-    assert!(repo.ok(&["comment", "list"]).contains("No comments yet"));
+    assert!(repo.ok(&["thread", "list"]).contains("No comments yet"));
 }
 
 #[test]
@@ -1376,7 +1369,7 @@ fn a_file_that_is_gone_has_no_new_side_left_to_ask_about() {
     let repo = removing();
 
     let err = repo.fails(&[
-        "comment",
+        "thread",
         "add",
         "src/gone.rs",
         "2-4",
@@ -1387,7 +1380,7 @@ fn a_file_that_is_gone_has_no_new_side_left_to_ask_about() {
     ]);
 
     assert!(err.contains("0 lines"), "{err}");
-    assert!(repo.ok(&["comment", "list"]).contains("No comments yet"));
+    assert!(repo.ok(&["thread", "list"]).contains("No comments yet"));
 }
 
 #[test]
@@ -1395,7 +1388,7 @@ fn a_side_that_is_neither_is_refused_before_anything_is_written() {
     let repo = removing();
 
     let err = repo.fails(&[
-        "comment",
+        "thread",
         "add",
         "src/gone.rs",
         "2-4",

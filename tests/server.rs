@@ -264,7 +264,7 @@ fn foreign_hosts_and_origins_cannot_read_any_local_surface() {
         "/api/file?path=src/a.rs",
         "/api/lines?path=src/a.rs&from=1&to=2",
         "/api/comments",
-        "/api/publish",
+        "/api/github",
         "/api/watch",
         "/health",
         "/",
@@ -309,17 +309,24 @@ fn foreign_origins_cannot_change_state_or_start_publication() {
             r#"{"key":"send_instruction","value":"unwanted"}"#,
         ),
         ("DELETE", "/api/config/send-instruction", ""),
+        ("POST", "/api/comments/nonexistent/generate", "{}"),
         (
             "POST",
-            "/api/publish",
-            r#"{"verdict":"comment","summary":"unwanted"}"#,
+            "/api/comments/nonexistent/pending",
+            r#"{"body":"unwanted"}"#,
         ),
-        ("POST", "/api/publish/ticks", "{}"),
         (
             "PUT",
-            "/api/token",
-            r#"{"host":"github.com","token":"test-secret"}"#,
+            "/api/comments/nonexistent/pending",
+            r#"{"body":"unwanted"}"#,
         ),
+        ("DELETE", "/api/comments/nonexistent/pending", ""),
+        (
+            "POST",
+            "/api/github/review",
+            r#"{"verdict":"comment","summary":"unwanted"}"#,
+        ),
+        ("PUT", "/api/mode", r#"{"mode":"peer"}"#),
         (
             "PUT",
             "/api/session",
@@ -895,28 +902,68 @@ fn closing_a_comment_that_is_not_there_is_refused_rather_than_ignored() {
 // ---- sending the review -------------------------------------------------
 
 #[test]
-fn the_local_server_has_no_publication_or_credential_write_endpoints() {
+fn the_local_server_never_takes_a_credential() {
+    // The token comes from gh at each call. A route that took one would be a
+    // way to plant a credential from a page.
     let s = Serving::new();
     for (method, path, body) in [
-        (
-            "POST",
-            "/api/publish",
-            r#"{"verdict":"comment","summary":"local only"}"#,
-        ),
-        ("POST", "/api/publish/ticks", "{}"),
         (
             "PUT",
             "/api/token",
             r#"{"host":"github.com","token":"fixture-only"}"#,
         ),
+        ("POST", "/api/publish", r#"{"verdict":"comment"}"#),
     ] {
         let (status, _) = s.probe_headers(method, path, Some(body), &[]);
-        assert_eq!(
-            status, 404,
-            "{path} must not invoke GitHub or save a credential"
-        );
+        assert_eq!(status, 404, "{path} must not exist");
     }
-    assert!(s.json("/api/review")["totalFiles"].as_u64().unwrap() > 0);
+}
+
+#[test]
+fn a_repository_with_no_remote_has_no_pull_request_and_is_a_self_review() {
+    let s = Serving::new();
+
+    let github = s.json("/api/github");
+
+    assert_eq!(github["connection"], "no-remote");
+    assert_eq!(github["mode"]["mode"], "self");
+    assert_eq!(github["pending"], serde_json::json!({}));
+}
+
+#[test]
+fn the_mode_chosen_on_the_page_is_the_mode_the_review_is_in() {
+    let s = Serving::new();
+
+    let (status, body) = s.probe("PUT", "/api/mode", Some(r#"{"mode":"peer"}"#));
+
+    assert_eq!(status, 204, "{body}");
+    let github = s.json("/api/github");
+    assert_eq!(github["mode"]["mode"], "peer");
+    assert_eq!(github["mode"]["reason"], "chosen by you");
+    let (status, _) = s.probe("PUT", "/api/mode", Some(r#"{"mode":"sideways"}"#));
+    assert!(status >= 400, "a mode that does not exist is refused");
+}
+
+#[test]
+fn a_pending_comment_needs_a_pull_request_to_live_on() {
+    let s = Serving::new();
+    let id = write_comment(&s);
+
+    let (status, body) = s.probe(
+        "POST",
+        &format!("/api/comments/{id}/pending"),
+        Some(r#"{"body":"Rename it."}"#),
+    );
+
+    assert_eq!(status, 400);
+    assert!(body.contains("no remote"), "{body}");
+    let (status, body) = s.probe(
+        "POST",
+        "/api/github/review",
+        Some(r#"{"verdict":"comment"}"#),
+    );
+    assert_eq!(status, 400);
+    assert!(body.contains("no remote"), "{body}");
 }
 
 #[test]
@@ -1636,9 +1683,10 @@ fn browser_and_cli_share_preferences_without_restarting_the_server() {
     let s = Serving::new();
     let response = s.json("/api/config");
     let fields = response["settings"].as_array().unwrap();
-    assert_eq!(fields.len(), 1 + usize::from(cfg!(target_os = "macos")));
-    let instruction = fields.last().unwrap();
+    assert_eq!(fields.len(), 2 + usize::from(cfg!(target_os = "macos")));
+    let instruction = &fields[fields.len() - 2];
     assert_eq!(instruction["key"], "send_instruction");
+    assert_eq!(fields.last().unwrap()["key"], "pending_instruction");
     assert_eq!(instruction["type"], "text");
     assert_eq!(instruction["value"], instruction["default"]);
     if cfg!(target_os = "macos") {
@@ -1799,7 +1847,7 @@ fn a_sent_comment_arrives_on_the_socket_of_the_session_that_served() {
     let content = lines[1]["message"]["content"].as_str().unwrap();
     assert!(
         content.starts_with(&format!(
-            "A reviewer left a comment on this branch in farol (comment {id}):"
+            "A reviewer left a comment on this branch in farol (thread {id}):"
         )),
         "{content}"
     );
@@ -1808,16 +1856,58 @@ fn a_sent_comment_arrives_on_the_socket_of_the_session_that_served() {
         "{content}"
     );
     assert!(
-        content.contains(&format!("farol comment ack {id}")),
+        content.contains(&format!("farol thread ack {id}")),
         "{content}"
     );
     assert!(
-        content.contains(&format!("farol comment reply {id}")),
+        content.contains(&format!("farol thread reply {id}")),
         "{content}"
     );
     assert!(
-        content.ends_with("change the code and say what you changed."),
+        content.contains("change the code and say what you changed.\n\n"),
         "{content}"
+    );
+    assert!(
+        content.ends_with("You may change the code to address the thread."),
+        "with no pull request to tell, it is a self review: {content}"
+    );
+}
+
+#[test]
+fn generate_asks_the_session_for_a_pending_comment_and_the_thread_says_so() {
+    let inbox = Inbox::new();
+    let env = inbox.env();
+    let s = Serving::from_session(
+        &env.iter()
+            .map(|(k, v)| (*k, v.as_str()))
+            .collect::<Vec<_>>(),
+    );
+    s.probe("PUT", "/api/mode", Some(r#"{"mode":"peer"}"#));
+    let id = write_comment(&s);
+
+    let (status, body) = s.probe(
+        "POST",
+        &format!("/api/comments/{id}/generate"),
+        Some(r#"{"instruction":"shorter"}"#),
+    );
+
+    assert_eq!(status, 204, "{body}");
+    let content = inbox.next()[1]["message"]["content"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert!(
+        content.contains(&format!("farol pending write {id}")),
+        "{content}"
+    );
+    assert!(content.contains("For this one: shorter"), "{content}");
+    assert!(
+        content.ends_with("do not change, commit or push code in this repository."),
+        "{content}"
+    );
+    assert_eq!(
+        s.comments_on("src/a.rs")[0]["waiting"]["purpose"],
+        "pending"
     );
 }
 
@@ -1841,7 +1931,10 @@ fn a_send_carries_the_instruction_saved_from_the_cli_without_a_restart() {
         .as_str()
         .unwrap()
         .to_string();
-    assert!(content.ends_with("reads it.\n\nOnly answer."), "{content}");
+    assert!(
+        content.contains("reads it.\n\nOnly answer.\n\n"),
+        "{content}"
+    );
 }
 
 #[test]
@@ -1930,12 +2023,12 @@ fn the_agent_acknowledges_and_answers_from_its_shell_and_the_page_reads_the_conv
             String::from_utf8_lossy(&out.stderr)
         );
     };
-    agent(&["comment", "ack", &id]);
+    agent(&["thread", "ack", &id]);
     assert_eq!(s.comments_on("src/a.rs")[0]["waiting"]["stage"], "working");
     assert_eq!(s.comments_on("src/a.rs")[0]["waiting"]["on"], "Claude Code");
 
     agent(&[
-        "comment",
+        "thread",
         "reply",
         &id,
         "--text",
@@ -1974,7 +2067,7 @@ fn the_agent_acknowledges_and_answers_from_its_shell_and_the_page_reads_the_conv
         "a follow-up carries the conversation: {follow_up}"
     );
 
-    let listed = s.repo.ok(&["comment", "list"]);
+    let listed = s.repo.ok(&["thread", "list"]);
     assert!(
         listed.contains("And the new one?"),
         "the agent reads the replies too: {listed}"

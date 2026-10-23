@@ -1,17 +1,23 @@
 mod error;
+mod mode;
 mod publishing;
 
 pub use error::*;
+pub use mode::*;
 pub use publishing::*;
 
 use crate::diff::domain::Side;
 use crate::error::Result;
 
-/// Something the reviewer wrote about a span of lines.
+/// Something the reviewer wrote about a span of lines — a thread, on screen.
 ///
 /// Theirs, not the session's: the map carries what the author explained, and
 /// this carries what the reader asked back. They sit in different files for the
 /// same reason they read differently on screen.
+///
+/// Still called a comment here, though the screen says thread: the name is
+/// what the store, the routes and the files on disk are all spelled in, and
+/// renaming every one of them would buy nothing the screen's word does not.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Comment {
     pub id: String,
@@ -27,23 +33,26 @@ pub struct Comment {
     pub to: u32,
     /// Markdown, kept as written.
     pub body: String,
-    /// Where it lives on the pull request, once it has been published.
+    /// The comment for the pull request that came out of this thread, which
+    /// lives in the reviewer's pending review on GitHub rather than here.
     ///
-    /// Published is not closed. The question is still open — it just has a
-    /// second home now, and the answer will come back there. Closing still
-    /// removes the comment; this only records that it left.
-    pub published: Option<String>,
+    /// Only its id is kept. The text and whether it went are GitHub's to say,
+    /// so there is no copy to fall out of step with the page of the pull
+    /// request, where the reviewer can edit it too.
+    pub pending: Option<PendingRef>,
     /// What was said after the question, and whether an agent owes an answer.
     pub conversation: Conversation,
 }
 
 impl Comment {
-    /// Handed to an agent; it owes an answer from here on.
-    pub fn sent(&mut self, to: &str, at: &str) {
+    /// Handed to an agent; it owes something from here on — an answer, or a
+    /// pending comment, which `purpose` says.
+    pub fn sent(&mut self, to: &str, at: &str, purpose: Purpose) {
         self.conversation.waiting = Some(Waiting {
             on: to.to_string(),
             since: at.to_string(),
             stage: Stage::Sent,
+            purpose,
         });
     }
 
@@ -51,21 +60,25 @@ impl Comment {
     /// send — the agent may have been handed the comment some other way, and
     /// the reviewer is better told it is being worked on than not.
     pub fn acknowledged(&mut self, by: &str, at: &str) {
-        let on = match &self.conversation.waiting {
-            Some(waiting) => waiting.on.clone(),
-            None => by.to_string(),
+        let (on, purpose) = match &self.conversation.waiting {
+            Some(waiting) => (waiting.on.clone(), waiting.purpose),
+            None => (by.to_string(), Purpose::Answer),
         };
         self.conversation.waiting = Some(Waiting {
             on,
             since: at.to_string(),
             stage: Stage::Working,
+            purpose,
         });
     }
 
-    /// Another turn. An agent's turn settles what it owed; the reviewer's does
-    /// not, because writing back is not the same as sending.
+    /// Another turn. An agent's turn settles an answer it owed; the reviewer's
+    /// does not, because writing back is not the same as sending. Nor does an
+    /// agent's reply settle a pending comment it was asked for: talking about
+    /// the comment is not writing it, and the badge would go away with nothing
+    /// on the pull request.
     pub fn reply(&mut self, from: Author, body: &str, at: &str) {
-        if matches!(from, Author::Agent(_)) {
+        if matches!(from, Author::Agent(_)) && self.owes(Purpose::Answer) {
             self.conversation.waiting = None;
         }
         self.conversation.replies.push(Reply {
@@ -73,6 +86,23 @@ impl Comment {
             body: body.trim().to_string(),
             at: at.to_string(),
         });
+    }
+
+    /// A pending comment now stands for this thread. It settles a pending
+    /// comment the agent owed, and nothing else: an answer still owed is still
+    /// owed.
+    pub fn pending_written(&mut self, pending: PendingRef) {
+        if self.owes(Purpose::Pending) {
+            self.conversation.waiting = None;
+        }
+        self.pending = Some(pending);
+    }
+
+    fn owes(&self, purpose: Purpose) -> bool {
+        self.conversation
+            .waiting
+            .as_ref()
+            .is_some_and(|waiting| waiting.purpose == purpose)
     }
 
     /// What lands on the clipboard: enough for the answer to be read somewhere
@@ -128,13 +158,31 @@ pub enum Author {
     Agent(String),
 }
 
-/// An answer owed, and how far along it is as far as farol was told.
+/// Something owed, and how far along it is as far as farol was told.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Waiting {
     /// The harness it was sent to.
     pub on: String,
     pub since: String,
     pub stage: Stage,
+    pub purpose: Purpose,
+}
+
+/// What the agent was asked for, which decides what settles the wait.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Purpose {
+    /// An answer in the thread: `farol thread reply`.
+    Answer,
+    /// A comment for the pull request: `farol pending write`.
+    Pending,
+}
+
+/// Where a thread's comment for the pull request lives, and who wrote it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PendingRef {
+    /// GitHub's node id for the review comment.
+    pub id: String,
+    pub by: Author,
 }
 
 /// Sent is what farol knows on its own; working is what the agent says when it
@@ -216,7 +264,7 @@ mod tests {
             from,
             to,
             body: "  Why this order?  ".into(),
-            published: None,
+            pending: None,
             conversation: Conversation::default(),
         }
     }
@@ -259,7 +307,7 @@ mod tests {
     #[test]
     fn an_agents_reply_settles_what_it_owed_and_the_reviewers_does_not() {
         let mut one = comment(1, 1);
-        one.sent("Claude Code", "10");
+        one.sent("Claude Code", "10", Purpose::Answer);
         one.acknowledged("Claude Code", "11");
         assert_eq!(
             one.conversation.waiting.as_ref().unwrap().stage,
@@ -275,5 +323,34 @@ mod tests {
         one.reply(Author::Agent("Claude Code".into()), "Because.", "13");
         assert_eq!(one.conversation.waiting, None);
         assert_eq!(one.conversation.replies.len(), 2);
+    }
+
+    #[test]
+    fn each_wait_is_settled_only_by_what_it_was_waiting_for() {
+        let mut one = comment(1, 1);
+        one.sent("Codex", "10", Purpose::Pending);
+        one.acknowledged("Codex", "11");
+        one.reply(Author::Agent("Codex".into()), "Writing it now.", "12");
+        assert!(
+            one.conversation.waiting.is_some(),
+            "a reply is not the pending comment the agent was asked for"
+        );
+
+        one.pending_written(PendingRef {
+            id: "PRRC_1".into(),
+            by: Author::Agent("Codex".into()),
+        });
+        assert_eq!(one.conversation.waiting, None);
+
+        one.sent("Codex", "13", Purpose::Answer);
+        one.pending_written(PendingRef {
+            id: "PRRC_2".into(),
+            by: Author::Reviewer,
+        });
+        assert!(
+            one.conversation.waiting.is_some(),
+            "the reviewer writing a pending comment does not answer for the agent"
+        );
+        assert_eq!(one.pending.unwrap().id, "PRRC_2");
     }
 }

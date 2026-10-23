@@ -199,6 +199,11 @@ impl Store {
         self.root.join("state.json")
     }
 
+    /// Self or peer review, as chosen or as the pull request said.
+    pub fn mode_file(&self) -> PathBuf {
+        self.root.join("review-mode.json")
+    }
+
     pub fn ensure(&self) -> Result<()> {
         std::fs::create_dir_all(self.maps_dir())?;
         Ok(())

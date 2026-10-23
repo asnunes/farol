@@ -29,6 +29,15 @@ pub(super) struct ServeArgs {
     /// Do not watch the repository for changes.
     #[arg(long)]
     no_watch: bool,
+    /// Review your own branch: the agent may change the code, and nothing is
+    /// offered for the pull request. Remembered for the branch.
+    #[arg(long, conflicts_with = "peer_review")]
+    self_review: bool,
+    /// Review somebody else's pull request: the agent is told not to touch
+    /// the code, and threads can become pending comments. Remembered for the
+    /// branch.
+    #[arg(long)]
+    peer_review: bool,
     /// Hold the terminal instead of going into the background. What the
     /// detached server runs as, and how to watch one that will not start.
     #[arg(long)]
@@ -37,6 +46,13 @@ pub(super) struct ServeArgs {
 
 impl ServeArgs {
     pub(super) fn run(self) -> Result<()> {
+        // Written before anything is served, so the first message to the
+        // agent already carries the rule for the mode asked for.
+        if let Some(mode) = self.mode() {
+            Ctx::from_workspace(self.session().scope)?
+                .choose_mode
+                .execute(mode)?;
+        }
         let preferences = super::wiring::config_cases()?;
         let config = preferences.get.execute()?;
         let open_browser = config.should_open(self.open, self.no_open);
@@ -63,6 +79,15 @@ impl ServeArgs {
         println!("farol is reading at {}", entry.url());
         println!("stop it with: farol servers stop {}", entry.port);
         Ok(())
+    }
+
+    fn mode(&self) -> Option<crate::comments::domain::ReviewMode> {
+        use crate::comments::domain::ReviewMode;
+        match (self.self_review, self.peer_review) {
+            (true, _) => Some(ReviewMode::SelfReview),
+            (_, true) => Some(ReviewMode::PeerReview),
+            _ => None,
+        }
     }
 
     fn session(&self) -> SessionConfig {

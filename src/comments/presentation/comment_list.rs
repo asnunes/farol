@@ -99,7 +99,7 @@ mod tests {
             from,
             to,
             body: "Why this order?\nIt reads backwards.".into(),
-            published: None,
+            pending: None,
             conversation: Default::default(),
         }
     }

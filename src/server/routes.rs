@@ -36,6 +36,14 @@ pub(super) fn router(state: Arc<AppState>) -> Router {
         .route("/api/comments/{id}", delete(close_comment))
         .route("/api/comments/{id}/send", post(send_comment))
         .route("/api/comments/{id}/replies", post(reply_comment))
+        .route("/api/comments/{id}/generate", post(generate_pending))
+        .route(
+            "/api/comments/{id}/pending",
+            post(write_pending).put(edit_pending).delete(remove_pending),
+        )
+        .route("/api/github", get(pull_request))
+        .route("/api/github/review", post(submit_review))
+        .route("/api/mode", put(choose_mode))
         .route_layer(middleware::from_fn_with_state(state.clone(), resolve))
         .route("/api/config", get(get_config).put(set_config))
         .route("/api/config/{key}", delete(reset_config))
@@ -238,12 +246,147 @@ async fn write_comment(
     }
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CloseQuery {
+    /// Set once the reviewer confirmed that the thread's pending comment goes
+    /// too. Without it a thread with one is refused, as in the terminal.
+    #[serde(default)]
+    discard_pending: bool,
+}
+
 async fn close_comment(
     Extension(cases): Extension<ServerUseCases>,
     Path(id): Path<String>,
+    Query(q): Query<CloseQuery>,
 ) -> impl IntoResponse {
-    match cases.comments.close(&id) {
+    match away(move || cases.close_thread.execute(&id, q.discard_pending)).await {
         Ok(()) => StatusCode::NO_CONTENT.into_response(),
+        Err(e) => fail(e),
+    }
+}
+
+/// The pull request, its mode and each thread's pending comment. Asked of
+/// GitHub, so off the request thread.
+async fn pull_request(Extension(cases): Extension<ServerUseCases>) -> impl IntoResponse {
+    match away(move || cases.readiness.execute()).await {
+        Ok(standing) => Json(view::PullRequestView::of(&standing)).into_response(),
+        Err(e) => fail(e),
+    }
+}
+
+#[derive(Deserialize)]
+struct PendingBody {
+    body: String,
+}
+
+/// The reviewer's own words for the pull request: written in the box, or
+/// taken from a turn of the conversation. Either way it is the reviewer who
+/// sends them, so they are signed by the reviewer.
+async fn write_pending(
+    Extension(cases): Extension<ServerUseCases>,
+    Path(id): Path<String>,
+    Json(pending): Json<PendingBody>,
+) -> impl IntoResponse {
+    let by = crate::comments::domain::Author::Reviewer;
+    match away(move || cases.write_pending.execute(&id, &pending.body, by)).await {
+        Ok(comment) => Json(view::CommentView::of(&comment)).into_response(),
+        Err(e) => fail(e),
+    }
+}
+
+async fn edit_pending(
+    Extension(cases): Extension<ServerUseCases>,
+    Path(id): Path<String>,
+    Json(pending): Json<PendingBody>,
+) -> impl IntoResponse {
+    match away(move || cases.edit_pending.execute(&id, &pending.body)).await {
+        Ok(()) => StatusCode::NO_CONTENT.into_response(),
+        Err(e) => fail(e),
+    }
+}
+
+async fn remove_pending(
+    Extension(cases): Extension<ServerUseCases>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    match away(move || cases.remove_pending.execute(&id)).await {
+        Ok(()) => StatusCode::NO_CONTENT.into_response(),
+        Err(e) => fail(e),
+    }
+}
+
+#[derive(Deserialize, Default)]
+struct GenerateBody {
+    /// The reviewer's note for this one comment, from "Generate with
+    /// instructions…". Their own words, going to their own agent, the same as
+    /// a reply is.
+    #[serde(default)]
+    instruction: String,
+}
+
+async fn generate_pending(
+    Extension(cases): Extension<ServerUseCases>,
+    Path(id): Path<String>,
+    body: Option<Json<GenerateBody>>,
+) -> impl IntoResponse {
+    let instruction = body.map(|Json(b)| b.instruction).unwrap_or_default();
+    match away(move || cases.generate_pending.execute(&id, &instruction)).await {
+        Ok(()) => StatusCode::NO_CONTENT.into_response(),
+        Err(e) => fail(e),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "kebab-case")]
+enum VerdictBody {
+    Comment,
+    RequestChanges,
+    Approve,
+}
+
+#[derive(Deserialize)]
+struct SubmitBody {
+    verdict: VerdictBody,
+    #[serde(default)]
+    summary: String,
+}
+
+/// Only the verdict and the summary travel: what is submitted is the pending
+/// review already on the pull request, never text the request carries.
+async fn submit_review(
+    Extension(cases): Extension<ServerUseCases>,
+    Json(submit): Json<SubmitBody>,
+) -> impl IntoResponse {
+    use crate::comments::domain::Verdict;
+    let verdict = match submit.verdict {
+        VerdictBody::Comment => Verdict::Comment,
+        VerdictBody::RequestChanges => Verdict::RequestChanges,
+        VerdictBody::Approve => Verdict::Approve,
+    };
+    match away(move || cases.publish_review.execute(verdict, &submit.summary)).await {
+        Ok(sent) => Json(view::SentView {
+            url: sent.url,
+            comments: sent.comments,
+            read: sent.read,
+            read_failed: sent.read_failed,
+        })
+        .into_response(),
+        Err(e) => fail(e),
+    }
+}
+
+#[derive(Deserialize)]
+struct ModeBody {
+    mode: crate::comments::domain::ReviewMode,
+}
+
+async fn choose_mode(
+    Extension(cases): Extension<ServerUseCases>,
+    Json(body): Json<ModeBody>,
+) -> impl IntoResponse {
+    match away(move || cases.choose_mode.execute(body.mode)).await {
+        Ok(_) => StatusCode::NO_CONTENT.into_response(),
         Err(e) => fail(e),
     }
 }
@@ -413,8 +556,7 @@ pub(super) mod tests {
 
     pub(in crate::server) fn use_cases() -> (tempfile::TempDir, ServerUseCases) {
         use crate::diff::application::{FileDiffs, ReviewScope};
-        use crate::map::application::{GetFileDiff, GetFileLines, GetReview};
-        use crate::progress::application::{MarkViewed, UnmarkViewed};
+        use crate::map::application::GetReview;
 
         let paths = ["a.rs", "b.rs", "Cargo.lock"];
         let diffs = FileDiffs::new(Arc::new(FakeDiffSource::with_paths(&paths)));
@@ -430,23 +572,74 @@ pub(super) mod tests {
         let (dir, comments) = comments(&paths);
         (
             dir,
-            ServerUseCases {
-                scope: crate::map::application::GetScope::new(scope.clone()),
-                review: GetReview::new(maps.versions, scope, progress.clone()),
-                file_diff: GetFileDiff::new(diffs),
-                file_lines: GetFileLines::new(ReviewScope::new(Arc::new(
-                    FakeDiffSource::with_paths(&paths),
-                ))),
-                mark_viewed: MarkViewed::new(progress.clone()),
-                unmark_viewed: UnmarkViewed::new(progress),
-                send_comment: crate::comments::application::SendComment::new(
-                    comments.clone(),
-                    None,
-                    Arc::new(crate::testing::InMemoryConfigRepository::default()),
-                ),
+            assemble(
+                &paths,
                 comments,
-            },
+                GetReview::new(maps.versions, scope, progress.clone()),
+                progress,
+            ),
         )
+    }
+
+    /// The use cases a server holds, over the fakes, with the two that differ
+    /// between tests handed in.
+    fn assemble(
+        paths: &[&str],
+        comments: Comments,
+        review: crate::map::application::GetReview,
+        progress: ProgressStore,
+    ) -> ServerUseCases {
+        use crate::comments::application::{
+            ChooseMode, CloseThread, EditPending, GeneratePending, PublishReview, PullRequestGate,
+            RemovePending, ReviewModes, ReviewReadiness, SendComment, WritePending,
+        };
+        use crate::diff::application::{CommitHistory, FileDiffs, ReviewScope};
+        use crate::map::application::{GetFileDiff, GetFileLines};
+        use crate::progress::application::{MarkViewed, UnmarkViewed};
+
+        let source = Arc::new(FakeDiffSource::with_paths(paths));
+        let scope = ReviewScope::new(source.clone());
+        let publisher: Arc<dyn crate::comments::domain::ReviewPublisher> =
+            Arc::new(crate::comments::infra::Unhosted);
+        let config = Arc::new(crate::testing::InMemoryConfigRepository::default());
+        let modes = ReviewModes::new(Arc::new(crate::testing::InMemoryModeStore::default()));
+        let gate = PullRequestGate::new(
+            publisher.clone(),
+            scope.clone(),
+            CommitHistory::new(source.clone()),
+        );
+        ServerUseCases {
+            scope: crate::map::application::GetScope::new(scope.clone()),
+            review,
+            file_diff: GetFileDiff::new(FileDiffs::new(source.clone())),
+            file_lines: GetFileLines::new(scope.clone()),
+            mark_viewed: MarkViewed::new(progress.clone()),
+            unmark_viewed: UnmarkViewed::new(progress.clone()),
+            send_comment: SendComment::new(comments.clone(), None, config.clone(), modes.clone()),
+            generate_pending: GeneratePending::new(
+                comments.clone(),
+                None,
+                config,
+                modes.clone(),
+                publisher.clone(),
+            ),
+            close_thread: CloseThread::new(comments.clone(), publisher.clone()),
+            write_pending: WritePending::new(comments.clone(), gate.clone(), publisher.clone()),
+            edit_pending: EditPending::new(comments.clone(), publisher.clone()),
+            remove_pending: RemovePending::new(comments.clone(), publisher.clone()),
+            choose_mode: ChooseMode::new(modes.clone()),
+            readiness: ReviewReadiness::new(
+                gate.clone(),
+                modes,
+                comments.clone(),
+                publisher.clone(),
+                scope.clone(),
+                None,
+                progress.clone(),
+            ),
+            publish_review: PublishReview::new(comments.clone(), gate, publisher, scope, progress),
+            comments,
+        }
     }
 
     #[tokio::test]
@@ -454,8 +647,8 @@ pub(super) mod tests {
         // If the progress store is unreadable the screen must say so rather
         // than render as though nothing had been read.
         use crate::diff::application::{FileDiffs, ReviewScope};
-        use crate::map::application::{GetFileDiff, GetFileLines, GetReview};
-        use crate::progress::application::{MarkViewed, ProgressStore, UnmarkViewed};
+        use crate::map::application::GetReview;
+        use crate::progress::application::ProgressStore;
 
         let paths = ["a.rs"];
         let diffs = FileDiffs::new(Arc::new(FakeDiffSource::with_paths(&paths)));
@@ -473,28 +666,16 @@ pub(super) mod tests {
             diffs.clone(),
         );
         let (_dir, comments) = comments(&paths);
-        let use_cases = ServerUseCases {
-            scope: crate::map::application::GetScope::new(ReviewScope::new(Arc::new(
-                FakeDiffSource::with_paths(&paths),
-            ))),
-            review: GetReview::new(
+        let use_cases = assemble(
+            &paths,
+            comments,
+            GetReview::new(
                 maps.versions,
                 ReviewScope::new(Arc::new(FakeDiffSource::with_paths(&paths))),
                 broken.clone(),
             ),
-            file_diff: GetFileDiff::new(diffs),
-            file_lines: GetFileLines::new(ReviewScope::new(Arc::new(FakeDiffSource::with_paths(
-                &paths,
-            )))),
-            mark_viewed: MarkViewed::new(broken.clone()),
-            unmark_viewed: UnmarkViewed::new(broken),
-            send_comment: crate::comments::application::SendComment::new(
-                comments.clone(),
-                None,
-                Arc::new(crate::testing::InMemoryConfigRepository::default()),
-            ),
-            comments,
-        };
+            broken,
+        );
         let (state, _) = AppState::new(
             session(use_cases, _dir.path()),
             crate::cmd::ConfigUseCases::new(Arc::new(

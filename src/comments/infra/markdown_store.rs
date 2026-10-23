@@ -1,7 +1,8 @@
 use std::path::{Path, PathBuf};
 
 use crate::comments::domain::{
-    Author, Comment, CommentStore, Conversation, Found, Reply, Stage, Unread, Unreadable, Waiting,
+    Author, Comment, CommentStore, Conversation, Found, PendingRef, Purpose, Reply, Stage, Unread,
+    Unreadable, Waiting,
 };
 use crate::diff::domain::Side;
 use crate::error::{Error, Result};
@@ -104,15 +105,33 @@ impl CommentStore for MarkdownComments {
 }
 
 fn render(comment: &Comment) -> String {
-    let published = match &comment.published {
-        Some(url) => format!("published: {url}\n"),
+    let pending = match &comment.pending {
+        Some(PendingRef {
+            id,
+            by: Author::Reviewer,
+        }) => format!("pending: {id} reviewer\n"),
+        Some(PendingRef {
+            id,
+            by: Author::Agent(name),
+        }) => format!("pending: {id} agent {name}\n"),
         None => String::new(),
     };
+    // The purpose on a line of its own, and only when it is not an answer:
+    // every file written before there was a second purpose reads as it did.
     let waiting = match &comment.conversation.waiting {
-        Some(w) => format!("waiting: {} {} {}\n", stage(w.stage), w.since, w.on),
+        Some(w) => format!(
+            "waiting: {} {} {}\n{}",
+            stage(w.stage),
+            w.since,
+            w.on,
+            match w.purpose {
+                Purpose::Answer => "",
+                Purpose::Pending => "waiting-for: pending\n",
+            }
+        ),
         None => String::new(),
     };
-    let published = format!("{published}{waiting}");
+    let header = format!("{pending}{waiting}");
     // Each turn under a marker a markdown viewer does not draw, so the file
     // still reads as prose in an editor and the turns stay apart.
     let replies: String = comment
@@ -131,7 +150,7 @@ fn render(comment: &Comment) -> String {
     // This is a file somebody opens and edits, and a key that appears only
     // sometimes is a key they have to know about before they can use it.
     format!(
-        "---\npath: {}\nside: {}\nlines: {}-{}\n{published}---\n\n{}\n",
+        "---\npath: {}\nside: {}\nlines: {}-{}\n{header}---\n\n{}\n",
         comment.path,
         comment.side,
         comment.from,
@@ -161,7 +180,25 @@ fn waiting(raw: &str) -> Option<Waiting> {
     };
     let since = parts.next()?.to_string();
     let on = parts.next().unwrap_or("agent").trim().to_string();
-    Some(Waiting { on, since, stage })
+    Some(Waiting {
+        on,
+        since,
+        stage,
+        purpose: Purpose::Answer,
+    })
+}
+
+/// `PRRC_kw 1 reviewer` or `PRRC_kw agent Claude Code`: the id GitHub gave the
+/// comment, then who wrote it.
+fn pending(raw: &str) -> Option<PendingRef> {
+    let mut parts = raw.splitn(3, ' ');
+    let id = parts.next()?.to_string();
+    let by = match parts.next()? {
+        "reviewer" => Author::Reviewer,
+        "agent" => Author::Agent(parts.next().unwrap_or("agent").trim().to_string()),
+        _ => return None,
+    };
+    Some(PendingRef { id, by })
 }
 
 /// The question, then each turn under its marker. A marker that cannot be read
@@ -234,20 +271,23 @@ fn parse(id: &str, file: String, raw: &str) -> std::result::Result<Comment, Unre
     let mut path = None;
     let mut side = None;
     let mut lines = None;
-    let mut published = None;
-    let mut pending = None;
+    let mut pending_ref = None;
+    let mut owed = None;
+    let mut purpose = Purpose::Answer;
+    // `published:` from 2.0.0-rc.1 falls through with the other unknown keys:
+    // that comment went out with a review nothing here can edit any more.
     for (key, value) in head.lines().filter_map(|line| line.split_once(':')) {
         match key.trim() {
             "path" => path = Some(value.trim().to_string()),
             "side" => side = Some(value.trim().to_string()),
             "lines" => lines = Some(value.trim().to_string()),
-            // The url has its own colons, so the key is split off and the rest
-            // is taken whole rather than split again.
-            "published" => published = Some(value.trim().to_string()),
-            "waiting" => pending = waiting(value.trim()),
+            "pending" => pending_ref = pending(value.trim()),
+            "waiting" => owed = waiting(value.trim()),
+            "waiting-for" if value.trim() == "pending" => purpose = Purpose::Pending,
             _ => {}
         }
     }
+    let owed = owed.map(|waiting| Waiting { purpose, ..waiting });
 
     let Some(path) = path else {
         return Err(unreadable(Unread::NoPath, None, body));
@@ -281,10 +321,10 @@ fn parse(id: &str, file: String, raw: &str) -> std::result::Result<Comment, Unre
         from,
         to,
         body: question,
-        published,
+        pending: pending_ref,
         conversation: Conversation {
             replies,
-            waiting: pending,
+            waiting: owed,
         },
     })
 }
@@ -324,7 +364,7 @@ mod tests {
             from: 82,
             to: 116,
             body: "Why **this** order?".into(),
-            published: None,
+            pending: None,
             conversation: Default::default(),
         }
     }
@@ -348,20 +388,38 @@ mod tests {
     }
 
     #[test]
-    fn where_a_comment_was_published_comes_back_with_it() {
+    fn the_pending_comment_and_what_the_agent_owes_come_back_with_it() {
         let (_dir, store) = store();
-        store
-            .save(&Comment {
-                published: Some("https://github.com/asnunes/farol/pull/12#discussion_r1".into()),
-                ..comment("1")
-            })
-            .unwrap();
+        let mut one = comment("1");
+        one.pending_written(PendingRef {
+            id: "PRRC_kwDO".into(),
+            by: Author::Agent("Claude Code".into()),
+        });
+        one.sent("Claude Code", "17", Purpose::Pending);
+        store.save(&one).unwrap();
 
-        let all = store.list().unwrap().comments;
+        let back = &store.list().unwrap().comments[0];
+        assert_eq!(back, &one);
         assert_eq!(
-            all[0].published.as_deref(),
-            Some("https://github.com/asnunes/farol/pull/12#discussion_r1")
+            back.conversation.waiting.as_ref().unwrap().purpose,
+            Purpose::Pending,
+            "a regenerate in flight must not read back as an answer owed"
         );
+    }
+
+    #[test]
+    fn a_comment_published_by_the_first_release_candidate_reads_as_a_thread() {
+        // rc.1 sent the comment itself with the review. That copy cannot be
+        // edited from here, so the thread comes back without a pending one.
+        let (_dir, store) = store();
+        std::fs::create_dir_all(&store.dir).unwrap();
+        std::fs::write(
+            store.file("1"),
+            "---\npath: src/a.rs\nlines: 82-116\npublished: https://github.com/o/r/pull/1#r1\n---\n\nWhy **this** order?\n",
+        )
+        .unwrap();
+
+        assert_eq!(store.list().unwrap().comments, vec![comment("1")]);
     }
 
     #[test]

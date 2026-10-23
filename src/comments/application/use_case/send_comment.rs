@@ -1,21 +1,22 @@
 use std::sync::Arc;
 
 use crate::agent::domain::{AgentChannel, AgentError};
-use crate::comments::application::Comments;
-use crate::comments::domain::{Author, Comment, CommentError};
+use crate::comments::application::{Comments, ReviewModes, message};
+use crate::comments::domain::Purpose;
 use crate::config::domain::ConfigRepository;
 use crate::error::Result;
 
-/// Hand one comment to the session that implemented the branch.
+/// Hand one thread to the session that implemented the branch, for an answer.
 ///
 /// The browser sends an id and nothing else; the text is built here from the
-/// comment as stored, so the route cannot be used to put arbitrary words in
+/// thread as stored, so the route cannot be used to put arbitrary words in
 /// front of an agent that may be running without permission prompts.
 #[derive(Clone)]
 pub struct SendComment {
     comments: Comments,
     channel: Option<Arc<dyn AgentChannel>>,
     config: Arc<dyn ConfigRepository>,
+    modes: ReviewModes,
 }
 
 impl SendComment {
@@ -23,11 +24,13 @@ impl SendComment {
         comments: Comments,
         channel: Option<Arc<dyn AgentChannel>>,
         config: Arc<dyn ConfigRepository>,
+        modes: ReviewModes,
     ) -> Self {
         Self {
             comments,
             channel,
             config,
+            modes,
         }
     }
 
@@ -44,52 +47,15 @@ impl SendComment {
     /// the agent.
     pub fn execute(&self, id: &str) -> Result<()> {
         let channel = self.channel.as_ref().ok_or(AgentError::NoSession)?;
-        let comment = self
-            .comments
-            .all()?
-            .comments
-            .into_iter()
-            .find(|comment| comment.id == id)
-            .ok_or_else(|| CommentError::Unknown { id: id.into() })?;
+        let comment = self.comments.get(id)?;
         let config = self.config.read()?;
-        channel.send(&message(&comment, config.send_instruction()))?;
+        let mode = self.modes.current()?.mode;
+        channel.send(&message::answer(&comment, mode, config.send_instruction()))?;
         // Only once the transport took it: a comment marked as sent that never
         // left would sit on screen waiting for an answer nobody was asked for.
-        self.comments.sent(&comment.id, channel.harness())?;
+        self.comments
+            .sent(&comment.id, channel.harness(), Purpose::Answer)?;
         Ok(())
-    }
-}
-
-/// The part farol always writes, and then whatever the user chose to add.
-///
-/// Fixed: naming farol, so the skill is picked up; the id, so the instruction
-/// never has to carry it; the conversation so far, so a follow-up stands on its
-/// own; and the two commands that bring the answer back to the screen. Those
-/// last are not the user's to edit — an instruction that dropped them would
-/// leave the comment marked as waiting forever, with the answer only in the
-/// agent's terminal.
-fn message(comment: &Comment, instruction: &str) -> String {
-    let id = &comment.id;
-    let mut text = format!(
-        "A reviewer left a comment on this branch in farol (comment {id}):\n\n{}",
-        comment.quoted()
-    );
-    if !comment.conversation.replies.is_empty() {
-        text.push_str("\n\nThe conversation so far, oldest first:");
-        for reply in &comment.conversation.replies {
-            let who = match &reply.from {
-                Author::Reviewer => "Reviewer",
-                Author::Agent(name) => name,
-            };
-            text.push_str(&format!("\n\n{who}: {}", reply.body));
-        }
-    }
-    text.push_str(&format!(
-        "\n\nBefore you start, run `farol comment ack {id}` so the reviewer sees you are on it. Answer with `farol comment reply {id} --text '…'`, in single quotes: that is where the reviewer reads it."
-    ));
-    match instruction.trim() {
-        "" => text,
-        instruction => format!("{text}\n\n{instruction}"),
     }
 }
 
@@ -97,6 +63,7 @@ fn message(comment: &Comment, instruction: &str) -> String {
 mod tests {
     use super::*;
     use crate::comments::application::CommentReach;
+    use crate::comments::domain::{Author, Comment};
     use crate::comments::infra::MarkdownComments;
     use crate::config::domain::{SettingKey, SettingValue};
     use crate::diff::application::{FileDiffs, ReviewScope};
@@ -104,7 +71,8 @@ mod tests {
     use crate::map::application::GetScope;
     use crate::shared::paths::Store;
     use crate::testing::{
-        BrokenConfigRepository, FakeDiffSource, InMemoryConfigRepository, RecordingChannel,
+        BrokenConfigRepository, FakeDiffSource, InMemoryConfigRepository, InMemoryModeStore,
+        RecordingChannel,
     };
 
     struct World {
@@ -140,6 +108,7 @@ mod tests {
                 self.comments.clone(),
                 Some(self.channel.clone()),
                 self.config.clone(),
+                modes(),
             )
         }
 
@@ -172,7 +141,7 @@ mod tests {
         assert_eq!(
             world.channel.sent(),
             vec![format!(
-                "A reviewer left a comment on this branch in farol (comment {id}):\n\nsrc/a.rs:82-116\n\nWhy this order?\n\nBefore you start, run `farol comment ack {id}` so the reviewer sees you are on it. Answer with `farol comment reply {id} --text '…'`, in single quotes: that is where the reviewer reads it.\n\nAnswer it, or change the code and say what you changed.",
+                "A reviewer left a comment on this branch in farol (thread {id}):\n\nsrc/a.rs:82-116\n\nWhy this order?\n\nBefore you start, run `farol thread ack {id}` so the reviewer sees you are on it. Answer with `farol thread reply {id} --text '…'`, in single quotes: that is where the reviewer reads it.\n\nAnswer it, or change the code and say what you changed.\n\nThis is a self review of your branch. You may change the code to address the thread.",
                 id = comment.id
             )]
         );
@@ -190,11 +159,11 @@ mod tests {
 
         let sent = world.channel.sent();
         assert!(
-            sent[0].ends_with("reads it.\n\nOnly answer. Leave it open."),
+            sent[0].contains("reads it.\n\nOnly answer. Leave it open.\n\n"),
             "{}",
             sent[0]
         );
-        assert!(sent[1].ends_with("reads it.\n\nFix it."), "{}", sent[1]);
+        assert!(sent[1].contains("reads it.\n\nFix it.\n\n"), "{}", sent[1]);
     }
 
     #[test]
@@ -205,7 +174,10 @@ mod tests {
 
         world.send().execute(&comment.id).unwrap();
 
-        assert!(world.channel.sent()[0].ends_with("that is where the reviewer reads it."));
+        assert!(
+            world.channel.sent()[0]
+                .contains("that is where the reviewer reads it.\n\nThis is a self review")
+        );
     }
 
     #[test]
@@ -253,6 +225,7 @@ mod tests {
             world.comments.clone(),
             Some(Arc::new(crate::testing::RefusingChannel)),
             world.config.clone(),
+            modes(),
         );
 
         assert!(send.execute(&comment.id).is_err());
@@ -272,6 +245,7 @@ mod tests {
             world.comments.clone(),
             Some(world.channel.clone()),
             Arc::new(BrokenConfigRepository),
+            modes(),
         );
 
         assert!(send.execute(&comment.id).is_err());
@@ -287,7 +261,7 @@ mod tests {
 
         let error = world.send().execute("nope").unwrap_err();
 
-        assert!(error.to_string().contains("farol comment list"), "{error}");
+        assert!(error.to_string().contains("farol thread list"), "{error}");
         assert!(world.channel.sent().is_empty());
     }
 
@@ -295,10 +269,44 @@ mod tests {
     fn without_a_session_the_refusal_points_back_to_copy() {
         let world = World::new();
         let comment = world.comment();
-        let send = SendComment::new(world.comments.clone(), None, world.config.clone());
+        let send = SendComment::new(world.comments.clone(), None, world.config.clone(), modes());
 
         assert_eq!(send.harness(), None);
         let error = send.execute(&comment.id).unwrap_err();
         assert!(error.to_string().contains("copy the comment"), "{error}");
+    }
+
+    #[test]
+    fn a_peer_review_tells_the_agent_not_to_touch_the_code() {
+        use crate::comments::domain::{ModeStore as _, ReviewMode, StoredMode};
+        let world = World::new();
+        let comment = world.comment();
+        let store = Arc::new(InMemoryModeStore::default());
+        store
+            .write(&StoredMode {
+                mode: ReviewMode::PeerReview,
+                chosen: true,
+                author: None,
+            })
+            .unwrap();
+        world.instruct("Fix it.");
+        let send = SendComment::new(
+            world.comments.clone(),
+            Some(world.channel.clone()),
+            world.config.clone(),
+            ReviewModes::new(store),
+        );
+
+        send.execute(&comment.id).unwrap();
+
+        assert!(
+            world.channel.sent()[0]
+                .ends_with("do not change, commit or push code in this repository."),
+            "the rule outranks the instruction in Settings"
+        );
+    }
+
+    fn modes() -> ReviewModes {
+        ReviewModes::new(Arc::new(InMemoryModeStore::default()))
     }
 }

@@ -1,4 +1,6 @@
-use crate::comments::domain::{CommentError, Readiness, Review, ReviewPublisher};
+use crate::comments::domain::{
+    Comment, CommentError, Readiness, RemoteComment, Review, ReviewPublisher,
+};
 use crate::error::Result;
 
 /// A repository with nowhere to publish to.
@@ -10,11 +12,27 @@ use crate::error::Result;
 pub struct Unhosted;
 
 impl ReviewPublisher for Unhosted {
-    fn readiness(&self, _branch: &str) -> Result<Readiness> {
+    fn readiness(&self, _branch: &str, _head: &str) -> Result<Readiness> {
         Ok(Readiness::NoRemote)
     }
 
-    fn publish(&self, _review: &Review) -> Result<String> {
+    fn add_pending(&self, _pull: &str, _head: &str, _at: &Comment, _body: &str) -> Result<String> {
+        Err(CommentError::NoRemote.into())
+    }
+
+    fn edit_pending(&self, _id: &str, _body: &str) -> Result<()> {
+        Err(CommentError::NoRemote.into())
+    }
+
+    fn remove_pending(&self, _id: &str) -> Result<()> {
+        Err(CommentError::NoRemote.into())
+    }
+
+    fn remote(&self, _ids: &[String]) -> Result<Vec<RemoteComment>> {
+        Err(CommentError::NoRemote.into())
+    }
+
+    fn submit(&self, _review: &Review) -> Result<String> {
         Err(CommentError::NoRemote.into())
     }
 
