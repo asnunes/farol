@@ -391,6 +391,119 @@ pub fn services(source: FakeDiffSource, repo: Arc<InMemoryMapRepository>) -> Map
     }
 }
 
+/// Threads over a real store in a folder that goes away with the test.
+///
+/// The real one rather than a stand-in: a folder of markdown files is
+/// microseconds to write and it puts the header parser in the path, which
+/// is the fragile part. The directory comes back with it because it has to
+/// outlive what is built on top of it.
+pub fn thread_store(paths: &[&str]) -> (tempfile::TempDir, crate::comments::application::Comments) {
+    use crate::comments::infra::MarkdownComments;
+    use crate::diff::application::{FileDiffs, ReviewScope};
+    use crate::map::application::GetScope;
+
+    let dir = tempfile::tempdir().unwrap();
+    let store = crate::shared::paths::Store::new(dir.path(), "feature/x");
+    let source = Arc::new(FakeDiffSource::with_paths(paths));
+    let scope = ReviewScope::new(source.clone());
+    let comments = crate::comments::application::Comments::new(
+        Arc::new(MarkdownComments::new(&store, dir.path())),
+        GetScope::new(scope.clone()),
+        crate::comments::application::CommentReach::new(scope, FileDiffs::new(source)),
+    );
+    (dir, comments)
+}
+
+/// Everything a server holds, over the fakes: what the tests of the server
+/// reach for when what they are about is not the use cases themselves.
+pub fn server_use_cases() -> (tempfile::TempDir, crate::cmd::ServerUseCases) {
+    use crate::diff::application::{FileDiffs, ReviewScope};
+    use crate::map::application::GetReview;
+
+    let paths = ["a.rs", "b.rs", "Cargo.lock"];
+    let diffs = FileDiffs::new(Arc::new(FakeDiffSource::with_paths(&paths)));
+    let scope = ReviewScope::new(Arc::new(FakeDiffSource::with_paths(&paths)));
+    let maps = crate::testing::services(
+        FakeDiffSource::with_paths(&paths),
+        Arc::new(crate::testing::InMemoryMapRepository::new()),
+    );
+    let progress = crate::progress::application::ProgressStore::new(
+        Arc::new(InMemoryProgressRepository::default()),
+        diffs.clone(),
+    );
+    let (dir, comments) = thread_store(&paths);
+    (
+        dir,
+        server_use_cases_over(
+            &paths,
+            comments,
+            GetReview::new(maps.versions, scope, progress.clone()),
+            progress,
+        ),
+    )
+}
+
+/// The same, with the two that differ between tests handed in: the review,
+/// and the progress store under it, which a test may want broken.
+pub fn server_use_cases_over(
+    paths: &[&str],
+    comments: crate::comments::application::Comments,
+    review: crate::map::application::GetReview,
+    progress: crate::progress::application::ProgressStore,
+) -> crate::cmd::ServerUseCases {
+    use crate::comments::application::{
+        ChooseMode, CloseThread, EditPending, GeneratePending, PublishReview, PullRequestGate,
+        RemovePending, ReviewModes, ReviewReadiness, SendComment, WritePending,
+    };
+    use crate::diff::application::{CommitHistory, FileDiffs, ReviewScope};
+    use crate::map::application::{GetFileDiff, GetFileLines};
+    use crate::progress::application::{MarkViewed, UnmarkViewed};
+
+    let source = Arc::new(FakeDiffSource::with_paths(paths));
+    let scope = ReviewScope::new(source.clone());
+    let publisher: Arc<dyn crate::comments::domain::ReviewPublisher> =
+        Arc::new(crate::comments::infra::Unhosted);
+    let config = Arc::new(crate::testing::InMemoryConfigRepository::default());
+    let modes = ReviewModes::new(Arc::new(crate::testing::InMemoryModeStore::default()));
+    let gate = PullRequestGate::new(
+        publisher.clone(),
+        scope.clone(),
+        CommitHistory::new(source.clone()),
+    );
+    crate::cmd::ServerUseCases {
+        scope: crate::map::application::GetScope::new(scope.clone()),
+        review,
+        file_diff: GetFileDiff::new(FileDiffs::new(source.clone())),
+        file_lines: GetFileLines::new(scope.clone()),
+        mark_viewed: MarkViewed::new(progress.clone()),
+        unmark_viewed: UnmarkViewed::new(progress.clone()),
+        send_comment: SendComment::new(comments.clone(), None, config.clone(), modes.clone()),
+        generate_pending: GeneratePending::new(
+            comments.clone(),
+            None,
+            config,
+            modes.clone(),
+            publisher.clone(),
+        ),
+        close_thread: CloseThread::new(comments.clone(), publisher.clone()),
+        write_pending: WritePending::new(comments.clone(), gate.clone(), publisher.clone()),
+        edit_pending: EditPending::new(comments.clone(), publisher.clone()),
+        remove_pending: RemovePending::new(comments.clone(), publisher.clone()),
+        choose_mode: ChooseMode::new(modes.clone()),
+        readiness: ReviewReadiness::new(
+            gate.clone(),
+            modes,
+            comments.clone(),
+            publisher.clone(),
+            scope.clone(),
+            None,
+            progress.clone(),
+        ),
+        publish_review: PublishReview::new(comments.clone(), gate, publisher, scope, progress),
+        comments,
+    }
+}
+
 /// The editor alone, for the many tests that only write.
 pub fn editor(
     source: FakeDiffSource,
