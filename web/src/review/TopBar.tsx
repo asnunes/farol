@@ -68,25 +68,10 @@ export function TopBar({
             </Badge>
           )}
         </div>
-        {/* With the refs, because it says what kind of review this is, as they
-            say what it compares — not among the actions on the right. Over
-            there it also moved whenever the peer-only controls appeared, and
-            Submit review landed under the pointer that had just chosen it. */}
-        {pull && <ReviewMode pull={pull} onChoose={github.chooseMode} />}
       </div>
 
       <div className="acts flex min-w-0 flex-wrap items-center gap-2 gap-y-2 max-md:w-full md:justify-end md:gap-4">
         {unreadable.length > 0 && <Unreadable broken={unreadable} />}
-        {pull && peer && <Connection pull={pull} />}
-        {/* Counted apart, because only one of the two ever leaves farol. */}
-        {peer && threads.length > 0 && (
-          <span className="counts font-mono text-xs text-ink-muted">
-            {threads.length} thread{threads.length === 1 ? "" : "s"} · {pending} pending
-          </span>
-        )}
-        {pull && peer && pull.connection === "ready" && (
-          <SubmitReview pull={pull} threads={threads} onSubmit={github.submit} />
-        )}
         {stale && <Refresh reason={stale} onRefresh={onRefresh} />}
         <ViewToggle view={view} onChange={onView} />
         <div className="progress flex items-center gap-2 font-mono text-xs text-ink-muted">
@@ -114,6 +99,30 @@ export function TopBar({
             value={review.totalFiles ? (review.viewedFiles / review.totalFiles) * 100 : 0}
             aria-label={`${review.viewedFiles} of ${review.totalFiles} read`}
           />
+        </div>
+      </div>
+
+      {/* The review with the pull request, on a line of its own: the mode and
+          why, and in a peer review what goes to GitHub. Kept off the line
+          above so nothing there moves when it changes — on that line, choosing
+          peer review pushed the mode aside and put Submit review under the
+          pointer. The line is there from the first paint, at a fixed height,
+          so GitHub answering does not move the page down either. */}
+      <div className="review-line -mx-4 flex h-7 w-[calc(100%+2rem)] items-center justify-between gap-3 border-t border-rule px-4 pt-2 md:-mx-5 md:w-[calc(100%+2.5rem)] md:px-5">
+        <div className="flex min-w-0 items-center gap-3">
+          {pull && <ReviewMode pull={pull} onChoose={github.chooseMode} />}
+          {pull && peer && <Connection pull={pull} />}
+        </div>
+        <div className="flex shrink-0 items-center gap-3">
+          {/* Counted apart, because only one of the two ever leaves farol. */}
+          {peer && threads.length > 0 && (
+            <span className="counts font-mono text-xs text-ink-muted">
+              {threads.length} thread{threads.length === 1 ? "" : "s"} · {pending} pending
+            </span>
+          )}
+          {pull && peer && pull.connection === "ready" && (
+            <SubmitReview pull={pull} threads={threads} onSubmit={github.submit} />
+          )}
         </div>
       </div>
     </header>
