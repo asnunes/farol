@@ -31,6 +31,9 @@ export function Comment({ comment, actions }: CommentProps) {
   // does; one that went with the review stays there whatever happens here.
   const discardsPending = comment.pending !== null && remote?.state === "pending";
   const use = (body: string) => actions.writePending(comment.id, body);
+  // Once there is a pending comment, Edit and Regenerate are how it changes;
+  // offering every turn as a replacement too would be a third way.
+  const offerUse = peer && !comment.waiting && comment.pending === null;
 
   return (
     <div className="comment commented flex flex-col gap-2 border-b border-comment-rule bg-comment-bg py-2 pr-4 pl-8 md:pr-6 md:pl-16">
@@ -41,9 +44,7 @@ export function Comment({ comment, actions }: CommentProps) {
 
         <div className="min-w-0 flex-1">
           <Prose className="body font-sans text-sm leading-relaxed text-ink-soft">{comment.body}</Prose>
-          {peer && !comment.waiting && comment.pending === null && (
-            <UseAsPending onUse={() => use(comment.body)} />
-          )}
+          {offerUse && <UseAsPending onUse={() => use(comment.body)} />}
         </div>
 
         <div className="acts flex shrink-0 items-center gap-0.5">
@@ -63,7 +64,7 @@ export function Comment({ comment, actions }: CommentProps) {
         {comment.replies.length > 0 && (
           <Replies
             replies={comment.replies}
-            onUse={peer && !comment.waiting ? use : undefined}
+            onUse={offerUse ? use : undefined}
           />
         )}
         {comment.waiting && <Status waiting={comment.waiting} />}

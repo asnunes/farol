@@ -273,6 +273,7 @@ describe("a comment on the page", () => {
       expect(screen.getByText("· written by Codex")).toBeTruthy();
       expect(screen.getByRole("button", { name: "Regenerate" })).toBeTruthy();
       expect(screen.queryByRole("button", { name: "Generate pending comment" })).toBeNull();
+      expect(screen.queryByRole("button", { name: "Use as pending comment" })).toBeNull();
 
       fireEvent.click(screen.getByLabelText("Close this thread"));
       fireEvent.click(screen.getByLabelText("Press again to close this thread"));
