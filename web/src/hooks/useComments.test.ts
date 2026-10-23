@@ -57,6 +57,6 @@ describe("a file's comments", () => {
   }
 
   function comment(id: string): CommentView {
-    return { id, path: "src/a.rs", side: "new", from: 1, to: 1, body: "why?", published: null, replies: [], waiting: null };
+    return { id, path: "src/a.rs", side: "new", from: 1, to: 1, body: "why?", pending: null, replies: [], waiting: null };
   }
 });

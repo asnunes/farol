@@ -80,8 +80,27 @@ function aside(url: string): Response | null {
       headers: { "content-type": "application/json" },
     });
   }
+  if (url === "/api/github") {
+    return new Response(JSON.stringify(selfReview), {
+      headers: { "content-type": "application/json" },
+    });
+  }
   return null;
 }
+
+/** What a repository with nowhere to publish answers: a self review. */
+const selfReview = {
+  connection: "no-remote",
+  number: null,
+  mine: false,
+  author: null,
+  openAt: null,
+  login: "gh auth login --hostname github.com",
+  numbers: [],
+  mode: { mode: "self", reason: "no pull request to tell" },
+  pending: {},
+  pendingFailed: null,
+};
 
 const emptyDiff = {
   path: "",
@@ -225,14 +244,14 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-it("keeps publication and credentials outside the local review page", async () => {
+it("offers nothing to send to a pull request in a self review", async () => {
   vi.stubGlobal("fetch", vi.fn(async (input: string) => {
     const url = String(input);
     return aside(url) ?? new Response(JSON.stringify(url === "/api/review" ? review() : emptyDiff));
   }));
   render(<App />);
   await screen.findByRole("progressbar");
-  expect(screen.queryByRole("button", { name: /Send review/ })).toBeNull();
+  expect(screen.queryByRole("button", { name: /Submit review/ })).toBeNull();
   expect(vi.mocked(fetch).mock.calls.some(([url]) => /\/api\/(publish|token)/.test(String(url)))).toBe(false);
 });
 

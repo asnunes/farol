@@ -15,7 +15,7 @@ const ARMED_FOR = 4000;
  * So it asks first. Two presses rather than a dialog, because a dialog over a
  * diff covers the code the question is about — and the button that copies sits
  * a few pixels away, which is the misclick worth guarding against. */
-export function Close({ comment, actions }: CloseProps) {
+export function Close({ comment, actions, discardsPending }: CloseProps) {
   const [armed, setArmed] = useState(false);
   const disarming = useRef<number | undefined>(undefined);
 
@@ -24,7 +24,7 @@ export function Close({ comment, actions }: CloseProps) {
   function press() {
     if (armed) {
       window.clearTimeout(disarming.current);
-      void actions.close(comment.id);
+      void actions.close(comment.id, discardsPending);
       return;
     }
     setArmed(true);
@@ -40,8 +40,14 @@ export function Close({ comment, actions }: CloseProps) {
           ? "closer bg-comment-ink text-[0.6875rem] text-surface hover:bg-comment-ink/90 hover:text-surface"
           : "closer text-comment-faint hover:bg-sunken hover:text-comment-ink"
       }
-      aria-label={armed ? "Press again to close this comment" : "Close this comment"}
-      title={armed ? "Press again — closing removes it" : "Close this comment"}
+      aria-label={armed ? "Press again to close this thread" : "Close this thread"}
+      title={
+        armed
+          ? discardsPending
+            ? "Press again — closing removes it, and its pending comment from the pull request"
+            : "Press again — closing removes it"
+          : "Close this thread"
+      }
       onClick={press}
       onBlur={() => setArmed(false)}
     >
@@ -51,4 +57,9 @@ export function Close({ comment, actions }: CloseProps) {
   );
 }
 
-type CloseProps = { comment: CommentView; actions: CommentActions };
+type CloseProps = {
+  comment: CommentView;
+  actions: CommentActions;
+  /** The thread's pending comment is still on the pull request, and goes too. */
+  discardsPending: boolean;
+};

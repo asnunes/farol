@@ -3,13 +3,12 @@ import { Comment } from "./Comment";
 import { commentsAt, numberOn } from "../line";
 import type { Anchor, Commentary } from "../line";
 
-/** Everything hanging off one row: what has already been asked there, and the
- * box if the reader is asking now.
+/** Everything hanging off one row: the threads already started there, and the
+ * box if the reader is starting one now.
  *
- * Not a thread — there are no replies to hang in one. A comment is a body and
- * nothing else, and two of them on the same line are two questions rather than
- * a conversation. What this gathers is what is attached to a line, which is why
- * the empty box belongs in it too.
+ * Two threads on the same line are two questions rather than one conversation.
+ * What this gathers is what is attached to a line, which is why the empty box
+ * belongs in it too.
  *
  * Both layouts show the same thing under the same line, so both draw it from
  * here rather than each assembling it from the parts. What differs is only what
@@ -44,6 +43,14 @@ export function AtLine({ at, commentary }: AtLineProps) {
             await actions.addAndSend(path, span.side, span.from, span.to, body);
             select.close();
           }}
+          onAddAsPending={
+            actions.pendingOffered
+              ? async (body) => {
+                  await actions.addAsPending(path, span.side, span.from, span.to, body);
+                  select.close();
+                }
+              : undefined
+          }
           onCancel={select.close}
         />
       )}

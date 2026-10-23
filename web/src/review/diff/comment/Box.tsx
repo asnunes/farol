@@ -4,11 +4,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { span } from "./quoted";
 import type { Span } from "../useLineSelection";
 
-/** How the box is worked, which is a description of it and never its name. */
-const KEYS = "Markdown. ⌘↵ to save, esc to close.";
-
-/** The same, when an agent session can take the comment straight away. */
-const KEYS_WITH_SEND = "Markdown. ⌘↵ to save and send, ⇧⌘↵ to only save, esc to close.";
 
 /** Where a comment gets written: a plain box under the lines it is about.
  *
@@ -20,7 +15,7 @@ const KEYS_WITH_SEND = "Markdown. ⌘↵ to save and send, ⇧⌘↵ to only sav
  * it. A box whose only name was its placeholder had no name at all once a word
  * was typed into it, and the placeholder is where the keys live, which is a
  * description of how to use the box and not a name for it. */
-export function Box({ span: lines, onSave, onCancel, agent, onSaveAndSend }: BoxProps) {
+export function Box({ span: lines, onSave, onCancel, agent, onSaveAndSend, onAddAsPending }: BoxProps) {
   const field = useId();
   const keys = useId();
   const [text, setText] = useState("");
@@ -44,12 +39,14 @@ export function Box({ span: lines, onSave, onCancel, agent, onSaveAndSend }: Box
     };
   }, []);
 
-  const keysText = agent ? KEYS_WITH_SEND : KEYS;
+  const keysText = keysFor(agent, onAddAsPending !== undefined);
 
-  async function save(andSend = false) {
+  async function save(how: "save" | "ask" | "pending") {
     if (!text.trim() || saving) return;
     setSaving(true);
-    await (andSend && agent ? onSaveAndSend(text) : onSave(text));
+    if (how === "pending" && onAddAsPending) await onAddAsPending(text);
+    else if (how === "ask" && agent) await onSaveAndSend(text);
+    else await onSave(text);
   }
 
   return (
@@ -78,9 +75,11 @@ export function Box({ span: lines, onSave, onCancel, agent, onSaveAndSend }: Box
           // worth writing usually runs to a second line.
           if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
             e.preventDefault();
-            // With a session, the plain shortcut does what the highlighted
-            // button does; saving alone is the one that takes the extra key.
-            void save(!e.shiftKey);
+            // The plain shortcut does what the highlighted button does. The
+            // shifted one adds a pending comment in a peer review, and saves
+            // alone everywhere else.
+            if (!e.shiftKey) void save(agent ? "ask" : "save");
+            else void save(onAddAsPending ? "pending" : "save");
           }
           if (e.key === "Escape") {
             e.preventDefault();
@@ -95,18 +94,18 @@ export function Box({ span: lines, onSave, onCancel, agent, onSaveAndSend }: Box
         {keysText}
       </span>
 
-      {/* With a session connected, sending is the point, so it is the button
+      {/* With a session connected, asking is the point, so it is the button
           that stands out and comes first; saving alone is the quieter one. */}
-      <div className="mt-2 flex gap-2">
+      <div className="mt-2 flex flex-wrap gap-2">
         {agent && (
           <Button
             size="xs"
             className="bg-comment-ink text-surface hover:bg-comment-ink/90"
-            title={`Save the comment and send it to ${agent}`}
+            title={`Start the thread and send it to ${agent}`}
             disabled={!text.trim() || saving}
-            onClick={() => void save(true)}
+            onClick={() => void save("ask")}
           >
-            Comment &amp; send
+            Ask {agent}
           </Button>
         )}
         <Button
@@ -114,10 +113,21 @@ export function Box({ span: lines, onSave, onCancel, agent, onSaveAndSend }: Box
           variant={agent ? "outline" : "default"}
           className={agent ? "" : "bg-comment-ink text-surface hover:bg-comment-ink/90"}
           disabled={!text.trim() || saving}
-          onClick={() => void save()}
+          onClick={() => void save("save")}
         >
           Comment
         </Button>
+        {onAddAsPending && (
+          <Button
+            size="xs"
+            variant="outline"
+            title="Start the thread with these words as its comment for the pull request"
+            disabled={!text.trim() || saving}
+            onClick={() => void save("pending")}
+          >
+            Add as pending comment
+          </Button>
+        )}
         <Button size="xs" variant="ghost" className="text-ink-muted" onClick={onCancel}>
           Cancel
         </Button>
@@ -133,8 +143,15 @@ export function Box({ span: lines, onSave, onCancel, agent, onSaveAndSend }: Box
  * leave nothing to tell the control apart from the box it opened. */
 function about(lines: Span): string {
   return lines.from === lines.to
-    ? `Comment on line ${span(lines, "–")}`
-    : `Comment on lines ${span(lines, "–")}`;
+    ? `Thread on line ${span(lines, "–")}`
+    : `Thread on lines ${span(lines, "–")}`;
+}
+
+/** How the box is worked, which is a description of it and never its name. */
+function keysFor(agent: string | null, pending: boolean): string {
+  const main = agent ? `⌘↵ asks ${agent}` : "⌘↵ saves";
+  const shifted = pending ? "⇧⌘↵ adds as pending comment" : agent ? "⇧⌘↵ only saves" : null;
+  return `Markdown. ${[main, shifted, "esc closes."].filter(Boolean).join(" · ")}`;
 }
 
 type BoxProps = {
@@ -144,4 +161,6 @@ type BoxProps = {
   /** The harness a send reaches, or null — and then there is only Comment. */
   agent: string | null;
   onSaveAndSend: (body: string) => Promise<void>;
+  /** Offered in a peer review: the thread starts with its pending comment. */
+  onAddAsPending?: (body: string) => Promise<void>;
 };

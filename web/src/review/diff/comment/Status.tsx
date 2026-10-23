@@ -4,8 +4,9 @@ import type { WaitingView } from "@/api";
 /** What the agent owes, as far as farol was told.
  *
  * "Sent" is all farol knows on its own; "working" is the agent saying so with
- * `farol comment ack`. Nothing finer exists to show: neither harness reports
- * whether it has started. */
+ * `farol thread ack`. Nothing finer exists to show: neither harness reports
+ * whether it has started. Which thing it owes is said too, because a thread
+ * waiting for a pending comment and one waiting for an answer look alike. */
 export function Status({ waiting }: StatusProps) {
   const working = waiting.stage === "working";
   return (
@@ -15,7 +16,13 @@ export function Status({ waiting }: StatusProps) {
       ) : (
         <Send className="size-3.5" aria-hidden="true" />
       )}
-      {working ? `${waiting.on} is working on it` : `Sent to ${waiting.on} · waiting for an answer`}
+      {waiting.purpose === "pending"
+        ? working
+          ? `${waiting.on} is writing a pending comment`
+          : `Sent to ${waiting.on} · waiting for a pending comment`
+        : working
+          ? `${waiting.on} is working on it`
+          : `Sent to ${waiting.on} · waiting for an answer`}
     </p>
   );
 }

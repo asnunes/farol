@@ -30,7 +30,10 @@ export const api = {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ path, side, from, to, body }),
     }).then(json<CommentView>),
-  closeComment: (id: string) => send(`/api/comments/${encodeURIComponent(id)}`, "DELETE"),
+  /** With `discardPending`, the thread's pending comment is taken off the pull
+   * request too; without it, a thread that still has one is refused. */
+  closeComment: (id: string, discardPending = false) =>
+    send(`/api/comments/${encodeURIComponent(id)}${discardPending ? "?discardPending=true" : ""}`, "DELETE"),
   /** The reviewer writing back under a comment; sending it on is `sendComment`. */
   replyComment: (id: string, body: string) =>
     fetch(`/api/comments/${encodeURIComponent(id)}/replies`, {
@@ -41,6 +44,27 @@ export const api = {
   /** Only the id goes: the server builds the message from the comment it holds. */
   sendComment: (id: string) =>
     send(`/api/comments/${encodeURIComponent(id)}/send`, "POST"),
+
+  /** The pull request, the review mode and each thread's pending comment. */
+  github: () => fetch("/api/github").then(json<PullRequestView>),
+  chooseMode: (mode: ReviewMode) => send("/api/mode", "PUT", { mode }),
+  /** The reviewer's own words, into their pending review on the pull request. */
+  writePending: (id: string, body: string) =>
+    send(`/api/comments/${encodeURIComponent(id)}/pending`, "POST", { body }),
+  editPending: (id: string, body: string) =>
+    send(`/api/comments/${encodeURIComponent(id)}/pending`, "PUT", { body }),
+  removePending: (id: string) =>
+    send(`/api/comments/${encodeURIComponent(id)}/pending`, "DELETE"),
+  /** Ask the agent to write it; `instruction` is the note for this one. */
+  generatePending: (id: string, instruction = "") =>
+    send(`/api/comments/${encodeURIComponent(id)}/generate`, "POST", { instruction }),
+  /** Only the verdict and summary go: what is submitted is what is pending. */
+  submitReview: (verdict: Verdict, summary: string) =>
+    fetch("/api/github/review", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ verdict, summary }),
+    }).then(json<SentView>),
 };
 
 /** The page, top to bottom: each block announced, then the files it holds, then
@@ -215,9 +239,9 @@ export type CommentView = {
   to: number;
   /** Markdown, as it was typed. */
   body: string;
-  /** Where it can be read on the pull request, once it has gone. Publishing is
-   * not answering: a published comment is still waiting for one. */
-  published: string | null;
+  /** Who wrote the thread's comment for the pull request, when it has one.
+   * What it says, and whether it went, is in `PullRequestView.pending`. */
+  pending: PendingByView | null;
   /** The turns after the question, oldest first. */
   replies: ReplyView[];
   /** Set while an agent owes an answer. */
@@ -232,8 +256,50 @@ export type ReplyView = {
   body: string;
 };
 
-/** An answer owed: handed over, or acknowledged by the agent as being worked on. */
-export type WaitingView = { on: string; stage: "sent" | "working" };
+/** Something owed — an answer, or a pending comment: handed over, or
+ * acknowledged by the agent as being worked on. */
+export type WaitingView = {
+  on: string;
+  stage: "sent" | "working";
+  purpose: "answer" | "pending";
+};
+
+export type PendingByView = { by: "reviewer" | "agent"; name: string };
+
+/** The pull request as the screen needs it, asked of GitHub apart from the
+ * threads so they never wait on the network. */
+export type PullRequestView = {
+  /** Fewer states than reasons: everything a login fixes reads as "connect". */
+  connection: "ready" | "connect" | "no-pull-request" | "ambiguous" | "no-remote";
+  number: number | null;
+  mine: boolean;
+  author: string | null;
+  openAt: string | null;
+  /** The command that connects, for the host the repository is on. */
+  login: string;
+  numbers: number[];
+  mode: { mode: ReviewMode; reason: string };
+  /** By thread id. */
+  pending: Record<string, RemotePendingView>;
+  pendingFailed: string | null;
+};
+
+export type ReviewMode = "self" | "peer";
+
+export type RemotePendingView = {
+  state: "pending" | "published" | "gone";
+  body: string | null;
+  url: string | null;
+};
+
+export type Verdict = "comment" | "request-changes" | "approve";
+
+export type SentView = {
+  url: string;
+  comments: number;
+  read: number;
+  readFailed: string | null;
+};
 
 /** Where a file sits: the block it is read under and how far down the map that
  * block is, which is what the band above the diff counts off. */

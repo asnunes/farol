@@ -14,6 +14,14 @@ export function noComments(): CommentActions {
     send: vi.fn().mockResolvedValue(true),
     addAndSend: vi.fn().mockResolvedValue(undefined),
     reply: vi.fn().mockResolvedValue(undefined),
+    all: [],
+    pendingOffered: false,
+    pendingOf: () => undefined,
+    writePending: vi.fn().mockResolvedValue(true),
+    editPending: vi.fn().mockResolvedValue(true),
+    removePending: vi.fn().mockResolvedValue(true),
+    generate: vi.fn().mockResolvedValue(true),
+    addAsPending: vi.fn().mockResolvedValue(true),
   };
 }
 
@@ -25,7 +33,7 @@ export function comment(over: Partial<CommentView> = {}): CommentView {
     from: 1,
     to: 1,
     body: "Why this order?",
-    published: null,
+    pending: null,
     replies: [],
     waiting: null,
     ...over,

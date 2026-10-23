@@ -29,25 +29,25 @@ describe("a comment on the page", () => {
     const actions = noComments();
     render(<Comment comment={comment()} actions={actions} />);
 
-    fireEvent.click(screen.getByLabelText("Close this comment"));
+    fireEvent.click(screen.getByLabelText("Close this thread"));
 
     expect(actions.close).not.toHaveBeenCalled();
-    expect(screen.getByLabelText("Press again to close this comment")).toBeTruthy();
+    expect(screen.getByLabelText("Press again to close this thread")).toBeTruthy();
   });
 
   it("closes on the second press", () => {
     const actions = noComments();
     render(<Comment comment={comment()} actions={actions} />);
 
-    fireEvent.click(screen.getByLabelText("Close this comment"));
-    fireEvent.click(screen.getByLabelText("Press again to close this comment"));
+    fireEvent.click(screen.getByLabelText("Close this thread"));
+    fireEvent.click(screen.getByLabelText("Press again to close this thread"));
 
-    expect(actions.close).toHaveBeenCalledWith("18cb-3731");
+    expect(actions.close).toHaveBeenCalledWith("18cb-3731", false);
   });
 
   it("copies where it was and what it said, in one paste", () => {
     // Pasted into a chat or an issue it has to stand on its own — the same
-    // shape `farol comment` writes on the terminal.
+    // shape `farol thread` writes on the terminal.
     expect(quoted(comment({ from: 82, to: 116 }))).toBe("src/a.rs:82-116\n\nWhy this order?");
     expect(quoted(comment({ from: 9, to: 9 }))).toBe("src/a.rs:9\n\nWhy this order?");
   });
@@ -99,11 +99,11 @@ describe("a comment on the page", () => {
 
   it("says what the agent owes: sent, then working once it acknowledges", () => {
     const { rerender } = render(
-      <Comment comment={comment({ waiting: { on: "Codex", stage: "sent" } })} actions={noComments()} />,
+      <Comment comment={comment({ waiting: { on: "Codex", stage: "sent", purpose: "answer" } })} actions={noComments()} />,
     );
     expect(screen.getByRole("status").textContent).toContain("Sent to Codex");
 
-    rerender(<Comment comment={comment({ waiting: { on: "Codex", stage: "working" } })} actions={noComments()} />);
+    rerender(<Comment comment={comment({ waiting: { on: "Codex", stage: "working", purpose: "answer" } })} actions={noComments()} />);
     expect(screen.getByRole("status").textContent).toContain("Codex is working on it");
   });
 
@@ -117,7 +117,7 @@ describe("a comment on the page", () => {
 
     const reply = screen.getByRole("button", { name: "Reply" });
     expect(container.querySelector(".acts")?.contains(reply)).toBe(false);
-    expect(container.querySelector(".thread")?.lastElementChild).toBe(reply);
+    expect(container.querySelector(".thread")?.lastElementChild?.contains(reply)).toBe(true);
   });
 
   it("says a reply was not sent, and sends it from there", async () => {
@@ -160,7 +160,7 @@ describe("a comment on the page", () => {
 
   it("offers no Reply while the agent owes an answer", () => {
     render(
-      <Comment comment={comment({ waiting: { on: "Codex", stage: "sent" } })} actions={noComments()} />,
+      <Comment comment={comment({ waiting: { on: "Codex", stage: "sent", purpose: "answer" } })} actions={noComments()} />,
     );
 
     expect(screen.queryByRole("button", { name: "Reply" })).toBeNull();
@@ -169,7 +169,7 @@ describe("a comment on the page", () => {
   it("holds Send while the agent owes an answer and once it has given one", () => {
     const actions = { ...noComments(), agent: "Claude Code" };
     const { rerender } = render(
-      <Comment comment={comment({ waiting: { on: "Claude Code", stage: "working" } })} actions={actions} />,
+      <Comment comment={comment({ waiting: { on: "Claude Code", stage: "working", purpose: "answer" } })} actions={actions} />,
     );
     const send = () => screen.getByLabelText("Send to Claude Code") as HTMLButtonElement;
     expect(send().disabled).toBe(true);
@@ -231,5 +231,76 @@ describe("a comment on the page", () => {
 
     expect(writeText).toHaveBeenCalledWith("src/a.rs:82-116\n\nWhy this order?");
     vi.unstubAllGlobals();
+  });
+
+  describe("in a peer review", () => {
+    const peer = () => ({ ...noComments(), agent: "Codex", pendingOffered: true });
+
+    it("offers a pending comment from the thread, the turns and the question", () => {
+      render(
+        <Comment
+          comment={comment({ replies: [{ from: "agent", name: "Codex", body: "Rename it." }] })}
+          actions={peer()}
+        />,
+      );
+
+      expect(screen.getByRole("button", { name: "Generate pending comment" })).toBeTruthy();
+      expect(screen.getAllByRole("button", { name: "Use as pending comment" })).toHaveLength(2);
+    });
+
+    it("takes a turn of the conversation as the pending comment", () => {
+      const actions = peer();
+      render(
+        <Comment
+          comment={comment({ replies: [{ from: "agent", name: "Codex", body: "Rename it." }] })}
+          actions={actions}
+        />,
+      );
+
+      fireEvent.click(screen.getAllByRole("button", { name: "Use as pending comment" })[1]);
+
+      expect(actions.writePending).toHaveBeenCalledWith("18cb-3731", "Rename it.");
+    });
+
+    it("shows the pending comment as GitHub has it, and closing takes it along", () => {
+      const actions = {
+        ...peer(),
+        pendingOf: () => ({ state: "pending" as const, body: "Please rename it.", url: null }),
+      };
+      render(<Comment comment={comment({ pending: { by: "agent", name: "Codex" } })} actions={actions} />);
+
+      expect(screen.getByText("Please rename it.")).toBeTruthy();
+      expect(screen.getByText("· written by Codex")).toBeTruthy();
+      expect(screen.getByRole("button", { name: "Regenerate" })).toBeTruthy();
+      expect(screen.queryByRole("button", { name: "Generate pending comment" })).toBeNull();
+
+      fireEvent.click(screen.getByLabelText("Close this thread"));
+      fireEvent.click(screen.getByLabelText("Press again to close this thread"));
+      expect(actions.close).toHaveBeenCalledWith("18cb-3731", true);
+    });
+
+    it("offers nothing to change on a comment that went with the review", () => {
+      const actions = {
+        ...peer(),
+        pendingOf: () => ({ state: "published" as const, body: "Done.", url: "https://x/1" }),
+      };
+      render(<Comment comment={comment({ pending: { by: "reviewer", name: "you" } })} actions={actions} />);
+
+      expect(screen.getByText("Published")).toBeTruthy();
+      expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
+      expect(screen.queryByRole("button", { name: "Remove" })).toBeNull();
+    });
+
+    it("says what the agent is writing while it owes a pending comment", () => {
+      render(
+        <Comment
+          comment={comment({ waiting: { on: "Codex", stage: "working", purpose: "pending" } })}
+          actions={peer()}
+        />,
+      );
+
+      expect(screen.getByText("Codex is writing a pending comment")).toBeTruthy();
+      expect(screen.queryByRole("button", { name: "Generate pending comment" })).toBeNull();
+    });
   });
 });

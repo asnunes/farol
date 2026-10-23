@@ -121,7 +121,7 @@ describe("opening what the diff did not print", () => {
     const row = [...container.querySelectorAll(".diff-row")].find((r) =>
       r.textContent?.includes("line 11"),
     );
-    expect(screen.queryByLabelText("Comment on line 11")).toBeNull();
+    expect(screen.queryByLabelText("Thread on line 11")).toBeNull();
     expect(row!.querySelector(".ln")!.className).not.toContain("cursor-pointer");
   });
 

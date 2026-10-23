@@ -8,7 +8,11 @@ import { Refresh } from "@/review/Refresh";
 import { ViewToggle } from "@/review/ViewToggle";
 import { MOD } from "@/hooks/useShortcuts";
 import type { DiffView } from "@/hooks/useDiffView";
-import type { ReviewView, Unreadable as UnreadableView } from "@/api";
+import { Connection } from "@/review/Connection";
+import { ReviewMode } from "@/review/ReviewMode";
+import { SubmitReview } from "@/review/SubmitReview";
+import type { GitHubState } from "@/hooks/useGitHub";
+import type { CommentView, ReviewView, Unreadable as UnreadableView } from "@/api";
 
 /** Where you are and how far through you are. */
 export function TopBar({
@@ -22,8 +26,15 @@ export function TopBar({
   onToggleSidebar,
   toggleRef,
   onNextUnread,
+  github,
+  threads,
 }: TopBarProps) {
   const done = review.totalFiles > 0 && review.viewedFiles === review.totalFiles;
+  const pull = github.pull;
+  const peer = pull?.mode.mode === "peer";
+  const pending = pull
+    ? threads.filter((thread) => pull.pending[thread.id]?.state === "pending").length
+    : 0;
 
   return (
     // Wrapping and tightening rather than dropping anything: every control here
@@ -61,6 +72,17 @@ export function TopBar({
 
       <div className="acts flex min-w-0 flex-wrap items-center gap-2 gap-y-2 max-md:w-full md:justify-end md:gap-4">
         {unreadable.length > 0 && <Unreadable broken={unreadable} />}
+        {pull && <ReviewMode pull={pull} onChoose={github.chooseMode} />}
+        {pull && peer && <Connection pull={pull} />}
+        {/* Counted apart, because only one of the two ever leaves farol. */}
+        {peer && threads.length > 0 && (
+          <span className="counts font-mono text-xs text-ink-muted">
+            {threads.length} thread{threads.length === 1 ? "" : "s"} · {pending} pending
+          </span>
+        )}
+        {pull && peer && pull.connection === "ready" && (
+          <SubmitReview pull={pull} threads={threads} onSubmit={github.submit} />
+        )}
         {stale && <Refresh reason={stale} onRefresh={onRefresh} />}
         <ViewToggle view={view} onChange={onView} />
         <div className="progress flex items-center gap-2 font-mono text-xs text-ink-muted">
@@ -166,6 +188,9 @@ type TopBarProps = {
   /** Focus comes back here when the sidebar closes under whoever was in it. */
   toggleRef: React.Ref<HTMLButtonElement>;
   onNextUnread: () => void;
+  github: GitHubState;
+  /** Every thread on the review, for the counts and the review dialog. */
+  threads: CommentView[];
 };
 
 type SidebarToggleProps = {
