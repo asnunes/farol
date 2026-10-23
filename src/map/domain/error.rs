@@ -34,7 +34,9 @@ pub enum MapError {
         existing: Vec<String>,
     },
 
-    #[error("'{path}' is already in block '{slug}'")]
+    #[error(
+        "'{path}' is already in block '{slug}'\nA file belongs to one block. If it also serves this story, leave a line note on it in '{slug}'; to move it, run `farol file remove {slug} {path}` first."
+    )]
     DuplicatePath { slug: String, path: String },
 
     #[error("lines {from}-{to} are outside '{path}', which has {total} lines")]

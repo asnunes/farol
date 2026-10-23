@@ -980,7 +980,9 @@ fn writing_a_map_reaches_the_open_page_without_it_asking() {
 
     std::thread::sleep(Duration::from_millis(500));
     // With a file in it, because a block holding nothing in the comparison is
-    // not rendered and this test is about the nudge, not about that rule.
+    // not rendered and this test is about the nudge, not about that rule. The
+    // file is moved from the block that had it: a file belongs to one block.
+    s.repo.ok(&["file", "remove", "wiring", "src/b.rs"]);
     s.repo.ok(&[
         "block",
         "add",
@@ -989,7 +991,7 @@ fn writing_a_map_reaches_the_open_page_without_it_asking() {
         "Later",
         "--context",
         "written while reading",
-        "src/a.rs",
+        "src/b.rs",
     ]);
 
     let out = watching.wait_with_output().expect("curl should finish");

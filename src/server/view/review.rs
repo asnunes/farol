@@ -1,5 +1,5 @@
 //! The review as the screen draws it: blocks in the author's order, each file
-//! once, under the earliest block that holds it, with its notes from every block.
+//! under the one block that reads it, with that block's notes.
 
 use std::collections::BTreeSet;
 
@@ -52,12 +52,6 @@ impl ReviewView {
         for block in map.blocks() {
             // A block whose every file left the comparison is gone from the
             // screen with them: a band of prose over nothing reads as a bug.
-            //
-            // "Holds something" and "renders something" are different, and the
-            // difference is the whole reason this is not a filter on the list
-            // below. A file read under an earlier block is not rendered again
-            // here, and that block is still worth its band — the story it tells
-            // about the file is the reason the author wrote it twice.
             if !map.paths_in(&block.slug).any(|path| scope.contains(path)) {
                 continue;
             }
@@ -65,11 +59,6 @@ impl ReviewView {
             let mut files = Vec::new();
 
             for bf in &block.files {
-                // Only the earliest block renders it; later ones would repeat the
-                // same diff under a different heading.
-                if placed.contains(&bf.path) {
-                    continue;
-                }
                 let Some(change) = scope.change(&bf.path) else {
                     continue;
                 };
@@ -77,6 +66,8 @@ impl ReviewView {
                 files.push(FileView::build(map, change, progress, false, None));
             }
 
+            // A file the block reads and also marks skim is drawn once, as
+            // the file.
             for entry in map.skim_for(&block.slug) {
                 if placed.contains(&entry.path) {
                     continue;
@@ -182,11 +173,7 @@ pub struct BlockView {
     pub title: String,
     pub context: String,
     pub files: Vec<FileView>,
-    /// What the block *holds*, which is not what it renders: a file it shares
-    /// with an earlier block is read under that one and listed here on neither.
-    /// Counted where the membership is known, because a screen counting the
-    /// rendered list instead calls a block finished while a file of its own is
-    /// still unread — and calls one that renders nothing unfinishable.
+    /// What the block holds, read files and skim alike, each path once.
     ///
     /// Never zero: a block with no path left in the comparison is not sent.
     pub total_files: usize,
@@ -201,12 +188,9 @@ pub struct FileView {
     pub additions: u32,
     pub deletions: u32,
     pub viewed: bool,
-    /// Note written for this file, from whichever block contributed it.
+    /// The note the block wrote for this file.
     pub notes: Vec<TaggedNote>,
     pub line_notes: Vec<TaggedLineNote>,
-    /// Every block this file participates in, in reading order. More than one
-    /// means the file shows up once but matters in several places.
-    pub tags: Vec<String>,
     pub skim: bool,
     pub skim_reason: Option<String>,
 }
@@ -225,26 +209,24 @@ impl FileView {
     ) -> FileView {
         let path = change.path.as_str();
 
-        // Notes from every block the file appears in, so nothing is lost by
-        // rendering it only once.
         let mut notes = Vec::new();
         let mut line_notes = Vec::new();
-        for block in map.blocks_of(path) {
-            if let Some(bf) = block.file(path) {
-                if let Some(text) = &bf.note {
-                    notes.push(TaggedNote {
-                        block: block.slug.to_string(),
-                        text: text.clone(),
-                    });
-                }
-                for n in &bf.line_notes {
-                    line_notes.push(TaggedLineNote {
-                        block: block.slug.to_string(),
-                        from: n.range.from,
-                        to: n.range.to,
-                        text: n.text.clone(),
-                    });
-                }
+        if let Some(block) = map.block_of(path)
+            && let Some(bf) = block.file(path)
+        {
+            if let Some(text) = &bf.note {
+                notes.push(TaggedNote {
+                    block: block.slug.to_string(),
+                    text: text.clone(),
+                });
+            }
+            for n in &bf.line_notes {
+                line_notes.push(TaggedLineNote {
+                    block: block.slug.to_string(),
+                    from: n.range.from,
+                    to: n.range.to,
+                    text: n.text.clone(),
+                });
             }
         }
         line_notes.sort_by_key(|n| (n.from, n.to));
@@ -262,11 +244,6 @@ impl FileView {
             viewed,
             notes,
             line_notes,
-            tags: map
-                .blocks_of(path)
-                .iter()
-                .map(|b| b.slug.to_string())
-                .collect(),
             skim,
             skim_reason,
         }
@@ -318,51 +295,6 @@ mod tests {
             m.add_file(&slug(name), *path, None, None).unwrap();
         }
         m
-    }
-
-    #[test]
-    fn a_file_in_two_blocks_is_rendered_once_in_the_earlier_one() {
-        let map = map_of(&[("first", "shared.rs"), ("second", "shared.rs")]);
-        let source = FakeDiffSource::with_paths(&["shared.rs"]);
-        let view = built(&map, source, &Progress::new());
-
-        assert_eq!(view.blocks[0].files.len(), 1);
-        assert_eq!(view.blocks[1].files.len(), 0);
-        assert_eq!(view.blocks[0].files[0].tags, vec!["first", "second"]);
-        assert_eq!(view.total_files, 1);
-    }
-
-    #[test]
-    fn notes_from_every_block_travel_with_the_single_rendering() {
-        let mut map = map_of(&[("first", "shared.rs"), ("second", "shared.rs")]);
-        map.update_file(
-            &slug("first"),
-            "shared.rs",
-            Some("why it starts here".into()),
-        )
-        .unwrap();
-        map.update_file(
-            &slug("second"),
-            "shared.rs",
-            Some("why it matters again".into()),
-        )
-        .unwrap();
-        map.add_line_note(
-            &slug("second"),
-            "shared.rs",
-            LineRange::new(10, 12).unwrap(),
-            "late note",
-        )
-        .unwrap();
-
-        let source = FakeDiffSource::with_paths(&["shared.rs"]);
-        let view = built(&map, source, &Progress::new());
-
-        let file = &view.blocks[0].files[0];
-        assert_eq!(file.notes.len(), 2);
-        assert_eq!(file.notes[1].block, "second");
-        assert_eq!(file.line_notes.len(), 1);
-        assert_eq!(file.line_notes[0].block, "second");
     }
 
     #[test]
@@ -467,58 +399,6 @@ mod tests {
     }
 
     #[test]
-    fn a_block_that_renders_nothing_is_still_finished_by_the_file_it_holds() {
-        // Its only file is rendered under the block before it, so this one has
-        // an empty list and no row of its own to tick. Counted off that list it
-        // could never be finished at all: the sidebar would show it unread for
-        // the whole review, with nothing the reader could do about it.
-        let map = map_of(&[("first", "shared.rs"), ("second", "shared.rs")]);
-        let mut progress = Progress::new();
-        progress.mark("shared.rs", "hash-of-shared.rs", "now");
-
-        let view = built(&map, FakeDiffSource::with_paths(&["shared.rs"]), &progress);
-
-        assert!(view.blocks[1].files.is_empty(), "renders nothing");
-        assert_eq!(
-            (view.blocks[1].total_files, view.blocks[1].viewed_files),
-            (1, 1)
-        );
-    }
-
-    #[test]
-    fn a_block_is_unfinished_while_a_file_it_shares_with_an_earlier_one_is_unread() {
-        // The other way the rendered list lies. Here the block does render
-        // something, and reading only that would report the whole story done
-        // while the file it shares — the reason the author wrote it twice — has
-        // not been opened.
-        let map = map_of(&[
-            ("first", "shared.rs"),
-            ("second", "shared.rs"),
-            ("second", "own.rs"),
-        ]);
-        let mut progress = Progress::new();
-        progress.mark("own.rs", "hash-of-own.rs", "now");
-
-        let view = built(
-            &map,
-            FakeDiffSource::with_paths(&["shared.rs", "own.rs"]),
-            &progress,
-        );
-
-        let second = &view.blocks[1];
-        assert_eq!(
-            second
-                .files
-                .iter()
-                .map(|f| f.path.as_str())
-                .collect::<Vec<_>>(),
-            vec!["own.rs"],
-            "the shared file is rendered under the first block"
-        );
-        assert_eq!((second.total_files, second.viewed_files), (2, 1));
-    }
-
-    #[test]
     fn skim_attached_to_a_block_counts_towards_finishing_it() {
         // A skimmed file is still a file the reader ticks off, and the progress
         // over the whole review counts it. A block that left it out would sit
@@ -537,30 +417,6 @@ mod tests {
             (view.blocks[0].total_files, view.blocks[0].viewed_files),
             (2, 0)
         );
-    }
-
-    #[test]
-    fn a_block_whose_file_is_read_under_an_earlier_one_keeps_its_band() {
-        // The dedup below leaves this block rendering no file, and that is not
-        // the same as holding none: the reason the author put the file in two
-        // blocks is the story the second one tells about it. Dropping every
-        // block with an empty file list would take that prose off the screen.
-        let mut map = map_of(&[("first", "shared.rs"), ("second", "shared.rs")]);
-        map.update_file(
-            &slug("second"),
-            "shared.rs",
-            Some("why it matters again".into()),
-        )
-        .unwrap();
-
-        let view = built(
-            &map,
-            FakeDiffSource::with_paths(&["shared.rs"]),
-            &Progress::new(),
-        );
-
-        assert_eq!(view.blocks.len(), 2, "{:?}", view.blocks);
-        assert!(view.blocks[1].files.is_empty());
     }
 
     #[test]
