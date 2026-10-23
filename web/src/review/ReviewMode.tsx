@@ -1,4 +1,4 @@
-import { ChevronDown } from "lucide-react";
+import { Check, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import type { PullRequestView, ReviewMode as Mode } from "@/api";
@@ -25,18 +25,33 @@ export function ReviewMode({ pull, onChoose }: ReviewModeProps) {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-72">
-        <p className="px-2 py-1.5 font-sans text-xs text-ink-muted">
-          {NAMES[current]}: {pull.mode.reason}.
-        </p>
+        {/* The mode in effect says why it is in effect; the other says what
+            switching to it would change. Naming the current one twice, once
+            as a heading and once as an item, said the same thing twice. */}
         {(["self", "peer"] as const).map((mode) => (
-          <DropdownMenuItem key={mode} disabled={mode === current} onSelect={() => void onChoose(mode)}>
-            <span className="font-sans text-sm">{NAMES[mode]}</span>
-            <span className="font-sans text-xs text-ink-muted">{WHAT[mode]}</span>
+          <DropdownMenuItem
+            key={mode}
+            disabled={mode === current}
+            className="data-[disabled]:opacity-100"
+            onSelect={() => void onChoose(mode)}
+          >
+            <span className="flex items-center gap-1.5 font-sans text-sm">
+              {NAMES[mode]}
+              {mode === current && <Check className="size-3.5" aria-label="current" />}
+            </span>
+            <span className="font-sans text-xs text-ink-muted">
+              {mode === current ? capitalized(pull.mode.reason) : WHAT[mode]}
+            </span>
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>
     </DropdownMenu>
   );
+}
+
+/** "the pull request is yours" as a line of its own: "The pull request is yours." */
+function capitalized(reason: string): string {
+  return `${reason.charAt(0).toUpperCase()}${reason.slice(1)}.`;
 }
 
 const NAMES: Record<Mode, string> = { self: "Self review", peer: "Peer review" };
