@@ -122,12 +122,21 @@ export function TopBar({
             </span>
           )}
           {pull?.url && (
-            <Button asChild variant="outline" size="xs" className="open-pull font-sans text-xs">
-              <a href={pull.url} target="_blank" rel="noreferrer">
-                <GitHubMark className="size-3.5" />
-                Open PR on GitHub
-              </a>
-            </Button>
+            <Tooltip delayDuration={0}>
+              <TooltipTrigger asChild>
+                <Button
+                  asChild
+                  variant="ghost"
+                  size="icon-xs"
+                  className="open-pull text-ink-muted hover:bg-sunken hover:text-ink"
+                >
+                  <a href={pull.url} target="_blank" rel="noreferrer" aria-label="Open PR on GitHub">
+                    <GitHubMark className="size-4" />
+                  </a>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Open PR on GitHub</TooltipContent>
+            </Tooltip>
           )}
           {pull && peer && pull.connection === "ready" && (
             <SubmitReview pull={pull} threads={threads} onSubmit={github.submit} />
