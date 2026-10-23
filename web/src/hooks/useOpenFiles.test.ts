@@ -61,7 +61,6 @@ function file(path: string, viewed: boolean): FileView {
     viewed,
     notes: [],
     lineNotes: [],
-    tags: [],
     skim: false,
     skimReason: null,
   };

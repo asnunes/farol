@@ -1,5 +1,4 @@
 import { ChevronDown, ChevronRight, MessageSquare } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CopyPath } from "@/review/CopyPath";
@@ -54,21 +53,6 @@ export function FileHeader({ file, open, onToggleOpen, onToggleViewed, comments 
             the one before it. */}
         <CopyPath key={file.path} path={file.path} />
 
-        {/* Only worth showing when the file belongs to more than one block —
-            otherwise the tag says what the block band already said. */}
-        {file.tags.length > 1 && (
-          <div className="tags flex shrink-0 gap-1">
-            {file.tags.map((t) => (
-              <Badge
-                key={t}
-                variant="secondary"
-                className="tag border-transparent bg-sunken font-mono text-[0.6875rem] font-normal text-ink-muted"
-              >
-                {t}
-              </Badge>
-            ))}
-          </div>
-        )}
       </div>
 
       <div className="right flex shrink-0 items-center gap-3 md:gap-4">

@@ -147,7 +147,6 @@ export type FileView = {
   viewed: boolean;
   notes: TaggedNote[];
   lineNotes: TaggedLineNote[];
-  tags: string[];
   skim: boolean;
   skimReason: string | null;
 };

@@ -12,7 +12,6 @@ function file(path: string, over: Partial<FileView> = {}): FileView {
     viewed: false,
     notes: [],
     lineNotes: [],
-    tags: [],
     skim: false,
     skimReason: null,
     ...over,
@@ -491,49 +490,6 @@ describe("marking read", () => {
     fireEvent.click(section("src/a.rs").querySelector(".markbox")!);
     await waitFor(() => expect(calls).toHaveLength(1));
     expect(calls[0].viewed).toBe(false);
-  });
-});
-
-describe("a file that belongs to two blocks", () => {
-  it("is rendered once and carries both tags and both notes", async () => {
-    // The server already resolved it to the earlier block; the page must show
-    // what it was given without inventing a second appearance.
-    serve({
-      review: review({
-        blocks: [
-          {
-            slug: "first",
-            title: "First",
-            context: "",
-            files: [
-              file("src/shared.rs", {
-                tags: ["first", "second"],
-                notes: [
-                  { block: "first", text: "why it starts here" },
-                  { block: "second", text: "why it matters again" },
-                ],
-              }),
-            ],
-            totalFiles: 1,
-            viewedFiles: 0,
-          },
-          // Renders nothing and holds the shared file, which is the case the
-          // rendered list could never report as finished.
-          { slug: "second", title: "Second", context: "", files: [],
-            totalFiles: 1, viewedFiles: 0 },
-        ],
-        totalFiles: 1,
-      }),
-    });
-
-    render(<App />);
-    await waitForReading("shared.rs");
-
-    expect(reading()).toContain("shared.rs");
-    expect(screen.getByText("why it starts here")).toBeTruthy();
-    expect(screen.getByText("why it matters again")).toBeTruthy();
-    const tags = [...document.querySelectorAll(".tags .tag")].map((e) => e.textContent);
-    expect(tags).toEqual(["first", "second"]);
   });
 });
 

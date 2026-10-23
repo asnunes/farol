@@ -78,13 +78,6 @@ export function FileSection({
           )}
           {file.notes.map((note, i) => (
             <FileNote key={i}>
-              {/* Which block the note came from, and only when the file is read
-                  under more than one. */}
-              {file.tags.length > 1 && (
-                <span className="from mt-1 shrink-0 font-mono text-xs text-highlight">
-                  {note.block}
-                </span>
-              )}
               <Prose className="min-w-0 flex-1">{note.text}</Prose>
             </FileNote>
           ))}

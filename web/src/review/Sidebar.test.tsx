@@ -171,7 +171,6 @@ function file(path: string, over: Partial<FileView> = {}): FileView {
     viewed: false,
     notes: [],
     lineNotes: [],
-    tags: [],
     skim: false,
     skimReason: null,
     ...over,
