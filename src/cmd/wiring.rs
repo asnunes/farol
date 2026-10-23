@@ -14,7 +14,9 @@ use crate::comments::application::{
     PullRequestGate, RemovePending, ReviewModes, ReviewReadiness, SendComment, WritePending,
 };
 use crate::comments::domain::ReviewPublisher;
-use crate::comments::infra::{GhCredentials, GitHub, JsonModeStore, MarkdownComments, Unhosted};
+use crate::comments::infra::{
+    GhCredentials, GitHub, JsonModeStore, Logins, MarkdownComments, Unhosted,
+};
 use crate::config::domain::ConfigRepository;
 use crate::config::infra::JsonConfigRepository;
 use crate::diff::application::{CommitHistory, FileDiffs, ReviewScope};
@@ -106,6 +108,8 @@ pub struct ServerUseCases {
 pub struct Serving {
     pub agent: Option<AgentAddress>,
     pub config: Arc<dyn ConfigRepository>,
+    /// Who the GitHub token belongs to, kept across requests.
+    pub logins: Arc<Logins>,
 }
 
 impl Ctx {
@@ -142,7 +146,14 @@ impl Ctx {
         let host = remote.as_ref().map(|remote| remote.host.clone());
         let credentials = Arc::new(GhCredentials::new("gh"));
         let publisher: Arc<dyn ReviewPublisher> = match remote {
-            Some(remote) => Arc::new(GitHub::new(remote, credentials.clone())),
+            Some(remote) => Arc::new(GitHub::new(
+                remote,
+                credentials.clone(),
+                serving
+                    .as_ref()
+                    .map(|serving| serving.logins.clone())
+                    .unwrap_or_default(),
+            )),
             None => Arc::new(Unhosted),
         };
 
@@ -323,6 +334,7 @@ pub fn server_factory(root: PathBuf) -> Result<Arc<dyn ServerUseCaseFactory>> {
     Ok(Arc::new(WorkspaceUseCases {
         root,
         config: config_repository()?,
+        logins: Arc::default(),
     }))
 }
 
@@ -337,6 +349,7 @@ impl ServerUseCaseFactory for WorkspaceUseCases {
         let serving = Serving {
             agent,
             config: self.config.clone(),
+            logins: self.logins.clone(),
         };
         Ok(Ctx::assemble(&self.root, request, Some(serving))?
             .server
@@ -347,4 +360,6 @@ impl ServerUseCaseFactory for WorkspaceUseCases {
 struct WorkspaceUseCases {
     root: PathBuf,
     config: Arc<dyn ConfigRepository>,
+    /// Here, because this outlives every request it builds for.
+    logins: Arc<Logins>,
 }

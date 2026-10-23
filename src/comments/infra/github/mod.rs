@@ -3,6 +3,9 @@
 //! Request validation and payloads stay in Farol; authentication comes from gh.
 
 mod http;
+mod logins;
+
+pub use logins::Logins;
 
 use std::sync::Arc;
 
@@ -21,15 +24,17 @@ pub struct GitHub {
     remote: Remote,
     credentials: Arc<dyn Credentials>,
     http: Http,
+    logins: Arc<Logins>,
 }
 
 impl GitHub {
-    pub fn new(remote: Remote, credentials: Arc<dyn Credentials>) -> Self {
+    pub fn new(remote: Remote, credentials: Arc<dyn Credentials>, logins: Arc<Logins>) -> Self {
         let http = Http::new(&remote.host);
         Self {
             remote,
             credentials,
             http,
+            logins,
         }
     }
 }
@@ -98,8 +103,14 @@ impl ReviewPublisher for GitHub {
             // One more call, and only here: the screen has to know whose pull
             // request this is before it offers a verdict, and the answer is
             // the same for every state that is not Ready.
-            let me = self.read(self.http.get(&token, &format!("{}/user", self.api()))?)?;
-            let me = me.get("login").and_then(|l| l.as_str()).unwrap_or_default();
+            let me = self.logins.get_or(&token, || {
+                let me = self.read(self.http.get(&token, &format!("{}/user", self.api()))?)?;
+                Ok(me
+                    .get("login")
+                    .and_then(|l| l.as_str())
+                    .unwrap_or_default()
+                    .to_string())
+            })?;
             return Ok(Readiness::Ready {
                 mine: !me.is_empty() && me == pull.author,
                 pull_request: pull.number,
@@ -927,6 +938,7 @@ mod tests {
                 slug: "owner/repo".into(),
             },
             credentials,
+            Arc::default(),
         );
 
         assert_eq!(
@@ -958,6 +970,7 @@ mod tests {
                 slug: "asnunes/farol".into(),
             },
             Arc::new(crate::testing::FakeCredentials::default()),
+            Arc::default(),
         )
     }
 }
