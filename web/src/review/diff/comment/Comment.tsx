@@ -14,7 +14,7 @@ import { Unsent } from "./Unsent";
 import { UseAsPending } from "./UseAsPending";
 import { span } from "./quoted";
 import type { CommentActions } from "@/hooks/useComments";
-import type { CommentView } from "@/api";
+import type { CommentView, RemotePendingView } from "@/api";
 
 /** One thread: the question the reviewer left, under the last line it is
  * about, the conversation it started, and — in a peer review — the comment for
@@ -90,9 +90,9 @@ export function Comment({ comment, actions }: CommentProps) {
         ) : comment.waiting ? null : (
           <div className="foot flex flex-wrap items-center gap-1">
             <Button
-              variant="ghost"
+              variant="outline"
               size="xs"
-              className="opener text-comment-faint hover:bg-sunken hover:text-comment-ink"
+              className="opener h-6 px-2 font-sans"
               onClick={() => setReplying(true)}
             >
               <MessageSquareReply className="size-3.5" aria-hidden="true" />
@@ -108,8 +108,25 @@ export function Comment({ comment, actions }: CommentProps) {
             )}
           </div>
         )}
+        {peer && <Stage thread={comment} remote={remote} />}
       </div>
     </div>
+  );
+}
+
+/** Where the thread is on its way to the pull request: a conversation, a
+ * pending comment, or a published one. */
+function Stage({ thread, remote }: StageProps) {
+  const now =
+    thread.pending === null ? "thread" : remote?.state === "published" ? "published" : "pending";
+  return (
+    <p className="stage font-sans text-[0.6875rem] tracking-wide text-faint">
+      <span className={now === "thread" ? "font-semibold text-ink-soft" : undefined}>Thread</span>
+      {" · "}
+      <span className={now === "pending" ? "font-semibold text-ink-soft" : undefined}>Pending</span>
+      {" · "}
+      <span className={now === "published" ? "font-semibold text-add-ink" : undefined}>Published</span>
+    </p>
   );
 }
 
@@ -139,3 +156,5 @@ function unsent(comment: CommentView): boolean {
 }
 
 type CommentProps = { comment: CommentView; actions: CommentActions };
+
+type StageProps = { thread: CommentView; remote: RemotePendingView | undefined };

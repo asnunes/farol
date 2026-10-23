@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { ChevronDown, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -14,6 +14,7 @@ export function Generate({ label, onGenerate }: GenerateProps) {
   const [asking, setAsking] = useState(false);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
+  const field = useId();
 
   async function generate(instruction: string) {
     setBusy(true);
@@ -27,10 +28,13 @@ export function Generate({ label, onGenerate }: GenerateProps) {
 
   if (asking) {
     return (
-      <div className="generate-with flex flex-col gap-2">
+      <div className="generate-with flex w-full flex-col gap-1.5 rounded-lg border border-rule-strong bg-surface px-3 py-2.5">
+        <label htmlFor={field} className="font-sans text-xs text-ink-soft">
+          {label === "Regenerate" ? "Instructions for the new pending comment" : "Instructions for this pending comment"}
+        </label>
         <Textarea
+          id={field}
           autoFocus
-          aria-label="Instructions for this pending comment"
           className="resize-y border-rule-strong bg-surface font-sans text-sm text-ink"
           rows={2}
           placeholder="e.g. “shorter”, “suggest the env var version”"
@@ -48,7 +52,7 @@ export function Generate({ label, onGenerate }: GenerateProps) {
             }
           }}
         />
-        <span className="font-sans text-xs text-ink-muted">
+        <span className="font-sans text-xs text-faint">
           Added to your instruction from Settings · ⌘↵ generates
         </span>
         <div className="flex gap-2">
@@ -58,7 +62,7 @@ export function Generate({ label, onGenerate }: GenerateProps) {
             disabled={!note.trim() || busy}
             onClick={() => void generate(note)}
           >
-            {label}
+            {label === "Regenerate" ? "Regenerate" : "Generate"}
           </Button>
           <Button size="xs" variant="ghost" className="text-ink-muted" onClick={() => setAsking(false)}>
             Cancel
@@ -68,12 +72,14 @@ export function Generate({ label, onGenerate }: GenerateProps) {
     );
   }
 
+  // One control in two halves, joined: the click is the plain case, and the
+  // arrow is the same action with a word added.
   return (
     <div className="generate inline-flex items-center">
       <Button
-        variant="ghost"
+        variant="outline"
         size="xs"
-        className="text-comment-faint hover:bg-sunken hover:text-comment-ink"
+        className="h-6 rounded-r-none px-2 font-sans"
         disabled={busy}
         onClick={() => void generate("")}
       >
@@ -83,20 +89,22 @@ export function Generate({ label, onGenerate }: GenerateProps) {
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
-            variant="ghost"
-            size="icon-xs"
-            className="text-comment-faint hover:bg-sunken hover:text-comment-ink"
+            variant="outline"
+            size="xs"
+            className="h-6 rounded-l-none border-l-0 px-1.5"
             aria-label={`${label} with instructions`}
             disabled={busy}
           >
             <ChevronDown className="size-3.5" aria-hidden="true" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start">
+        <DropdownMenuContent align="start" className="w-64">
           <DropdownMenuItem onSelect={() => setAsking(true)}>
-            <span className="font-sans text-sm">{label} with instructions…</span>
-            <span className="font-sans text-xs text-ink-muted">
-              adds a note to your instruction from Settings, just for this one
+            <span className="font-sans text-xs text-ink-soft">{label} with instructions…</span>
+            <span className="font-sans text-xs text-faint">
+              {label === "Regenerate"
+                ? "e.g. “shorter”, “suggest the env var version”"
+                : "adds a note to your instruction from Settings, just for this one"}
             </span>
           </DropdownMenuItem>
         </DropdownMenuContent>

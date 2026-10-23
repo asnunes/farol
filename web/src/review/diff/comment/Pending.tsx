@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Prose } from "@/review/Prose";
@@ -9,10 +8,10 @@ import type { CommentView, RemotePendingView } from "@/api";
 
 /** The thread's comment for the pull request, as GitHub holds it.
  *
- * Quiet on purpose: a dot and a label, not a coloured box. The thread is what
- * the reader is working in, and this is what will leave it; marking it loudly
- * would make the comment look like the point of the thread rather than its
- * outcome. */
+ * A card of its own under the thread, as the approved mockup draws it: the
+ * state is a small pill with a dot — amber while it waits, green once it went
+ * — and nothing else is coloured, so the card reads as the thread's outcome
+ * rather than as the point of the thread. */
 export function Pending({ comment, remote, actions, busy }: PendingProps) {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState("");
@@ -45,25 +44,27 @@ export function Pending({ comment, remote, actions, busy }: PendingProps) {
   const published = remote.state === "published";
 
   return (
-    <div className="pending flex flex-col gap-1.5 border-l-2 border-rule-strong pl-3">
-      <span className="flex items-center gap-1.5 font-mono text-xs text-ink-muted">
-        <span
-          className={published ? "size-1.5 rounded-full bg-add-ink" : "size-1.5 rounded-full bg-highlight"}
-          aria-hidden="true"
-        />
-        <span className="font-semibold text-ink-soft">{published ? "Published" : "Pending"}</span>
+    <div className="pending overflow-hidden rounded-lg border border-rule-strong bg-surface">
+      <div className="flex items-center gap-2 border-b border-rule px-2.5 py-1.5 font-sans text-xs text-ink-muted">
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-rule-strong px-2 text-[0.6875rem] font-medium text-ink-soft">
+          <span
+            className={published ? "size-1.5 rounded-full bg-add-ink" : "size-1.5 rounded-full bg-highlight"}
+            aria-hidden="true"
+          />
+          {published ? "Published" : "Pending"}
+        </span>
         {published && remote.url ? (
-          <a href={remote.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 underline">
-            view on GitHub <ExternalLink className="size-3" aria-hidden="true" />
+          <a href={remote.url} target="_blank" rel="noreferrer" className="text-add-ink hover:underline">
+            view on GitHub ↗
           </a>
         ) : (
           <span>for the pull request</span>
         )}
-        <span>· written by {by}</span>
-      </span>
+        <span className="ml-auto font-mono">written by {by}</span>
+      </div>
 
       {editing ? (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2 px-3 py-2">
           <Textarea
             autoFocus
             aria-label="Edit the pending comment"
@@ -97,17 +98,17 @@ export function Pending({ comment, remote, actions, busy }: PendingProps) {
           </div>
         </div>
       ) : (
-        <Prose className="body font-sans text-sm leading-relaxed text-ink-soft">{remote.body ?? ""}</Prose>
+        <Prose className="body px-3 py-2 font-sans text-sm leading-relaxed text-ink">{remote.body ?? ""}</Prose>
       )}
 
       {/* A submitted comment is the pull request's now: nothing here can
           change it, so nothing here offers to. */}
       {!published && !editing && !busy && (
-        <div className="flex flex-wrap items-center gap-1">
+        <div className="flex flex-wrap items-center gap-1.5 px-2.5 pb-2">
           <Button
-            variant="ghost"
+            variant="outline"
             size="xs"
-            className="text-comment-faint hover:bg-sunken hover:text-comment-ink"
+            className="h-6 px-2 font-sans"
             onClick={() => {
               setText(remote.body ?? "");
               setEditing(true);
@@ -115,13 +116,25 @@ export function Pending({ comment, remote, actions, busy }: PendingProps) {
           >
             Edit
           </Button>
-          {actions.agent && (
-            <Generate label="Regenerate" onGenerate={(note) => actions.generate(comment.id, note)} />
-          )}
+          {/* What the agent wrote can be written again; what the reviewer
+              wrote is theirs, and the agent is asked about it instead. */}
+          {actions.agent &&
+            (comment.pending?.by === "agent" ? (
+              <Generate label="Regenerate" onGenerate={(note) => actions.generate(comment.id, note)} />
+            ) : (
+              <Button
+                variant="outline"
+                size="xs"
+                className="h-6 px-2 font-sans"
+                onClick={() => void actions.send(comment.id)}
+              >
+                Ask {actions.agent} about it
+              </Button>
+            ))}
           <Button
             variant="ghost"
             size="xs"
-            className="text-comment-faint hover:bg-sunken hover:text-comment-ink"
+            className="h-6 px-2 font-sans text-ink-muted"
             onClick={() => void actions.removePending(comment.id)}
           >
             Remove

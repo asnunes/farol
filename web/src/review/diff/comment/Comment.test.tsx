@@ -270,7 +270,7 @@ describe("a comment on the page", () => {
       render(<Comment comment={comment({ pending: { by: "agent", name: "Codex" } })} actions={actions} />);
 
       expect(screen.getByText("Please rename it.")).toBeTruthy();
-      expect(screen.getByText("· written by Codex")).toBeTruthy();
+      expect(screen.getByText("written by Codex")).toBeTruthy();
       expect(screen.getByRole("button", { name: "Regenerate" })).toBeTruthy();
       expect(screen.queryByRole("button", { name: "Generate pending comment" })).toBeNull();
       expect(screen.queryByRole("button", { name: "Use as pending comment" })).toBeNull();
@@ -285,9 +285,11 @@ describe("a comment on the page", () => {
         ...peer(),
         pendingOf: () => ({ state: "published" as const, body: "Done.", url: "https://x/1" }),
       };
-      render(<Comment comment={comment({ pending: { by: "reviewer", name: "you" } })} actions={actions} />);
+      const { container } = render(
+        <Comment comment={comment({ pending: { by: "reviewer", name: "you" } })} actions={actions} />,
+      );
 
-      expect(screen.getByText("Published")).toBeTruthy();
+      expect(container.querySelector(".pending")?.textContent).toContain("Published");
       expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
       expect(screen.queryByRole("button", { name: "Remove" })).toBeNull();
     });
@@ -302,6 +304,24 @@ describe("a comment on the page", () => {
 
       expect(screen.getByText("Codex is writing a pending comment")).toBeTruthy();
       expect(screen.queryByRole("button", { name: "Generate pending comment" })).toBeNull();
+    });
+
+    it("asks the agent about a pending comment the reviewer wrote, instead of regenerating it", () => {
+      const actions = {
+        ...peer(),
+        pendingOf: () => ({ state: "pending" as const, body: "Rename it.", url: null }),
+      };
+      render(<Comment comment={comment({ pending: { by: "reviewer", name: "you" } })} actions={actions} />);
+
+      expect(screen.queryByRole("button", { name: "Regenerate" })).toBeNull();
+      fireEvent.click(screen.getByRole("button", { name: "Ask Codex about it" }));
+      expect(actions.send).toHaveBeenCalledWith("18cb-3731");
+    });
+
+    it("says where the thread is on its way to the pull request", () => {
+      const { container } = render(<Comment comment={comment()} actions={peer()} />);
+
+      expect(container.querySelector(".stage")?.textContent).toBe("Thread · Pending · Published");
     });
   });
 });

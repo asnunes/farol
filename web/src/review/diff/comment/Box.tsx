@@ -132,6 +132,9 @@ export function Box({ span: lines, onSave, onCancel, agent, onSaveAndSend, onAdd
           Cancel
         </Button>
       </div>
+      <p className="hint mt-1.5 font-sans text-xs text-faint" aria-hidden="true">
+        {keysText}
+      </p>
     </div>
   );
 }
