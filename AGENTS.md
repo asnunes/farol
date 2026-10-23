@@ -308,9 +308,16 @@ writer primitives, not a component layer.
 
 ### The view model is assembled on the server
 
-`ReviewView::build` applies the reading rules — a file is shown once under the
-earliest block that holds it, carrying the notes and tags from every block it
-belongs to. The frontend renders; it does not decide.
+`ReviewView::build` applies the reading rules — blocks in the author's order,
+each file under the one block that reads it, skim after. The frontend renders;
+it does not decide.
+
+**A file belongs to one block.** It used to be allowed in several, and the
+screen then had to pick one to draw it under, carry the other blocks' notes over
+and tag the row with every block it was in — machinery for a case a line note
+on the shared lines handles better, because it points at the lines. The map
+refuses a second block; a map written before that folds the file into its first
+block on load, with every note.
 
 **A dependency is held, not passed.** `Git` owns the repository and answers
 questions about it; nothing takes a `&gix::Repository` parameter. The one
@@ -355,7 +362,7 @@ answer to "where does adding a block live".
 
 Tailwind for styling, shadcn for the few components that earn it — the help
 panel is a `Dialog` because Radix brings focus trapping and `Escape` that the
-hand-rolled modal did not, the meter is a `Progress`, the tags are `Badge`s.
+hand-rolled modal did not, the meter is a `Progress`, the chips are `Badge`s.
 Everything else on screen is a diff renderer and a sidebar, which shadcn has
 nothing to offer, so they are plain elements with utilities.
 
