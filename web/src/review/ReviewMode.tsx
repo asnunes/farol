@@ -17,14 +17,14 @@ export function ReviewMode({ pull, onChoose }: ReviewModeProps) {
         <Button
           variant="ghost"
           size="xs"
-          className="review-mode h-auto gap-1 px-1 font-mono text-xs font-normal text-ink-muted hover:text-ink"
+          className="review-mode h-auto shrink-0 gap-1 px-1 font-mono text-xs font-normal text-ink-muted hover:text-ink"
           title={`${NAMES[current]} — ${pull.mode.reason}`}
         >
           Mode: <span className="font-semibold text-ink-soft">{NAMES[current]}</span>
           <ChevronDown className="size-3" aria-hidden="true" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-72">
+      <DropdownMenuContent align="start" className="w-72">
         {/* The mode in effect says why it is in effect; the other says what
             switching to it would change. Naming the current one twice, once
             as a heading and once as an item, said the same thing twice. */}

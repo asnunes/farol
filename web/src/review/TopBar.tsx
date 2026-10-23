@@ -68,11 +68,15 @@ export function TopBar({
             </Badge>
           )}
         </div>
+        {/* With the refs, because it says what kind of review this is, as they
+            say what it compares — not among the actions on the right. Over
+            there it also moved whenever the peer-only controls appeared, and
+            Submit review landed under the pointer that had just chosen it. */}
+        {pull && <ReviewMode pull={pull} onChoose={github.chooseMode} />}
       </div>
 
       <div className="acts flex min-w-0 flex-wrap items-center gap-2 gap-y-2 max-md:w-full md:justify-end md:gap-4">
         {unreadable.length > 0 && <Unreadable broken={unreadable} />}
-        {pull && <ReviewMode pull={pull} onChoose={github.chooseMode} />}
         {pull && peer && <Connection pull={pull} />}
         {/* Counted apart, because only one of the two ever leaves farol. */}
         {peer && threads.length > 0 && (
