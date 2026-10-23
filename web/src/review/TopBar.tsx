@@ -111,7 +111,19 @@ export function TopBar({
           so GitHub answering does not move the page down either. */}
       <div className="review-line -mx-4 flex h-7 w-[calc(100%+2rem)] items-center justify-between gap-3 border-t border-rule px-4 pt-2 md:-mx-5 md:w-[calc(100%+2.5rem)] md:px-5">
         <div className="flex min-w-0 items-center gap-3">
-          {pull && <ReviewMode pull={pull} onChoose={github.chooseMode} />}
+          {/* Held in place while GitHub answers, which takes a second or so:
+              the mode always comes, so its place is shown. What comes on the
+              right depends on the answer, and a placeholder there would
+              promise a button that may not arrive. */}
+          {pull ? (
+            <ReviewMode pull={pull} onChoose={github.chooseMode} />
+          ) : (
+            <span
+              className="review-mode-loading block h-3.5 w-32 animate-pulse rounded-sm bg-sunken"
+              role="status"
+              aria-label="Reading the pull request"
+            />
+          )}
           {pull && peer && <Connection pull={pull} />}
         </div>
         <div className="flex shrink-0 items-center gap-3">
