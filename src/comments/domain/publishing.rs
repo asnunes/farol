@@ -1,29 +1,67 @@
 //! Sending the review somewhere the rest of the team will read it.
-//!
-//! The publication skill checks readiness before asking the reader to authorize a send.
 
 use crate::comments::domain::Comment;
 use crate::error::Result;
 
-/// Where a finished review goes. A trait so the use case never learns what a
-/// pull request is over the wire — and so a test can assert the review that
-/// would have been sent without touching the network.
+/// Where a review goes, and where its pending comments live until it does.
+///
+/// A trait so the use cases never learn what a pull request is over the wire,
+/// and so a test can assert what would have been sent without the network.
+///
+/// The pending comments are on the host from the moment they are written, in
+/// the reviewer's own pending review — the same place the pull request's page
+/// keeps them. farol holds their ids and nothing else, so there is no local
+/// copy to reconcile and nothing half-sent to recover when a call fails.
 pub trait ReviewPublisher: Send + Sync {
-    /// What stands between the reviewer and sending, if anything.
-    fn readiness(&self, branch: &str) -> Result<Readiness>;
+    /// What stands between the reviewer and the pull request, if anything.
+    /// Looked up by the commit under review first, which is what finds the pull
+    /// request of a fork or of a branch checked out under another name, and by
+    /// the branch name after.
+    fn readiness(&self, branch: &str, head: &str) -> Result<Readiness>;
 
-    /// Send it. Answers with where the review can be read.
-    fn publish(&self, review: &Review) -> Result<String>;
+    /// Put a comment in the reviewer's pending review on `pull`, starting one
+    /// at `head` when there is none. Answers with the comment's id.
+    fn add_pending(&self, pull: &str, head: &str, at: &Comment, body: &str) -> Result<String>;
+
+    fn edit_pending(&self, id: &str, body: &str) -> Result<()>;
+
+    /// Taking a pending comment back. One already gone is not an error: the
+    /// reviewer may have deleted it on the pull request's page.
+    fn remove_pending(&self, id: &str) -> Result<()>;
+
+    /// What the host holds for these comment ids, in the same order.
+    fn remote(&self, ids: &[String]) -> Result<Vec<RemoteComment>>;
+
+    /// Submit the pending review with the verdict and summary, or post the
+    /// verdict alone when nothing is pending. Answers with where it landed.
+    fn submit(&self, review: &Review) -> Result<String>;
 
     /// Mark these files as read on the pull request, for whoever the token
     /// belongs to. Answers with how many the host took.
     ///
-    /// Its own verb rather than part of `publish`, because the two have
+    /// Its own verb rather than part of `submit`, because the two have
     /// different consequences: the review is posted once and cannot be taken
     /// back, while marks are a convenience that can fail without costing
     /// anything. Folded together, the second failing would hide inside the
     /// first succeeding.
     fn mark_read(&self, pull: &str, paths: &[String]) -> Result<usize>;
+}
+
+/// One comment as the host has it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteComment {
+    pub id: String,
+    pub state: RemoteState,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RemoteState {
+    /// In the pending review: only the reviewer sees it.
+    Pending { body: String },
+    /// Submitted with a review.
+    Published { body: String, url: String },
+    /// Deleted on the pull request's page, or never there.
+    Gone,
 }
 
 /// Why the review cannot be sent yet — or that it can.
@@ -52,7 +90,15 @@ pub enum Readiness {
         /// is what lets farol offer the verdict that exists instead of the two
         /// that do not.
         mine: bool,
+        /// Who opened it, which is what decides the review mode.
+        author: String,
+        /// Its page, for the reader to open it from the review.
+        url: String,
     },
+
+    /// More than one open pull request shows this commit, and farol will not
+    /// pick one at random.
+    Ambiguous { numbers: Vec<u32> },
 
     /// The repository has no remote, so there is no host to publish to. Not a
     /// step on the way to being ready — a different situation entirely.
@@ -73,17 +119,16 @@ pub enum Readiness {
     NoPullRequest { open_at: String },
 }
 
-/// A review as it goes out: the summary the reviewer wrote at the end, the
-/// verdict, and the comments that have not gone yet.
+/// A review as it is submitted: the verdict and the summary the reviewer wrote
+/// at the end. The comments are already on the host, in the pending review.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Review {
-    pub pull_request: u32,
-    /// The commit the comments were written against, sent along so the host
-    /// anchors them where they were read.
+    /// The host's id for the pull request.
+    pub pull: String,
+    /// The commit a verdict with nothing pending is posted against.
     pub head: String,
     pub summary: String,
     pub verdict: Verdict,
-    pub comments: Vec<Comment>,
 }
 
 /// What the review says about the change as a whole.
@@ -107,8 +152,8 @@ impl Verdict {
     /// Whether the summary is required.
     ///
     /// Only of the one that asks for work. Commenting and approving are
-    /// carried by whatever goes with them, and the comments are sent as a
-    /// draft first precisely so that the host asks for no summary either.
+    /// carried by whatever goes with them, and a pending review is submitted
+    /// without the host asking for a summary either.
     /// Asking for changes is a demand, and a demand with no words leaves the
     /// author reading line notes to work out what would satisfy it.
     pub fn needs_summary(&self) -> bool {
@@ -132,8 +177,8 @@ mod tests {
     fn only_asking_for_changes_needs_a_word_of_its_own() {
         assert!(Verdict::RequestChanges.needs_summary());
         assert!(!Verdict::Approve.needs_summary());
-        // The comments are the review. Sent as a draft and submitted after,
-        // GitHub does not ask for a summary here either.
+        // The comments are the review. Submitted from a pending review, GitHub
+        // does not ask for a summary here either.
         assert!(!Verdict::Comment.needs_summary());
     }
 }

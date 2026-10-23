@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { readingOrder } from "@/api";
 import { cn } from "@/lib/utils";
 import { useComments } from "@/hooks/useComments";
+import { useGitHub } from "@/hooks/useGitHub";
 import { useDiffView } from "@/hooks/useDiffView";
 import { useOpenFiles } from "@/hooks/useOpenFiles";
 import { useTheme } from "@/hooks/useTheme";
@@ -44,7 +45,8 @@ export default function App() {
   const [view, setView] = useDiffView();
   const files = useOpenFiles();
   const [theme, setTheme] = useTheme();
-  const comments = useComments(setFailed, generation);
+  const github = useGitHub(setFailed, generation);
+  const comments = useComments(setFailed, generation, github);
 
   // The sidebar can go while the reader is standing in it, and focus has to be
   // put somewhere before it does — dropped on the document, the next Tab
@@ -169,6 +171,8 @@ export default function App() {
           onToggleSidebar={toggleSidebar}
           toggleRef={sidebarToggle}
           onNextUnread={nextUnread}
+          github={github}
+          threads={comments.all}
         />
         {sidebarOpen && (
           <Sidebar

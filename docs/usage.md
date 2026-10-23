@@ -55,48 +55,111 @@ numbering and everything else on the new one. A span stays on one side — a dra
 that reaches the other column stops where its own side stops. The side travels
 with the comment and is published as `LEFT` or `RIGHT`.
 
-Comments can also be managed through the CLI:
+Each comment starts a **thread**: a conversation about those lines, with the
+agent or just to copy. Threads stay local. They can also be managed through the
+CLI:
 
 ```bash
-farol comment list
-farol comment add src/retry.rs 82-116 --text "Why is this ordering deliberate?"
-farol comment add src/gone.rs 2-4 --side old --text "Where did this go?"
+farol thread list
+farol thread add src/retry.rs 82-116 --text "Why is this ordering deliberate?"
+farol thread add src/gone.rs 2-4 --side old --text "Where did this go?"
 ```
 
 `--side` is `new` by default, which is the file as it now reads. Ranges on the
 old side are the line numbers of the file before the change.
 
-`farol comment close ID` removes a comment once it is answered. In the browser,
-closing asks for confirmation because local comments are not recoverable from Git.
+`farol thread close ID` removes a thread once it is answered. In the browser,
+closing asks for confirmation because local threads are not recoverable from Git.
+
+### Ask the agent
+
+When the review was opened by `farol serve` from inside a Claude Code or Codex
+session, the box a thread is written in gets **Ask {agent}**, which saves it and
+sends it in one press, and each thread gets a **Send** button next to **Copy**.
+`⌘↵` asks; `⇧⌘↵` only saves. Claude Code receives the message on its session
+socket between tool calls, and Codex queues it with `codex queue` until the
+current turn ends. Neither interrupts the agent. The tick means the harness took
+the message, not that the agent has read it.
+
+The message always says it comes from farol and carries the thread's id,
+location, text and the conversation so far, with the two commands the agent
+answers through: `farol thread ack ID` when it starts, which marks the thread as
+being worked on, and `farol thread reply ID --text '…'`, which puts the answer
+under it on the page. That part is fixed. After it comes the instruction set in
+`send-instruction`, and last the rule of the review mode, which no instruction
+overrides.
+
+**Reply** writes back under a thread, and **Reply & send** hands the whole
+exchange to the agent again. The page marks a thread sent to an agent until the
+agent answers, and says so when a reply of yours was saved but not sent.
+
+Running `farol serve` again from another session points the open review at that
+session. A `farol serve` run from a plain terminal keeps the session already
+known. Without a session there is no Send button, and **Copy** works as before.
+
+### Self review and peer review
+
+A **self review** is your own branch: the agent is the one that wrote it and may
+change the code. A **peer review** is somebody else's pull request: the agent is
+your assistant, every message tells it not to change, commit or push code, and
+threads can become pending comments.
+
+Farol tells them apart by the pull request's author, and shows the mode and why
+in the top bar, where it can be changed. `farol serve --self-review` or
+`--peer-review` sets it from the terminal. Either choice is remembered for the
+branch. Without a pull request it is a self review.
+
+### Pending comments
+
+In a peer review a thread can have a **pending comment**: the comment for the
+pull request that came out of it. It lives in your pending review on GitHub,
+which only you see until you submit the review, so it also shows on the pull
+request's page and can be edited there. There are three ways to one:
+
+- **Generate pending comment** asks the agent to write it, following
+  `pending-instruction`. The arrow beside it adds an instruction for this one.
+- **Add as pending comment** in the box starts the thread with your own words
+  as its comment.
+- **Use as pending comment** takes the question or a turn of the conversation
+  as it is.
+
+The pending comment sits under its thread with **Edit**, **Regenerate** and
+**Remove**. A new one is written before the old one is taken back. Writing one
+needs the pull request to show the commit you are reading.
+
+```bash
+farol pending write ID --text '…'   # what the agent runs
+farol pending edit ID --text '…'
+farol pending remove ID
+```
 
 ## Send to GitHub
 
-Ask your agent to use `farol-publish-review`. It verifies GitHub CLI (`gh`)
-authentication, identifies the PR and its author, and presents the comments and
-current file-read marks for approval. On your own PR, choose between publishing
-comments with the marks or synchronizing only the marks. For another author's
-PR, choose a comment, approval, or request-changes verdict.
+**Submit review…** in the top bar lists the pending comments that go, says how
+many threads stay in farol, and takes the verdict and an optional summary.
+Asking for changes needs a summary. On your own pull request only **Comment** is
+offered: GitHub does not let an author approve or request changes on their own.
 
-The CLI operations used by the skill are:
+The connection is your GitHub CLI login. Farol asks `gh auth token --hostname
+HOST` at each call, so `GH_TOKEN` and `GITHUB_TOKEN` work too, and never stores a
+token or accepts one through the page. Without a login the top bar says
+**Connect GitHub** with the command to run, and without a pull request it links
+to the page that opens one; threads keep working either way. The page looks again
+when you come back to its tab, so there is nothing to reload.
+
+The skill `farol-publish-review` does the same from a session. The CLI it uses:
 
 ```bash
 farol github status
-farol comment list
 farol github review --comment
 farol github review --request-changes --summary "The retry window needs a bound."
 farol github ticks
 ```
 
-`status` is read-only and exits nonzero while publishing is unavailable.
-`review` publishes pending comments and synchronizes current read marks.
-`ticks` sends only read marks and leaves comments local. Both require the PR's
-commit to match the reviewed commit.
-
-Authenticate in your terminal with `gh auth login --hostname HOST`, using the
-repository's host, and check with `gh auth status --hostname HOST`. Farol reads
-the host's credential through `gh auth token --hostname HOST` internally; it
-neither stores a separate token nor accepts one through the web interface.
-Local reading and commenting need no GitHub authentication.
+`status` lists the pull request, the mode and the pending comments, and exits
+nonzero while the pull request cannot be reached. `review` submits the pending
+review and ticks the files you read. `ticks` sends only the read marks, and needs
+the pull request to show the commit you read.
 
 ## Share a map
 
@@ -134,20 +197,30 @@ browser by default. Linux only prints the URL.
 farol config list
 farol config show
 farol config set open-browser false
+farol config set send-instruction "Answer it. Leave it open."
+farol config reset send-instruction
 farol serve --open
 farol serve --no-open
 ```
 
 `farol config list` shows the settings available on this system, including their
-titles, optional descriptions, defaults and current values. `farol config show`
-shows the stored values. Both the CLI and the review page use the backend catalog.
+titles, types, optional descriptions, defaults and current values. `farol config
+show` shows the values in effect, defaults included. Both the CLI and the review
+page use the backend catalog.
+
+`config set` reads the value the way the setting reads it: `true` or `false` for
+a switch, the text as written for a text setting, including an empty string.
+`config reset` puts a setting back to its default. The file keeps only what you
+set, so a default improved in a later release still reaches you.
 
 Preferences live in `$XDG_CONFIG_HOME/farol/config.json`, or
 `~/.config/farol/config.json` when that variable is unset. They apply to all
 repositories for your user on this machine. No file means automatic browser
-opening stays enabled on macOS.
+opening stays enabled on macOS, and Send uses the default instruction.
 
-The review's **Settings** button reads and writes the same preference. Changes
+The review's **Settings** button reads and writes the same preferences; a text
+setting is saved with its **Save** button. The send instruction is read on every
+Send, so a change counts on the next press. Changes to opening the browser
 apply to future `farol serve` invocations, including when reusing a running
 server. `--open` and `--no-open` override the saved value for one invocation;
 they cannot be combined. Configuration commands work outside a repository.

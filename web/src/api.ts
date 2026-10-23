@@ -1,12 +1,15 @@
 /** Everything the browser asks the server for. */
 export const api = {
   config: () => fetch("/api/config").then(json<Config>),
-  setSetting: (key: string, value: boolean) =>
+  setSetting: (key: string, value: SettingValue) =>
     fetch("/api/config", {
       method: "PUT",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ key, value }),
     }).then(json<Config>),
+  /** Back to the default, answered with the configuration as it now stands. */
+  resetSetting: (key: string) =>
+    fetch(`/api/config/${encodeURIComponent(key)}`, { method: "DELETE" }).then(json<Config>),
   review: () => fetch("/api/review").then(json<ReviewView>),
   file: (path: string) =>
     fetch(`/api/file?path=${encodeURIComponent(path)}`).then(json<FileDiff>),
@@ -20,9 +23,48 @@ export const api = {
       .then((answer) => answer.lines),
 
   comments: () => fetch("/api/comments").then(json<CommentsView>),
+  /** Answers with the comment as stored, whose id is what a Send needs. */
   addComment: (path: string, side: Side, from: number, to: number, body: string) =>
-    send("/api/comments", "POST", { path, side, from, to, body }),
-  closeComment: (id: string) => send(`/api/comments/${encodeURIComponent(id)}`, "DELETE"),
+    fetch("/api/comments", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ path, side, from, to, body }),
+    }).then(json<CommentView>),
+  /** With `discardPending`, the thread's pending comment is taken off the pull
+   * request too; without it, a thread that still has one is refused. */
+  closeComment: (id: string, discardPending = false) =>
+    send(`/api/comments/${encodeURIComponent(id)}${discardPending ? "?discardPending=true" : ""}`, "DELETE"),
+  /** The reviewer writing back under a comment; sending it on is `sendComment`. */
+  replyComment: (id: string, body: string) =>
+    fetch(`/api/comments/${encodeURIComponent(id)}/replies`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ body }),
+    }).then(json<CommentView>),
+  /** Only the id goes: the server builds the message from the comment it holds. */
+  sendComment: (id: string) =>
+    send(`/api/comments/${encodeURIComponent(id)}/send`, "POST"),
+
+  /** The pull request, the review mode and each thread's pending comment. */
+  github: () => fetch("/api/github").then(json<PullRequestView>),
+  chooseMode: (mode: ReviewMode) => send("/api/mode", "PUT", { mode }),
+  /** The reviewer's own words, into their pending review on the pull request. */
+  writePending: (id: string, body: string) =>
+    send(`/api/comments/${encodeURIComponent(id)}/pending`, "POST", { body }),
+  editPending: (id: string, body: string) =>
+    send(`/api/comments/${encodeURIComponent(id)}/pending`, "PUT", { body }),
+  removePending: (id: string) =>
+    send(`/api/comments/${encodeURIComponent(id)}/pending`, "DELETE"),
+  /** Ask the agent to write it; `instruction` is the note for this one. */
+  generatePending: (id: string, instruction = "") =>
+    send(`/api/comments/${encodeURIComponent(id)}/generate`, "POST", { instruction }),
+  /** Only the verdict and summary go: what is submitted is what is pending. */
+  submitReview: (verdict: Verdict, summary: string) =>
+    fetch("/api/github/review", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ verdict, summary }),
+    }).then(json<SentView>),
 };
 
 /** The page, top to bottom: each block announced, then the files it holds, then
@@ -166,6 +208,9 @@ export type CommentsView = {
    * grouping the list again wherever it needs the cut. */
   files: Record<string, CommentView[]>;
   unreadable: Unreadable[];
+  /** The harness a Send reaches — "Claude Code", "Codex" — or null, and then
+   * there is no Send to offer. */
+  agent: string | null;
 };
 
 /** A comment the store could not read.
@@ -194,16 +239,81 @@ export type CommentView = {
   to: number;
   /** Markdown, as it was typed. */
   body: string;
-  /** Where it can be read on the pull request, once it has gone. Publishing is
-   * not answering: a published comment is still waiting for one. */
-  published: string | null;
+  /** Who wrote the thread's comment for the pull request, when it has one.
+   * What it says, and whether it went, is in `PullRequestView.pending`. */
+  pending: PendingByView | null;
+  /** The turns after the question, oldest first. */
+  replies: ReplyView[];
+  /** Set while an agent owes an answer. */
+  waiting: WaitingView | null;
+};
+
+/** One turn of a comment's conversation. */
+export type ReplyView = {
+  from: "reviewer" | "agent";
+  /** "You", or the harness that answered. */
+  name: string;
+  body: string;
+};
+
+/** Something owed — an answer, or a pending comment: handed over, or
+ * acknowledged by the agent as being worked on. */
+export type WaitingView = {
+  on: string;
+  stage: "sent" | "working";
+  purpose: "answer" | "pending";
+};
+
+export type PendingByView = { by: "reviewer" | "agent"; name: string };
+
+/** The pull request as the screen needs it, asked of GitHub apart from the
+ * threads so they never wait on the network. */
+export type PullRequestView = {
+  /** Fewer states than reasons: everything a login fixes reads as "connect". */
+  connection: "ready" | "connect" | "no-pull-request" | "ambiguous" | "no-remote";
+  number: number | null;
+  mine: boolean;
+  author: string | null;
+  /** The pull request's page, when there is one. */
+  url: string | null;
+  openAt: string | null;
+  /** The command that connects, for the host the repository is on. */
+  login: string;
+  numbers: number[];
+  mode: { mode: ReviewMode; reason: string };
+  /** By thread id. */
+  pending: Record<string, RemotePendingView>;
+  pendingFailed: string | null;
+};
+
+export type ReviewMode = "self" | "peer";
+
+export type RemotePendingView = {
+  state: "pending" | "published" | "gone";
+  body: string | null;
+  url: string | null;
+};
+
+export type Verdict = "comment" | "request-changes" | "approve";
+
+export type SentView = {
+  url: string;
+  comments: number;
+  read: number;
+  readFailed: string | null;
 };
 
 /** Where a file sits: the block it is read under and how far down the map that
  * block is, which is what the band above the diff counts off. */
 export type FileHome = { block: BlockView; index: number };
 
-export type Config = { settings: BooleanSetting[] };
+export type Config = { settings: Setting[] };
+
+/** One preference, told apart by `type`: the screen draws a switch or a text
+ * box from it without knowing which preference it is. */
+export type Setting = BooleanSetting | TextSetting;
+
+export type SettingValue = boolean | string;
 
 export type BooleanSetting = {
   key: string;
@@ -212,6 +322,15 @@ export type BooleanSetting = {
   type: "boolean";
   default: boolean;
   value: boolean;
+};
+
+export type TextSetting = {
+  key: string;
+  title: string;
+  description: string | null;
+  type: "text";
+  default: string;
+  value: string;
 };
 
 async function json<T>(res: Response): Promise<T> {

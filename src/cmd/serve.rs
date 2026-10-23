@@ -29,6 +29,15 @@ pub(super) struct ServeArgs {
     /// Do not watch the repository for changes.
     #[arg(long)]
     no_watch: bool,
+    /// Review your own branch: the agent may change the code, and nothing is
+    /// offered for the pull request. Remembered for the branch.
+    #[arg(long, conflicts_with = "peer_review")]
+    self_review: bool,
+    /// Review somebody else's pull request: the agent is told not to touch
+    /// the code, and threads can become pending comments. Remembered for the
+    /// branch.
+    #[arg(long)]
+    peer_review: bool,
     /// Hold the terminal instead of going into the background. What the
     /// detached server runs as, and how to watch one that will not start.
     #[arg(long)]
@@ -37,6 +46,13 @@ pub(super) struct ServeArgs {
 
 impl ServeArgs {
     pub(super) fn run(self) -> Result<()> {
+        // Written before anything is served, so the first message to the
+        // agent already carries the rule for the mode asked for.
+        if let Some(mode) = self.mode() {
+            Ctx::from_workspace(self.session().scope)?
+                .choose_mode
+                .execute(mode)?;
+        }
         let preferences = super::wiring::config_cases()?;
         let config = preferences.get.execute()?;
         let open_browser = config.should_open(self.open, self.no_open);
@@ -65,6 +81,15 @@ impl ServeArgs {
         Ok(())
     }
 
+    fn mode(&self) -> Option<crate::comments::domain::ReviewMode> {
+        use crate::comments::domain::ReviewMode;
+        match (self.self_review, self.peer_review) {
+            (true, _) => Some(ReviewMode::SelfReview),
+            (_, true) => Some(ReviewMode::PeerReview),
+            _ => None,
+        }
+    }
+
     fn session(&self) -> SessionConfig {
         SessionConfig {
             scope: self
@@ -72,6 +97,7 @@ impl ServeArgs {
                 .with_base(self.base.clone())
                 .request(self.head.clone()),
             watch: !self.no_watch,
+            agent: super::wiring::agent_here(),
         }
     }
 
@@ -89,7 +115,7 @@ impl ServeArgs {
         let scope = ctx.scope.execute()?;
 
         crate::server::Server::new(crate::server::ServeConfig {
-            factory: server_factory(root.clone()),
+            factory: server_factory(root.clone())?,
             check_head: super::wiring::check_head(&root)?,
             session,
             branch: scope.branch,
@@ -131,10 +157,12 @@ mod tests {
     fn explicit_browser_flags_override_the_saved_preference() {
         for saved in [true, false] {
             let mut config = crate::config::domain::Config::default();
-            config.set(
-                crate::config::domain::SettingKey::parse("open_browser").unwrap(),
-                saved,
-            );
+            config
+                .set(
+                    crate::config::domain::SettingKey::parse("open_browser").unwrap(),
+                    crate::config::domain::SettingValue::Boolean(saved),
+                )
+                .unwrap();
             for (flags, expected) in [
                 (vec![], saved),
                 (vec!["--open"], true),

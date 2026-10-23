@@ -1,9 +1,12 @@
 use std::path::{Path, PathBuf};
 
-use crate::comments::domain::{Comment, CommentStore, Found, Unread, Unreadable};
-use crate::diff::domain::Side;
+use crate::comments::domain::{Comment, CommentStore, Found};
 use crate::error::{Error, Result};
 use crate::shared::paths::Store;
+
+mod format;
+
+use format::{parse, render};
 
 /// One markdown file per comment, under the branch's own folder.
 ///
@@ -101,119 +104,11 @@ impl CommentStore for MarkdownComments {
     }
 }
 
-fn render(comment: &Comment) -> String {
-    let published = match &comment.published {
-        Some(url) => format!("published: {url}\n"),
-        None => String::new(),
-    };
-    // The side is written every time, including the one that is the default.
-    // This is a file somebody opens and edits, and a key that appears only
-    // sometimes is a key they have to know about before they can use it.
-    format!(
-        "---\npath: {}\nside: {}\nlines: {}-{}\n{published}---\n\n{}\n",
-        comment.path,
-        comment.side,
-        comment.from,
-        comment.to,
-        comment.body.trim()
-    )
-}
-
-/// The header, then the prose. Written by hand rather than with a yaml crate:
-/// a handful of keys does not justify a dependency, and a file a person edited
-/// by hand and got slightly wrong should be skipped, not fatal.
-///
-/// Anything in the header that is not one of the keys it knows is passed over: a
-/// key from an older farol, a line somebody was drafting, a blank one. Only the
-/// facts it needs can stop it — and when they do, what survived comes back so
-/// the reviewer is told in their own terms rather than in file names.
-fn parse(id: &str, file: String, raw: &str) -> std::result::Result<Comment, Unreadable> {
-    let unreadable = |why, about: Option<String>, body: &str| Unreadable {
-        file: file.clone(),
-        about,
-        excerpt: excerpt(body),
-        why,
-    };
-
-    let Some((head, body)) = raw
-        .strip_prefix("---\n")
-        .and_then(|rest| rest.split_once("\n---\n"))
-    else {
-        // Nothing to read but the prose, which is all the reviewer has left to
-        // recognise it by.
-        return Err(unreadable(Unread::NoHeader, None, raw));
-    };
-
-    let mut path = None;
-    let mut side = None;
-    let mut lines = None;
-    let mut published = None;
-    for (key, value) in head.lines().filter_map(|line| line.split_once(':')) {
-        match key.trim() {
-            "path" => path = Some(value.trim().to_string()),
-            "side" => side = Some(value.trim().to_string()),
-            "lines" => lines = Some(value.trim().to_string()),
-            // The url has its own colons, so the key is split off and the rest
-            // is taken whole rather than split again.
-            "published" => published = Some(value.trim().to_string()),
-            _ => {}
-        }
-    }
-
-    let Some(path) = path else {
-        return Err(unreadable(Unread::NoPath, None, body));
-    };
-    // No side is the new one: every comment farol wrote before it could write
-    // any other was about the file as it now reads, so reading those files that
-    // way is reading them correctly rather than defaulting. A side that is
-    // there and says something else is a different matter — it is skipped and
-    // named, because putting the comment on the wrong column is worse than
-    // telling the reviewer one file needs a look.
-    let side = match side.as_deref() {
-        None => Side::New,
-        Some(raw) => match Side::parse(raw) {
-            Some(side) => side,
-            None => return Err(unreadable(Unread::BadSide, Some(path), body)),
-        },
-    };
-    let range = lines
-        .as_deref()
-        .map(|l| l.split_once('-').unwrap_or((l, l)))
-        .and_then(|(a, b)| Some((a.trim().parse().ok()?, b.trim().parse().ok()?)));
-    let Some((from, to)) = range else {
-        return Err(unreadable(Unread::NoLines, Some(path), body));
-    };
-
-    Ok(Comment {
-        id: id.to_string(),
-        path,
-        side,
-        from,
-        to,
-        body: body.trim().to_string(),
-        published,
-    })
-}
-
-/// How much of a comment it takes to recognise it. One line, because that is
-/// what a chip and a terminal row have room for, and the first line of a
-/// comment is where people put the question.
-const EXCERPT: usize = 60;
-
-fn excerpt(body: &str) -> Option<String> {
-    let line = body.trim().lines().next()?.trim();
-    if line.is_empty() {
-        return None;
-    }
-    match line.chars().count() > EXCERPT {
-        true => Some(line.chars().take(EXCERPT).collect::<String>() + "…"),
-        false => Some(line.to_string()),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::comments::domain::{Author, PendingRef, Purpose, Unread};
+    use crate::diff::domain::Side;
 
     fn store() -> (tempfile::TempDir, MarkdownComments) {
         let dir = tempfile::tempdir().unwrap();
@@ -230,7 +125,8 @@ mod tests {
             from: 82,
             to: 116,
             body: "Why **this** order?".into(),
-            published: None,
+            pending: None,
+            conversation: Default::default(),
         }
     }
 
@@ -253,20 +149,38 @@ mod tests {
     }
 
     #[test]
-    fn where_a_comment_was_published_comes_back_with_it() {
+    fn the_pending_comment_and_what_the_agent_owes_come_back_with_it() {
         let (_dir, store) = store();
-        store
-            .save(&Comment {
-                published: Some("https://github.com/asnunes/farol/pull/12#discussion_r1".into()),
-                ..comment("1")
-            })
-            .unwrap();
+        let mut one = comment("1");
+        one.pending_written(PendingRef {
+            id: "PRRC_kwDO".into(),
+            by: Author::Agent("Claude Code".into()),
+        });
+        one.sent("Claude Code", "17", Purpose::Pending);
+        store.save(&one).unwrap();
 
-        let all = store.list().unwrap().comments;
+        let back = &store.list().unwrap().comments[0];
+        assert_eq!(back, &one);
         assert_eq!(
-            all[0].published.as_deref(),
-            Some("https://github.com/asnunes/farol/pull/12#discussion_r1")
+            back.conversation.waiting.as_ref().unwrap().purpose,
+            Purpose::Pending,
+            "a regenerate in flight must not read back as an answer owed"
         );
+    }
+
+    #[test]
+    fn a_comment_published_by_the_first_release_candidate_reads_as_a_thread() {
+        // rc.1 sent the comment itself with the review. That copy cannot be
+        // edited from here, so the thread comes back without a pending one.
+        let (_dir, store) = store();
+        std::fs::create_dir_all(&store.dir).unwrap();
+        std::fs::write(
+            store.file("1"),
+            "---\npath: src/a.rs\nlines: 82-116\npublished: https://github.com/o/r/pull/1#r1\n---\n\nWhy **this** order?\n",
+        )
+        .unwrap();
+
+        assert_eq!(store.list().unwrap().comments, vec![comment("1")]);
     }
 
     #[test]

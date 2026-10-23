@@ -29,8 +29,28 @@ src/
 ├── shared/      errors, workspace and store paths
 ├── diff/        derived from git, never persisted
 ├── map/         blocks, order, notes — written by the skill
-└── progress/    what has been read — written by the server
+├── progress/    what has been read — written by the server
+├── comments/    what the reviewer wrote back
+├── config/      preferences for the user, across repositories
+└── agent/       reaching the session that implemented the branch
 ```
+
+`agent` has only `domain` and `infra`. It holds the `AgentChannel` port and one
+adapter per harness; what gets sent, and when, belongs to the part that owns the
+subject, so sending a comment is `comments/application/use_case/send_comment.rs`,
+which depends on `agent::domain` the way `comments/application` already depends
+on `map`. The session's address is read from the environment the harness
+exports, once per `farol serve`, and travels in `SessionConfig` so a reused
+server follows the session that last asked for it.
+
+`comments` holds the threads — the reviewer's conversation about a span, kept
+as markdown beside the map — and, in a peer review, each thread's comment for
+the pull request. That one is **not stored here**: it lives in the reviewer's
+pending review on GitHub from the moment it is written, and farol keeps only its
+id. Text and state are read back from GitHub, so there is no local copy to
+reconcile, and submitting the review is one call on something that already
+exists. The connection is the `gh` login, asked for at each call; there is no
+other way to publish and no agent fallback.
 
 The parts were chosen by **who writes them**: the skill writes `map`, the server
 writes `progress`, nobody writes `diff`. That is the same line that separates the

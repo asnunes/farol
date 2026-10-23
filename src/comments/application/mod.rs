@@ -1,12 +1,21 @@
+mod message;
+mod modes;
+mod pull_request;
 mod reach;
+#[cfg(test)]
+mod testing;
 mod use_case;
 
+pub use modes::*;
+pub use pull_request::*;
 pub use reach::*;
 pub use use_case::*;
 
 use std::sync::Arc;
 
-use crate::comments::domain::{Comment, CommentError, CommentStore, Found};
+use crate::comments::domain::{
+    Author, Comment, CommentError, CommentStore, Found, PendingRef, Purpose,
+};
 use crate::diff::domain::Side;
 use crate::error::Result;
 use crate::map::application::GetScope;
@@ -44,7 +53,7 @@ impl Comments {
     ///
     /// Checked on the read rather than in each caller, because this is the one
     /// the browser and the terminal both come through: the count in the sidebar
-    /// and the list in `farol comment list` are the same list or they are two
+    /// and the list in `farol thread list` are the same list or they are two
     /// answers to one question.
     pub fn all(&self) -> Result<Found> {
         let mut found = self.store.list()?;
@@ -96,23 +105,82 @@ impl Comments {
             from,
             to,
             body: body.trim().to_string(),
-            published: None,
+            pending: None,
+            conversation: Default::default(),
         };
         self.store.save(&comment)?;
         Ok(comment)
     }
 
-    /// Close one, which is to say drop it.
+    /// One thread the review still holds, or the refusal that says how to find
+    /// the ones it does.
+    pub fn get(&self, id: &str) -> Result<Comment> {
+        self.all()?
+            .comments
+            .into_iter()
+            .find(|comment| comment.id == id)
+            .ok_or_else(|| CommentError::Unknown { id: id.into() }.into())
+    }
+
+    /// The thread's comment for the pull request is now this one.
+    pub fn record_pending(&self, id: &str, pending: PendingRef) -> Result<Comment> {
+        self.edit(id, |comment| comment.pending_written(pending))
+    }
+
+    /// The thread no longer has a comment for the pull request.
+    pub fn clear_pending(&self, id: &str) -> Result<Comment> {
+        self.edit(id, |comment| comment.pending = None)
+    }
+
+    /// Another turn in the conversation under a comment.
+    pub fn reply(&self, id: &str, from: Author, body: &str) -> Result<Comment> {
+        if body.trim().is_empty() {
+            return Err(CommentError::Empty.into());
+        }
+        self.edit(id, |comment| comment.reply(from, body, &now()))
+    }
+
+    /// The agent says it has started on the comment.
+    pub fn acknowledge(&self, id: &str, by: &str) -> Result<Comment> {
+        self.edit(id, |comment| comment.acknowledged(by, &now()))
+    }
+
+    /// Record that the comment was handed to an agent, and what for.
+    pub fn sent(&self, id: &str, to: &str, purpose: Purpose) -> Result<Comment> {
+        self.edit(id, |comment| comment.sent(to, &now(), purpose))
+    }
+
+    /// One comment the review still holds, changed and written back. Read
+    /// through `all` so a comment the diff no longer reaches cannot be answered
+    /// either — it is not on the screen to be read.
+    fn edit(&self, id: &str, change: impl FnOnce(&mut Comment)) -> Result<Comment> {
+        let mut comment = self.get(id)?;
+        change(&mut comment);
+        self.store.save(&comment)?;
+        Ok(comment)
+    }
+
+    /// Drop one. Whether it may go while a pending comment hangs off it is
+    /// `CloseThread`'s question, which can ask the pull request.
     ///
     /// There is no settled-but-kept state. A comment lives as long as it is
     /// waiting for an answer, and the list is therefore always what is still
     /// open — nothing to filter, nothing to reopen.
-    pub fn close(&self, id: &str) -> Result<()> {
+    pub(super) fn close(&self, id: &str) -> Result<()> {
         match self.store.close(id)? {
             true => Ok(()),
             false => Err(CommentError::Unknown { id: id.into() }.into()),
         }
     }
+}
+
+/// Seconds since the epoch, the clock `viewed` is stamped with too.
+fn now() -> String {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or_default()
+        .to_string()
 }
 
 /// An id that survives leaving this machine.
@@ -185,6 +253,51 @@ mod tests {
             new_lines: lines,
             lines: vec![],
         }
+    }
+
+    #[test]
+    fn a_conversation_survives_the_store_and_an_agents_answer_settles_it() {
+        let (_dir, comments) = comments();
+        let one = comments
+            .add("src/a.rs", Side::New, 82, 116, "Why this order?")
+            .unwrap();
+
+        comments
+            .sent(&one.id, "Claude Code", Purpose::Answer)
+            .unwrap();
+        comments.acknowledge(&one.id, "Claude Code").unwrap();
+        comments
+            .reply(
+                &one.id,
+                Author::Agent("Claude Code".into()),
+                "Because the **legacy** format.\n\nSecond paragraph.",
+            )
+            .unwrap();
+        comments
+            .reply(&one.id, Author::Reviewer, "And the new one?")
+            .unwrap();
+
+        let back = &comments.all().unwrap().comments[0];
+        assert_eq!(
+            back.body, "Why this order?",
+            "replies must not leak into the question"
+        );
+        let replies = &back.conversation.replies;
+        assert_eq!(replies.len(), 2);
+        assert_eq!(replies[0].from, Author::Agent("Claude Code".into()));
+        assert_eq!(
+            replies[0].body,
+            "Because the **legacy** format.\n\nSecond paragraph."
+        );
+        assert_eq!(replies[1].from, Author::Reviewer);
+        assert_eq!(back.conversation.waiting, None);
+    }
+
+    #[test]
+    fn a_reply_to_a_comment_that_is_not_there_says_how_to_find_them() {
+        let (_dir, comments) = comments();
+        let error = comments.reply("nope", Author::Reviewer, "hi").unwrap_err();
+        assert!(error.to_string().contains("farol thread list"), "{error}");
     }
 
     #[test]
@@ -402,7 +515,7 @@ mod tests {
 
         let err = comments.close("nope").unwrap_err().to_string();
         assert!(err.contains("nope"), "{err}");
-        assert!(err.contains("comment list"), "{err}");
+        assert!(err.contains("thread list"), "{err}");
     }
 
     #[test]

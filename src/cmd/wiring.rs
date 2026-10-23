@@ -7,9 +7,18 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use crate::comments::application::{CommentReach, Comments, PublishReview, ReviewReadiness};
+use crate::agent::domain::AgentChannel;
+use crate::agent::infra::{AgentAddress, ClaudeSocket, CodexQueue};
+use crate::comments::application::{
+    ChooseMode, CloseThread, CommentReach, Comments, EditPending, GeneratePending, PublishReview,
+    PullRequestGate, RemovePending, ReviewModes, ReviewReadiness, SendComment, WritePending,
+};
 use crate::comments::domain::ReviewPublisher;
-use crate::comments::infra::{GhCredentials, GitHub, MarkdownComments, Unhosted};
+use crate::comments::infra::{
+    GhCredentials, GitHub, JsonModeStore, Logins, MarkdownComments, Unhosted,
+};
+use crate::config::domain::ConfigRepository;
+use crate::config::infra::JsonConfigRepository;
 use crate::diff::application::{CommitHistory, FileDiffs, ReviewScope};
 use crate::diff::infra::{GixSource, ScopeRequest};
 use crate::error::Result;
@@ -57,10 +66,17 @@ pub struct Ctx {
     pub scope: GetScope,
 
     pub comments: Comments,
+    pub close_thread: CloseThread,
+    pub write_pending: WritePending,
+    pub edit_pending: EditPending,
+    pub remove_pending: RemovePending,
+    pub choose_mode: ChooseMode,
     pub readiness: ReviewReadiness,
-    pub publish_review: Arc<PublishReview>,
+    pub publish_review: PublishReview,
 
-    server: ServerUseCases,
+    /// Only when serving: the CLI never sends to an agent, and building this
+    /// would make every command resolve the configuration folder for nothing.
+    server: Option<ServerUseCases>,
     git_dir: PathBuf,
     root: PathBuf,
 }
@@ -76,6 +92,24 @@ pub struct ServerUseCases {
     pub mark_viewed: MarkViewed,
     pub unmark_viewed: UnmarkViewed,
     pub comments: Comments,
+    pub close_thread: CloseThread,
+    pub send_comment: SendComment,
+    pub generate_pending: GeneratePending,
+    pub write_pending: WritePending,
+    pub edit_pending: EditPending,
+    pub remove_pending: RemovePending,
+    pub choose_mode: ChooseMode,
+    pub readiness: ReviewReadiness,
+    pub publish_review: PublishReview,
+}
+
+/// What a server adds to a context: the session it reports to, and where the
+/// user's preferences are read from.
+pub struct Serving {
+    pub agent: Option<AgentAddress>,
+    pub config: Arc<dyn ConfigRepository>,
+    /// Who the GitHub token belongs to, kept across requests.
+    pub logins: Arc<Logins>,
 }
 
 impl Ctx {
@@ -85,6 +119,10 @@ impl Ctx {
     }
 
     pub fn at(root: &Path, request: ScopeRequest) -> Result<Self> {
+        Self::assemble(root, request, None)
+    }
+
+    fn assemble(root: &Path, request: ScopeRequest, serving: Option<Serving>) -> Result<Self> {
         let workspace = Workspace::discover(root)?;
         let git_dir = workspace.git_dir().to_path_buf();
         let root = workspace.root();
@@ -95,6 +133,7 @@ impl Ctx {
         let remote = workspace.remote();
 
         let comment_store = Arc::new(MarkdownComments::new(&workspace.store(), &root));
+        let modes = ReviewModes::new(Arc::new(JsonModeStore::new(workspace.store())));
         let maps = Arc::new(JsonMapRepository::new(workspace.store()));
         let maps_for_sharing = maps.clone();
         let progress_repo = Arc::new(JsonProgressRepository::new(workspace.store()));
@@ -107,7 +146,14 @@ impl Ctx {
         let host = remote.as_ref().map(|remote| remote.host.clone());
         let credentials = Arc::new(GhCredentials::new("gh"));
         let publisher: Arc<dyn ReviewPublisher> = match remote {
-            Some(remote) => Arc::new(GitHub::new(remote, credentials.clone())),
+            Some(remote) => Arc::new(GitHub::new(
+                remote,
+                credentials.clone(),
+                serving
+                    .as_ref()
+                    .map(|serving| serving.logins.clone())
+                    .unwrap_or_default(),
+            )),
             None => Arc::new(Unhosted),
         };
 
@@ -126,20 +172,28 @@ impl Ctx {
         let scope_for_publishing = scope.clone();
         let scope_for_lines = scope.clone();
 
+        let gate = PullRequestGate::new(publisher.clone(), scope.clone(), history.clone());
         let readiness = ReviewReadiness::new(
+            gate.clone(),
+            modes.clone(),
+            comments.clone(),
             publisher.clone(),
             scope_for_publishing.clone(),
             host.clone(),
             progress.clone(),
         );
-        let publish_review = Arc::new(PublishReview::new(
-            comment_store,
-            publisher,
+        let publish_review = PublishReview::new(
+            comments.clone(),
+            gate.clone(),
+            publisher.clone(),
             scope_for_publishing,
-            reach,
-            history,
             progress.clone(),
-        ));
+        );
+        let close_thread = CloseThread::new(comments.clone(), publisher.clone());
+        let write_pending = WritePending::new(comments.clone(), gate, publisher.clone());
+        let edit_pending = EditPending::new(comments.clone(), publisher.clone());
+        let remove_pending = RemovePending::new(comments.clone(), publisher.clone());
+        let choose_mode = ChooseMode::new(modes.clone());
 
         Ok(Self {
             add_block: AddBlock::new(editor.clone()),
@@ -169,27 +223,46 @@ impl Ctx {
             scope: GetScope::new(scope.clone()),
 
             comments: comments.clone(),
-
-            // Only the CLI can reach publication; serving a review never authenticates.
+            close_thread: close_thread.clone(),
+            write_pending: write_pending.clone(),
+            edit_pending: edit_pending.clone(),
+            remove_pending: remove_pending.clone(),
+            choose_mode: choose_mode.clone(),
             readiness: readiness.clone(),
             publish_review: publish_review.clone(),
 
-            server: ServerUseCases {
+            server: serving.map(|serving| ServerUseCases {
                 scope: GetScope::new(scope.clone()),
                 review: GetReview::new(versions, scope, progress.clone()),
                 file_diff: GetFileDiff::new(diffs),
                 file_lines: GetFileLines::new(scope_for_lines),
                 mark_viewed: MarkViewed::new(progress.clone()),
                 unmark_viewed: UnmarkViewed::new(progress),
+                send_comment: SendComment::new(
+                    comments.clone(),
+                    serving.agent.as_ref().map(channel),
+                    serving.config.clone(),
+                    modes.clone(),
+                ),
+                generate_pending: GeneratePending::new(
+                    comments.clone(),
+                    serving.agent.as_ref().map(channel),
+                    serving.config,
+                    modes,
+                    publisher,
+                ),
                 comments,
-            },
+                close_thread,
+                write_pending,
+                edit_pending,
+                remove_pending,
+                choose_mode,
+                readiness,
+                publish_review,
+            }),
             git_dir,
             root,
         })
-    }
-
-    pub fn server(&self) -> &ServerUseCases {
-        &self.server
     }
 
     pub fn git_dir(&self) -> &PathBuf {
@@ -203,23 +276,49 @@ impl Ctx {
 }
 
 pub fn config_cases() -> Result<ConfigUseCases> {
-    let repo = Arc::new(crate::config::infra::JsonConfigRepository::new(
+    Ok(ConfigUseCases::new(config_repository()?))
+}
+
+/// The session this process was started from, read off what its harness
+/// exported. Read here and not by the adapters, which take what they are given.
+pub fn agent_here() -> Option<AgentAddress> {
+    AgentAddress::from_env(|name| std::env::var(name).ok())
+}
+
+/// Which harness this process was started from, by the name the screen uses.
+pub fn harness_here() -> Option<&'static str> {
+    agent_here().map(|address| channel(&address).harness())
+}
+
+/// The one place that knows which harness speaks through which transport.
+fn channel(address: &AgentAddress) -> Arc<dyn AgentChannel> {
+    match address {
+        AgentAddress::ClaudeCode { socket, token } => {
+            Arc::new(ClaudeSocket::new(socket.clone(), token.clone()))
+        }
+        AgentAddress::Codex { thread } => Arc::new(CodexQueue::new("codex", thread.clone())),
+    }
+}
+
+fn config_repository() -> Result<Arc<dyn ConfigRepository>> {
+    Ok(Arc::new(JsonConfigRepository::new(
         crate::shared::paths::config_dir()?,
-    ));
-    Ok(ConfigUseCases::new(repo))
+    )))
 }
 
 #[derive(Clone)]
 pub struct ConfigUseCases {
     pub get: crate::config::application::GetConfig,
     pub set_setting: crate::config::application::SetSetting,
+    pub reset_setting: crate::config::application::ResetSetting,
 }
 
 impl ConfigUseCases {
     pub fn new(repo: Arc<dyn crate::config::domain::ConfigRepository>) -> Self {
         Self {
             get: crate::config::application::GetConfig::new(repo.clone()),
-            set_setting: crate::config::application::SetSetting::new(repo),
+            set_setting: crate::config::application::SetSetting::new(repo.clone()),
+            reset_setting: crate::config::application::ResetSetting::new(repo),
         }
     }
 }
@@ -231,22 +330,36 @@ pub fn check_head(root: &Path) -> Result<crate::diff::application::CheckHead> {
     )))
 }
 
-pub fn server_factory(root: PathBuf) -> Arc<dyn ServerUseCaseFactory> {
-    Arc::new(WorkspaceUseCases { root })
+pub fn server_factory(root: PathBuf) -> Result<Arc<dyn ServerUseCaseFactory>> {
+    Ok(Arc::new(WorkspaceUseCases {
+        root,
+        config: config_repository()?,
+        logins: Arc::default(),
+    }))
 }
 
 /// A request gets one Git window, shared by all the use cases it invokes.
 /// Keeping the factory instead of its result lets the next request follow refs.
 pub trait ServerUseCaseFactory: Send + Sync {
-    fn build(&self, request: ScopeRequest) -> Result<ServerUseCases>;
+    fn build(&self, request: ScopeRequest, agent: Option<AgentAddress>) -> Result<ServerUseCases>;
 }
 
 impl ServerUseCaseFactory for WorkspaceUseCases {
-    fn build(&self, request: ScopeRequest) -> Result<ServerUseCases> {
-        Ok(Ctx::at(&self.root, request)?.server)
+    fn build(&self, request: ScopeRequest, agent: Option<AgentAddress>) -> Result<ServerUseCases> {
+        let serving = Serving {
+            agent,
+            config: self.config.clone(),
+            logins: self.logins.clone(),
+        };
+        Ok(Ctx::assemble(&self.root, request, Some(serving))?
+            .server
+            .expect("a serving context always assembles the server's use cases"))
     }
 }
 
 struct WorkspaceUseCases {
     root: PathBuf,
+    config: Arc<dyn ConfigRepository>,
+    /// Here, because this outlives every request it builds for.
+    logins: Arc<Logins>,
 }

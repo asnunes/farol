@@ -23,7 +23,7 @@ const KEYS: [string, string][] = [
  * on a line; these are what turn the one line it offers into a passage. */
 const ON_THE_PLUS: [string, string][] = [
   ["shift ↑ / shift ↓", "reach for another line, up or down"],
-  ["Enter", "write the comment, over every line reached"],
+  ["Enter", "start a thread, over every line reached"],
 ];
 
 export function HelpDialog({

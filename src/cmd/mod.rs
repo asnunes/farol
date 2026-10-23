@@ -3,30 +3,34 @@
 use clap::{Args, Parser, Subcommand};
 
 mod block;
-mod comment;
 mod config;
 mod file;
 mod github;
 mod line;
 mod map;
+mod pending;
 mod scope;
 mod serve;
 mod servers;
 mod skim;
+mod thread;
 mod wiring;
 
 use block::BlockAction;
-use comment::CommentAction;
 use file::FileAction;
 use github::GithubAction;
 use line::LineAction;
 use map::MapAction;
+use pending::PendingAction;
 use scope::ShowScope;
 use serve::ServeArgs;
 use servers::ServersArgs;
 use skim::SkimAction;
+use thread::ThreadAction;
 
-pub use wiring::{ConfigUseCases, Ctx, ServerUseCaseFactory, ServerUseCases, server_factory};
+pub use wiring::{
+    ConfigUseCases, Ctx, ServerUseCaseFactory, ServerUseCases, Serving, server_factory,
+};
 
 use crate::diff::infra::ScopeRequest;
 use crate::error::Result;
@@ -162,12 +166,19 @@ enum Command {
         #[command(subcommand)]
         action: LineAction,
     },
-    /// What the reviewer wrote back.
-    Comment {
+    /// What the reviewer wrote back: a conversation about a span of lines.
+    Thread {
         #[command(flatten)]
         scope: ScopeArgs,
         #[command(subcommand)]
-        action: CommentAction,
+        action: ThreadAction,
+    },
+    /// A thread's comment for the pull request, in your pending review on GitHub.
+    Pending {
+        #[command(flatten)]
+        scope: ScopeArgs,
+        #[command(subcommand)]
+        action: PendingAction,
     },
     /// Sending the review to the pull request.
     Github {
@@ -208,7 +219,8 @@ impl Command {
             Command::File { scope, action } => action.run(&scope.open()?),
             Command::Line { scope, action } => action.run(&scope.open()?),
             Command::Skim { scope, action } => action.run(&scope.open()?),
-            Command::Comment { scope, action } => action.run(&scope.open()?),
+            Command::Thread { scope, action } => action.run(&scope.open()?),
+            Command::Pending { scope, action } => action.run(&scope.open()?),
             Command::Github { scope, action } => action.run(&scope.open()?),
         }
     }

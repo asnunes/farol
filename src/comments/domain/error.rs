@@ -11,7 +11,7 @@ pub enum CommentError {
     #[error("a comment with no text says nothing")]
     Empty,
 
-    #[error("no comment with id {id} — `farol comment list` shows them")]
+    #[error("no thread with id {id} — `farol thread list` shows them")]
     Unknown { id: String },
 
     #[error(
@@ -27,12 +27,6 @@ pub enum CommentError {
     },
 
     // ---- publishing ------------------------------------------------------
-    #[error(
-        "these comments are no longer on lines the diff shows:\n{}\nThe branch moved under them. Close them, or write them again where the code went.",
-        Listing(.comments)
-    )]
-    NoLongerInDiff { comments: Vec<String> },
-
     #[error("this repository has no remote, so there is no pull request to publish to")]
     NoRemote,
 
@@ -88,17 +82,34 @@ pub enum CommentError {
 
     #[error("GitHub refused the review: {what}")]
     Refused { what: String },
+
+    #[error(
+        "more than one open pull request shows this commit: {}\nfarol will not pick one. Close the ones that are not this review, or check out the branch of the one that is.",
+        Numbers(.numbers)
+    )]
+    AmbiguousPullRequest { numbers: Vec<u32> },
+
+    #[error("thread {id} has no pending comment — write one first")]
+    NoPending { id: String },
+
+    #[error(
+        "thread {id} still has a pending comment on the pull request\nRemove it with `farol pending remove {id}`, or submit the review, before closing the thread."
+    )]
+    PendingStillOpen { id: String },
+
+    #[error(
+        "the pending comment of thread {id} was already submitted with a review, so it can no longer change"
+    )]
+    AlreadyPublished { id: String },
 }
 
-/// One per line, indented, because the reviewer has to go and find each one.
-struct Listing<'a>(&'a Vec<String>);
+/// Pull request numbers as a person reads them: `#4, #7`.
+struct Numbers<'a>(&'a Vec<u32>);
 
-impl std::fmt::Display for Listing<'_> {
+impl std::fmt::Display for Numbers<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for one in self.0 {
-            writeln!(f, "    {one}")?;
-        }
-        Ok(())
+        let all: Vec<String> = self.0.iter().map(|n| format!("#{n}")).collect();
+        write!(f, "{}", all.join(", "))
     }
 }
 
@@ -139,14 +150,11 @@ mod tests {
     }
 
     #[test]
-    fn the_ones_that_drifted_are_listed_so_they_can_be_found() {
-        let e = CommentError::NoLongerInDiff {
-            comments: vec!["src/a.rs:82-116".into(), "src/b.rs:9".into()],
+    fn an_ambiguous_commit_names_every_pull_request_it_could_be() {
+        let e = CommentError::AmbiguousPullRequest {
+            numbers: vec![4, 7],
         };
-
-        let msg = e.to_string();
-        assert!(msg.contains("    src/a.rs:82-116"), "{msg}");
-        assert!(msg.contains("    src/b.rs:9"), "{msg}");
+        assert!(e.to_string().contains("#4, #7"), "{e}");
     }
 
     #[test]

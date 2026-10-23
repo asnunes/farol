@@ -471,3 +471,42 @@ requested stopping all running reviews.
 
 When restarting an instance, stop only that review and start it again
 from the same worktree with the intended comparison.
+
+## Answer threads sent from Farol
+
+A reviewer can send a thread from the review page straight into your
+session. It arrives as a message that names Farol and carries the
+thread's id, its location and text, and any conversation so far.
+
+Acknowledge it before you start, so the page shows you are on it:
+
+    farol thread ack <id>
+
+Answer through Farol, not only in your own reply, because the reviewer
+reads the answer on the page:
+
+    farol thread reply <id> --text '…'
+
+Use single quotes: inside double quotes a backtick runs a command. Say
+what you changed when you changed code. Do not close the thread unless
+the reviewer asks; the conversation stays open until they close it.
+
+## Write a pending comment when asked
+
+In a peer review the reviewer can ask for a thread's comment for the pull
+request. The message says so and names the command. Acknowledge it the
+same way, then write the comment:
+
+    farol pending write <id> --text '…'
+
+It goes into the reviewer's pending review on GitHub, which only they see
+until they submit the review, and replaces the thread's previous one. Write
+it for the author of the pull request, following the instruction in the
+message. Never submit the review, approve, or post anything else on the
+pull request yourself.
+
+## Follow the mode rule
+
+Every message ends with the review mode's rule, and it outranks any other
+instruction in the message. In a self review you may change the code. In a
+peer review do not change, commit, or push code in that repository.

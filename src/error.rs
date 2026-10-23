@@ -11,6 +11,7 @@
 //! a dependency running the wrong way, in the module whose whole job is to be
 //! depended on.
 
+use crate::agent::domain::AgentError;
 use crate::comments::domain::CommentError;
 use crate::config::domain::ConfigError;
 use crate::diff::domain::ScopeError;
@@ -44,6 +45,9 @@ pub enum Error {
 
     #[error(transparent)]
     Comment(#[from] CommentError),
+
+    #[error(transparent)]
+    Agent(#[from] AgentError),
 
     // ---- the world failing underneath -----------------------------------
     /// git failing, mostly. There is nothing farol can add to what the library

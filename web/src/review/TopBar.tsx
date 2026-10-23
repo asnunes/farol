@@ -8,7 +8,12 @@ import { Refresh } from "@/review/Refresh";
 import { ViewToggle } from "@/review/ViewToggle";
 import { MOD } from "@/hooks/useShortcuts";
 import type { DiffView } from "@/hooks/useDiffView";
-import type { ReviewView, Unreadable as UnreadableView } from "@/api";
+import { GitHubMark } from "@/components/GitHubMark";
+import { Connection } from "@/review/Connection";
+import { ReviewMode } from "@/review/ReviewMode";
+import { SubmitReview } from "@/review/SubmitReview";
+import type { GitHubState } from "@/hooks/useGitHub";
+import type { CommentView, ReviewView, Unreadable as UnreadableView } from "@/api";
 
 /** Where you are and how far through you are. */
 export function TopBar({
@@ -22,8 +27,15 @@ export function TopBar({
   onToggleSidebar,
   toggleRef,
   onNextUnread,
+  github,
+  threads,
 }: TopBarProps) {
   const done = review.totalFiles > 0 && review.viewedFiles === review.totalFiles;
+  const pull = github.pull;
+  const peer = pull?.mode.mode === "peer";
+  const pending = pull
+    ? threads.filter((thread) => pull.pending[thread.id]?.state === "pending").length
+    : 0;
 
   return (
     // Wrapping and tightening rather than dropping anything: every control here
@@ -88,6 +100,59 @@ export function TopBar({
             value={review.totalFiles ? (review.viewedFiles / review.totalFiles) * 100 : 0}
             aria-label={`${review.viewedFiles} of ${review.totalFiles} read`}
           />
+        </div>
+      </div>
+
+      {/* The review with the pull request, on a line of its own: the mode and
+          why, and in a peer review what goes to GitHub. Kept off the line
+          above so nothing there moves when it changes — on that line, choosing
+          peer review pushed the mode aside and put Submit review under the
+          pointer. The line is there from the first paint, at a fixed height,
+          so GitHub answering does not move the page down either. */}
+      <div className="review-line -mx-4 flex h-7 w-[calc(100%+2rem)] items-center justify-between gap-3 border-t border-rule px-4 pt-2 md:-mx-5 md:w-[calc(100%+2.5rem)] md:px-5">
+        <div className="flex min-w-0 items-center gap-3">
+          {/* Held in place while GitHub answers, which takes a second or so:
+              the mode always comes, so its place is shown. What comes on the
+              right depends on the answer, and a placeholder there would
+              promise a button that may not arrive. */}
+          {pull ? (
+            <ReviewMode pull={pull} onChoose={github.chooseMode} />
+          ) : (
+            <span
+              className="review-mode-loading block h-3.5 w-32 animate-pulse rounded-sm bg-sunken"
+              role="status"
+              aria-label="Reading the pull request"
+            />
+          )}
+          {pull && peer && <Connection pull={pull} />}
+        </div>
+        <div className="flex shrink-0 items-center gap-3">
+          {/* Counted apart, because only one of the two ever leaves farol. */}
+          {peer && threads.length > 0 && (
+            <span className="counts font-mono text-xs text-ink-muted">
+              {threads.length} thread{threads.length === 1 ? "" : "s"} · {pending} pending
+            </span>
+          )}
+          {pull?.url && (
+            <Tooltip delayDuration={0}>
+              <TooltipTrigger asChild>
+                <Button
+                  asChild
+                  variant="ghost"
+                  size="icon-xs"
+                  className="open-pull text-ink-muted hover:bg-sunken hover:text-ink"
+                >
+                  <a href={pull.url} target="_blank" rel="noreferrer" aria-label="Open PR on GitHub">
+                    <GitHubMark className="size-4" />
+                  </a>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Open PR on GitHub</TooltipContent>
+            </Tooltip>
+          )}
+          {pull && peer && pull.connection === "ready" && (
+            <SubmitReview pull={pull} threads={threads} onSubmit={github.submit} />
+          )}
         </div>
       </div>
     </header>
@@ -166,6 +231,9 @@ type TopBarProps = {
   /** Focus comes back here when the sidebar closes under whoever was in it. */
   toggleRef: React.Ref<HTMLButtonElement>;
   onNextUnread: () => void;
+  github: GitHubState;
+  /** Every thread on the review, for the counts and the review dialog. */
+  threads: CommentView[];
 };
 
 type SidebarToggleProps = {

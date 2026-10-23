@@ -1,14 +1,21 @@
 use std::sync::Arc;
 
-use crate::comments::domain::{Readiness, ReviewPublisher};
+use crate::comments::application::{Comments, PullRequestGate, ReviewModes};
+use crate::comments::domain::{ModeChoice, Readiness, RemoteState, ReviewPublisher};
 use crate::diff::application::ReviewScope;
 use crate::error::Result;
 
-/// Ask whether the review could be sent, and if not, what is in the way.
+/// Where the review stands with the pull request: whether there is one to
+/// write on, whose it is and so which mode this is, and what each thread's
+/// pending comment looks like there now.
 ///
-/// Read-only preparation for the publication skill, including the marks it will send.
+/// One question for the screen and for `farol github status`, because both
+/// draw the same thing and two assemblies would drift.
 #[derive(Clone)]
 pub struct ReviewReadiness {
+    pull: PullRequestGate,
+    modes: ReviewModes,
+    comments: Comments,
     publisher: Arc<dyn ReviewPublisher>,
     scope: ReviewScope,
     host: Option<String>,
@@ -17,12 +24,18 @@ pub struct ReviewReadiness {
 
 impl ReviewReadiness {
     pub fn new(
+        pull: PullRequestGate,
+        modes: ReviewModes,
+        comments: Comments,
         publisher: Arc<dyn ReviewPublisher>,
         scope: ReviewScope,
         host: Option<String>,
         progress: crate::progress::application::ProgressStore,
     ) -> Self {
         Self {
+            pull,
+            modes,
+            comments,
             publisher,
             scope,
             host,
@@ -32,13 +45,50 @@ impl ReviewReadiness {
 
     pub fn execute(&self) -> Result<Standing> {
         let scope = self.scope.get()?;
-        let branch = scope.branch.clone();
+        let readiness = self.pull.readiness()?;
+        let mode = self.modes.detect(&readiness)?;
+        let (pending, pending_failed) = match readiness.can_send() {
+            true => match self.pending() {
+                Ok(pending) => (pending, None),
+                // The rest of the answer is still worth having: the screen
+                // draws the threads and says the pending ones could not be read.
+                Err(error) => (vec![], Some(error.to_string())),
+            },
+            false => (vec![], None),
+        };
         Ok(Standing {
             host: self.host.clone(),
-            readiness: self.publisher.readiness(&branch)?,
-            branch,
+            branch: scope.branch.clone(),
+            readiness,
+            mode,
+            pending,
+            pending_failed,
             read: self.progress.current_paths(&scope.files)?,
         })
+    }
+
+    fn pending(&self) -> Result<Vec<ThreadPending>> {
+        let threads: Vec<_> = self
+            .comments
+            .all()?
+            .comments
+            .into_iter()
+            .filter_map(|thread| thread.pending.clone().map(|pending| (thread, pending)))
+            .collect();
+        let ids: Vec<String> = threads
+            .iter()
+            .map(|(_, pending)| pending.id.clone())
+            .collect();
+        let remote = self.publisher.remote(&ids)?;
+        Ok(threads
+            .into_iter()
+            .zip(remote)
+            .map(|((thread, _), remote)| ThreadPending {
+                thread: thread.id.clone(),
+                at: thread.at(),
+                state: remote.state,
+            })
+            .collect())
     }
 }
 
@@ -52,5 +102,18 @@ pub struct Standing {
     pub host: Option<String>,
     pub branch: String,
     pub readiness: Readiness,
+    pub mode: ModeChoice,
+    pub pending: Vec<ThreadPending>,
+    /// Why the pending comments could not be read, when they could not.
+    pub pending_failed: Option<String>,
     pub read: Vec<String>,
+}
+
+/// One thread's pending comment, as the pull request has it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ThreadPending {
+    pub thread: String,
+    /// Where the thread sits, the way a person would type it.
+    pub at: String,
+    pub state: RemoteState,
 }

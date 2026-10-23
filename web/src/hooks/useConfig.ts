@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, type Config } from "@/api";
+import { api, type Config, type SettingValue } from "@/api";
 
 export function useConfig(open: boolean) {
   const [config, setConfig] = useState<Config | null>(null);
@@ -18,19 +18,25 @@ export function useConfig(open: boolean) {
     return () => { active = false; };
   }, [open]);
 
-  async function setSetting(key: string, value: boolean) {
+  /** True once the server kept it, so a text box knows its draft is now the value. */
+  async function save(job: Promise<Config>): Promise<boolean> {
     setSaving(true);
     setSaved(false);
     setError(null);
     try {
-      setConfig(await api.setSetting(key, value));
+      setConfig(await job);
       setSaved(true);
+      return true;
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Could not save settings.");
+      return false;
     } finally {
       setSaving(false);
     }
   }
 
-  return { config, error, saving, saved, setSetting };
+  const setSetting = (key: string, value: SettingValue) => save(api.setSetting(key, value));
+  const resetSetting = (key: string) => save(api.resetSetting(key));
+
+  return { config, error, saving, saved, setSetting, resetSetting };
 }

@@ -148,7 +148,7 @@ function show(view: ReviewView, onPick = vi.fn(), comments: CommentView[] = []) 
 }
 
 function comment(path: string, id: string): CommentView {
-  return { id, path, side: "new", from: 1, to: 1, body: "why?", published: null };
+  return { id, path, side: "new", from: 1, to: 1, body: "why?", pending: null, replies: [], waiting: null };
 }
 
 /** The row for a path, found the way a screen reader would name it. */

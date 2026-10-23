@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::config::domain::{Config, ConfigRepository, SettingKey};
+use crate::config::domain::{Config, ConfigRepository, SettingKey, SettingValue};
 use crate::error::Result;
 
 #[derive(Clone)]
@@ -13,9 +13,9 @@ impl SetSetting {
         Self { repo }
     }
 
-    pub fn execute(&self, key: SettingKey, value: bool) -> Result<Config> {
+    pub fn execute(&self, key: SettingKey, value: SettingValue) -> Result<Config> {
         let mut config = self.repo.read()?;
-        config.set(key, value);
+        config.set(key, value)?;
         self.repo.write(&config)?;
         Ok(config)
     }

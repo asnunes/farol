@@ -1,15 +1,16 @@
-//! What the reviewer wrote back.
+//! What the reviewer wrote back: the threads.
 
 use clap::Subcommand;
 
 use super::{Action, Ctx};
+use crate::comments::domain::Author;
 use crate::comments::presentation::CommentList;
 use crate::diff::domain::Side;
 use crate::error::Result;
 use crate::map::domain::LineRange;
 
 #[derive(Subcommand)]
-pub(super) enum CommentAction {
+pub(super) enum ThreadAction {
     Add {
         path: String,
         /// Line range, for example 82-116.
@@ -24,14 +25,24 @@ pub(super) enum CommentAction {
     },
     /// Everything still waiting for an answer.
     List,
-    /// Answered, so it goes.
+    /// Answered, so it goes. Refused while its pending comment is still on
+    /// the pull request.
     Close { id: String },
+    /// Say you have started on a thread sent from farol, so the reviewer sees it.
+    Ack { id: String },
+    /// Answer a thread. Run from an agent session, it is signed by that
+    /// harness; from a plain terminal, by the reviewer.
+    Reply {
+        id: String,
+        #[arg(long, allow_hyphen_values = true)]
+        text: String,
+    },
 }
 
-impl Action for CommentAction {
+impl Action for ThreadAction {
     fn run(self, ctx: &Ctx) -> Result<()> {
         match self {
-            CommentAction::Add {
+            ThreadAction::Add {
                 path,
                 range,
                 side,
@@ -44,16 +55,31 @@ impl Action for CommentAction {
                 let range = LineRange::parse(&range)?;
 
                 let one = ctx.comments.add(&path, side, range.from, range.to, &text)?;
-                println!("Wrote comment {} on {}.", one.id, one.at());
+                println!("Wrote thread {} on {}.", one.id, one.at());
                 Ok(())
             }
-            CommentAction::List => {
+            ThreadAction::List => {
                 print!("{}", CommentList(&ctx.comments.all()?));
                 Ok(())
             }
-            CommentAction::Close { id } => {
-                ctx.comments.close(&id)?;
-                println!("Closed comment {id}.");
+            ThreadAction::Close { id } => {
+                ctx.close_thread.execute(&id, false)?;
+                println!("Closed thread {id}.");
+                Ok(())
+            }
+            ThreadAction::Ack { id } => {
+                let by = super::wiring::harness_here().unwrap_or("agent");
+                ctx.comments.acknowledge(&id, by)?;
+                println!("Marked thread {id} as being worked on by {by}.");
+                Ok(())
+            }
+            ThreadAction::Reply { id, text } => {
+                let from = match super::wiring::harness_here() {
+                    Some(name) => Author::Agent(name.to_string()),
+                    None => Author::Reviewer,
+                };
+                ctx.comments.reply(&id, from, &text)?;
+                println!("Replied to thread {id}.");
                 Ok(())
             }
         }

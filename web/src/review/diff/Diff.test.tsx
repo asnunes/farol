@@ -240,10 +240,10 @@ describe("commenting on the diff", () => {
 
     // The label the box opens under is also the box's name, so the span the
     // drag covered is what a screen reader reads out of it.
-    expect((screen.getByLabelText("Comment on lines 1–2") as HTMLTextAreaElement).tagName).toBe(
+    expect((screen.getByLabelText("Thread on lines 1–2") as HTMLTextAreaElement).tagName).toBe(
       "TEXTAREA",
     );
-    expect(container.querySelector(".commentbox .lbl")?.textContent).toBe("Comment on lines 1–2");
+    expect(container.querySelector(".commentbox .lbl")?.textContent).toBe("Thread on lines 1–2");
   });
 
   it("opens the box on the line whose plus was pressed", () => {
@@ -599,7 +599,7 @@ describe("where the keyboard is left when a comment box closes", () => {
 
     fireEvent.change(box, { target: { value: "Why this order?" } });
 
-    expect(screen.getByLabelText("Comment on line 2")).toBe(box);
+    expect(screen.getByLabelText("Thread on line 2")).toBe(box);
     const said = box.getAttribute("aria-describedby");
     expect(document.getElementById(said ?? "")?.textContent).toContain("⌘↵");
   });

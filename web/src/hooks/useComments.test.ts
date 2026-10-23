@@ -48,7 +48,7 @@ describe("a file's comments", () => {
    * and go round until the heap gave out — which is what it did.
    */
   async function loaded(files: Record<string, CommentView[]>) {
-    vi.spyOn(api, "comments").mockResolvedValue({ files, unreadable: [] });
+    vi.spyOn(api, "comments").mockResolvedValue({ files, unreadable: [], agent: null });
     const onError = vi.fn();
     const { result } = renderHook(() => useComments(onError));
     const first = Object.keys(files)[0];
@@ -57,6 +57,6 @@ describe("a file's comments", () => {
   }
 
   function comment(id: string): CommentView {
-    return { id, path: "src/a.rs", side: "new", from: 1, to: 1, body: "why?", published: null };
+    return { id, path: "src/a.rs", side: "new", from: 1, to: 1, body: "why?", pending: null, replies: [], waiting: null };
   }
 });

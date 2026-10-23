@@ -245,7 +245,7 @@ mod tests {
     fn the_state_hands_out_the_channel_the_watcher_writes_to() {
         // The watcher and the SSE route have to meet on the same channel, or
         // the browser is told nothing and never reloads.
-        let (_dir, use_cases) = routes::tests::use_cases();
+        let (_dir, use_cases) = crate::testing::server_use_cases();
         let (state, changes) = AppState::new(
             routes::tests::session(use_cases, _dir.path()),
             crate::cmd::ConfigUseCases::new(Arc::new(
