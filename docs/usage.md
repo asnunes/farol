@@ -143,7 +143,9 @@ offered: GitHub does not let an author approve or request changes on their own.
 The connection is your GitHub CLI login. Farol asks `gh auth token --hostname
 HOST` at each call, so `GH_TOKEN` and `GITHUB_TOKEN` work too, and never stores a
 token or accepts one through the page. Without a login the top bar says
-**Connect GitHub** with the command to run; threads keep working.
+**Connect GitHub** with the command to run, and without a pull request it links
+to the page that opens one; threads keep working either way. The page looks again
+when you come back to its tab, so there is nothing to reload.
 
 The skill `farol-publish-review` does the same from a session. The CLI it uses:
 

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type PullRequestView, type ReviewMode, type SentView, type Verdict } from "@/api";
 import { onNudge } from "@/lib/watch";
+import { usePageVisible } from "@/hooks/usePageVisible";
 import { said } from "@/lib/utils";
 
 /** The pull request, the review mode, and each thread's pending comment as
@@ -31,6 +32,20 @@ export function useGitHub(onError: (message: string) => void, generation = 0) {
 
   useEffect(() => onNudge("comments", () => void load()), [load]);
   useEffect(() => onNudge("head", () => void load()), [load]);
+
+  // What is missing is fixed somewhere else — a pull request opened on
+  // GitHub, `gh auth login` in a terminal — and nothing local announces it.
+  // Coming back to the tab is when the reader expects it fixed, so that is
+  // when the page asks again: once, and only while something is missing, so
+  // a review that is ready does not reach GitHub on every switch of tabs.
+  const visible = usePageVisible();
+  const wasVisible = useRef(visible);
+  const missing = pull !== null && pull.connection !== "ready" && pull.connection !== "no-remote";
+  useEffect(() => {
+    const returned = visible && !wasVisible.current;
+    wasVisible.current = visible;
+    if (returned && missing) void load();
+  }, [visible, missing, load]);
 
   return {
     /** Null until GitHub answers the first time. */
