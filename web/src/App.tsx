@@ -14,7 +14,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { useReview } from "@/hooks/useReview";
 import { useShortcuts } from "@/hooks/useShortcuts";
 import { useSidebar } from "@/hooks/useSidebar";
-import { Activity } from "@/review/Activity";
+import { Activity } from "@/review/activity/Activity";
 import { HelpDialog } from "@/review/HelpDialog";
 import { KeyBar } from "@/review/KeyBar";
 import { scrollToFile, scrollToThread } from "@/lib/scroll";
