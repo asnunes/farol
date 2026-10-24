@@ -101,10 +101,10 @@ describe("a comment on the page", () => {
     const { rerender } = render(
       <Comment comment={comment({ waiting: { on: "Codex", stage: "sent", purpose: "answer", since: "100" } })} actions={noComments()} />,
     );
-    expect(screen.getByRole("status").textContent).toContain("Sent to Codex");
+    expect(screen.getByRole("status").textContent).toContain("Asked Codex");
 
     rerender(<Comment comment={comment({ waiting: { on: "Codex", stage: "working", purpose: "answer", since: "100" } })} actions={noComments()} />);
-    expect(screen.getByRole("status").textContent).toContain("Codex is working on it");
+    expect(screen.getByRole("status").textContent).toContain("Codex is answering");
   });
 
   it("offers Reply after the last turn, not among the actions on the question", () => {
@@ -302,7 +302,7 @@ describe("a comment on the page", () => {
         />,
       );
 
-      expect(screen.getByText("Codex is writing a pending comment")).toBeTruthy();
+      expect(screen.getByText("Codex is drafting it")).toBeTruthy();
       expect(screen.queryByRole("button", { name: "Generate pending comment" })).toBeNull();
     });
 

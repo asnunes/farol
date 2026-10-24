@@ -30,8 +30,8 @@ describe("the activity box", () => {
 
     expect(screen.getByText("In progress")).toBeTruthy();
     expect(screen.getByText("Updates")).toBeTruthy();
-    expect(screen.getByText("Codex is working on it")).toBeTruthy();
-    expect(screen.getByText("Sent to Claude Code · waiting for an answer")).toBeTruthy();
+    expect(screen.getByText("Codex is answering")).toBeTruthy();
+    expect(screen.getByText("Asked Claude Code")).toBeTruthy();
   });
 });
 
@@ -48,8 +48,8 @@ function state(): ActivityState {
   };
   return {
     working: [
-      { thread: comment({ id: "t2" }), started: true, line: "Codex is working on it", excerpt: "Se o dispatch falhar?", since: Date.now() / 1000 - 60 },
-      { thread: comment({ id: "t3" }), started: false, line: "Sent to Claude Code · waiting for an answer", excerpt: "E o retry?", since: Date.now() / 1000 - 10 },
+      { thread: comment({ id: "t2" }), waiting: { on: "Codex", stage: "working", purpose: "answer", since: "1" }, line: "Codex is answering", excerpt: "Se o dispatch falhar?", since: Date.now() / 1000 - 60 },
+      { thread: comment({ id: "t3" }), waiting: { on: "Claude Code", stage: "sent", purpose: "answer", since: "1" }, line: "Asked Claude Code", excerpt: "E o retry?", since: Date.now() / 1000 - 10 },
     ],
     updates: [update],
     fresh: 1,

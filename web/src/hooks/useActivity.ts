@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { CommentView, PullRequestView } from "@/api";
+import type { CommentView, PullRequestView, WaitingView } from "@/api";
+import { waitingLine } from "@/review/diff/comment/waiting";
 import { span } from "@/review/diff/comment/quoted";
 
 /** What the agents did on the threads, for the box in the corner.
@@ -89,8 +90,7 @@ export type Update = {
 /** A thread an agent owes something on right now: handed over, or started. */
 export type Working = {
   thread: CommentView;
-  /** Whether the agent has said it started; until then it was only sent. */
-  started: boolean;
+  waiting: WaitingView;
   /** The line the row reads as, the same words the thread's own badge uses. */
   line: string;
   excerpt: string;
@@ -148,16 +148,11 @@ function working(threads: CommentView[]): Working[] {
   return threads.flatMap((thread) => {
     const waiting = thread.waiting;
     if (!waiting) return [];
-    const started = waiting.stage === "working";
-    const pending = waiting.purpose === "pending";
-    const line = started
-      ? `${waiting.on} ${pending ? "is writing a pending comment" : "is working on it"}`
-      : `Sent to ${waiting.on} · waiting for ${pending ? "a pending comment" : "an answer"}`;
     return [
       {
         thread,
-        started,
-        line,
+        waiting,
+        line: waitingLine(waiting),
         excerpt: firstLine(thread.body),
         since: Number(waiting.since) || 0,
       },

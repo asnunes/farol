@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Send, X } from "lucide-react";
+import { Send, Sparkles, X } from "lucide-react";
+import { WaitingIcon } from "@/review/diff/comment/WaitingIcon";
 import { cn } from "@/lib/utils";
 import { ago, where, type Activity as ActivityState, type Update, type Working } from "@/hooks/useActivity";
 import type { CommentView } from "@/api";
@@ -13,7 +14,7 @@ import type { CommentView } from "@/api";
  * several answers in a row. */
 export function Activity({ activity, open, onOpen, onJump }: ActivityProps) {
   const { working, updates, fresh } = activity;
-  const started = working.filter((w) => w.started).length;
+  const started = working.filter((w) => w.waiting.stage === "working").length;
   const sent = working.length - started;
   const launcher = useRef<HTMLButtonElement>(null);
   const [bump, setBump] = useState(false);
@@ -104,7 +105,13 @@ export function Activity({ activity, open, onOpen, onJump }: ActivityProps) {
         {fresh > 0 && working.length > 0 && <span aria-hidden="true">·</span>}
         {sent > 0 && (
           <span className="inline-flex items-center gap-1.5 text-comment-ink">
-            <Send className="size-3" aria-hidden="true" />
+            {/* All of them pending comments asked for, it is the ✦; any answer
+                among them, the plane. */}
+            {working.every((w) => w.waiting.stage === "working" || w.waiting.purpose === "pending") ? (
+              <Sparkles className="size-3" aria-hidden="true" />
+            ) : (
+              <Send className="size-3" aria-hidden="true" />
+            )}
             {sent} waiting
           </span>
         )}
@@ -134,8 +141,8 @@ function Row({ item, onJump }: RowProps) {
         onClick={onJump}
       >
         {isWorking ? (
-          <span className="mt-[5px] text-comment-ink">
-            {item.started ? <Spinner /> : <Send className="size-3" aria-hidden="true" />}
+          <span className="mt-[3px] text-comment-ink">
+            <WaitingIcon waiting={item.waiting} className="size-3" />
           </span>
         ) : (
           <span

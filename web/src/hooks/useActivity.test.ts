@@ -65,7 +65,7 @@ describe("agent activity", () => {
 
     const { result } = renderHook(() => useActivity([writing, wrote], null, "b5", true));
 
-    expect(result.current.working[0].line).toBe("Codex is writing a pending comment");
+    expect(result.current.working[0].line).toBe("Codex is drafting it");
     expect(result.current.updates[0].what).toBe("wrote a pending comment");
   });
 
@@ -100,8 +100,8 @@ describe("agent activity", () => {
 
     const { result } = renderHook(() => useActivity([sent], null, "b7", true));
 
-    expect(result.current.working[0].line).toBe("Sent to Claude Code · waiting for an answer");
-    expect(result.current.working[0].started).toBe(false);
+    expect(result.current.working[0].line).toBe("Asked Claude Code");
+    expect(result.current.working[0].waiting.stage).toBe("sent");
   });
 });
 
