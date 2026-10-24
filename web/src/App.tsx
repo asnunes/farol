@@ -122,9 +122,7 @@ export default function App() {
   // brought to the middle of the pane.
   const jumpToThread = (thread: CommentView) => {
     comments.expand(thread.id);
-    setCurrent(thread.path);
-    const file = order.find((f) => f.path === thread.path);
-    if (file) files.set(file, true);
+    goTo(thread.path);
     scrollToThread(thread.id);
   };
 

@@ -24,13 +24,12 @@ export function scrollToFile(path: string) {
 
 /** Bring a thread to the middle of the reading pane, and mark it for a moment.
  *
- * The thread may not be on the page yet: its file was folded a moment ago and
- * its diff is still being fetched. So this waits for it, for as long as a diff
+ * Called after the move to its file, which is what gets the file's diff asked
+ * for at all: a diff is fetched when its file comes near the screen, and the
+ * thread is drawn from it. So this waits for the thread, for as long as a diff
  * takes to arrive and no longer — a thread that never shows was closed or left
  * the diff, and there is nothing to land on. */
 export function scrollToThread(id: string) {
-  stopAnchoring?.();
-  settling = Date.now() + SETTLES_IN;
   const giveUp = Date.now() + WAITS_FOR_THREAD;
   const look = () => {
     const thread = document.querySelector<HTMLElement>(`[data-thread="${CSS.escape(id)}"]`);
@@ -38,6 +37,8 @@ export function scrollToThread(id: string) {
       if (Date.now() < giveUp) requestAnimationFrame(look);
       return;
     }
+    // The move to the file is holding the file in place; this move wins.
+    stopAnchoring?.();
     settling = Date.now() + SETTLES_IN;
     thread.scrollIntoView({ block: "center" });
     holdPosition(thread);
