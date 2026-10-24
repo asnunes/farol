@@ -8,9 +8,8 @@ function file(path: string, viewed = false): FileView {
     additions: 1,
     deletions: 0,
     viewed,
-    notes: [],
+    note: null,
     lineNotes: [],
-    tags: [],
     skim: false,
     skimReason: null,
   };

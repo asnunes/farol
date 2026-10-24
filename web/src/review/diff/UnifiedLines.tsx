@@ -67,7 +67,7 @@ export function UnifiedLines({
           </div>
         </div>
 
-        <LineNotes notes={notesAt(file, line)} file={file} />
+        <LineNotes notes={notesAt(file, line)} />
         <AtLine at={at} commentary={commentary} />
       </div>
     );

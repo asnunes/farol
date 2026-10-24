@@ -19,10 +19,13 @@ impl GhCredentials {
 
 impl Credentials for GhCredentials {
     fn token(&self, host: &str) -> Result<Option<String>> {
-        let output = Command::new(&self.executable)
-            .args(["auth", "token", "--hostname", host])
-            .output()
-            .map_err(|_| CommentError::GitHubCliUnavailable)?;
+        let output = crate::shared::process::output(Command::new(&self.executable).args([
+            "auth",
+            "token",
+            "--hostname",
+            host,
+        ]))
+        .map_err(|_| CommentError::GitHubCliUnavailable)?;
         // gh may include account details in stderr. Keep diagnostics actionable
         // without reflecting authentication output back into a review session.
         if !output.status.success() {

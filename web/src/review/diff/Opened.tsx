@@ -92,7 +92,7 @@ function OpenedChunk({
           </div>
         )}
 
-        <LineNotes notes={notesAt(file, line)} file={file} />
+        <LineNotes notes={notesAt(file, line)} />
       </div>
     );
   });

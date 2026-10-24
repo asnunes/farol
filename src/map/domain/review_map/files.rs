@@ -10,8 +10,16 @@ impl ReviewMap {
         after: Option<&str>,
     ) -> Result<()> {
         let path = path.into();
+        // One block per file, including skim attached to a block: a file read
+        // in two places is read once and claimed twice, and the screen had to
+        // pick a block, carry the other's notes over and tag the row to say so.
+        if let Some(owner) = self.owner_of(&path).filter(|owner| *owner != slug) {
+            return Err(MapError::DuplicatePath {
+                slug: owner.to_string(),
+                path,
+            });
+        }
         let block = self.block_mut(slug)?;
-
         if block.file(&path).is_some() {
             return Err(MapError::DuplicatePath {
                 slug: slug.to_string(),

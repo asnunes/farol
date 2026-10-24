@@ -100,20 +100,6 @@ mod tests {
     }
 
     #[test]
-    fn a_file_in_two_blocks_counts_once_because_it_is_read_once() {
-        let mut m = mapped();
-        m.add_block(&slug("wiring"), "t", "c", Position::End)
-            .unwrap();
-        m.add_file(&slug("wiring"), "a.rs", None, None).unwrap();
-
-        assert!(
-            summary(&m).contains("1 file ·") || summary(&m).contains("1 file\n"),
-            "{}",
-            summary(&m)
-        );
-    }
-
-    #[test]
     fn line_notes_are_counted_because_they_are_the_expensive_part() {
         let mut m = mapped();
         m.add_line_note(&slug("core"), "a.rs", range(10, 12), "n")

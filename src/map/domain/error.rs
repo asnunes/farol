@@ -34,8 +34,19 @@ pub enum MapError {
         existing: Vec<String>,
     },
 
-    #[error("'{path}' is already in block '{slug}'")]
+    #[error(
+        "'{path}' is already in block '{slug}'\nA file belongs to one block. If it also serves this story, leave a line note on it in '{slug}'; to move it, run `farol file remove {slug} {path}` first."
+    )]
     DuplicatePath { slug: String, path: String },
+
+    #[error(
+        "'{path}' is in both '{first}' and '{second}', and a file belongs to one block\nThis map was written before that rule. Run the farol skill again to map the branch."
+    )]
+    SharedPath {
+        path: String,
+        first: String,
+        second: String,
+    },
 
     #[error("lines {from}-{to} are outside '{path}', which has {total} lines")]
     RangeOutOfFile {

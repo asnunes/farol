@@ -48,7 +48,12 @@ change, even when they open it directly from the sidebar.
 
 A block is what you can describe in one sentence without needing the word
 “and”. It is not a file, a commit, a directory, or a layer. A block cuts
-across folders, and a file can appear in more than one.
+across folders.
+
+A file belongs to one block. When it changed for two stories, put it in the
+block the reader needs it for first, and leave a line note on the lines that
+belong to the other story, naming it. Farol refuses a file already in another
+block and says which one.
 
 Do not group by folder or by the file's role — controller, service,
 repository. That grouping does not depend on the change: two completely

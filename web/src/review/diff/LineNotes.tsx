@@ -1,10 +1,10 @@
-import type { FileView, TaggedLineNote } from "@/api";
+import type { LineNoteView } from "@/api";
 
 /** What the session wrote about a span of lines, under the last line of it.
  *
  * The rail on the left is the same one the covered lines carry, so the span and
  * its prose read as one thing. */
-export function LineNotes({ notes, file }: LineNotesProps) {
+export function LineNotes({ notes }: LineNotesProps) {
   return notes.map((note, i) => (
     <div
       key={i}
@@ -12,13 +12,10 @@ export function LineNotes({ notes, file }: LineNotesProps) {
     >
       <span className="lbl mr-2 font-mono text-xs text-highlight">
         {note.from}–{note.to}
-        {/* Which block the note came from, and only when the file is read
-            under more than one: otherwise the band above already said it. */}
-        {file.tags.length > 1 ? ` · ${note.block}` : ""}
       </span>
       {note.text}
     </div>
   ));
 }
 
-type LineNotesProps = { notes: TaggedLineNote[]; file: FileView };
+type LineNotesProps = { notes: LineNoteView[] };

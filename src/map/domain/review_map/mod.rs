@@ -25,6 +25,7 @@ use super::slug::Slug;
 pub const MAP_VERSION: u32 = 1;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "StoredMap")]
 pub struct ReviewMap {
     pub version: u32,
     pub branch: String,
@@ -140,19 +141,89 @@ impl ReviewMap {
         out
     }
 
-    /// The block a file is read in: the earliest one that holds it. Ordering
-    /// decides this, so there is nothing to choose.
-    pub fn first_block_of(&self, path: &str) -> Option<&Block> {
+    /// The block a file is read in, if any block reads it.
+    pub fn block_of(&self, path: &str) -> Option<&Block> {
         self.blocks.iter().find(|b| b.file(path).is_some())
     }
 
-    /// Every block a file participates in, in reading order. The screen turns
-    /// this into the tag list next to the path.
-    pub fn blocks_of(&self, path: &str) -> Vec<&Block> {
-        self.blocks
+    /// The block that claims a path, as a file or as skim attached to it.
+    fn owner_of(&self, path: &str) -> Option<&Slug> {
+        self.block_of(path).map(|b| &b.slug).or_else(|| {
+            self.skim
+                .iter()
+                .find(|s| s.path == path)
+                .and_then(|s| s.block.as_ref())
+        })
+    }
+
+    /// Every path in one place: one block's files, or the skim list — skim
+    /// attached to a block counting as that block. The methods that change the
+    /// map keep this true; this is what a map read from disk is held to.
+    fn one_home_per_path(&self) -> std::result::Result<(), MapError> {
+        let mut seen: Vec<(&str, &str)> = Vec::new();
+        let homes = self
+            .blocks
             .iter()
-            .filter(|b| b.file(path).is_some())
-            .collect()
+            .flat_map(|b| {
+                b.files
+                    .iter()
+                    .map(move |f| (f.path.as_str(), b.slug.as_str()))
+            })
+            .chain(self.skim.iter().filter_map(|s| {
+                // Skim in the block that reads the file is the same home.
+                let home = s.block.as_ref().map(|b| b.as_str()).unwrap_or("skim");
+                let reads = self.block_of(&s.path).map(|b| b.slug.as_str());
+                (reads != Some(home)).then_some((s.path.as_str(), home))
+            }));
+        for (path, home) in homes {
+            if let Some((_, first)) = seen.iter().find(|(p, _)| *p == path) {
+                return Err(MapError::SharedPath {
+                    path: path.to_string(),
+                    first: first.to_string(),
+                    second: home.to_string(),
+                });
+            }
+            seen.push((path, home));
+        }
+        Ok(())
+    }
+}
+
+/// The map as it is read from disk, before it is held to the map's rules.
+#[derive(Deserialize)]
+struct StoredMap {
+    version: u32,
+    branch: String,
+    base: String,
+    generated_at: String,
+    #[serde(default)]
+    parent: Option<String>,
+    #[serde(default)]
+    blocks: Vec<Block>,
+    #[serde(default)]
+    skim: Vec<SkimEntry>,
+    #[serde(default)]
+    orphans: Vec<Orphan>,
+}
+
+/// Held to the map's rules on the way in, and refused when it breaks one:
+/// a stored map is not migrated, it is discarded and the reader is told why.
+impl TryFrom<StoredMap> for ReviewMap {
+    type Error = MapError;
+
+    fn try_from(stored: StoredMap) -> std::result::Result<Self, MapError> {
+        let map = ReviewMap {
+            version: stored.version,
+            branch: stored.branch,
+            base: stored.base,
+            generated_at: stored.generated_at,
+            parent: stored.parent,
+            blocks: stored.blocks,
+            skim: stored.skim,
+            orphans: stored.orphans,
+        };
+        map.one_home_per_path()?;
+        Ok(map)
     }
 }
 
@@ -162,30 +233,75 @@ mod tests {
     use crate::testing::{map_with, slug};
 
     #[test]
-    fn a_file_in_two_blocks_reads_in_the_earlier_one() {
+    fn a_file_already_in_one_block_is_refused_in_another_naming_where_it_is() {
         let mut m = map_with(&["first", "second"]);
-        m.add_file(&slug("second"), "shared.rs", None, None)
-            .unwrap();
         m.add_file(&slug("first"), "shared.rs", None, None).unwrap();
 
-        assert_eq!(
-            m.first_block_of("shared.rs").unwrap().slug.as_str(),
-            "first"
+        let err = m
+            .add_file(&slug("second"), "shared.rs", None, None)
+            .unwrap_err()
+            .to_string();
+
+        assert!(err.contains("already in block 'first'"), "{err}");
+        assert!(
+            err.contains("farol file remove first shared.rs"),
+            "the refusal carries the way to move it: {err}"
         );
-        let tags: Vec<String> = m
-            .blocks_of("shared.rs")
-            .iter()
-            .map(|b| b.slug.to_string())
-            .collect();
-        assert_eq!(tags, vec!["first", "second"]);
+    }
+
+    #[test]
+    fn skim_may_only_name_the_block_that_reads_the_file() {
+        let mut m = map_with(&["first", "second"]);
+        m.add_file(&slug("first"), "a.rs", None, None).unwrap();
+
+        assert!(
+            m.add_skim("a.rs", "rename only", Some(slug("second")))
+                .is_err()
+        );
+        assert!(
+            m.add_skim("a.rs", "rename only", Some(slug("first")))
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn a_stored_map_with_a_file_in_two_blocks_is_refused_rather_than_rewritten() {
+        // Stored state is not migrated: a map that breaks the rule is
+        // discarded by whoever reads it, and the reason names the file.
+        let json = serde_json::json!({
+            "version": MAP_VERSION, "branch": "b", "base": "main", "generated_at": "h",
+            "blocks": [
+                {"slug": "first", "title": "t", "context": "c", "files": [{"path": "shared.rs"}]},
+                {"slug": "second", "title": "t", "context": "c", "files": [{"path": "shared.rs"}]},
+            ],
+        });
+
+        let err = serde_json::from_value::<ReviewMap>(json)
+            .unwrap_err()
+            .to_string();
+
+        assert!(err.contains("shared.rs"), "{err}");
+        assert!(err.contains("'first' and 'second'"), "{err}");
+    }
+
+    #[test]
+    fn skim_in_the_block_that_reads_the_file_is_not_a_second_home() {
+        let mut m = map_with(&["first"]);
+        m.add_file(&slug("first"), "a.rs", None, None).unwrap();
+        m.add_skim("a.rs", "rename only", None).unwrap();
+
+        let back: ReviewMap = serde_json::from_value(serde_json::to_value(&m).unwrap()).unwrap();
+
+        assert_eq!(back, m);
     }
 
     #[test]
     fn covered_paths_span_blocks_and_skim_without_duplicates() {
         let mut m = map_with(&["one", "two"]);
         m.add_file(&slug("one"), "a.rs", None, None).unwrap();
-        m.add_file(&slug("two"), "a.rs", None, None).unwrap();
         m.add_file(&slug("two"), "b.rs", None, None).unwrap();
+        m.add_skim("a.rs", "rename only", Some(slug("one")))
+            .unwrap();
         m.add_skim("Cargo.lock", "generated", None).unwrap();
 
         assert_eq!(

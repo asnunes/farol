@@ -17,6 +17,21 @@ impl ReviewMap {
                 existing: self.slugs(),
             });
         }
+        // Skimming a file a block already reads is how a block says "this one
+        // can be read diagonally", so it belongs to that block: named without
+        // one, it is attached there; named with another, it is refused.
+        let mut block = block;
+        if let Some(owner) = self.block_of(&path).map(|b| b.slug.clone()) {
+            match &block {
+                Some(named) if *named != owner => {
+                    return Err(MapError::DuplicatePath {
+                        slug: owner.to_string(),
+                        path,
+                    });
+                }
+                _ => block = Some(owner),
+            }
+        }
         self.skim.retain(|s| s.path != path);
         self.skim.push(SkimEntry {
             path,

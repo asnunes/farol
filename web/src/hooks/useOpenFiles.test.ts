@@ -59,9 +59,8 @@ function file(path: string, viewed: boolean): FileView {
     additions: 1,
     deletions: 0,
     viewed,
-    notes: [],
+    note: null,
     lineNotes: [],
-    tags: [],
     skim: false,
     skimReason: null,
   };

@@ -31,11 +31,21 @@ impl AgentChannel for CodexQueue {
 
     fn send(&self, text: &str) -> Result<(), AgentError> {
         // `--message=` joined, so a text that opens with `-` is not read as a flag.
-        let output = Command::new(&self.executable)
-            .args(["queue", "--thread", &self.thread])
-            .arg(format!("--message={text}"))
-            .output()
-            .map_err(|_| AgentError::Unavailable)?;
+        let output = crate::shared::process::output(
+            Command::new(&self.executable)
+                .args(["queue", "--thread", &self.thread])
+                .arg(format!("--message={text}")),
+        )
+        // Only a missing executable means Codex is not installed. Anything
+        // else is said as it is: "install Codex" to somebody who has it sends
+        // them looking for the wrong thing.
+        .map_err(|e| match e.kind() {
+            std::io::ErrorKind::NotFound => AgentError::Unavailable,
+            _ => AgentError::Refused {
+                harness: HARNESS,
+                why: e.to_string(),
+            },
+        })?;
         if output.status.success() {
             return Ok(());
         }
@@ -107,5 +117,20 @@ mod tests {
             .send("hello")
             .unwrap_err();
         assert!(error.to_string().contains("Install Codex CLI"));
+    }
+
+    #[test]
+    fn a_codex_that_will_not_start_says_why_instead_of_asking_to_install_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let exe = codex(dir.path(), "exit 0");
+        std::fs::set_permissions(&exe, std::fs::Permissions::from_mode(0o600)).unwrap();
+
+        let error = CodexQueue::new(exe, "thread-1".into())
+            .send("hello")
+            .unwrap_err()
+            .to_string();
+
+        assert!(!error.contains("Install Codex CLI"), "{error}");
+        assert!(error.contains("Permission denied"), "{error}");
     }
 }

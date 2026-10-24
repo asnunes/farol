@@ -10,9 +10,8 @@ function file(path: string, over: Partial<FileView> = {}): FileView {
     additions: 2,
     deletions: 0,
     viewed: false,
-    notes: [],
+    note: null,
     lineNotes: [],
-    tags: [],
     skim: false,
     skimReason: null,
     ...over,
@@ -279,7 +278,7 @@ describe("landing", () => {
     // like it lost a step.
     const r = review();
     r.blocks[0].context = "The `Hunk` already carried `newStart`.";
-    r.blocks[0].files[0].notes = [{ block: "first", text: "Reuse `FileDiff` here." }];
+    r.blocks[0].files[0].note = "Reuse `FileDiff` here.";
     serve({ review: r });
     render(<App />);
     await waitForReading("a.rs");
@@ -494,49 +493,6 @@ describe("marking read", () => {
   });
 });
 
-describe("a file that belongs to two blocks", () => {
-  it("is rendered once and carries both tags and both notes", async () => {
-    // The server already resolved it to the earlier block; the page must show
-    // what it was given without inventing a second appearance.
-    serve({
-      review: review({
-        blocks: [
-          {
-            slug: "first",
-            title: "First",
-            context: "",
-            files: [
-              file("src/shared.rs", {
-                tags: ["first", "second"],
-                notes: [
-                  { block: "first", text: "why it starts here" },
-                  { block: "second", text: "why it matters again" },
-                ],
-              }),
-            ],
-            totalFiles: 1,
-            viewedFiles: 0,
-          },
-          // Renders nothing and holds the shared file, which is the case the
-          // rendered list could never report as finished.
-          { slug: "second", title: "Second", context: "", files: [],
-            totalFiles: 1, viewedFiles: 0 },
-        ],
-        totalFiles: 1,
-      }),
-    });
-
-    render(<App />);
-    await waitForReading("shared.rs");
-
-    expect(reading()).toContain("shared.rs");
-    expect(screen.getByText("why it starts here")).toBeTruthy();
-    expect(screen.getByText("why it matters again")).toBeTruthy();
-    const tags = [...document.querySelectorAll(".tags .tag")].map((e) => e.textContent);
-    expect(tags).toEqual(["first", "second"]);
-  });
-});
-
 describe("a map behind the branch", () => {
   it("says how far behind it is and lists what it does not cover", async () => {
     serve({
@@ -739,7 +695,7 @@ describe("the diff itself", () => {
     // as not having written it.
     withDiff(oneChange, {
       lineNotes: [
-        { from: 20, to: 20, text: "this is the actual fix", block: "first" },
+        { from: 20, to: 20, text: "this is the actual fix" },
       ],
     });
     render(<App />);
@@ -751,7 +707,7 @@ describe("the diff itself", () => {
 
   it("leaves a note off the lines it does not belong to", async () => {
     withDiff(oneChange, {
-      lineNotes: [{ from: 99, to: 99, text: "about somewhere else", block: "first" }],
+      lineNotes: [{ from: 99, to: 99, text: "about somewhere else" }],
     });
     render(<App />);
 

@@ -417,7 +417,7 @@ fn every_level_of_prose_the_session_wrote_reaches_the_browser() {
     assert_eq!(core["context"], "c");
     let file = &core["files"][0];
     assert_eq!(file["path"], "src/a.rs");
-    assert_eq!(file["notes"][0]["text"], "start here");
+    assert_eq!(file["note"], "start here");
     assert_eq!(file["lineNotes"][0]["text"], "the actual fix");
     assert_eq!(file["lineNotes"][0]["from"], 10);
     assert_eq!(file["lineNotes"][0]["to"], 12);
@@ -980,7 +980,9 @@ fn writing_a_map_reaches_the_open_page_without_it_asking() {
 
     std::thread::sleep(Duration::from_millis(500));
     // With a file in it, because a block holding nothing in the comparison is
-    // not rendered and this test is about the nudge, not about that rule.
+    // not rendered and this test is about the nudge, not about that rule. The
+    // file is moved from the block that had it: a file belongs to one block.
+    s.repo.ok(&["file", "remove", "wiring", "src/b.rs"]);
     s.repo.ok(&[
         "block",
         "add",
@@ -989,7 +991,7 @@ fn writing_a_map_reaches_the_open_page_without_it_asking() {
         "Later",
         "--context",
         "written while reading",
-        "src/a.rs",
+        "src/b.rs",
     ]);
 
     let out = watching.wait_with_output().expect("curl should finish");

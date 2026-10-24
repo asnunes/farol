@@ -83,7 +83,7 @@ export function SplitLines({
           )}
         </div>
 
-        {line && <LineNotes notes={notesAt(file, line)} file={file} />}
+        {line && <LineNotes notes={notesAt(file, line)} />}
         <AtLine at={at} commentary={commentary} />
       </div>
     );
