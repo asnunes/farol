@@ -1,4 +1,5 @@
 pub mod paths;
+pub mod process;
 
 /// Stands in for a commit id when the map covers uncommitted work.
 ///
