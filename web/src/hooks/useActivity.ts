@@ -86,11 +86,13 @@ export type Update = {
   read: boolean;
 };
 
-/** An agent at work on a thread right now. */
+/** A thread an agent owes something on right now: handed over, or started. */
 export type Working = {
   thread: CommentView;
-  who: string;
-  what: string;
+  /** Whether the agent has said it started; until then it was only sent. */
+  started: boolean;
+  /** The line the row reads as, the same words the thread's own badge uses. */
+  line: string;
   excerpt: string;
   since: number;
 };
@@ -137,20 +139,30 @@ function happened(threads: CommentView[], pull: PullRequestView | null): Event[]
   return out;
 }
 
+/** Every thread an agent owes something on, from the moment it was sent.
+ *
+ * Not only from the acknowledgement: between the send and the agent saying it
+ * started, the thread is already waiting, and a box that stayed quiet then
+ * looked as though the send had not gone. */
 function working(threads: CommentView[]): Working[] {
-  return threads.flatMap((thread) =>
-    thread.waiting?.stage === "working"
-      ? [
-          {
-            thread,
-            who: thread.waiting.on,
-            what: thread.waiting.purpose === "pending" ? "is writing a pending comment" : "is working on it",
-            excerpt: firstLine(thread.body),
-            since: Number(thread.waiting.since) || 0,
-          },
-        ]
-      : [],
-  );
+  return threads.flatMap((thread) => {
+    const waiting = thread.waiting;
+    if (!waiting) return [];
+    const started = waiting.stage === "working";
+    const pending = waiting.purpose === "pending";
+    const line = started
+      ? `${waiting.on} ${pending ? "is writing a pending comment" : "is working on it"}`
+      : `Sent to ${waiting.on} · waiting for ${pending ? "a pending comment" : "an answer"}`;
+    return [
+      {
+        thread,
+        started,
+        line,
+        excerpt: firstLine(thread.body),
+        since: Number(waiting.since) || 0,
+      },
+    ];
+  });
 }
 
 /** The start of what was said, without the markup that would show as noise. */

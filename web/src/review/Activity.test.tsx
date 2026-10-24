@@ -10,6 +10,7 @@ describe("the activity box", () => {
 
     const launcher = screen.getByRole("button", { name: /new/ });
     expect(launcher.textContent).toContain("1 new");
+    expect(launcher.textContent).toContain("1 waiting");
     expect(launcher.textContent).toContain("1 working");
   });
 
@@ -30,6 +31,7 @@ describe("the activity box", () => {
     expect(screen.getByText("In progress")).toBeTruthy();
     expect(screen.getByText("Updates")).toBeTruthy();
     expect(screen.getByText("Codex is working on it")).toBeTruthy();
+    expect(screen.getByText("Sent to Claude Code · waiting for an answer")).toBeTruthy();
   });
 });
 
@@ -45,7 +47,10 @@ function state(): ActivityState {
     read: false,
   };
   return {
-    working: [{ thread: comment({ id: "t2" }), who: "Codex", what: "is working on it", excerpt: "Se o dispatch falhar?", since: Date.now() / 1000 - 60 }],
+    working: [
+      { thread: comment({ id: "t2" }), started: true, line: "Codex is working on it", excerpt: "Se o dispatch falhar?", since: Date.now() / 1000 - 60 },
+      { thread: comment({ id: "t3" }), started: false, line: "Sent to Claude Code · waiting for an answer", excerpt: "E o retry?", since: Date.now() / 1000 - 10 },
+    ],
     updates: [update],
     fresh: 1,
     read: vi.fn(),

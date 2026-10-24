@@ -65,7 +65,7 @@ describe("agent activity", () => {
 
     const { result } = renderHook(() => useActivity([writing, wrote], null, "b5", true));
 
-    expect(result.current.working[0].what).toBe("is writing a pending comment");
+    expect(result.current.working[0].line).toBe("Codex is writing a pending comment");
     expect(result.current.updates[0].what).toBe("wrote a pending comment");
   });
 
@@ -90,6 +90,18 @@ describe("agent activity", () => {
     expect(ago(1000, 1010)).toBe("just now");
     expect(ago(1000, 1000 + 120)).toBe("2 min ago");
     expect(ago(1000, 1000 + 3 * 3600)).toBe("3 h ago");
+  });
+
+  it("lists a thread as waiting from the moment it is sent, before the agent starts", () => {
+    const sent = comment({
+      id: "t1",
+      waiting: { on: "Claude Code", stage: "sent", purpose: "answer", since: "100" },
+    });
+
+    const { result } = renderHook(() => useActivity([sent], null, "b7", true));
+
+    expect(result.current.working[0].line).toBe("Sent to Claude Code · waiting for an answer");
+    expect(result.current.working[0].started).toBe(false);
   });
 });
 

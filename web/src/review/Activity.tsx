@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { X } from "lucide-react";
+import { Send, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ago, where, type Activity as ActivityState, type Update, type Working } from "@/hooks/useActivity";
 import type { CommentView } from "@/api";
@@ -13,6 +13,8 @@ import type { CommentView } from "@/api";
  * several answers in a row. */
 export function Activity({ activity, open, onOpen, onJump }: ActivityProps) {
   const { working, updates, fresh } = activity;
+  const started = working.filter((w) => w.started).length;
+  const sent = working.length - started;
   const launcher = useRef<HTMLButtonElement>(null);
   const [bump, setBump] = useState(false);
   const before = useRef(fresh);
@@ -100,10 +102,17 @@ export function Activity({ activity, open, onOpen, onJump }: ActivityProps) {
         {fresh === 0 && working.length === 0 && <span>No agent activity</span>}
         {fresh > 0 && <b className="font-semibold text-ink">{fresh} new</b>}
         {fresh > 0 && working.length > 0 && <span aria-hidden="true">·</span>}
-        {working.length > 0 && (
+        {sent > 0 && (
+          <span className="inline-flex items-center gap-1.5 text-comment-ink">
+            <Send className="size-3" aria-hidden="true" />
+            {sent} waiting
+          </span>
+        )}
+        {sent > 0 && started > 0 && <span aria-hidden="true">·</span>}
+        {started > 0 && (
           <span className="inline-flex items-center gap-1.5 text-comment-ink">
             <Spinner />
-            {working.length} working
+            {started} working
           </span>
         )}
       </button>
@@ -116,6 +125,7 @@ function Row({ item, onJump }: RowProps) {
   const isWorking = !("key" in item);
   const read = !isWorking && item.read;
   const when = isWorking ? `since ${ago(item.since).replace(" ago", "")}` : ago(item.at);
+  const line = isWorking ? item.line : `${item.who} ${item.what}`;
 
   return (
     <li>
@@ -124,8 +134,8 @@ function Row({ item, onJump }: RowProps) {
         onClick={onJump}
       >
         {isWorking ? (
-          <span className="mt-[5px]">
-            <Spinner />
+          <span className="mt-[5px] text-comment-ink">
+            {item.started ? <Spinner /> : <Send className="size-3" aria-hidden="true" />}
           </span>
         ) : (
           <span
@@ -138,7 +148,7 @@ function Row({ item, onJump }: RowProps) {
         )}
         <span className="min-w-0">
           <span className={cn("block font-sans text-[0.8125rem]", read ? "text-ink-muted" : "text-ink")}>
-            {item.who} {item.what}
+            {line}
           </span>
           <span className="block font-mono text-[0.72rem] text-comment-ink">
             {where(item.thread)} <span className="text-faint">· {when}</span>
