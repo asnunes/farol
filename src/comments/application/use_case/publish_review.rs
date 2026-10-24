@@ -110,8 +110,7 @@ impl PublishReview {
     fn pending_count(&self) -> Result<usize> {
         let ids: Vec<String> = self
             .comments
-            .all()?
-            .comments
+            .every()?
             .into_iter()
             .filter_map(|thread| thread.pending.map(|pending| pending.id))
             .collect();

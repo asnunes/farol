@@ -41,23 +41,23 @@ impl Comments {
         }
     }
 
-    /// Everything still waiting for an answer, and the files that could not be
-    /// read at all.
+    /// Every thread, split by whether the diff still reaches its lines, and
+    /// the files that could not be read at all.
     ///
-    /// Held to the same rule `add` writes under: a comment exists where the
-    /// diff reaches it, and nothing keeps that true afterwards. The branch
-    /// moves, the line it sat on goes away, and what is left is counted in the
-    /// margin beside the file and drawn on no row — because there is no row
-    /// left to draw it on. A question the reader is told about, cannot read,
-    /// and cannot close is worse than one that is simply gone.
+    /// `add` proves a thread sits on the diff, and nothing keeps that true: the
+    /// branch moves, the lines go, and often it is the agent's own fix for the
+    /// thread that moved them. Those threads used to be dropped here, which
+    /// took the conversation off the screen and left the agent unable to
+    /// answer. Now they come back on their own list, for the screen to draw
+    /// away from the lines and for every command to still reach.
     ///
-    /// Checked on the read rather than in each caller, because this is the one
-    /// the browser and the terminal both come through: the count in the sidebar
-    /// and the list in `farol thread list` are the same list or they are two
-    /// answers to one question.
+    /// Split on the read rather than in each caller, because this is the one
+    /// the browser and the terminal both come through.
     pub fn all(&self) -> Result<Found> {
         let mut found = self.store.list()?;
-        found.comments = self.reach.split(std::mem::take(&mut found.comments))?.live;
+        let split = self.reach.split(std::mem::take(&mut found.comments))?;
+        found.comments = split.live;
+        found.drifted = split.drifted;
         Ok(found)
     }
 
@@ -112,14 +112,37 @@ impl Comments {
         Ok(comment)
     }
 
-    /// One thread the review still holds, or the refusal that says how to find
-    /// the ones it does.
+    /// One thread, wherever its lines are now, or the refusal that says how to
+    /// find the ones there are.
     pub fn get(&self, id: &str) -> Result<Comment> {
-        self.all()?
+        let found = self.all()?;
+        found
+            .comments
+            .into_iter()
+            .chain(found.drifted)
+            .find(|comment| comment.id == id)
+            .ok_or_else(|| CommentError::Unknown { id: id.into() }.into())
+    }
+
+    /// One thread whose lines the diff still prints, for what only makes sense
+    /// on a line of the diff: a comment for the pull request.
+    pub fn live(&self, id: &str) -> Result<Comment> {
+        let found = self.all()?;
+        if found.drifted.iter().any(|comment| comment.id == id) {
+            return Err(CommentError::OffTheDiff { id: id.into() }.into());
+        }
+        found
             .comments
             .into_iter()
             .find(|comment| comment.id == id)
             .ok_or_else(|| CommentError::Unknown { id: id.into() }.into())
+    }
+
+    /// Every thread, on the diff or off it: what has a pending comment on the
+    /// pull request does whether or not its lines are still shown.
+    pub fn every(&self) -> Result<Vec<Comment>> {
+        let found = self.all()?;
+        Ok(found.comments.into_iter().chain(found.drifted).collect())
     }
 
     /// The thread's comment for the pull request is now this one.
@@ -348,28 +371,41 @@ mod tests {
     }
 
     #[test]
-    fn a_comment_the_diff_has_stopped_reaching_is_not_listed() {
+    fn a_thread_the_diff_has_stopped_reaching_is_kept_apart_and_still_answered() {
         // `add` proves the rule once and nothing holds it afterwards: the
-        // reviewer pulls, the hunk the comment sat in is rewritten, and the
-        // line it was anchored to is not printed any more.
-        //
-        // Left in the list it is the worst of both — counted in the margin
-        // beside the file, drawn on no row because there is no row left, and so
-        // impossible to read or to close.
+        // reviewer pulls, the hunk the thread sat in is rewritten — often by
+        // the agent's own fix for it — and the line is not printed any more.
+        // Dropped, the conversation would vanish and the answer would have
+        // nowhere to go.
         let dir = tempfile::tempdir().unwrap();
         let when_written = over_at(dir.path(), a_file());
-        when_written
+        let one = when_written
             .add("src/a.rs", Side::New, 12, 12, "Why this order?")
             .unwrap();
-        assert_eq!(when_written.all().unwrap().comments.len(), 1);
 
         let after_pulling = over_at(dir.path(), a_file().showing("src/a.rs", vec![hunk(40, 3)]));
 
-        assert!(after_pulling.all().unwrap().comments.is_empty());
+        let found = after_pulling.all().unwrap();
+        assert!(
+            found.comments.is_empty(),
+            "there is no line left to draw it at"
+        );
+        assert_eq!(found.drifted.len(), 1);
+        after_pulling
+            .reply(&one.id, Author::Agent("Codex".into()), "Moved it.")
+            .unwrap();
+        assert_eq!(
+            after_pulling.all().unwrap().drifted[0]
+                .conversation
+                .replies
+                .len(),
+            1,
+            "the agent's answer still lands on the thread"
+        );
     }
 
     #[test]
-    fn a_comment_on_a_file_that_left_the_review_is_not_listed() {
+    fn a_thread_on_a_file_that_left_the_review_is_kept_apart_without_asking_for_its_diff() {
         // The file has no diff to ask for at all. Asking would fail rather
         // than answer, and failing here would take the whole list down with it.
         let dir = tempfile::tempdir().unwrap();
@@ -379,7 +415,25 @@ mod tests {
 
         let elsewhere = over_at(dir.path(), FakeDiffSource::with_paths(&["src/b.rs"]));
 
-        assert!(elsewhere.all().unwrap().comments.is_empty());
+        let found = elsewhere.all().unwrap();
+        assert!(found.comments.is_empty());
+        assert_eq!(found.drifted.len(), 1);
+    }
+
+    #[test]
+    fn a_thread_off_the_diff_cannot_be_asked_for_as_a_live_one() {
+        // What needs a line of the diff — a comment for the pull request —
+        // is told why, rather than that the thread does not exist.
+        let dir = tempfile::tempdir().unwrap();
+        let one = over_at(dir.path(), a_file())
+            .add("src/a.rs", Side::New, 12, 12, "Why this order?")
+            .unwrap();
+
+        let moved = over_at(dir.path(), a_file().showing("src/a.rs", vec![hunk(40, 3)]));
+
+        let err = moved.live(&one.id).unwrap_err().to_string();
+        assert!(err.contains("no longer shows"), "{err}");
+        assert!(moved.get(&one.id).is_ok());
     }
 
     #[test]

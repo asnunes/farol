@@ -41,9 +41,9 @@ impl WritePending {
         if body.is_empty() {
             return Err(CommentError::Empty.into());
         }
-        // Through `get`, which only hands back threads the diff still reaches:
+        // Through `live`, which refuses a thread the diff no longer reaches:
         // a line GitHub would refuse is refused here, before the round trip.
-        let thread = self.comments.get(id)?;
+        let thread = self.comments.live(id)?;
         let pull = self.pull.at_head()?;
         if let Some(old) = &thread.pending {
             let state = self.publisher.remote(std::slice::from_ref(&old.id))?;

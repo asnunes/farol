@@ -70,8 +70,7 @@ impl ReviewReadiness {
     fn pending(&self) -> Result<Vec<ThreadPending>> {
         let threads: Vec<_> = self
             .comments
-            .all()?
-            .comments
+            .every()?
             .into_iter()
             .filter_map(|thread| thread.pending.clone().map(|pending| (thread, pending)))
             .collect();

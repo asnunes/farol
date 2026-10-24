@@ -89,6 +89,11 @@ pub enum CommentError {
     )]
     AmbiguousPullRequest { numbers: Vec<u32> },
 
+    #[error(
+        "thread {id} is on lines the diff no longer shows, so it cannot have a comment for the pull request\nGitHub only takes a review comment on a line of the diff. Start a thread where the code went."
+    )]
+    OffTheDiff { id: String },
+
     #[error("thread {id} has no pending comment — write one first")]
     NoPending { id: String },
 

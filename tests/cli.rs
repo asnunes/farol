@@ -1575,3 +1575,37 @@ fn the_send_instruction_is_text_and_can_be_put_back_to_its_default() {
             .starts_with("Answer it")
     );
 }
+
+#[test]
+fn a_thread_whose_file_left_the_review_is_still_listed_and_answered() {
+    // Often the agent's fix is what takes the lines away. The thread has to
+    // survive it, or the answer about that fix has nowhere to go.
+    let repo = Repo::new();
+    repo.feature();
+    let wrote = repo.ok(&[
+        "thread",
+        "add",
+        "src/a.rs",
+        "10-12",
+        "--text",
+        "Why this order?",
+    ]);
+    let id = wrote
+        .split_whitespace()
+        .nth(2)
+        .expect("the id follows 'Wrote thread'")
+        .to_string();
+
+    repo.git(&["rm", "-q", "src/a.rs"]);
+    repo.commit("the fix took the file away");
+
+    let list = repo.ok(&["thread", "list"]);
+    assert!(list.contains("No longer on the diff:"), "{list}");
+    assert!(list.contains("    Why this order?"), "{list}");
+
+    repo.ok(&["thread", "reply", &id, "--text", "Removed it instead."]);
+    assert!(
+        repo.ok(&["thread", "list"]).contains("Removed it instead."),
+        "the reply lands on the thread off the diff"
+    );
+}

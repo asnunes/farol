@@ -1,45 +1,27 @@
 use std::fmt::{self, Display};
 
-use crate::comments::domain::{Author, Found, Stage, Unread, Unreadable};
+use crate::comments::domain::{Author, Comment, Found, Stage, Unread, Unreadable};
 
 /// The comments, for the terminal and for the session reading its own review.
 pub struct CommentList<'a>(pub &'a Found);
 
 impl Display for CommentList<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.0.comments.is_empty() && self.0.unreadable.is_empty() {
+        if self.0.comments.is_empty() && self.0.drifted.is_empty() && self.0.unreadable.is_empty() {
             return writeln!(f, "No comments yet.");
         }
 
         for comment in &self.0.comments {
-            // `at` and not the three fields laid out again: it is the one place
-            // that knows a span on the old side has to say so, and a second
-            // spelling here would be the one that forgets.
-            writeln!(f, "{}  {}", comment.id, comment.at())?;
-            for line in comment.body.lines() {
-                writeln!(f, "    {line}")?;
+            write_thread(f, comment)?;
+        }
+
+        // Apart, and saying why: these are answered and closed like any other,
+        // but a reader looking for them at their lines will not find them.
+        if !self.0.drifted.is_empty() {
+            writeln!(f, "No longer on the diff:\n")?;
+            for comment in &self.0.drifted {
+                write_thread(f, comment)?;
             }
-            // The conversation too: an agent asked to answer reads this list,
-            // and answering the question without the replies under it would be
-            // answering a question already settled.
-            for reply in &comment.conversation.replies {
-                let who = match &reply.from {
-                    Author::Reviewer => "reviewer",
-                    Author::Agent(name) => name,
-                };
-                writeln!(f, "    — {who}:")?;
-                for line in reply.body.lines() {
-                    writeln!(f, "      {line}")?;
-                }
-            }
-            if let Some(waiting) = &comment.conversation.waiting {
-                let stage = match waiting.stage {
-                    Stage::Sent => "sent to",
-                    Stage::Working => "being worked on by",
-                };
-                writeln!(f, "    ({stage} {})", waiting.on)?;
-            }
-            writeln!(f)?;
         }
 
         // Named the way the review is read, not the way it is stored: the file
@@ -61,6 +43,39 @@ impl Display for CommentList<'_> {
         }
         Ok(())
     }
+}
+
+/// One thread: where, what was asked, the conversation, and what is owed.
+fn write_thread(f: &mut fmt::Formatter<'_>, comment: &Comment) -> fmt::Result {
+    // `at` and not the three fields laid out again: it is the one place
+    // that knows a span on the old side has to say so, and a second
+    // spelling here would be the one that forgets.
+    writeln!(f, "{}  {}", comment.id, comment.at())?;
+    for line in comment.body.lines() {
+        writeln!(f, "    {line}")?;
+    }
+    // The conversation too: an agent asked to answer reads this list,
+    // and answering the question without the replies under it would be
+    // answering a question already settled.
+    for reply in &comment.conversation.replies {
+        let who = match &reply.from {
+            Author::Reviewer => "reviewer",
+            Author::Agent(name) => name,
+        };
+        writeln!(f, "    — {who}:")?;
+        for line in reply.body.lines() {
+            writeln!(f, "      {line}")?;
+        }
+    }
+    if let Some(waiting) = &comment.conversation.waiting {
+        let stage = match waiting.stage {
+            Stage::Sent => "sent to",
+            Stage::Working => "being worked on by",
+        };
+        writeln!(f, "    ({stage} {})", waiting.on)?;
+    }
+    writeln!(f)?;
+    Ok(())
 }
 
 /// What the reviewer knows it by: the file it was about, or failing that, the
@@ -107,6 +122,7 @@ mod tests {
     fn found(comments: Vec<Comment>, unreadable: Vec<Unreadable>) -> Found {
         Found {
             comments,
+            drifted: vec![],
             unreadable,
         }
     }

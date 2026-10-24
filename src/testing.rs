@@ -872,6 +872,7 @@ impl crate::comments::domain::CommentStore for InMemoryComments {
     fn list(&self) -> Result<crate::comments::domain::Found> {
         Ok(crate::comments::domain::Found {
             comments: self.comments.lock().unwrap().clone(),
+            drifted: vec![],
             unreadable: vec![],
         })
     }
