@@ -103,10 +103,12 @@ impl CommentView {
             body: comment.body.clone(),
             pending: comment.pending.as_ref().map(|pending| match &pending.by {
                 Author::Reviewer => PendingByView {
+                    id: pending.id.clone(),
                     by: "reviewer",
                     name: "you".into(),
                 },
                 Author::Agent(name) => PendingByView {
+                    id: pending.id.clone(),
                     by: "agent",
                     name: name.clone(),
                 },
@@ -120,11 +122,13 @@ impl CommentView {
                         from: "reviewer",
                         name: "You".into(),
                         body: reply.body.clone(),
+                        at: reply.at.clone(),
                     },
                     Author::Agent(name) => ReplyView {
                         from: "agent",
                         name: name.clone(),
                         body: reply.body.clone(),
+                        at: reply.at.clone(),
                     },
                 })
                 .collect(),
@@ -142,6 +146,7 @@ impl CommentView {
                         Purpose::Answer => "answer",
                         Purpose::Pending => "pending",
                     },
+                    since: waiting.since.clone(),
                 }),
         }
     }
@@ -156,6 +161,8 @@ pub struct ReplyView {
     /// Who to name it as: "You" for the reviewer, the harness for an agent.
     pub name: String,
     pub body: String,
+    /// Seconds since the epoch, for the activity list to say how long ago.
+    pub at: String,
 }
 
 /// Something owed, as the screen marks it.
@@ -167,11 +174,16 @@ pub struct WaitingView {
     pub stage: &'static str,
     /// "answer" or "pending": what the badge says is being done.
     pub purpose: &'static str,
+    /// Seconds since the epoch.
+    pub since: String,
 }
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PendingByView {
+    /// GitHub's id for the comment, which tells one pending comment from the
+    /// one that replaced it.
+    pub id: String,
     /// "reviewer" or "agent".
     pub by: &'static str,
     /// "you", or the harness.
