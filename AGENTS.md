@@ -316,8 +316,9 @@ it does not decide.
 screen then had to pick one to draw it under, carry the other blocks' notes over
 and tag the row with every block it was in — machinery for a case a line note
 on the shared lines handles better, because it points at the lines. The map
-refuses a second block; a map written before that folds the file into its first
-block on load, with every note.
+refuses a second block, and a stored map that breaks the rule is refused on the
+way in and discarded with the reason, like any other stored state that no longer
+fits — not migrated.
 
 **A dependency is held, not passed.** `Git` owns the repository and answers
 questions about it; nothing takes a `&gix::Repository` parameter. The one

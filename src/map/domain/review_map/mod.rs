@@ -25,7 +25,7 @@ use super::slug::Slug;
 pub const MAP_VERSION: u32 = 1;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(from = "StoredMap")]
+#[serde(try_from = "StoredMap")]
 pub struct ReviewMap {
     pub version: u32,
     pub branch: String,
@@ -156,44 +156,40 @@ impl ReviewMap {
         })
     }
 
-    /// Fold a file listed in several blocks into the earliest, which is where
-    /// the screen always read it. Maps written before a file belonged to one
-    /// block still load: the later blocks' notes move to the file that stays,
-    /// because the prose outlives the arrangement it sat in.
-    fn one_block_per_file(mut self) -> Self {
-        let mut home: std::collections::HashMap<String, (usize, usize)> = Default::default();
-        let mut strays = Vec::new();
-        for b in 0..self.blocks.len() {
-            for file in std::mem::take(&mut self.blocks[b].files) {
-                if home.contains_key(&file.path) {
-                    strays.push(file);
-                    continue;
-                }
-                home.insert(file.path.clone(), (b, self.blocks[b].files.len()));
-                self.blocks[b].files.push(file);
+    /// Every path in one place: one block's files, or the skim list — skim
+    /// attached to a block counting as that block. The methods that change the
+    /// map keep this true; this is what a map read from disk is held to.
+    fn one_home_per_path(&self) -> std::result::Result<(), MapError> {
+        let mut seen: Vec<(&str, &str)> = Vec::new();
+        let homes = self
+            .blocks
+            .iter()
+            .flat_map(|b| {
+                b.files
+                    .iter()
+                    .map(move |f| (f.path.as_str(), b.slug.as_str()))
+            })
+            .chain(self.skim.iter().filter_map(|s| {
+                // Skim in the block that reads the file is the same home.
+                let home = s.block.as_ref().map(|b| b.as_str()).unwrap_or("skim");
+                let reads = self.block_of(&s.path).map(|b| b.slug.as_str());
+                (reads != Some(home)).then_some((s.path.as_str(), home))
+            }));
+        for (path, home) in homes {
+            if let Some((_, first)) = seen.iter().find(|(p, _)| *p == path) {
+                return Err(MapError::SharedPath {
+                    path: path.to_string(),
+                    first: first.to_string(),
+                    second: home.to_string(),
+                });
             }
+            seen.push((path, home));
         }
-        for stray in strays {
-            let (b, f) = home[&stray.path];
-            let file = &mut self.blocks[b].files[f];
-            file.note = match (file.note.take(), stray.note) {
-                (Some(kept), Some(moved)) => Some(format!("{kept}\n\n{moved}")),
-                (kept, moved) => kept.or(moved),
-            };
-            file.line_notes.extend(stray.line_notes);
-        }
-        // Skim that named a block other than the one reading the file follows
-        // the file, so the file still has one home.
-        for entry in &mut self.skim {
-            if let Some(&(b, _)) = home.get(&entry.path) {
-                entry.block = Some(self.blocks[b].slug.clone());
-            }
-        }
-        self
+        Ok(())
     }
 }
 
-/// The map as it is read from disk, before it is held to one block per file.
+/// The map as it is read from disk, before it is held to the map's rules.
 #[derive(Deserialize)]
 struct StoredMap {
     version: u32,
@@ -210,9 +206,13 @@ struct StoredMap {
     orphans: Vec<Orphan>,
 }
 
-impl From<StoredMap> for ReviewMap {
-    fn from(stored: StoredMap) -> Self {
-        ReviewMap {
+/// Held to the map's rules on the way in, and refused when it breaks one:
+/// a stored map is not migrated, it is discarded and the reader is told why.
+impl TryFrom<StoredMap> for ReviewMap {
+    type Error = MapError;
+
+    fn try_from(stored: StoredMap) -> std::result::Result<Self, MapError> {
+        let map = ReviewMap {
             version: stored.version,
             branch: stored.branch,
             base: stored.base,
@@ -221,8 +221,9 @@ impl From<StoredMap> for ReviewMap {
             blocks: stored.blocks,
             skim: stored.skim,
             orphans: stored.orphans,
-        }
-        .one_block_per_file()
+        };
+        map.one_home_per_path()?;
+        Ok(map)
     }
 }
 
@@ -264,35 +265,34 @@ mod tests {
     }
 
     #[test]
-    fn a_map_written_with_a_file_in_two_blocks_keeps_it_in_the_first_with_every_note() {
-        // Maps written before a file belonged to one block still load, and
-        // nothing the session wrote about the file is lost on the way.
+    fn a_stored_map_with_a_file_in_two_blocks_is_refused_rather_than_rewritten() {
+        // Stored state is not migrated: a map that breaks the rule is
+        // discarded by whoever reads it, and the reason names the file.
         let json = serde_json::json!({
             "version": MAP_VERSION, "branch": "b", "base": "main", "generated_at": "h",
             "blocks": [
-                {"slug": "first", "title": "t", "context": "c",
-                 "files": [{"path": "shared.rs", "note": "why it changed first"}]},
-                {"slug": "second", "title": "t", "context": "c",
-                 "files": [{"path": "shared.rs", "note": "why it changed again",
-                            "line_notes": [{"from": 3, "to": 4, "text": "this part"}]}]},
+                {"slug": "first", "title": "t", "context": "c", "files": [{"path": "shared.rs"}]},
+                {"slug": "second", "title": "t", "context": "c", "files": [{"path": "shared.rs"}]},
             ],
-            "skim": [{"path": "shared.rs", "reason": "r", "block": "second"}],
         });
 
-        let m: ReviewMap = serde_json::from_value(json).unwrap();
+        let err = serde_json::from_value::<ReviewMap>(json)
+            .unwrap_err()
+            .to_string();
 
-        assert!(m.block(&slug("second")).unwrap().files.is_empty());
-        let kept = m.block(&slug("first")).unwrap().file("shared.rs").unwrap();
-        assert_eq!(
-            kept.note.as_deref(),
-            Some("why it changed first\n\nwhy it changed again")
-        );
-        assert_eq!(kept.line_notes.len(), 1);
-        assert_eq!(
-            m.skim()[0].block,
-            Some(slug("first")),
-            "skim follows the file"
-        );
+        assert!(err.contains("shared.rs"), "{err}");
+        assert!(err.contains("'first' and 'second'"), "{err}");
+    }
+
+    #[test]
+    fn skim_in_the_block_that_reads_the_file_is_not_a_second_home() {
+        let mut m = map_with(&["first"]);
+        m.add_file(&slug("first"), "a.rs", None, None).unwrap();
+        m.add_skim("a.rs", "rename only", None).unwrap();
+
+        let back: ReviewMap = serde_json::from_value(serde_json::to_value(&m).unwrap()).unwrap();
+
+        assert_eq!(back, m);
     }
 
     #[test]
