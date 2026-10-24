@@ -10,7 +10,7 @@ function file(path: string, over: Partial<FileView> = {}): FileView {
     additions: 2,
     deletions: 0,
     viewed: false,
-    notes: [],
+    note: null,
     lineNotes: [],
     skim: false,
     skimReason: null,
@@ -278,7 +278,7 @@ describe("landing", () => {
     // like it lost a step.
     const r = review();
     r.blocks[0].context = "The `Hunk` already carried `newStart`.";
-    r.blocks[0].files[0].notes = [{ block: "first", text: "Reuse `FileDiff` here." }];
+    r.blocks[0].files[0].note = "Reuse `FileDiff` here.";
     serve({ review: r });
     render(<App />);
     await waitForReading("a.rs");
@@ -695,7 +695,7 @@ describe("the diff itself", () => {
     // as not having written it.
     withDiff(oneChange, {
       lineNotes: [
-        { from: 20, to: 20, text: "this is the actual fix", block: "first" },
+        { from: 20, to: 20, text: "this is the actual fix" },
       ],
     });
     render(<App />);
@@ -707,7 +707,7 @@ describe("the diff itself", () => {
 
   it("leaves a note off the lines it does not belong to", async () => {
     withDiff(oneChange, {
-      lineNotes: [{ from: 99, to: 99, text: "about somewhere else", block: "first" }],
+      lineNotes: [{ from: 99, to: 99, text: "about somewhere else" }],
     });
     render(<App />);
 

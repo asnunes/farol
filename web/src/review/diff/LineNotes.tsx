@@ -1,4 +1,4 @@
-import type { TaggedLineNote } from "@/api";
+import type { LineNoteView } from "@/api";
 
 /** What the session wrote about a span of lines, under the last line of it.
  *
@@ -18,4 +18,4 @@ export function LineNotes({ notes }: LineNotesProps) {
   ));
 }
 
-type LineNotesProps = { notes: TaggedLineNote[] };
+type LineNotesProps = { notes: LineNoteView[] };

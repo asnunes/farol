@@ -417,7 +417,7 @@ fn every_level_of_prose_the_session_wrote_reaches_the_browser() {
     assert_eq!(core["context"], "c");
     let file = &core["files"][0];
     assert_eq!(file["path"], "src/a.rs");
-    assert_eq!(file["notes"][0]["text"], "start here");
+    assert_eq!(file["note"], "start here");
     assert_eq!(file["lineNotes"][0]["text"], "the actual fix");
     assert_eq!(file["lineNotes"][0]["from"], 10);
     assert_eq!(file["lineNotes"][0]["to"], 12);

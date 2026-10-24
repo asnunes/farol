@@ -1,6 +1,6 @@
 import type { CommentActions } from "@/hooks/useComments";
 import type { LineSelection } from "./useLineSelection";
-import type { CommentView, DiffLine, FileView, Hunk, Side, TaggedLineNote } from "@/api";
+import type { CommentView, DiffLine, FileView, Hunk, Side, LineNoteView } from "@/api";
 
 /** The comment layer over one file's diff: what is already written, what can be
  * done to it, and which lines the reader is choosing right now.
@@ -72,7 +72,7 @@ export function notedBy(file: FileView, line: DiffLine): boolean {
  *
  * A note is anchored to the last line of its span, which is where the reader
  * has finished reading the thing it is about. */
-export function notesAt(file: FileView, line: DiffLine): TaggedLineNote[] {
+export function notesAt(file: FileView, line: DiffLine): LineNoteView[] {
   return file.lineNotes.filter((n) => line.newNumber !== null && n.to === line.newNumber);
 }
 

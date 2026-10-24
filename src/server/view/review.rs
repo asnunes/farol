@@ -111,9 +111,6 @@ impl ReviewView {
 
         let mut loose_skim = Vec::new();
         for entry in map.loose_skim() {
-            if placed.contains(&entry.path) {
-                continue;
-            }
             let Some(change) = scope.change(&entry.path) else {
                 continue;
             };
@@ -189,8 +186,8 @@ pub struct FileView {
     pub deletions: u32,
     pub viewed: bool,
     /// The note the block wrote for this file.
-    pub notes: Vec<TaggedNote>,
-    pub line_notes: Vec<TaggedLineNote>,
+    pub note: Option<String>,
+    pub line_notes: Vec<LineNoteView>,
     pub skim: bool,
     pub skim_reason: Option<String>,
 }
@@ -209,26 +206,20 @@ impl FileView {
     ) -> FileView {
         let path = change.path.as_str();
 
-        let mut notes = Vec::new();
-        let mut line_notes = Vec::new();
-        if let Some(block) = map.block_of(path)
-            && let Some(bf) = block.file(path)
-        {
-            if let Some(text) = &bf.note {
-                notes.push(TaggedNote {
-                    block: block.slug.to_string(),
-                    text: text.clone(),
-                });
-            }
-            for n in &bf.line_notes {
-                line_notes.push(TaggedLineNote {
-                    block: block.slug.to_string(),
-                    from: n.range.from,
-                    to: n.range.to,
-                    text: n.text.clone(),
-                });
-            }
-        }
+        let file = map.block_of(path).and_then(|block| block.file(path));
+        let note = file.and_then(|f| f.note.clone());
+        let mut line_notes: Vec<LineNoteView> = file
+            .map(|f| {
+                f.line_notes
+                    .iter()
+                    .map(|n| LineNoteView {
+                        from: n.range.from,
+                        to: n.range.to,
+                        text: n.text.clone(),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
         line_notes.sort_by_key(|n| (n.from, n.to));
 
         // Read *and still the same file*. Comparing paths alone was what kept
@@ -242,7 +233,7 @@ impl FileView {
             additions: change.additions,
             deletions: change.deletions,
             viewed,
-            notes,
+            note,
             line_notes,
             skim,
             skim_reason,
@@ -250,17 +241,10 @@ impl FileView {
     }
 }
 
+/// A note pinned to a span of lines on the new side.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct TaggedNote {
-    pub block: String,
-    pub text: String,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TaggedLineNote {
-    pub block: String,
+pub struct LineNoteView {
     pub from: u32,
     pub to: u32,
     pub text: String,

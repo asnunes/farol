@@ -145,16 +145,15 @@ export type FileView = {
   additions: number;
   deletions: number;
   viewed: boolean;
-  notes: TaggedNote[];
-  lineNotes: TaggedLineNote[];
+  /** The note the block wrote for this file, if it wrote one. */
+  note: string | null;
+  lineNotes: LineNoteView[];
   skim: boolean;
   skimReason: string | null;
 };
 
-export type TaggedNote = { block: string; text: string };
-
-export type TaggedLineNote = {
-  block: string;
+/** A note pinned to a span of lines on the new side. */
+export type LineNoteView = {
   from: number;
   to: number;
   text: string;

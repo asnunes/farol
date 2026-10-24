@@ -52,7 +52,7 @@ export function file(over: Partial<FileView> = {}): FileView {
     additions: 1,
     deletions: 0,
     viewed: false,
-    notes: [],
+    note: null,
     lineNotes: [],
     skim: false,
     skimReason: null,

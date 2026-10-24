@@ -128,7 +128,7 @@ describe("opening what the diff did not print", () => {
   it("shows a line note that was written where the diff never reached", async () => {
     // Written, counted in the sidebar, and invisible until the region opens.
     const hidden = file();
-    hidden.lineNotes = [{ block: "core", from: 11, to: 12, text: "vale ler junto" }];
+    hidden.lineNotes = [{ from: 11, to: 12, text: "vale ler junto" }];
 
     const { container } = render(<Diff {...props(twoHunks(100), "unified", hidden)} />);
     expect(screen.queryByText("vale ler junto")).toBeNull();

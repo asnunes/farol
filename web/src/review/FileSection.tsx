@@ -76,11 +76,11 @@ export function FileSection({
           {file.skim && file.skimReason && (
             <FileNote>Safe to skim — {file.skimReason}</FileNote>
           )}
-          {file.notes.map((note, i) => (
-            <FileNote key={i}>
-              <Prose className="min-w-0 flex-1">{note.text}</Prose>
+          {file.note && (
+            <FileNote>
+              <Prose className="min-w-0 flex-1">{file.note}</Prose>
             </FileNote>
-          ))}
+          )}
 
           {heavy && !asked ? (
             <div className="heavy px-6 py-6 font-sans text-sm text-ink-muted">
