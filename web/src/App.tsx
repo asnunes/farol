@@ -120,9 +120,12 @@ export default function App() {
   // From the activity box to a thread: its file opened if reading had folded
   // it, the thread opened if the reader had minimised it, and the thread
   // brought to the middle of the pane.
+  //
+  // A thread off the diff is not in its file but after its block, or at the
+  // end of the page, and is always drawn: there is no file to open first.
   const jumpToThread = (thread: CommentView) => {
     comments.expand(thread.id);
-    goTo(thread.path);
+    if (!comments.drifted.some((t) => t.id === thread.id)) goTo(thread.path);
     scrollToThread(thread.id);
   };
 
