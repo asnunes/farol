@@ -15,6 +15,7 @@ const KEYS: [string, string][] = [
   ["Space", "the same"],
   ["[ / ]", "previous and next block"],
   [`${MOD}B`, "show or hide the sidebar"],
+  [".", "show or hide what the agents did"],
   ["?", "this list"],
 ];
 

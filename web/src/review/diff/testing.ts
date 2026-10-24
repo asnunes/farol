@@ -22,6 +22,10 @@ export function noComments(): CommentActions {
     removePending: vi.fn().mockResolvedValue(true),
     generate: vi.fn().mockResolvedValue(true),
     addAsPending: vi.fn().mockResolvedValue(true),
+    loaded: true,
+    isMinimized: () => false,
+    toggleMinimized: vi.fn(),
+    expand: vi.fn(),
   };
 }
 

@@ -3,9 +3,10 @@ import { TriangleAlert, X } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { readingOrder } from "@/api";
+import { readingOrder, type CommentView } from "@/api";
 import { cn } from "@/lib/utils";
 import { useComments } from "@/hooks/useComments";
+import { useActivity } from "@/hooks/useActivity";
 import { useGitHub } from "@/hooks/useGitHub";
 import { useDiffView } from "@/hooks/useDiffView";
 import { useOpenFiles } from "@/hooks/useOpenFiles";
@@ -13,9 +14,10 @@ import { useTheme } from "@/hooks/useTheme";
 import { useReview } from "@/hooks/useReview";
 import { useShortcuts } from "@/hooks/useShortcuts";
 import { useSidebar } from "@/hooks/useSidebar";
+import { Activity } from "@/review/activity/Activity";
 import { HelpDialog } from "@/review/HelpDialog";
 import { KeyBar } from "@/review/KeyBar";
-import { scrollToFile } from "@/lib/scroll";
+import { scrollToFile, scrollToThread } from "@/lib/scroll";
 import { Reading } from "@/review/Reading";
 import { Sidebar } from "@/review/Sidebar";
 import { TopBar } from "@/review/TopBar";
@@ -47,6 +49,8 @@ export default function App() {
   const [theme, setTheme] = useTheme();
   const github = useGitHub(setFailed, generation);
   const comments = useComments(setFailed, generation, github);
+  const activity = useActivity(comments.all, github.pull, review?.branch ?? "", comments.loaded);
+  const [activityOpen, setActivityOpen] = useState(false);
 
   // The sidebar can go while the reader is standing in it, and focus has to be
   // put somewhere before it does — dropped on the document, the next Tab
@@ -113,6 +117,15 @@ export default function App() {
     [order, toggleViewed],
   );
 
+  // From the activity box to a thread: its file opened if reading had folded
+  // it, the thread opened if the reader had minimised it, and the thread
+  // brought to the middle of the pane.
+  const jumpToThread = (thread: CommentView) => {
+    comments.expand(thread.id);
+    goTo(thread.path);
+    scrollToThread(thread.id);
+  };
+
   useShortcuts({
     review,
     order,
@@ -123,6 +136,7 @@ export default function App() {
     toggleViewed: mark,
     setHelpOpen,
     toggleSidebar,
+    toggleActivity: () => setActivityOpen((open) => !open),
   });
 
   if (error) {
@@ -206,6 +220,16 @@ export default function App() {
           onHelp={() => setHelpOpen(true)}
         />
         <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
+        {/* Only where there is an agent to hear from, or something it already
+            did: on a review with neither, the corner stays empty. */}
+        {(comments.agent || activity.updates.length > 0 || activity.working.length > 0) && (
+          <Activity
+            activity={activity}
+            open={activityOpen}
+            onOpen={setActivityOpen}
+            onJump={jumpToThread}
+          />
+        )}
         {failed && <Failed what={failed} onClose={() => setFailed(null)} />}
       </div>
     </TooltipProvider>
@@ -223,7 +247,7 @@ function Failed({ what, onClose }: { what: string; onClose: () => void }) {
     <Alert
       variant="destructive"
       role="alert"
-      className="failed fixed right-4 bottom-14 left-4 z-50 flex w-auto max-w-[34rem] items-start gap-3 border-rule bg-surface shadow-lg sm:left-auto"
+      className="failed fixed right-4 bottom-24 left-4 z-50 flex w-auto max-w-[34rem] items-start gap-3 border-rule bg-surface shadow-lg sm:left-auto"
     >
       <TriangleAlert />
       <AlertDescription className="min-w-0 flex-1 font-mono text-sm whitespace-pre-wrap">

@@ -307,3 +307,15 @@
 .add .changed {
   background: var(--farol-add-strong);
 }
+
+/* A thread reached from the activity box, marked for a moment so the eye finds
+   it after the jump. */
+.thread-flash {
+  box-shadow: inset 3px 0 0 var(--color-highlight);
+}
+
+/* The activity box's launcher, when something new arrives while it is closed. */
+@keyframes activity-bump {
+  30% { transform: translateY(-4px); }
+  60% { transform: translateY(0); }
+}

@@ -19,6 +19,7 @@ export function useShortcuts({
   toggleViewed,
   setHelpOpen,
   toggleSidebar,
+  toggleActivity,
 }: Shortcuts) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -86,6 +87,9 @@ export function useShortcuts({
         case "?":
           setHelpOpen((v) => !v);
           break;
+        case ".":
+          toggleActivity();
+          break;
         case "Escape":
           setHelpOpen(() => false);
           break;
@@ -93,7 +97,7 @@ export function useShortcuts({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [review, order, index, current, goTo, nextUnread, toggleViewed, setHelpOpen, toggleSidebar]);
+  }, [review, order, index, current, goTo, nextUnread, toggleViewed, setHelpOpen, toggleSidebar, toggleActivity]);
 }
 
 type Shortcuts = {
@@ -107,4 +111,6 @@ type Shortcuts = {
   toggleViewed: (path: string, viewed: boolean) => Promise<void>;
   setHelpOpen: (fn: (open: boolean) => boolean) => void;
   toggleSidebar: () => void;
+  /** Open or close the agent activity box. */
+  toggleActivity: () => void;
 };

@@ -22,6 +22,32 @@ export function scrollToFile(path: string) {
   });
 }
 
+/** Bring a thread to the middle of the reading pane, and mark it for a moment.
+ *
+ * Called after the move to its file, which is what gets the file's diff asked
+ * for at all: a diff is fetched when its file comes near the screen, and the
+ * thread is drawn from it. So this waits for the thread, for as long as a diff
+ * takes to arrive and no longer — a thread that never shows was closed or left
+ * the diff, and there is nothing to land on. */
+export function scrollToThread(id: string) {
+  const giveUp = Date.now() + WAITS_FOR_THREAD;
+  const look = () => {
+    const thread = document.querySelector<HTMLElement>(`[data-thread="${CSS.escape(id)}"]`);
+    if (!thread) {
+      if (Date.now() < giveUp) requestAnimationFrame(look);
+      return;
+    }
+    // The move to the file is holding the file in place; this move wins.
+    stopAnchoring?.();
+    settling = Date.now() + SETTLES_IN;
+    thread.scrollIntoView({ block: "center" });
+    holdPosition(thread);
+    thread.classList.add("thread-flash");
+    window.setTimeout(() => thread.classList.remove("thread-flash"), FLASHES_FOR);
+  };
+  requestAnimationFrame(look);
+}
+
 /** Nearby lazy diffs can grow above a jump after its first scroll lands. */
 function holdPosition(anchor: HTMLElement) {
   const pane = anchor.closest<HTMLElement>(".pane");
@@ -75,3 +101,9 @@ let settling = 0;
 let stopAnchoring: (() => void) | undefined;
 
 const SETTLES_IN = 400;
+
+/** How long a jump waits for its thread to be drawn: about what a diff takes. */
+const WAITS_FOR_THREAD = 3000;
+
+/** How long a thread reached from the activity box stays marked. */
+const FLASHES_FOR = 1600;
