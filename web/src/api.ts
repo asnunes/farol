@@ -252,6 +252,8 @@ export type ReplyView = {
   /** "You", or the harness that answered. */
   name: string;
   body: string;
+  /** Seconds since the epoch, as text. */
+  at: string;
 };
 
 /** Something owed — an answer, or a pending comment: handed over, or
@@ -260,9 +262,16 @@ export type WaitingView = {
   on: string;
   stage: "sent" | "working";
   purpose: "answer" | "pending";
+  /** Seconds since the epoch, as text. */
+  since: string;
 };
 
-export type PendingByView = { by: "reviewer" | "agent"; name: string };
+export type PendingByView = {
+  /** GitHub's id for the comment: a regenerated one has a new id. */
+  id: string;
+  by: "reviewer" | "agent";
+  name: string;
+};
 
 /** The pull request as the screen needs it, asked of GitHub apart from the
  * threads so they never wait on the network. */

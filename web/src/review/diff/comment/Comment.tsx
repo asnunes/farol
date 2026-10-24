@@ -34,17 +34,25 @@ export function Comment({ comment, actions }: CommentProps) {
   // Once there is a pending comment, Edit and Regenerate are how it changes;
   // offering every turn as a replacement too would be a third way.
   const offerUse = peer && !comment.waiting && comment.pending === null;
+  const minimized = actions.isMinimized(comment.id);
 
   return (
-    <div className="comment commented flex flex-col gap-2 border-b border-comment-rule bg-comment-bg py-2 pr-4 pl-8 md:pr-6 md:pl-16">
+    <div
+      data-thread={comment.id}
+      className="comment commented flex scroll-mt-32 flex-col gap-2 border-b border-comment-rule bg-comment-bg py-2 pr-4 pl-8 transition-[box-shadow,background-color] duration-300 md:pr-6 md:pl-16"
+    >
       <div className="flex items-start gap-2 md:gap-3">
         <span className="lbl mt-0.5 shrink-0 font-mono text-xs text-comment-ink">
           {span(comment, "–")}
         </span>
 
         <div className="min-w-0 flex-1">
-          <Prose className="body font-sans text-sm leading-relaxed text-ink-soft">{comment.body}</Prose>
-          {offerUse && <UseAsPending onUse={() => use(comment.body)} />}
+          {minimized ? (
+            <p className="body truncate font-sans text-sm text-ink-muted">{comment.body}</p>
+          ) : (
+            <Prose className="body font-sans text-sm leading-relaxed text-ink-soft">{comment.body}</Prose>
+          )}
+          {offerUse && !minimized && <UseAsPending onUse={() => use(comment.body)} />}
         </div>
 
         <div className="acts flex shrink-0 items-center gap-0.5">
@@ -53,6 +61,20 @@ export function Comment({ comment, actions }: CommentProps) {
           )}
           <Copy comment={comment} />
           <Close comment={comment} actions={actions} discardsPending={discardsPending} />
+          {/* Folds the thread to its question, for a reader who is done with
+              it for now; the activity box opens it again when something
+              arrives there. */}
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="minimize font-mono text-comment-faint hover:bg-sunken hover:text-comment-ink"
+            aria-label={minimized ? "Expand this thread" : "Minimize this thread"}
+            aria-expanded={!minimized}
+            title={minimized ? "Expand this thread" : "Minimize this thread"}
+            onClick={() => actions.toggleMinimized(comment.id)}
+          >
+            {minimized ? "+" : "–"}
+          </Button>
         </div>
       </div>
 
@@ -60,56 +82,58 @@ export function Comment({ comment, actions }: CommentProps) {
           to answer — not up with the actions on the question. While an agent
           owes something there is no turn to take: a reply then would land in
           the middle of its work. */}
-      <div className="thread flex flex-col gap-2 pl-6 md:pl-10">
-        {comment.replies.length > 0 && (
-          <Replies
-            replies={comment.replies}
-            onUse={offerUse ? use : undefined}
-          />
-        )}
-        {comment.waiting && <Status waiting={comment.waiting} />}
-        {actions.agent && unsent(comment) && (
-          <Unsent
-            agent={actions.agent}
-            reply={comment.replies.length > 0}
-            onSend={() => actions.send(comment.id)}
-          />
-        )}
-        {comment.pending !== null && (
-          <Pending comment={comment} remote={remote} actions={actions} busy={comment.waiting !== null} />
-        )}
-        {replying ? (
-          <ReplyBox
-            agent={actions.agent}
-            onReply={async (body, andSend) => {
-              await actions.reply(comment.id, body, andSend);
-              setReplying(false);
-            }}
-            onCancel={() => setReplying(false)}
-          />
-        ) : comment.waiting ? null : (
-          <div className="foot flex flex-wrap items-center gap-1">
-            <Button
-              variant="outline"
-              size="xs"
-              className="opener h-6 px-2 font-sans"
-              onClick={() => setReplying(true)}
-            >
-              <MessageSquareReply className="size-3.5" aria-hidden="true" />
-              Reply
-            </Button>
-            {/* Once there is a pending comment, a new one is Regenerate, on
-                the comment itself. */}
-            {peer && actions.agent && comment.pending === null && (
-              <Generate
-                label="Generate pending comment"
-                onGenerate={(note) => actions.generate(comment.id, note)}
-              />
-            )}
-          </div>
-        )}
-        {peer && <Stage thread={comment} remote={remote} />}
-      </div>
+      {!minimized && (
+        <div className="thread flex flex-col gap-2 pl-6 md:pl-10">
+          {comment.replies.length > 0 && (
+            <Replies
+              replies={comment.replies}
+              onUse={offerUse ? use : undefined}
+            />
+          )}
+          {comment.waiting && <Status waiting={comment.waiting} />}
+          {actions.agent && unsent(comment) && (
+            <Unsent
+              agent={actions.agent}
+              reply={comment.replies.length > 0}
+              onSend={() => actions.send(comment.id)}
+            />
+          )}
+          {comment.pending !== null && (
+            <Pending comment={comment} remote={remote} actions={actions} busy={comment.waiting !== null} />
+          )}
+          {replying ? (
+            <ReplyBox
+              agent={actions.agent}
+              onReply={async (body, andSend) => {
+                await actions.reply(comment.id, body, andSend);
+                setReplying(false);
+              }}
+              onCancel={() => setReplying(false)}
+            />
+          ) : comment.waiting ? null : (
+            <div className="foot flex flex-wrap items-center gap-1">
+              <Button
+                variant="outline"
+                size="xs"
+                className="opener h-6 px-2 font-sans"
+                onClick={() => setReplying(true)}
+              >
+                <MessageSquareReply className="size-3.5" aria-hidden="true" />
+                Reply
+              </Button>
+              {/* Once there is a pending comment, a new one is Regenerate, on
+                  the comment itself. */}
+              {peer && actions.agent && comment.pending === null && (
+                <Generate
+                  label="Generate pending comment"
+                  onGenerate={(note) => actions.generate(comment.id, note)}
+                />
+              )}
+            </div>
+          )}
+          {peer && <Stage thread={comment} remote={remote} />}
+        </div>
+      )}
     </div>
   );
 }

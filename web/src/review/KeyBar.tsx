@@ -84,6 +84,7 @@ const SHORTCUTS: { keys: (string | { Icon: typeof ArrowUp })[]; what: string }[]
   { keys: ["n"], what: "next unread" },
   { keys: [";", { Icon: Space }], what: "mark read" },
   { keys: ["[", "]"], what: "block" },
+  { keys: ["."], what: "activity" },
   { keys: ["?"], what: "help" },
 ];
 

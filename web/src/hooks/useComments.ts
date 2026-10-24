@@ -17,13 +17,21 @@ export function useComments(
   github: GitHubState | null = null,
 ) {
   const [found, setFound] = useState<CommentsView>(EMPTY);
+  const [loaded, setLoaded] = useState(false);
+  // Threads folded to one line by the reader. Held here rather than in each
+  // thread, because the activity box has to open one from the other end of
+  // the page.
+  const [minimized, setMinimized] = useState<ReadonlySet<string>>(new Set());
   const latest = useRef(0);
 
   const load = useCallback(async () => {
     const request = ++latest.current;
     try {
       const next = await api.comments();
-      if (request === latest.current) setFound(next);
+      if (request === latest.current) {
+        setFound(next);
+        setLoaded(true);
+      }
     } catch (e) {
       if (request === latest.current) onError(said(e));
     }
@@ -31,6 +39,7 @@ export function useComments(
 
   useEffect(() => {
     setFound(EMPTY);
+    setLoaded(false);
     void load();
     return () => { latest.current++; };
   }, [load, generation]);
@@ -67,6 +76,22 @@ export function useComments(
      * A lookup and not a filter — the cut was decided before it got here. */
     on: useCallback((path: string) => found.files[path] ?? NONE, [found.files]),
     unreadable: found.unreadable,
+    /** Whether the threads have come back at least once. */
+    loaded,
+    isMinimized: (id: string) => minimized.has(id),
+    toggleMinimized: (id: string) =>
+      setMinimized((was) => {
+        const next = new Set(was);
+        if (!next.delete(id)) next.add(id);
+        return next;
+      }),
+    expand: (id: string) =>
+      setMinimized((was) => {
+        if (!was.has(id)) return was;
+        const next = new Set(was);
+        next.delete(id);
+        return next;
+      }),
     /** Every thread, for what counts them across files. */
     all: Object.values(found.files).flat(),
     add: (path: string, side: Side, from: number, to: number, body: string) =>

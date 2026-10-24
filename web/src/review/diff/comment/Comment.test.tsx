@@ -84,8 +84,8 @@ describe("a comment on the page", () => {
       <Comment
         comment={comment({
           replies: [
-            { from: "agent", name: "Claude Code", body: "Because the **legacy** format comes first." },
-            { from: "reviewer", name: "You", body: "And the new one?" },
+            { from: "agent", name: "Claude Code", body: "Because the **legacy** format comes first.", at: "100" },
+            { from: "reviewer", name: "You", body: "And the new one?", at: "100" },
           ],
         })}
         actions={noComments()}
@@ -99,18 +99,18 @@ describe("a comment on the page", () => {
 
   it("says what the agent owes: sent, then working once it acknowledges", () => {
     const { rerender } = render(
-      <Comment comment={comment({ waiting: { on: "Codex", stage: "sent", purpose: "answer" } })} actions={noComments()} />,
+      <Comment comment={comment({ waiting: { on: "Codex", stage: "sent", purpose: "answer", since: "100" } })} actions={noComments()} />,
     );
     expect(screen.getByRole("status").textContent).toContain("Sent to Codex");
 
-    rerender(<Comment comment={comment({ waiting: { on: "Codex", stage: "working", purpose: "answer" } })} actions={noComments()} />);
+    rerender(<Comment comment={comment({ waiting: { on: "Codex", stage: "working", purpose: "answer", since: "100" } })} actions={noComments()} />);
     expect(screen.getByRole("status").textContent).toContain("Codex is working on it");
   });
 
   it("offers Reply after the last turn, not among the actions on the question", () => {
     const { container } = render(
       <Comment
-        comment={comment({ replies: [{ from: "agent", name: "Claude Code", body: "Because." }] })}
+        comment={comment({ replies: [{ from: "agent", name: "Claude Code", body: "Because.", at: "100" }] })}
         actions={noComments()}
       />,
     );
@@ -126,8 +126,8 @@ describe("a comment on the page", () => {
       <Comment
         comment={comment({
           replies: [
-            { from: "agent", name: "Codex", body: "Because." },
-            { from: "reviewer", name: "You", body: "Why not an env key?" },
+            { from: "agent", name: "Codex", body: "Because.", at: "100" },
+            { from: "reviewer", name: "You", body: "Why not an env key?", at: "100" },
           ],
         })}
         actions={actions}
@@ -151,7 +151,7 @@ describe("a comment on the page", () => {
 
     rerender(
       <Comment
-        comment={comment({ replies: [{ from: "agent", name: "Codex", body: "Because." }] })}
+        comment={comment({ replies: [{ from: "agent", name: "Codex", body: "Because.", at: "100" }] })}
         actions={{ ...noComments(), agent: "Codex" }}
       />,
     );
@@ -160,7 +160,7 @@ describe("a comment on the page", () => {
 
   it("offers no Reply while the agent owes an answer", () => {
     render(
-      <Comment comment={comment({ waiting: { on: "Codex", stage: "sent", purpose: "answer" } })} actions={noComments()} />,
+      <Comment comment={comment({ waiting: { on: "Codex", stage: "sent", purpose: "answer", since: "100" } })} actions={noComments()} />,
     );
 
     expect(screen.queryByRole("button", { name: "Reply" })).toBeNull();
@@ -169,14 +169,14 @@ describe("a comment on the page", () => {
   it("holds Send while the agent owes an answer and once it has given one", () => {
     const actions = { ...noComments(), agent: "Claude Code" };
     const { rerender } = render(
-      <Comment comment={comment({ waiting: { on: "Claude Code", stage: "working", purpose: "answer" } })} actions={actions} />,
+      <Comment comment={comment({ waiting: { on: "Claude Code", stage: "working", purpose: "answer", since: "100" } })} actions={actions} />,
     );
     const send = () => screen.getByLabelText("Send to Claude Code") as HTMLButtonElement;
     expect(send().disabled).toBe(true);
 
     rerender(
       <Comment
-        comment={comment({ replies: [{ from: "agent", name: "Claude Code", body: "Because." }] })}
+        comment={comment({ replies: [{ from: "agent", name: "Claude Code", body: "Because.", at: "100" }] })}
         actions={actions}
       />,
     );
@@ -187,8 +187,8 @@ describe("a comment on the page", () => {
       <Comment
         comment={comment({
           replies: [
-            { from: "agent", name: "Claude Code", body: "Because." },
-            { from: "reviewer", name: "You", body: "And this?" },
+            { from: "agent", name: "Claude Code", body: "Because.", at: "100" },
+            { from: "reviewer", name: "You", body: "And this?", at: "100" },
           ],
         })}
         actions={actions}
@@ -239,7 +239,7 @@ describe("a comment on the page", () => {
     it("offers a pending comment from the thread, the turns and the question", () => {
       render(
         <Comment
-          comment={comment({ replies: [{ from: "agent", name: "Codex", body: "Rename it." }] })}
+          comment={comment({ replies: [{ from: "agent", name: "Codex", body: "Rename it.", at: "100" }] })}
           actions={peer()}
         />,
       );
@@ -252,7 +252,7 @@ describe("a comment on the page", () => {
       const actions = peer();
       render(
         <Comment
-          comment={comment({ replies: [{ from: "agent", name: "Codex", body: "Rename it." }] })}
+          comment={comment({ replies: [{ from: "agent", name: "Codex", body: "Rename it.", at: "100" }] })}
           actions={actions}
         />,
       );
@@ -267,7 +267,7 @@ describe("a comment on the page", () => {
         ...peer(),
         pendingOf: () => ({ state: "pending" as const, body: "Please rename it.", url: null }),
       };
-      render(<Comment comment={comment({ pending: { by: "agent", name: "Codex" } })} actions={actions} />);
+      render(<Comment comment={comment({ pending: { id: "PRRC_1", by: "agent", name: "Codex" } })} actions={actions} />);
 
       expect(screen.getByText("Please rename it.")).toBeTruthy();
       expect(screen.getByText("written by Codex")).toBeTruthy();
@@ -286,7 +286,7 @@ describe("a comment on the page", () => {
         pendingOf: () => ({ state: "published" as const, body: "Done.", url: "https://x/1" }),
       };
       const { container } = render(
-        <Comment comment={comment({ pending: { by: "reviewer", name: "you" } })} actions={actions} />,
+        <Comment comment={comment({ pending: { id: "PRRC_1", by: "reviewer", name: "you" } })} actions={actions} />,
       );
 
       expect(container.querySelector(".pending")?.textContent).toContain("Published");
@@ -297,7 +297,7 @@ describe("a comment on the page", () => {
     it("says what the agent is writing while it owes a pending comment", () => {
       render(
         <Comment
-          comment={comment({ waiting: { on: "Codex", stage: "working", purpose: "pending" } })}
+          comment={comment({ waiting: { on: "Codex", stage: "working", purpose: "pending", since: "100" } })}
           actions={peer()}
         />,
       );
@@ -311,7 +311,7 @@ describe("a comment on the page", () => {
         ...peer(),
         pendingOf: () => ({ state: "pending" as const, body: "Rename it.", url: null }),
       };
-      render(<Comment comment={comment({ pending: { by: "reviewer", name: "you" } })} actions={actions} />);
+      render(<Comment comment={comment({ pending: { id: "PRRC_1", by: "reviewer", name: "you" } })} actions={actions} />);
 
       expect(screen.queryByRole("button", { name: "Regenerate" })).toBeNull();
       fireEvent.click(screen.getByRole("button", { name: "Ask Codex about it" }));
@@ -323,5 +323,19 @@ describe("a comment on the page", () => {
 
       expect(container.querySelector(".stage")?.textContent).toBe("Thread · Pending · Published");
     });
+  });
+
+  it("folds to its question when minimized, and opens again", () => {
+    const actions = { ...noComments(), isMinimized: () => true };
+    const { container } = render(
+      <Comment
+        comment={comment({ replies: [{ from: "agent", name: "Codex", body: "Because.", at: "100" }] })}
+        actions={actions}
+      />,
+    );
+
+    expect(container.querySelector(".thread")).toBeNull();
+    fireEvent.click(screen.getByLabelText("Expand this thread"));
+    expect(actions.toggleMinimized).toHaveBeenCalledWith("18cb-3731");
   });
 });
