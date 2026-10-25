@@ -68,6 +68,12 @@ farol thread add src/gone.rs 2-4 --side old --text "Where did this go?"
 `--side` is `new` by default, which is the file as it now reads. Ranges on the
 old side are the line numbers of the file before the change.
 
+A thread whose lines the diff no longer shows — the code moved, often because
+of the fix it asked for, or the file left the review — is not lost: it moves to
+the end of its file's block, or to a block of its own at the end of the page,
+and can still be answered and closed. `farol thread list` lists them under
+"No longer on the diff". Only a pending comment needs its lines in the diff.
+
 `farol thread close ID` removes a thread once it is answered. In the browser,
 closing asks for confirmation because local threads are not recoverable from Git.
 

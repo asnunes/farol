@@ -92,8 +92,10 @@ export function useComments(
         next.delete(id);
         return next;
       }),
-    /** Every thread, for what counts them across files. */
-    all: Object.values(found.files).flat(),
+    /** Every thread, on the diff or off it, for what counts them across files. */
+    all: [...Object.values(found.files).flat(), ...found.drifted],
+    /** Threads whose lines the diff no longer shows. */
+    drifted: found.drifted,
     add: (path: string, side: Side, from: number, to: number, body: string) =>
       write(api.addComment(path, side, from, to, body)),
     close: (id: string, discardPending = false) => write(api.closeComment(id, discardPending)),
@@ -150,4 +152,4 @@ export type CommentsOn = (path: string) => CommentView[];
  * handed a fresh one on each render. */
 const NONE: CommentView[] = [];
 
-const EMPTY: CommentsView = { files: {}, unreadable: [], agent: null };
+const EMPTY: CommentsView = { files: {}, drifted: [], unreadable: [], agent: null };

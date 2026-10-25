@@ -30,6 +30,11 @@ use crate::diff::domain::Side;
 #[serde(rename_all = "camelCase")]
 pub struct CommentsView {
     pub files: BTreeMap<String, Vec<CommentView>>,
+    /// Threads whose lines the diff no longer prints, oldest first. Not under
+    /// their file, because there is no line left in it to draw them at: the
+    /// screen puts them at the end of the file's block, or in a block of their
+    /// own when the file has none.
+    pub drifted: Vec<CommentView>,
     pub unreadable: Vec<UnreadableView>,
     /// The harness a Send would reach, or null — and then there is no button.
     /// Carried here because the only reader is the comment's own row.
@@ -51,6 +56,7 @@ impl CommentsView {
 
         Self {
             files,
+            drifted: found.drifted.iter().map(CommentView::of).collect(),
             unreadable: found
                 .unreadable
                 .iter()
@@ -217,6 +223,7 @@ mod tests {
                 comment("18cb-0003", "src/b.rs"),
                 comment("18cb-0001", "src/a.rs"),
             ],
+            drifted: Vec::new(),
             unreadable: Vec::new(),
         };
 

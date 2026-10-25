@@ -8,6 +8,7 @@ export function noComments(): CommentActions {
   return {
     on: () => [],
     unreadable: [],
+    drifted: [],
     add: vi.fn().mockResolvedValue(undefined),
     close: vi.fn().mockResolvedValue(undefined),
     agent: null,

@@ -1,15 +1,16 @@
-import { useRef } from "react";
+import { Fragment, useRef } from "react";
 import { useCurrentFile } from "@/hooks/useCurrentFile";
 import { useDiffs } from "@/hooks/useDiffs";
 import { useResumeAt } from "@/hooks/useResumeAt";
 import { BlockBar } from "@/review/BlockBar";
 import { FileSection } from "@/review/FileSection";
+import { DriftedThreads } from "@/review/DriftedThreads";
 import { Unmapped } from "@/review/Unmapped";
 import type { CommentActions } from "@/hooks/useComments";
 import type { DiffView } from "@/hooks/useDiffView";
 import type { OpenFiles } from "@/hooks/useOpenFiles";
-import { readingRows } from "@/api";
-import type { ReviewView } from "@/api";
+import { blockOf, readingRows } from "@/api";
+import type { CommentView, ReviewView } from "@/api";
 
 /** The whole review, in one scroll.
  *
@@ -27,6 +28,7 @@ export function Reading({
   comments,
 }: ReadingProps) {
   const pane = useRef<HTMLElement>(null);
+  const drifted = byBlock(review, comments.drifted);
   const { diffs, errors, request, retry } = useDiffs();
 
   // Landing first, and the order is load-bearing: effects run in the order
@@ -60,24 +62,34 @@ export function Reading({
             total={review.blocks.length}
           />
         ) : (
-          <FileSection
-            key={row.file.path}
-            file={row.file}
-            diff={diffs[row.file.path]}
-            error={errors[row.file.path]}
-            onRetry={() => retry(row.file.path)}
-            view={view}
-            open={files.isOpen(row.file)}
-            onToggleOpen={() => files.set(row.file, !files.isOpen(row.file))}
-            onReach={() => request(row.file.path)}
-            onToggleViewed={() => onToggleViewed(row.file.path, !row.file.viewed)}
-            comments={comments.on(row.file.path)}
-            commentActions={comments}
-          />
+          <Fragment key={row.file.path}>
+            <FileSection
+              file={row.file}
+              diff={diffs[row.file.path]}
+              error={errors[row.file.path]}
+              onRetry={() => retry(row.file.path)}
+              view={view}
+              open={files.isOpen(row.file)}
+              onToggleOpen={() => files.set(row.file, !files.isOpen(row.file))}
+              onReach={() => request(row.file.path)}
+              onToggleViewed={() => onToggleViewed(row.file.path, !row.file.viewed)}
+              comments={comments.on(row.file.path)}
+              commentActions={comments}
+            />
+            {/* After the block's last file: the threads of its files that the
+                diff no longer reaches. */}
+            <DriftedThreads threads={drifted.lastOf.get(row.file.path) ?? []} actions={comments} />
+          </Fragment>
         ),
       )}
 
       {review.unmapped.length > 0 && <Unmapped paths={review.unmapped} />}
+
+      <DriftedThreads
+        threads={drifted.homeless}
+        actions={comments}
+        heading="Threads on code that left the review"
+      />
 
       {/* Room under the last file, so it too can be brought up to the line a
           quarter down the pane that decides which file is being read.
@@ -94,6 +106,29 @@ export function Reading({
     </main>
   );
 }
+
+/** Where each thread off the diff goes: after the last file of the block its
+ * file is read in, or, with no such block, into the block of their own. */
+function byBlock(review: ReviewView, threads: CommentView[]): Placement {
+  const lastOf = new Map<string, CommentView[]>();
+  const homeless: CommentView[] = [];
+  for (const thread of threads) {
+    const home = blockOf(review, thread.path)?.block;
+    const last = home?.files[home.files.length - 1]?.path;
+    if (!last) {
+      homeless.push(thread);
+      continue;
+    }
+    lastOf.set(last, [...(lastOf.get(last) ?? []), thread]);
+  }
+  return { lastOf, homeless };
+}
+
+type Placement = {
+  /** By the path of the block's last file, which they are drawn after. */
+  lastOf: Map<string, CommentView[]>;
+  homeless: CommentView[];
+};
 
 type ReadingProps = {
   review: ReviewView;

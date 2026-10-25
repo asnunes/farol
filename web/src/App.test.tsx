@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
+import { comment } from "./review/diff/testing";
 import { api, type FileDiff, type FileView, type ReviewView } from "./api";
 
 function file(path: string, over: Partial<FileView> = {}): FileView {
@@ -75,7 +76,7 @@ function aside(url: string): Response | null {
     return new Response(JSON.stringify({ settings: [] }));
   }
   if (url.startsWith("/api/comments")) {
-    return new Response('{"files":{},"unreadable":[]}', {
+    return new Response('{"files":{},"drifted":[],"unreadable":[]}', {
       headers: { "content-type": "application/json" },
     });
   }
@@ -546,7 +547,7 @@ describe("refreshing an open review", () => {
     const announce = notifications();
     serve({ review: review() });
     const files = vi.spyOn(api, "file").mockResolvedValue(diff("OLD_CONTENT"));
-    const comments = vi.spyOn(api, "comments").mockResolvedValue({ files: {}, unreadable: [], agent: null });
+    const comments = vi.spyOn(api, "comments").mockResolvedValue({ files: {}, drifted: [], unreadable: [], agent: null });
     render(<App />);
     await waitFor(() => expect(section("src/a.rs").textContent).toContain("OLD_CONTENT"));
     const beforeComments = comments.mock.calls.length;
@@ -818,6 +819,34 @@ describe("light and dark", () => {
   });
 });
 
+describe("threads the diff no longer reaches", () => {
+  it("sit at the end of their file's block, or in a block of their own at the end", async () => {
+    // The agent's fix for a thread is often what moves its lines. Dropped, the
+    // conversation would vanish with the answer on its way.
+    serve({ review: review() });
+    vi.spyOn(api, "comments").mockResolvedValue({
+      files: {},
+      drifted: [
+        comment({ id: "moved", path: "src/a.rs", body: "Why this order?" }),
+        comment({ id: "gone", path: "src/gone.rs", body: "Where did this go?" }),
+      ],
+      unreadable: [],
+      agent: null,
+    });
+    render(<App />);
+
+    const moved = await screen.findByText("Why this order?");
+    const lastOfFirst = section("src/b.rs");
+    const secondBand = document.querySelector('[data-block="second"]')!;
+    expect(lastOfFirst.compareDocumentPosition(moved) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(moved.compareDocumentPosition(secondBand) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    const own = screen.getByText("Threads on code that left the review").closest("section")!;
+    expect(within(own).getByText("Where did this go?")).toBeTruthy();
+    expect(within(own).queryByText("Why this order?")).toBeNull();
+  });
+});
+
 describe("a long review", () => {
   it("asks for one diff per file, and only for the files on the page", async () => {
     // The pane is one page now. Fetching every diff up front would mean a
@@ -935,6 +964,7 @@ describe("a comment file that cannot be read", () => {
           return new Response(
             JSON.stringify({
               files: {},
+              drifted: [],
               unreadable: [
                 {
                   file: ".git/farol/feature-x/comments/18cb-3731.md",

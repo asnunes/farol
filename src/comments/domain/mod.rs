@@ -211,7 +211,12 @@ pub trait CommentStore: Send + Sync {
 /// which is worse than the error it was avoiding.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Found {
+    /// Threads on lines the diff still prints.
     pub comments: Vec<Comment>,
+    /// Threads whose lines the diff no longer prints: the code moved, or the
+    /// file left the review. Kept apart rather than dropped, because the
+    /// conversation is still the reader's and the agent may still be answering.
+    pub drifted: Vec<Comment>,
     pub unreadable: Vec<Unreadable>,
 }
 

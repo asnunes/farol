@@ -41,7 +41,9 @@ impl GeneratePending {
     /// instruction from Settings rather than in place of it.
     pub fn execute(&self, id: &str, this_time: &str) -> Result<()> {
         let channel = self.channel.as_ref().ok_or(AgentError::NoSession)?;
-        let thread = self.comments.get(id)?;
+        // A thread off the diff could never have its comment written, so the
+        // agent is not asked to write one.
+        let thread = self.comments.live(id)?;
         let config = self.config.read()?;
         let mode = self.modes.current()?.mode;
         // What it replaces, read off the pull request when farol can. Without

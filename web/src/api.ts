@@ -205,6 +205,9 @@ export type CommentsView = {
    * server like every other answer, so the browser looks a file up instead of
    * grouping the list again wherever it needs the cut. */
   files: Record<string, CommentView[]>;
+  /** Threads whose lines the diff no longer shows, oldest first. The screen
+   * puts them at the end of their file's block, or in a block of their own. */
+  drifted: CommentView[];
   unreadable: Unreadable[];
   /** The harness a Send reaches — "Claude Code", "Codex" — or null, and then
    * there is no Send to offer. */
