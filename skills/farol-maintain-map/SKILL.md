@@ -202,6 +202,11 @@ Finish with:
 Resolve pending notes and coverage gaps, then reread the complete map
 for accuracy, self-contained context, and reading order.
 
+Then fill the lenses: run `farol lens pending` and write each missing or
+outdated answer, following the farol skill's Write the lenses section. A
+commit that changed a covered file makes its lenses outdated; rewrite
+those here.
+
 Before opening the review, inspect `farol servers`. Use `farol serve`
 for the intended worktree and comparison, following the shared rules
 for preserving running reviews.

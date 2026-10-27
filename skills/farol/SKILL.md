@@ -177,7 +177,8 @@ is the reviewer's decision.
 
 If you identify a potential problem while preparing the map, keep
 that finding separate from the map and report it through the review
-or conversation workflow appropriate to the task.
+or conversation workflow appropriate to the task, or in the lens that
+asks for it (see Write the lenses).
 
 ## Give each block its context
 
@@ -414,6 +415,37 @@ misleading grouping, repetition, or unsupported explanations.
 
 Do not add explanations merely to fill space. Do not remove context
 the reviewer needs merely to make the map shorter.
+
+## Write the lenses
+
+Lenses let the reviewer understand the change before reading the code:
+what the pull request does, where its risk is, what was checked, which
+tests exist. Each lens is a title and a prompt in a group: the pull
+request, each block, or each file the prompt applies to. The reviewer
+chooses which lenses exist and what each asks, so ask farol instead of
+assuming the list:
+
+    farol lens pending
+
+It lists every lens that is missing or outdated, with its prompt, the
+command for each target, and the rules every answer is held to. Write
+each one, following its prompt:
+
+    farol lens write <id> --text '…'                  # the pull request
+    farol lens write <id> --block <slug> --text '…'   # a block
+    farol lens write <id> --file <path> --text '…'    # a file
+
+Keep each answer to a few lines: the point of a lens is that reading it
+takes less time than reading the code. Write them from what the session
+knows, in the map's language. Cite code in backticks as `path:from-to`,
+adding `(old)` for a line the change removed; a cited line that does not
+exist is refused. A file lens is offered for every file in the review:
+write an empty text for a file it does not apply to. When a lens asks for
+files a person should read themselves, pass each with `--read <path>`.
+
+Lenses are where judgment goes. Unlike the map, a lens such as Risk or
+Evidence may assess the change, because the reviewer asked for it there.
+Writing a lens never changes, commits or publishes code.
 
 ## Respect running reviews
 
