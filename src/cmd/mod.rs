@@ -6,6 +6,7 @@ mod block;
 mod config;
 mod file;
 mod github;
+mod lens;
 mod line;
 mod map;
 mod pending;
@@ -19,6 +20,7 @@ mod wiring;
 use block::BlockAction;
 use file::FileAction;
 use github::GithubAction;
+use lens::LensAction;
 use line::LineAction;
 use map::MapAction;
 use pending::PendingAction;
@@ -187,6 +189,13 @@ enum Command {
         #[command(subcommand)]
         action: GithubAction,
     },
+    /// What the session says about the change, so it can be read before the code.
+    Lens {
+        #[command(flatten)]
+        scope: ScopeArgs,
+        #[command(subcommand)]
+        action: LensAction,
+    },
     /// Files the reviewer may read diagonally.
     Skim {
         #[command(flatten)]
@@ -207,6 +216,10 @@ impl Command {
             // And `servers` asks about the machine rather than a repository:
             // it answers from anywhere, including outside a git repository.
             Command::Servers(args) => args.run(),
+
+            // And `lens`, whose catalog commands answer from anywhere, like
+            // `config`; the rest open the window themselves.
+            Command::Lens { scope, action } => action.run(scope),
 
             // The rest are uniform. The window is resolved once per group and
             // handed down, instead of every action reopening it. The match

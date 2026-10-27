@@ -309,6 +309,13 @@ fn foreign_origins_cannot_change_state_or_start_publication() {
             r#"{"key":"send_instruction","value":"unwanted"}"#,
         ),
         ("DELETE", "/api/config/send-instruction", ""),
+        (
+            "POST",
+            "/api/lenses",
+            r#"{"title":"x","group":"pr","prompt":"x"}"#,
+        ),
+        ("PUT", "/api/lenses/overview", r#"{"enabled":false}"#),
+        ("DELETE", "/api/lenses/overview", ""),
         ("POST", "/api/comments/nonexistent/generate", "{}"),
         (
             "POST",
@@ -2074,4 +2081,79 @@ fn the_agent_acknowledges_and_answers_from_its_shell_and_the_page_reads_the_conv
         listed.contains("And the new one?"),
         "the agent reads the replies too: {listed}"
     );
+}
+
+#[test]
+fn a_lens_written_from_the_cli_reaches_the_review_and_goes_outdated_when_its_file_changes() {
+    let s = Serving::new();
+    s.repo.ok(&[
+        "lens",
+        "write",
+        "overview",
+        "--text",
+        "It fixes `src/a.rs:10-12`.",
+    ]);
+    s.repo.ok(&[
+        "lens",
+        "write",
+        "tests",
+        "--file",
+        "src/a.rs",
+        "--text",
+        "- retries once",
+    ]);
+    let past_the_end = s
+        .repo
+        .farol(&["lens", "write", "overview", "--text", "`src/a.rs:500`"]);
+    assert!(
+        !past_the_end.status.success(),
+        "a citation past the end of the file is refused"
+    );
+
+    let review = s.json("/api/review");
+    assert_eq!(review["lenses"][0]["id"], "overview");
+    assert_eq!(review["lenses"][0]["state"], "written");
+    assert_eq!(review["lenses"][0]["citations"][0]["from"], 10);
+    let a = &review["blocks"][0]["files"][0];
+    assert_eq!(a["path"], "src/a.rs");
+    assert_eq!(a["lenses"][0]["title"], "Tests");
+    assert_eq!(
+        a["folded"], true,
+        "the lenses speak for a file they saw as it is"
+    );
+
+    s.repo.write("src/a.rs", &numbered(61));
+    s.repo.commit("one more line");
+    s.repo.derive();
+    let review = s.json("/api/review");
+    assert_eq!(review["lenses"][0]["state"], "outdated");
+    assert_eq!(
+        review["blocks"][0]["files"][0]["folded"], false,
+        "a file that changed since starts open"
+    );
+    let pending = s.repo.ok(&["lens", "pending"]);
+    assert!(
+        pending.contains("outdated: farol lens write overview"),
+        "{pending}"
+    );
+}
+
+#[test]
+fn the_lens_catalog_is_edited_from_settings_and_the_cli_reads_the_same_one() {
+    let s = Serving::new();
+    let (status, body) = s.probe(
+        "POST",
+        "/api/lenses",
+        Some(r#"{"title":"Migrations","group":"file","prompt":"What each migration does."}"#),
+    );
+    assert_eq!(status, 200, "{body}");
+    let (status, _) = s.probe("PUT", "/api/lenses/overview", Some(r#"{"enabled":false}"#));
+    assert_eq!(status, 200);
+
+    let listed = s.repo.ok(&["lens", "list"]);
+    assert!(listed.contains("[on ] migrations"), "{listed}");
+    assert!(listed.contains("[off] overview"), "{listed}");
+    let lenses = s.json("/api/lenses");
+    assert_eq!(lenses["lenses"][0]["id"], "overview");
+    assert_eq!(lenses["lenses"][0]["enabled"], false);
 }

@@ -248,9 +248,10 @@ mod tests {
         let (_dir, use_cases) = crate::testing::server_use_cases();
         let (state, changes) = AppState::new(
             routes::tests::session(use_cases, _dir.path()),
-            crate::cmd::ConfigUseCases::new(Arc::new(
-                crate::testing::InMemoryConfigRepository::default(),
-            )),
+            crate::cmd::ConfigUseCases::new(
+                Arc::new(crate::testing::InMemoryConfigRepository::default()),
+                Arc::new(crate::testing::InMemoryLensCatalog::default()),
+            ),
             signal::channel(false).1,
         );
 

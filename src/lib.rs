@@ -6,6 +6,7 @@ pub mod diff;
 /// What farol reports when it cannot do what was asked. Above the layers,
 /// not beneath them — see the module docs.
 pub mod error;
+pub mod lenses;
 pub mod map;
 pub mod progress;
 pub mod server;

@@ -13,7 +13,7 @@ use crate::cmd::ServerUseCases;
 /// Everything the screen needs to draw itself, in one call.
 pub(super) async fn review(Extension(cases): Extension<ServerUseCases>) -> impl IntoResponse {
     match cases.review.execute() {
-        Ok(snapshot) => Json(view::ReviewView::build(&snapshot)).into_response(),
+        Ok((snapshot, lenses)) => Json(view::ReviewView::build(&snapshot, &lenses)).into_response(),
         Err(e) => fail(e),
     }
 }

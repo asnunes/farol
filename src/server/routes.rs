@@ -17,6 +17,7 @@ use axum::routing::{any, delete, get, post, put};
 
 mod config;
 mod github;
+mod lenses;
 mod review;
 mod session;
 mod threads;
@@ -59,6 +60,8 @@ pub(super) fn router(state: Arc<AppState>) -> Router {
             get(config::get_config).put(config::set_config),
         )
         .route("/api/config/{key}", delete(config::reset_config))
+        .route("/api/lenses", get(lenses::list).post(lenses::create))
+        .route("/api/lenses/{id}", put(lenses::save).delete(lenses::delete))
         .route("/api/session", put(session::configure))
         .route("/api/watch", get(watch::watch))
         .route("/health", get(session::health))
@@ -180,9 +183,10 @@ pub(super) mod tests {
         );
         let (state, _) = AppState::new(
             session(use_cases, _dir.path()),
-            crate::cmd::ConfigUseCases::new(Arc::new(
-                crate::testing::InMemoryConfigRepository::default(),
-            )),
+            crate::cmd::ConfigUseCases::new(
+                Arc::new(crate::testing::InMemoryConfigRepository::default()),
+                Arc::new(crate::testing::InMemoryLensCatalog::default()),
+            ),
             tokio::sync::watch::channel(false).1,
         );
 

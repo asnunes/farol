@@ -15,6 +15,7 @@ use crate::agent::domain::AgentError;
 use crate::comments::domain::CommentError;
 use crate::config::domain::ConfigError;
 use crate::diff::domain::ScopeError;
+use crate::lenses::domain::LensError;
 use crate::map::domain::MapError;
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -48,6 +49,9 @@ pub enum Error {
 
     #[error(transparent)]
     Agent(#[from] AgentError),
+
+    #[error(transparent)]
+    Lens(#[from] LensError),
 
     // ---- the world failing underneath -----------------------------------
     /// git failing, mostly. There is nothing farol can add to what the library

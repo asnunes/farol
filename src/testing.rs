@@ -472,7 +472,11 @@ pub fn server_use_cases_over(
     );
     crate::cmd::ServerUseCases {
         scope: crate::map::application::GetScope::new(scope.clone()),
-        review,
+        review: crate::lenses::application::GetReviewWithLenses::new(
+            review,
+            Arc::new(InMemoryLensCatalog::default()),
+            Arc::new(InMemoryLensAnswers::default()),
+        ),
         file_diff: GetFileDiff::new(FileDiffs::new(source.clone())),
         file_lines: GetFileLines::new(scope.clone()),
         mark_viewed: MarkViewed::new(progress.clone()),
@@ -980,6 +984,61 @@ impl crate::agent::domain::AgentChannel for RecordingChannel {
 
     fn send(&self, text: &str) -> std::result::Result<(), crate::agent::domain::AgentError> {
         self.0.lock().unwrap().push(text.to_string());
+        Ok(())
+    }
+}
+
+/// The user's lenses, kept in memory.
+#[derive(Default)]
+pub struct InMemoryLensCatalog(Mutex<crate::lenses::domain::LensCatalog>);
+
+impl InMemoryLensCatalog {
+    pub fn with(catalog: crate::lenses::domain::LensCatalog) -> Self {
+        Self(Mutex::new(catalog))
+    }
+}
+
+impl crate::lenses::domain::LensCatalogRepository for InMemoryLensCatalog {
+    fn read(&self) -> crate::error::Result<crate::lenses::domain::LensCatalog> {
+        Ok(self.0.lock().unwrap().clone())
+    }
+
+    fn write(&self, catalog: &crate::lenses::domain::LensCatalog) -> crate::error::Result<()> {
+        *self.0.lock().unwrap() = catalog.clone();
+        Ok(())
+    }
+}
+
+/// Lens answers kept in memory, keyed the way the JSON store keys its files,
+/// so a collision on the key behaves as it does on disk.
+#[derive(Default)]
+pub struct InMemoryLensAnswers(Mutex<Vec<crate::lenses::domain::LensAnswer>>);
+
+impl crate::lenses::domain::LensAnswerRepository for InMemoryLensAnswers {
+    fn all(&self) -> crate::error::Result<Vec<crate::lenses::domain::LensAnswer>> {
+        Ok(self.0.lock().unwrap().clone())
+    }
+
+    fn find(
+        &self,
+        lens: &crate::lenses::domain::LensId,
+        target: &crate::lenses::domain::LensTarget,
+    ) -> crate::error::Result<Option<crate::lenses::domain::LensAnswer>> {
+        Ok(self
+            .0
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|a| &a.lens == lens && a.target.file_name() == target.file_name())
+            .cloned())
+    }
+
+    fn write(&self, answer: &crate::lenses::domain::LensAnswer) -> crate::error::Result<()> {
+        let mut all = self.0.lock().unwrap();
+        all.retain(|a| {
+            !(a.lens == answer.lens && a.target.file_name() == answer.target.file_name())
+        });
+        all.push(answer.clone());
         Ok(())
     }
 }

@@ -6,10 +6,12 @@
 
 mod diff;
 mod github;
+mod lenses;
 mod review;
 mod threads;
 
 pub use diff::*;
 pub use github::*;
+pub use lenses::*;
 pub use review::*;
 pub use threads::*;

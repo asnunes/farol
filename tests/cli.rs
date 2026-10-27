@@ -1609,3 +1609,31 @@ fn a_thread_whose_file_left_the_review_is_still_listed_and_answered() {
         "the reply lands on the thread off the diff"
     );
 }
+
+#[test]
+fn the_lens_catalog_answers_from_outside_a_repository() {
+    let repo = Repo::new();
+    let outside = tempfile::tempdir().unwrap();
+
+    let out = repo.farol_in(outside.path(), &["lens", "list"]);
+
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(String::from_utf8_lossy(&out.stdout).contains("[on ] tests"));
+}
+
+#[test]
+fn a_lens_aimed_at_the_wrong_target_is_refused_with_the_way_out() {
+    let repo = Repo::new();
+    repo.feature();
+    repo.derive();
+    repo.core_block(&["src/a.rs"]);
+
+    let out = repo.farol(&["lens", "write", "tests", "--text", "x"]);
+
+    assert!(!out.status.success());
+    assert!(String::from_utf8_lossy(&out.stderr).contains("--file <path>"));
+}

@@ -5,7 +5,9 @@ use std::collections::BTreeSet;
 
 use serde::Serialize;
 
+use super::LensView;
 use crate::diff::domain::FileChange;
+use crate::lenses::application::LensReading;
 use crate::map::application::ReviewSnapshot;
 use crate::map::domain::ReviewMap;
 use crate::progress::domain::Progress;
@@ -35,12 +37,14 @@ pub struct ReviewView {
     /// and once to wrap the key that walks to the next unread file, each with
     /// its own idea of what to do when there is none left.
     pub first_unread: Option<String>,
+    /// The pull request's lenses, in order, before the first block.
+    pub lenses: Vec<LensView>,
 }
 
 impl ReviewView {
     /// Shape a snapshot for the wire. The use case gathered the parts; this
     /// only decides how the screen sees them.
-    pub fn build(snapshot: &ReviewSnapshot) -> Self {
+    pub fn build(snapshot: &ReviewSnapshot, lenses: &LensReading) -> Self {
         let map = &snapshot.map;
         let scope = &snapshot.scope;
         let progress = &snapshot.progress;
@@ -63,7 +67,7 @@ impl ReviewView {
                     continue;
                 };
                 placed.push(bf.path.clone());
-                files.push(FileView::build(map, change, progress, false, None));
+                files.push(FileView::build(map, change, progress, lenses, false, None));
             }
 
             // A file the block reads and also marks skim is drawn once, as
@@ -80,6 +84,7 @@ impl ReviewView {
                     map,
                     change,
                     progress,
+                    lenses,
                     true,
                     Some(entry.reason.clone()),
                 ));
@@ -103,6 +108,7 @@ impl ReviewView {
                 slug: block.slug.to_string(),
                 title: block.title.clone(),
                 context: block.context.clone(),
+                lenses: LensView::all(lenses.for_block(&block.slug)),
                 files,
                 total_files: held.len(),
                 viewed_files,
@@ -119,6 +125,7 @@ impl ReviewView {
                 map,
                 change,
                 progress,
+                lenses,
                 true,
                 Some(entry.reason.clone()),
             ));
@@ -159,6 +166,7 @@ impl ReviewView {
             total_files,
             viewed_files,
             first_unread,
+            lenses: LensView::all(lenses.for_pr()),
         }
     }
 }
@@ -169,6 +177,8 @@ pub struct BlockView {
     pub slug: String,
     pub title: String,
     pub context: String,
+    /// The block's lenses, in order, between its context and its code.
+    pub lenses: Vec<LensView>,
     pub files: Vec<FileView>,
     /// What the block holds, read files and skim alike, each path once.
     ///
@@ -190,6 +200,14 @@ pub struct FileView {
     pub line_notes: Vec<LineNoteView>,
     pub skim: bool,
     pub skim_reason: Option<String>,
+    /// The file's own lenses, drawn under its header.
+    pub lenses: Vec<LensView>,
+    /// Whether its diff starts folded: some lens answer was written against
+    /// this very content, so the lenses speak for it. One that changed since,
+    /// or that no answer covers, starts open.
+    pub folded: bool,
+    /// The lens that asks a person to read this file themselves.
+    pub read_yourself: Option<String>,
 }
 
 impl FileView {
@@ -201,6 +219,7 @@ impl FileView {
         map: &ReviewMap,
         change: &FileChange,
         progress: &Progress,
+        lenses: &LensReading,
         skim: bool,
         skim_reason: Option<String>,
     ) -> FileView {
@@ -237,6 +256,9 @@ impl FileView {
             line_notes,
             skim,
             skim_reason,
+            lenses: LensView::all(lenses.for_file(path)),
+            folded: lenses.saw(path, &change.content_hash),
+            read_yourself: lenses.read_yourself(path).map(str::to_string),
         }
     }
 }
@@ -260,12 +282,15 @@ mod tests {
     /// Assemble the snapshot the way the use case would, from a fake.
     fn built(map: &ReviewMap, source: FakeDiffSource, progress: &Progress) -> ReviewView {
         let scope = source.scope().unwrap().clone();
-        ReviewView::build(&ReviewSnapshot {
-            map: map.clone(),
-            scope,
-            progress: progress.clone(),
-            commits_behind: 0,
-        })
+        ReviewView::build(
+            &ReviewSnapshot {
+                map: map.clone(),
+                scope,
+                progress: progress.clone(),
+                commits_behind: 0,
+            },
+            &crate::lenses::application::LensReading::default(),
+        )
     }
 
     fn map_of(paths: &[(&str, &str)]) -> ReviewMap {
@@ -523,5 +548,69 @@ mod tests {
             .unwrap();
         let spans: Vec<_> = file.line_notes.iter().map(|n| (n.from, n.to)).collect();
         assert_eq!(spans, vec![(10, 12), (40, 42)]);
+    }
+
+    #[test]
+    fn a_file_the_lenses_speak_for_starts_folded_and_carries_its_own_lens() {
+        use crate::lenses::application::LensReading;
+        use crate::lenses::domain::{
+            Covered, Freshness, LensAnswer, LensCatalog, LensId, LensTarget,
+        };
+        let map = map_of(&[("core", "a.rs"), ("core", "b.rs")]);
+        let source = FakeDiffSource::with_paths(&["a.rs", "b.rs"]);
+        let scope = source.scope().unwrap().clone();
+        let blob = |p: &str| scope.change(p).unwrap().content_hash.clone();
+        let tests = LensAnswer {
+            lens: LensId::parse("tests").unwrap(),
+            target: LensTarget::File {
+                path: "a.rs".into(),
+            },
+            text: "- retries `a.rs:3`".into(),
+            written_at: "abc1234".into(),
+            covers: vec![Covered {
+                path: "a.rs".into(),
+                blob: blob("a.rs"),
+            }],
+            prompt_hash: "p".into(),
+            read: vec!["b.rs".into()],
+            citations: vec![],
+        };
+        let reading = LensReading {
+            lenses: LensCatalog::default().enabled(),
+            answers: vec![(tests, Freshness::Written)],
+        };
+
+        let view = ReviewView::build(
+            &ReviewSnapshot {
+                map,
+                scope,
+                progress: Progress::new(),
+                commits_behind: 0,
+            },
+            &reading,
+        );
+
+        let files = &view.blocks[0].files;
+        assert!(files[0].folded, "a.rs is what the Tests answer saw");
+        assert!(
+            !files[1].folded,
+            "nothing speaks for b.rs, so its code is open"
+        );
+        assert_eq!(files[0].lenses[0].title, "Tests");
+        assert_eq!(files[1].read_yourself.as_deref(), Some("Tests"));
+        let pr: Vec<_> = view
+            .lenses
+            .iter()
+            .map(|l| (l.id.as_str(), l.state))
+            .collect();
+        assert_eq!(
+            pr,
+            vec![
+                ("overview", "missing"),
+                ("risk", "missing"),
+                ("evidence", "missing")
+            ],
+            "the pull request's lenses are drawn, written or not"
+        );
     }
 }
