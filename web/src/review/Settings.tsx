@@ -3,6 +3,7 @@ import { Settings as SettingsIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useConfig } from "@/hooks/useConfig";
+import { LensSettings } from "./settings/LensSettings";
 import { TextField } from "./TextField";
 
 export function Settings() {
@@ -24,7 +25,7 @@ export function Settings() {
         <SettingsIcon className="size-3.5" aria-hidden="true" />
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="border-rule bg-surface sm:max-w-md">
+        <DialogContent className="max-h-[90vh] overflow-y-auto border-rule bg-surface sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="font-sans text-base text-ink">Settings</DialogTitle>
             <DialogDescription className="text-ink-muted">
@@ -63,6 +64,7 @@ export function Settings() {
             ),
           )}
           {error && <p role="alert" className="text-sm text-ink">{error}</p>}
+          <LensSettings open={open} />
           <p role="status" className="min-h-4 text-xs text-ink-muted">{saving ? "Saving…" : saved ? "Saved" : ""}</p>
         </DialogContent>
       </Dialog>

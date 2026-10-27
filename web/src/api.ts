@@ -10,6 +10,23 @@ export const api = {
   /** Back to the default, answered with the configuration as it now stands. */
   resetSetting: (key: string) =>
     fetch(`/api/config/${encodeURIComponent(key)}`, { method: "DELETE" }).then(json<Config>),
+  lenses: () => fetch("/api/lenses").then(json<LensCatalogView>),
+  addLens: (lens: NewLens) =>
+    fetch("/api/lenses", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(lens),
+    }).then(json<LensCatalogView>),
+  /** Only what is sent changes: the words, the switch, or both. */
+  saveLens: (id: string, change: LensChange) =>
+    fetch(`/api/lenses/${encodeURIComponent(id)}`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(change),
+    }).then(json<LensCatalogView>),
+  /** Gone for good, a lens farol ships included. */
+  deleteLens: (id: string) =>
+    fetch(`/api/lenses/${encodeURIComponent(id)}`, { method: "DELETE" }).then(json<LensCatalogView>),
   review: () => fetch("/api/review").then(json<ReviewView>),
   file: (path: string) =>
     fetch(`/api/file?path=${encodeURIComponent(path)}`).then(json<FileDiff>),
@@ -125,12 +142,16 @@ export type ReviewView = {
    * all have been. Where the reader is put when the map arrives, and where the
    * key that walks to the next unread file wraps round to. */
   firstUnread: string | null;
+  /** The pull request's lenses, in order, drawn before the first block. */
+  lenses: LensView[];
 };
 
 export type BlockView = {
   slug: string;
   title: string;
   context: string;
+  /** The block's lenses, between its context and its code. */
+  lenses: LensView[];
   files: FileView[];
   /** What the block holds, which is more than it renders: a file it shares with
    * an earlier block is read there and listed in neither list. Counted by the
@@ -150,6 +171,12 @@ export type FileView = {
   lineNotes: LineNoteView[];
   skim: boolean;
   skimReason: string | null;
+  /** The file's own lenses, drawn under its header. */
+  lenses: LensView[];
+  /** The lenses speak for this content of the file, so its diff starts folded. */
+  folded: boolean;
+  /** The lens asking a person to read this file themselves. */
+  readYourself: string | null;
 };
 
 /** A note pinned to a span of lines on the new side. */
@@ -316,6 +343,34 @@ export type SentView = {
 /** Where a file sits: the block it is read under and how far down the map that
  * block is, which is what the band above the diff counts off. */
 export type FileHome = { block: BlockView; index: number };
+
+/** One lens on one target, and what it said. */
+export type LensView = {
+  id: string;
+  title: string;
+  state: "written" | "outdated" | "missing";
+  text: string;
+  /** The short commit it was written at, or "uncommitted work". */
+  writtenAt: string | null;
+  /** Files changed since it was written; zero when only its prompt did. */
+  changed: number;
+  /** The citations that can be followed, as they appear in the text. */
+  citations: CitationView[];
+};
+
+/** A place in the code a lens points at. */
+export type CitationView = { text: string; path: string; side: Side; from: number; to: number };
+
+export type LensGroup = "pr" | "block" | "file";
+
+export type LensCatalogView = { lenses: LensRow[] };
+
+/** A lens as Settings lists it. */
+export type LensRow = { id: string; title: string; group: LensGroup; prompt: string; enabled: boolean };
+
+export type NewLens = { title: string; group: LensGroup; prompt: string };
+
+export type LensChange = { title?: string; prompt?: string; enabled?: boolean };
 
 export type Config = { settings: Setting[] };
 

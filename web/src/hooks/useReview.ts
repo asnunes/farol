@@ -46,6 +46,9 @@ export function useReview() {
     const off = [
       onNudge("map", () => setStale("map")),
       onNudge("head", () => setStale((previous) => previous ?? "head")),
+      // New answers are offered like a new map, for the same reason: they
+      // can fold and unfold the files the reader is in the middle of.
+      onNudge("lenses", () => setStale((previous) => previous ?? "lenses")),
     ];
     return () => off.forEach((stop) => stop());
   }, []);
@@ -61,4 +64,4 @@ export function useReview() {
   return { review, current, setCurrent, error, toggleViewed, stale, generation, refresh: load };
 }
 
-export type RefreshReason = "map" | "head";
+export type RefreshReason = "map" | "head" | "lenses";

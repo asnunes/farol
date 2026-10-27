@@ -173,6 +173,9 @@ function file(path: string, over: Partial<FileView> = {}): FileView {
     lineNotes: [],
     skim: false,
     skimReason: null,
+    lenses: [],
+    folded: false,
+    readYourself: null,
     ...over,
   };
 }
@@ -186,6 +189,7 @@ function block(slug: string, paths: string[], over: Partial<BlockView> = {}): Bl
     slug,
     title: slug,
     context: "",
+    lenses: [],
     files,
     totalFiles: files.length,
     viewedFiles: files.filter((f) => f.viewed).length,
@@ -206,5 +210,6 @@ function review(blocks: BlockView[], looseSkim: FileView[] = []): ReviewView {
     viewedFiles: 0,
     firstUnread:
       [...blocks.flatMap((b) => b.files), ...looseSkim].find((f) => !f.viewed)?.path ?? null,
+    lenses: [],
   };
 }

@@ -45,6 +45,8 @@ export function SplitLines({
     return (
       <div key={i}>
         <div
+          data-old={at.old?.oldNumber ?? undefined}
+          data-new={at.new?.newNumber ?? undefined}
           className={cn(
             "row",
             stacked ? "stack-row" : "split-row",

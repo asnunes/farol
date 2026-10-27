@@ -12,6 +12,9 @@ function file(path: string, viewed = false): FileView {
     lineNotes: [],
     skim: false,
     skimReason: null,
+    lenses: [],
+    folded: false,
+    readYourself: null,
   };
 }
 
@@ -22,9 +25,9 @@ function review(): ReviewView {
     generatedAt: "abc1234",
     commitsBehind: 0,
     blocks: [
-      { slug: "one", title: "First", context: "", files: [file("a.rs", true), file("b.rs")],
+      { slug: "one", title: "First", context: "", lenses: [], files: [file("a.rs", true), file("b.rs")],
         totalFiles: 2, viewedFiles: 1 },
-      { slug: "two", title: "Second", context: "", files: [file("c.rs")],
+      { slug: "two", title: "Second", context: "", lenses: [], files: [file("c.rs")],
         totalFiles: 1, viewedFiles: 0 },
     ],
     looseSkim: [file("Cargo.lock")],
@@ -32,6 +35,7 @@ function review(): ReviewView {
     totalFiles: 4,
     viewedFiles: 1,
     firstUnread: "b.rs",
+    lenses: [],
   };
 }
 

@@ -20,8 +20,9 @@ export function onNudge(kind: Nudge, fn: () => void) {
 }
 
 /** What the server has to say. `map` and `head` mean the review underneath the
- * reader moved; `comments` means only what the reader wrote did. */
-export type Nudge = "map" | "head" | "comments";
+ * reader moved; `comments` means only what the reader wrote did, and `lenses`
+ * that the session wrote what the lenses say. */
+export type Nudge = "map" | "head" | "comments" | "lenses";
 
 function open(): EventSource {
   listeners++;

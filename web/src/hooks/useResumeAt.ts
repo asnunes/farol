@@ -15,7 +15,7 @@ import { scrollToFile } from "@/lib/scroll";
  * the file the reader was taken to while the pane shows whichever one happened
  * to land at that offset. So the aim is corrected until the page stops moving
  * underneath it. */
-export function useResumeAt(path: string | null) {
+export function useResumeAt(path: string | null, first: boolean) {
   const landed = useRef(false);
   // Outside the effect: the current file changes as soon as the landing works,
   // which re-runs the effect, and a flag inside it would have the aim give up
@@ -25,6 +25,9 @@ export function useResumeAt(path: string | null) {
   useEffect(() => {
     if (landed.current || !path) return;
     landed.current = true;
+    // A review nobody has started opens at the top, where the pull request's
+    // lenses are: landing on the first file would scroll straight past them.
+    if (first) return;
 
     // Straight away, not on the next frame: this is what claims the settling
     // window, and until it is claimed the scroll-derived current file is free
@@ -67,7 +70,7 @@ export function useResumeAt(path: string | null) {
       window.removeEventListener("touchstart", handOver);
       window.removeEventListener("keydown", handOver);
     };
-  }, [path]);
+  }, [path, first]);
 }
 
 /** How long the aim is held, in frames — about two seconds.

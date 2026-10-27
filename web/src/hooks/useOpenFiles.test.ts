@@ -11,6 +11,18 @@ describe("which files are open", () => {
     expect(result.current.isOpen(file("a.rs", true))).toBe(false);
   });
 
+  it("folds a file the lenses speak for, and opens it again when that stops holding", () => {
+    const { result } = renderHook(() => useOpenFiles());
+    const spoken = { ...file("a.rs", false), folded: true };
+
+    expect(result.current.isOpen(spoken)).toBe(false);
+    act(() => result.current.set(spoken, true));
+    expect(result.current.isOpen(spoken)).toBe(true);
+    // The file changed under its lenses: the server stops folding it, and the
+    // reader's choice, made against the old standing, lapses with it.
+    expect(result.current.isOpen({ ...spoken, folded: false })).toBe(true);
+  });
+
   it("keeps a file the reader folded folded", () => {
     const { result } = renderHook(() => useOpenFiles());
     const unread = file("a.rs", false);
@@ -63,5 +75,8 @@ function file(path: string, viewed: boolean): FileView {
     lineNotes: [],
     skim: false,
     skimReason: null,
+    lenses: [],
+    folded: false,
+    readYourself: null,
   };
 }

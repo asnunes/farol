@@ -13,12 +13,24 @@ export function Refresh({ reason, onRefresh }: RefreshProps) {
       size="xs"
       className="refresh rounded-full bg-highlight-dim font-mono text-highlight hover:bg-highlight-dim hover:opacity-80"
       onClick={onRefresh}
-      title={reason === "map" ? "A newer map was written. Click to read it." : "The current branch changed. Click to refresh the review."}
+      title={TITLES[reason]}
     >
       <RefreshCw className="size-3" aria-hidden="true" />
-      {reason === "map" ? "new map available" : "branch changed"}
+      {LABELS[reason]}
     </Button>
   );
 }
+
+const LABELS: Record<RefreshReason, string> = {
+  map: "new map available",
+  head: "branch changed",
+  lenses: "new lenses written",
+};
+
+const TITLES: Record<RefreshReason, string> = {
+  map: "A newer map was written. Click to read it.",
+  head: "The current branch changed. Click to refresh the review.",
+  lenses: "The session wrote lenses. Click to read them.",
+};
 
 type RefreshProps = { reason: RefreshReason; onRefresh: () => void };

@@ -15,6 +15,9 @@ function file(path: string, over: Partial<FileView> = {}): FileView {
     lineNotes: [],
     skim: false,
     skimReason: null,
+    lenses: [],
+    folded: false,
+    readYourself: null,
     ...over,
   };
 }
@@ -30,11 +33,12 @@ function review(over: Partial<ReviewView> = {}): ReviewView {
         slug: "first",
         title: "The change itself",
         context: "why it exists",
+        lenses: [],
         files: [file("src/a.rs"), file("src/b.rs")],
         totalFiles: 2,
         viewedFiles: 0,
       },
-      { slug: "second", title: "The wiring", context: "", files: [file("src/c.rs")],
+      { slug: "second", title: "The wiring", context: "", lenses: [], files: [file("src/c.rs")],
         totalFiles: 1, viewedFiles: 0 },
     ],
     looseSkim: [],
@@ -42,6 +46,7 @@ function review(over: Partial<ReviewView> = {}): ReviewView {
     totalFiles: 3,
     viewedFiles: 0,
     firstUnread: null,
+    lenses: [],
     ...over,
   };
 
@@ -1371,10 +1376,10 @@ describe("the sidebar on a screen too narrow to hold it", () => {
     // not the layout's.
     const drag = screenIs(1440);
     serve({ review: review({ viewedFiles: 1, blocks: [
-      { slug: "first", title: "The change itself", context: "why it exists",
+      { slug: "first", title: "The change itself", context: "why it exists", lenses: [],
         files: [file("src/a.rs", { viewed: true }), file("src/b.rs")],
         totalFiles: 2, viewedFiles: 1 },
-      { slug: "second", title: "The wiring", context: "", files: [file("src/c.rs")],
+      { slug: "second", title: "The wiring", context: "", lenses: [], files: [file("src/c.rs")],
         totalFiles: 1, viewedFiles: 0 },
     ] }) });
     render(<App />);
