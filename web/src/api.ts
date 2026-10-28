@@ -115,6 +115,9 @@ export function readingOrder(review: ReviewView): FileView[] {
   return readingRows(review).flatMap((row) => ("file" in row ? [row.file] : []));
 }
 
+/** A lens the reader is on, and the block it opens when it has one. */
+export type LensHere = { lens: LensView; block: BlockView | null };
+
 /** One line of the page: a block's band, or a file under it. */
 export type ReadingRow = { block: BlockView; number: number } | { file: FileView };
 
@@ -124,6 +127,19 @@ export function blockOf(review: ReviewView, path: string): FileHome | null {
     if (review.blocks[i].files.some((f) => f.path === path)) {
       return { block: review.blocks[i], index: i };
     }
+  }
+  return null;
+}
+
+/** The pull request or block lens the reader is on, when `current` names one
+ * rather than a file: `lens:pr:<id>` or `lens:block:<slug>:<id>`, the key the
+ * section carries with `lens:` in front so it can never be taken for a path. */
+export function lensAt(review: ReviewView, current: string | null): LensHere | null {
+  const pr = review.lenses.find((lens) => current === `lens:pr:${lens.id}`);
+  if (pr) return { lens: pr, block: null };
+  for (const block of review.blocks) {
+    const lens = block.lenses.find((l) => current === `lens:block:${block.slug}:${l.id}`);
+    if (lens) return { lens, block };
   }
   return null;
 }

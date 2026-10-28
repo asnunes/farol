@@ -51,7 +51,10 @@ function whereTheReaderIs(root: HTMLElement): string | null {
   const pane = root.getBoundingClientRect();
   const line = pane.top + pane.height * READING_LINE;
 
-  const visible = [...root.querySelectorAll<HTMLElement>("[data-path]")]
+  // The pull request's and the blocks' lenses are places too, so the sidebar
+  // and the mark key follow the reader onto them. A file's own lenses are not:
+  // they sit under its header and belong to it.
+  const visible = [...root.querySelectorAll<HTMLElement>(PLACES)]
     .map((el) => ({ el, box: el.getBoundingClientRect() }))
     .filter(({ box }) => box.bottom > pane.top && box.top < pane.bottom);
   if (!visible.length) return null;
@@ -59,9 +62,12 @@ function whereTheReaderIs(root: HTMLElement): string | null {
   const passed = visible.filter(({ box }) => box.top <= line);
   const here = passed[passed.length - 1] ?? visible[0];
 
-  return here.el.dataset.path ?? null;
+  const { path, lensKey } = here.el.dataset;
+  return path ?? (lensKey ? `lens:${lensKey}` : null);
 }
 
 /** How far down the pane a header has to be before the file counts as the one
  * being read. Near the top, because the reader works downwards. */
 const READING_LINE = 0.25;
+
+const PLACES = '[data-path], [data-lens-key^="pr:"], [data-lens-key^="block:"]';

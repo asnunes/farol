@@ -40,7 +40,7 @@ export function Sidebar({
           </div>
           <ul className="blk-files mt-1">
             {review.lenses.map((lens) => (
-              <LensRow key={lens.id} lens={lens} onPick={() => scrollToLens(`pr:${lens.id}`)} />
+              <LensRow key={lens.id} lens={lens} current={current === `lens:pr:${lens.id}`} onPick={() => scrollToLens(`pr:${lens.id}`)} />
             ))}
           </ul>
         </section>
@@ -76,7 +76,7 @@ function Block({
   const state =
     block.viewedFiles === block.totalFiles
       ? "done"
-      : block.files.some((f) => f.path === current)
+      : block.files.some((f) => f.path === current) || current?.startsWith(`lens:block:${block.slug}:`)
         ? "current"
         : "todo";
 
@@ -105,7 +105,12 @@ function Block({
       </div>
       <ul className="blk-files mt-1">
         {block.lenses.map((lens) => (
-          <LensRow key={lens.id} lens={lens} onPick={() => scrollToLens(`block:${block.slug}:${lens.id}`)} />
+          <LensRow
+            key={lens.id}
+            lens={lens}
+            current={current === `lens:block:${block.slug}:${lens.id}`}
+            onPick={() => scrollToLens(`block:${block.slug}:${lens.id}`)}
+          />
         ))}
         {block.files.map((f) => (
           <FileRow

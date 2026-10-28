@@ -11,7 +11,7 @@ const KEYS: [string, string][] = [
   ["j / k", "previous and next file, in reading order"],
   ["↑ / ↓", "the same"],
   ["n", "jump to the next file you have not read"],
-  [";", "mark the current file read"],
+  [";", "mark the current file read, or the current lens seen"],
   ["Space", "the same"],
   ["[ / ]", "previous and next block"],
   [`${MOD}B`, "show or hide the sidebar"],

@@ -3,7 +3,7 @@ import { TriangleAlert, X } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { readingOrder, type CommentView } from "@/api";
+import { lensAt, readingOrder, type CommentView } from "@/api";
 import { cn } from "@/lib/utils";
 import { useComments } from "@/hooks/useComments";
 import { useActivity } from "@/hooks/useActivity";
@@ -65,7 +65,13 @@ export default function App() {
   }, [toggle]);
 
   const order = review ? readingOrder(review) : [];
-  const index = order.findIndex((f) => f.path === current);
+  // On a lens, the keys count from just before what it opens: the block's
+  // first file, or the first file of all for the pull request's.
+  const onLens = review ? lensAt(review, current) : null;
+  const index = onLens
+    ? order.findIndex((f) => f.path === onLens.block?.files[0]?.path)
+      - (onLens.block ? 1 : 0)
+    : order.findIndex((f) => f.path === current);
   const reading = useRef(order);
   reading.current = order;
 
@@ -138,6 +144,7 @@ export default function App() {
     goTo,
     nextUnread,
     toggleViewed: mark,
+    toggleSeen,
     setHelpOpen,
     toggleSidebar,
     toggleActivity: () => setActivityOpen((open) => !open),
