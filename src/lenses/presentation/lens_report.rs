@@ -98,9 +98,6 @@ impl Display for AnswerReport<'_> {
             return writeln!(f, "(empty: the lens does not apply here)");
         }
         writeln!(f, "\n{}", answer.text.trim())?;
-        for path in &answer.read {
-            writeln!(f, "read yourself: {path}")?;
-        }
         Ok(())
     }
 }
@@ -142,6 +139,6 @@ mod tests {
         assert!(out.starts_with("PR:"), "{out}");
         assert!(out.contains("[on ] overview"), "{out}");
         assert!(out.contains("[off] vocabulary"), "{out}");
-        assert!(out.contains("File:\n  [on ] tests"), "{out}");
+        assert!(out.contains("File:\n  [on ] summary"), "{out}");
     }
 }

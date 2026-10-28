@@ -220,19 +220,6 @@ mod tests {
     }
 
     #[test]
-    fn pruning_also_drops_skim_entries_for_files_that_left() {
-        let source = FakeDiffSource::with_paths(&["a.rs"]);
-        let mut map = map_with_note("old", range(1, 2), "n");
-        map.add_skim("gone.lock", "generated", None).unwrap();
-        map.add_skim("a.rs", "still here", None).unwrap();
-
-        reconciler(source).prune_gone_files(&mut map).unwrap();
-
-        let paths: Vec<&str> = map.skim().iter().map(|s| s.path.as_str()).collect();
-        assert_eq!(paths, vec!["a.rs"]);
-    }
-
-    #[test]
     fn a_file_still_under_review_survives_pruning_untouched() {
         let source = FakeDiffSource::with_paths(&["a.rs"]);
         let mut map = map_with_note("old", range(3, 4), "keep me");

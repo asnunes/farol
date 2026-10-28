@@ -64,9 +64,6 @@ pub enum MapError {
     #[error("invalid range '{raw}' — expected <from>-<to>, for example 82-116")]
     BadRange { raw: String },
 
-    #[error("'{path}' is not marked as skim")]
-    NotSkimmed { path: String },
-
     #[error("no line note at {range} on '{path}' in block '{slug}'")]
     NoSuchLineNote {
         slug: String,

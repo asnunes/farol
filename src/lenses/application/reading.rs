@@ -45,15 +45,6 @@ impl LensReading {
         !self.answers.is_empty()
     }
 
-    /// The lens that asks a person to read this file themselves, if one does.
-    pub fn read_yourself(&self, path: &str) -> Option<&str> {
-        self.answers
-            .iter()
-            .find(|(answer, _)| answer.read.iter().any(|p| p == path))
-            .and_then(|(answer, _)| self.lenses.iter().find(|l| l.id == answer.lens))
-            .map(|lens| lens.title.as_str())
-    }
-
     fn in_group(
         &self,
         group: LensGroup,

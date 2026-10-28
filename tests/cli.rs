@@ -481,8 +481,8 @@ fn check_fails_while_a_file_belongs_to_nobody() {
     assert!(text.contains("src/forgotten.rs"), "{text}");
     assert!(text.contains("never appears on screen"), "{text}");
 
-    // Marking it skim is a legitimate way to satisfy the rule.
-    repo.ok(&["skim", "add", "src/forgotten.rs", "--reason", "mechanical"]);
+    // Putting it in a block is what satisfies the rule.
+    repo.ok(&["file", "add", "core", "src/forgotten.rs"]);
     assert!(repo.ok(&["map", "check"]).contains("Map is complete."));
 }
 
@@ -750,15 +750,7 @@ fn a_malformed_block_name_is_refused_wherever_one_is_named() {
             "Not A Slug",
         ],
         vec!["block", "move", "core", "--after", "Not A Slug"],
-        vec![
-            "skim",
-            "add",
-            "src/a.rs",
-            "--reason",
-            "r",
-            "--block",
-            "Not A Slug",
-        ],
+        vec!["file", "look", "Not A Slug", "src/a.rs", "--reason", "r"],
     ] {
         let err = repo.fails(&args);
         assert!(
@@ -978,18 +970,27 @@ fn notes_can_be_rewritten_and_withdrawn() {
 }
 
 #[test]
-fn a_skim_entry_can_be_taken_back_out() {
+fn a_file_worth_a_closer_look_says_why_and_can_be_taken_back() {
     let repo = Repo::new();
     repo.feature();
-    repo.write("Cargo.lock", "checksums\n");
-    repo.commit("regenerate");
     repo.derive();
-    repo.ok(&["skim", "add", "Cargo.lock", "--reason", "regenerated"]);
-    assert!(repo.ok(&["map", "show"]).contains("Cargo.lock"));
+    repo.core_block(&["src/a.rs"]);
+    repo.ok(&[
+        "file",
+        "look",
+        "core",
+        "src/a.rs",
+        "--reason",
+        "the whole rule",
+    ]);
+    assert!(
+        repo.ok(&["map", "show"])
+            .contains("worth a closer look: the whole rule")
+    );
 
-    repo.ok(&["skim", "remove", "Cargo.lock"]);
+    repo.ok(&["file", "unlook", "core", "src/a.rs"]);
 
-    assert!(!repo.ok(&["map", "show"]).contains("Cargo.lock"));
+    assert!(!repo.ok(&["map", "show"]).contains("worth a closer look"));
 }
 
 #[test]

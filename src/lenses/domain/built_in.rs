@@ -3,8 +3,9 @@
 //! Four are on, one for each thing "Solving code review at Anthropic" says
 //! stays with a person once machines do most of the reading: deciding whether
 //! the change should exist, reviewing the risky code and the patterns others
-//! will copy, and reading the evidence. Tests is the list of cases the user
-//! asked for in place of reading the test files. Each prompt asks for a few
+//! will copy, and reading the evidence. Summary says in a line or three what
+//! each file does, and Tests lists the cases, both so a file can be judged
+//! without opening it. Each prompt asks for a few
 //! lines, because lenses that take as long to read as the code have failed.
 
 use super::{LensDefinition, LensGroup, LensId};
@@ -44,7 +45,7 @@ pub(super) const BUILT_IN: &[BuiltIn] = &[
         id: "risk",
         title: "Risk",
         group: LensGroup::Pr,
-        prompt: "How risky this change is, judged by what it touches rather than by who wrote it: low, medium or high, and why. Name the sensitive paths it touches (authentication, billing, data, CI, release), any pattern it introduces that others will copy, and the files a person should read themselves, passing each of those with --read. A few lines.",
+        prompt: "How risky this change is, judged by what it touches rather than by who wrote it: low, medium or high, and why. Name the sensitive paths it touches (authentication, billing, data, CI, release), any pattern it introduces that others will copy. A few lines.",
         enabled: true,
     },
     BuiltIn {
@@ -52,6 +53,13 @@ pub(super) const BUILT_IN: &[BuiltIn] = &[
         title: "Evidence",
         group: LensGroup::Pr,
         prompt: "What was checked, and what it would miss, in as few lines as it takes. The commands that ran and what they returned. Then only the problems that matter, found by reviewing the diff in a subagent with a clean context: each tagged Important or Pre-existing, with its file and line, including anything that breaks CLAUDE.md, AGENTS.md or REVIEW.md. Do not list nits; give only their count. Say \"Nothing to fix\" when there is nothing. End with what these checks would not catch.",
+        enabled: true,
+    },
+    BuiltIn {
+        id: "summary",
+        title: "Summary",
+        group: LensGroup::File,
+        prompt: "Write this for every file in the review. In one to three short lines, say what the file does in this change, as plainly as: \"Defines the structs X and Y\", or \"Defines the use case Z, which: 1. … 2. … 3. …\". No more than it takes to know whether to open the file.",
         enabled: true,
     },
     BuiltIn {

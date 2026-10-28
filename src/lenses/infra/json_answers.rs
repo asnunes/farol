@@ -91,7 +91,6 @@ mod tests {
                 blob: "1".into(),
             }],
             prompt_hash: "p".into(),
-            read: vec![],
             citations: vec![],
         }
     }

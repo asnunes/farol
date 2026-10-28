@@ -22,9 +22,6 @@ pub struct LensAnswer {
     pub written_at: String,
     pub covers: Vec<Covered>,
     pub prompt_hash: String,
-    /// Files the answer asks a person to read themselves.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub read: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub citations: Vec<Citation>,
 }
@@ -132,7 +129,6 @@ mod tests {
             written_at: "abc".into(),
             covers,
             prompt_hash: "p".into(),
-            read: vec![],
             citations: vec![],
         }
     }

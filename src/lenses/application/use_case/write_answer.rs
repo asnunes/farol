@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::diff::application::{FileDiffs, ReviewScope};
-use crate::diff::domain::{ReviewPath, Side};
+use crate::diff::domain::Side;
 use crate::error::Result;
 use crate::lenses::application::{Aim, covered_now};
 use crate::lenses::domain::{
@@ -45,13 +45,7 @@ impl WriteAnswer {
         }
     }
 
-    pub fn execute(
-        &self,
-        id: &LensId,
-        aim: Aim,
-        text: String,
-        read: Vec<ReviewPath>,
-    ) -> Result<LensAnswer> {
+    pub fn execute(&self, id: &LensId, aim: Aim, text: String) -> Result<LensAnswer> {
         let lens = self.catalog.read()?.require(id)?.definition;
         let map = self.versions.require_current()?;
         let target = match (lens.group, aim) {
@@ -93,7 +87,6 @@ impl WriteAnswer {
                 scope.head_sha.clone()
             },
             prompt_hash: lens.prompt_hash(),
-            read: read.iter().map(|p| p.as_str().to_string()).collect(),
         };
         self.answers.write(&answer)?;
         Ok(answer)
@@ -185,7 +178,6 @@ mod tests {
                 &id("tests"),
                 Aim::File(scope.path("a.rs").unwrap()),
                 "- retries `a.rs:10`".into(),
-                vec![],
             )
             .unwrap();
 
@@ -199,9 +191,7 @@ mod tests {
     fn a_pr_lens_covers_every_file_and_a_block_lens_its_block() {
         let (write, _, _) = setup();
 
-        let pr = write
-            .execute(&id("overview"), Aim::Pr, "x".into(), vec![])
-            .unwrap();
+        let pr = write.execute(&id("overview"), Aim::Pr, "x".into()).unwrap();
 
         assert_eq!(
             pr.covers
@@ -221,12 +211,11 @@ mod tests {
                 &id("overview"),
                 Aim::File(scope.path("a.rs").unwrap()),
                 "x".into(),
-                vec![],
             )
             .unwrap_err()
             .to_string();
         let on_the_pr = write
-            .execute(&id("tests"), Aim::Pr, "x".into(), vec![])
+            .execute(&id("tests"), Aim::Pr, "x".into())
             .unwrap_err()
             .to_string();
 
@@ -245,24 +234,14 @@ mod tests {
         };
 
         let error = write
-            .execute(
-                &id("architecture"),
-                Aim::Block(slug("nowhere")),
-                "x".into(),
-                vec![],
-            )
+            .execute(&id("architecture"), Aim::Block(slug("nowhere")), "x".into())
             .unwrap_err()
             .to_string();
 
         assert!(error.contains("core"), "{error}");
         assert!(
             write
-                .execute(
-                    &id("architecture"),
-                    Aim::Block(slug("core")),
-                    "x".into(),
-                    vec![]
-                )
+                .execute(&id("architecture"), Aim::Block(slug("core")), "x".into(),)
                 .is_ok()
         );
     }
@@ -272,12 +251,7 @@ mod tests {
         let (write, answers, _) = setup();
 
         let error = write
-            .execute(
-                &id("overview"),
-                Aim::Pr,
-                "see `a.rs:150-160`".into(),
-                vec![],
-            )
+            .execute(&id("overview"), Aim::Pr, "see `a.rs:150-160`".into())
             .unwrap_err()
             .to_string();
 
@@ -294,7 +268,6 @@ mod tests {
                 &id("overview"),
                 Aim::Pr,
                 "see `AGENTS.md:12` and `a.rs:3 (old)`".into(),
-                vec![],
             )
             .unwrap();
 

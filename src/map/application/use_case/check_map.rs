@@ -93,28 +93,6 @@ mod tests {
     }
 
     #[test]
-    fn a_file_on_the_skim_list_counts_as_covered() {
-        // Saying "read this diagonally" is a decision about the file, not a
-        // failure to decide.
-        let paths = ["a.rs", "Cargo.lock"];
-        let (svc, scope) = use_case_setup(&paths);
-        svc.editor
-            .edit(|map| {
-                map.add_block(&slug("core"), "t", "c", crate::map::domain::Position::End)?;
-                map.add_file(&slug("core"), "a.rs", None, None)?;
-                map.add_skim("Cargo.lock", "regenerated", None)
-            })
-            .unwrap();
-
-        assert!(
-            CheckMap::new(svc.versions, scope)
-                .execute()
-                .unwrap()
-                .passed()
-        );
-    }
-
-    #[test]
     fn an_orphan_nobody_decided_about_holds_the_check_open() {
         let (svc, scope) = use_case_setup(&["a.rs"]);
         svc.editor

@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use crate::diff::application::ReviewScope;
 use crate::error::Result;
 use crate::lenses::application::{Aim, ShowAnswer, WriteAnswer};
 use crate::lenses::domain::{LensAnswer, LensAnswerRepository, LensError, LensId};
@@ -16,19 +15,13 @@ use crate::lenses::domain::{LensAnswer, LensAnswerRepository, LensError, LensId}
 pub struct KeepAnswer {
     show: ShowAnswer,
     write: WriteAnswer,
-    scope: ReviewScope,
 }
 
 impl KeepAnswer {
-    pub fn new(
-        answers: Arc<dyn LensAnswerRepository>,
-        write: WriteAnswer,
-        scope: ReviewScope,
-    ) -> Self {
+    pub fn new(answers: Arc<dyn LensAnswerRepository>, write: WriteAnswer) -> Self {
         Self {
             show: ShowAnswer::new(answers),
             write,
-            scope,
         }
     }
 
@@ -36,13 +29,7 @@ impl KeepAnswer {
         let Some(answer) = self.show.execute(id, aim.clone())? else {
             return Err(LensError::NothingToKeep { id: id.to_string() }.into());
         };
-        // A file it asked a person to read that left the review is dropped.
-        let read = answer
-            .read
-            .iter()
-            .filter_map(|path| self.scope.path(path).ok())
-            .collect();
-        self.write.execute(id, aim, answer.text, read)
+        self.write.execute(id, aim, answer.text)
     }
 }
 
@@ -65,16 +52,14 @@ mod tests {
             svc.versions,
         );
         let id = LensId::parse("overview").unwrap();
-        let mut old = write
-            .execute(&id, Aim::Pr, "It retries.".into(), vec![])
-            .unwrap();
+        let mut old = write.execute(&id, Aim::Pr, "It retries.".into()).unwrap();
         old.covers = vec![Covered {
             path: "a.rs".into(),
             blob: "before".into(),
         }];
         answers.write(&old).unwrap();
 
-        let kept = KeepAnswer::new(answers, write, scope)
+        let kept = KeepAnswer::new(answers, write)
             .execute(&id, Aim::Pr)
             .unwrap();
 
@@ -98,7 +83,7 @@ mod tests {
             svc.versions,
         );
 
-        let error = KeepAnswer::new(answers, write, scope)
+        let error = KeepAnswer::new(answers, write)
             .execute(&LensId::parse("risk").unwrap(), Aim::Pr)
             .unwrap_err()
             .to_string();

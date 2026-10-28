@@ -186,7 +186,7 @@ impl Drop for Serving {
 }
 
 /// A branch with a map worth serving: two blocks, all three levels of prose,
-/// and something marked skim.
+/// and a file worth a closer look.
 fn mapped() -> Repo {
     let repo = Repo::new();
     repo.feature();
@@ -215,7 +215,15 @@ fn mapped() -> Repo {
         "why",
         "src/b.rs",
     ]);
-    repo.ok(&["skim", "add", "Cargo.lock", "--reason", "regenerated"]);
+    repo.ok(&["file", "add", "wiring", "Cargo.lock"]);
+    repo.ok(&[
+        "file",
+        "look",
+        "core",
+        "src/a.rs",
+        "--reason",
+        "the whole fix",
+    ]);
     repo
 }
 
@@ -436,15 +444,14 @@ fn every_level_of_prose_the_session_wrote_reaches_the_browser() {
 }
 
 #[test]
-fn a_file_marked_skim_arrives_with_the_reason_it_can_be_skimmed() {
+fn a_file_worth_a_closer_look_arrives_with_why() {
     let s = Serving::new();
 
     let review = s.json("/api/review");
 
-    let loose = review["looseSkim"].as_array().unwrap();
-    assert_eq!(loose[0]["path"], "Cargo.lock");
-    assert_eq!(loose[0]["skim"], true);
-    assert_eq!(loose[0]["skimReason"], "regenerated");
+    let a = &review["blocks"][0]["files"][0];
+    assert_eq!(a["path"], "src/a.rs");
+    assert_eq!(a["look"], "the whole fix");
 }
 
 #[test]
@@ -462,10 +469,6 @@ fn a_map_the_comparison_has_outlived_offers_nothing_to_read() {
     let review = s.json("/api/review");
     assert_eq!(review["totalFiles"], 0);
     assert!(review["blocks"].as_array().unwrap().is_empty(), "{review}");
-    assert!(
-        review["looseSkim"].as_array().unwrap().is_empty(),
-        "{review}"
-    );
     assert!(
         review["unmapped"].as_array().unwrap().is_empty(),
         "{review}"
@@ -497,7 +500,7 @@ fn only_the_files_that_left_the_comparison_go() {
     assert_eq!(review["blocks"].as_array().unwrap().len(), 1, "{review}");
     assert_eq!(review["blocks"][0]["slug"], "wiring");
     assert_eq!(review["blocks"][0]["files"][0]["path"], "src/b.rs");
-    assert_eq!(review["looseSkim"][0]["path"], "Cargo.lock");
+    assert_eq!(review["blocks"][0]["files"][1]["path"], "Cargo.lock");
     assert_eq!(review["totalFiles"], 2);
     assert!(
         review["unmapped"].as_array().unwrap().is_empty(),
@@ -2123,8 +2126,12 @@ fn a_lens_written_from_the_cli_reaches_the_review_and_goes_outdated_when_its_fil
     assert_eq!(a["path"], "src/a.rs");
     assert_eq!(a["lenses"][0]["title"], "Tests");
     assert_eq!(
-        a["folded"], true,
-        "once lenses are written no file is shown until it is opened"
+        a["folded"], false,
+        "src/a.rs is marked worth a closer look, so it stays open"
+    );
+    assert_eq!(
+        review["blocks"][1]["files"][0]["folded"], true,
+        "once lenses are written any other file starts folded"
     );
 
     s.repo.write("src/a.rs", &numbered(61));
@@ -2133,8 +2140,8 @@ fn a_lens_written_from_the_cli_reaches_the_review_and_goes_outdated_when_its_fil
     let review = s.json("/api/review");
     assert_eq!(review["lenses"][0]["state"], "outdated");
     assert_eq!(
-        review["blocks"][0]["files"][0]["folded"], true,
-        "a file that changed since stays folded too; its lenses say Outdated"
+        review["blocks"][1]["files"][0]["folded"], true,
+        "folding does not depend on the lenses being up to date"
     );
     let derived = s.repo.derive();
     assert!(

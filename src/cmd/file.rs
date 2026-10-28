@@ -27,6 +27,18 @@ pub(super) enum FileAction {
         slug: String,
         path: String,
     },
+    /// Mark a file worth a closer look, saying why; it starts open on screen.
+    Look {
+        slug: String,
+        path: String,
+        #[arg(long)]
+        reason: String,
+    },
+    /// Take the closer-look mark off a file.
+    Unlook {
+        slug: String,
+        path: String,
+    },
 }
 
 impl Action for FileAction {
@@ -54,6 +66,22 @@ impl Action for FileAction {
                 ctx.report(
                     format!("Updated the note on '{path}'."),
                     ctx.update_file.execute(&slug, &path, note),
+                )
+            }
+            FileAction::Look { slug, path, reason } => {
+                let slug = Slug::parse(&slug)?;
+                let path = ctx.scope.path(&path)?;
+                ctx.report(
+                    format!("Marked '{path}' worth a closer look."),
+                    ctx.look_file.execute(&slug, &path, Some(reason)),
+                )
+            }
+            FileAction::Unlook { slug, path } => {
+                let slug = Slug::parse(&slug)?;
+                let path = ctx.scope.path(&path)?;
+                ctx.report(
+                    format!("Took the closer-look mark off '{path}'."),
+                    ctx.look_file.execute(&slug, &path, None),
                 )
             }
             FileAction::Remove { slug, path } => {

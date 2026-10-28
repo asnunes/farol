@@ -29,10 +29,10 @@ use crate::lenses::application::{
 use crate::lenses::domain::LensCatalogRepository;
 use crate::lenses::infra::{JsonLensAnswers, JsonLensCatalog};
 use crate::map::application::{
-    AddBlock, AddFile, AddLineNote, AddSkim, CheckMap, DeriveMap, DiscardNote, ExportMap,
-    GetFileDiff, GetFileLines, GetReview, GetScope, ImportMap, MapDerivation, MapEditor,
-    MapReconciler, MapVersions, MoveBlock, RemoveBlock, RemoveFile, RemoveLineNote, RemoveSkim,
-    ResetMap, RestoreNote, ShowMap, UpdateBlock, UpdateFile, UpdateLineNote,
+    AddBlock, AddFile, AddLineNote, CheckMap, DeriveMap, DiscardNote, ExportMap, GetFileDiff,
+    GetFileLines, GetReview, GetScope, ImportMap, LookFile, MapDerivation, MapEditor,
+    MapReconciler, MapVersions, MoveBlock, RemoveBlock, RemoveFile, RemoveLineNote, ResetMap,
+    RestoreNote, ShowMap, UpdateBlock, UpdateFile, UpdateLineNote,
 };
 use crate::map::infra::JsonMapRepository;
 use crate::progress::application::{MarkViewed, ProgressStore, UnmarkViewed};
@@ -60,8 +60,7 @@ pub struct Ctx {
     pub restore_note: RestoreNote,
     pub discard_note: DiscardNote,
 
-    pub add_skim: AddSkim,
-    pub remove_skim: RemoveSkim,
+    pub look_file: LookFile,
 
     pub derive_map: DeriveMap,
     pub show_map: ShowMap,
@@ -240,8 +239,7 @@ impl Ctx {
             restore_note: RestoreNote::new(editor.clone()),
             discard_note: DiscardNote::new(editor.clone()),
 
-            add_skim: AddSkim::new(editor.clone()),
-            remove_skim: RemoveSkim::new(editor.clone()),
+            look_file: LookFile::new(editor.clone()),
 
             derive_map: DeriveMap::new(derivation, versions.clone()),
             show_map: ShowMap::new(versions.clone()),
@@ -260,7 +258,7 @@ impl Ctx {
             readiness: readiness.clone(),
             publish_review: publish_review.clone(),
 
-            keep_answer: KeepAnswer::new(lens_answers.clone(), write_answer.clone(), scope.clone()),
+            keep_answer: KeepAnswer::new(lens_answers.clone(), write_answer.clone()),
             write_answer,
             pending_answers,
             show_answer: ShowAnswer::new(lens_answers.clone()),

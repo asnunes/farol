@@ -13,7 +13,6 @@ mod pending;
 mod scope;
 mod serve;
 mod servers;
-mod skim;
 mod thread;
 mod wiring;
 
@@ -27,7 +26,6 @@ use pending::PendingAction;
 use scope::ShowScope;
 use serve::ServeArgs;
 use servers::ServersArgs;
-use skim::SkimAction;
 use thread::ThreadAction;
 
 pub use wiring::{
@@ -196,13 +194,6 @@ enum Command {
         #[command(subcommand)]
         action: LensAction,
     },
-    /// Files the reviewer may read diagonally.
-    Skim {
-        #[command(flatten)]
-        scope: ScopeArgs,
-        #[command(subcommand)]
-        action: SkimAction,
-    },
 }
 
 impl Command {
@@ -231,7 +222,6 @@ impl Command {
             Command::Block { scope, action } => action.run(&scope.open()?),
             Command::File { scope, action } => action.run(&scope.open()?),
             Command::Line { scope, action } => action.run(&scope.open()?),
-            Command::Skim { scope, action } => action.run(&scope.open()?),
             Command::Thread { scope, action } => action.run(&scope.open()?),
             Command::Pending { scope, action } => action.run(&scope.open()?),
             Command::Github { scope, action } => action.run(&scope.open()?),
@@ -277,7 +267,7 @@ mod tests {
             vec!["scope", "--dirty"],
             vec!["map", "show", "--dirty"],
             vec!["block", "remove", "core", "--direct"],
-            vec!["skim", "remove", "Cargo.lock", "--base", "develop"],
+            vec!["file", "unlook", "core", "a.rs", "--base", "develop"],
         ] {
             parse(&group);
         }

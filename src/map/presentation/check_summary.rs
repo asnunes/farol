@@ -14,7 +14,7 @@ impl Display for CheckSummary<'_> {
         if !report.uncovered.is_empty() {
             writeln!(
                 f,
-                "{} file(s) in the review are in no block and not marked skim:",
+                "{} file(s) in the review are in no block:",
                 report.uncovered.len()
             )?;
             for path in &report.uncovered {
@@ -22,7 +22,7 @@ impl Display for CheckSummary<'_> {
             }
             writeln!(
                 f,
-                "\nA file nobody assigned never appears on screen. Put each one in a\nblock, in the `outros` block, or mark it skim."
+                "\nA file nobody assigned never appears on screen. Put each one in the\nblock whose change it follows, or in the `outros` block."
             )?;
         }
 

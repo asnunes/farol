@@ -20,8 +20,6 @@ pub struct ReviewView {
     pub generated_at: String,
     pub commits_behind: u32,
     pub blocks: Vec<BlockView>,
-    /// Skim entries that belong to no block.
-    pub loose_skim: Vec<FileView>,
     /// Files in the diff that no block mentions — only possible when the map is
     /// behind the branch. Shown as a warning, never silently dropped.
     pub unmapped: Vec<String>,
@@ -67,31 +65,10 @@ impl ReviewView {
                     continue;
                 };
                 placed.push(bf.path.clone());
-                files.push(FileView::build(map, change, progress, lenses, false, None));
+                files.push(FileView::build(map, change, progress, lenses));
             }
 
-            // A file the block reads and also marks skim is drawn once, as
-            // the file.
-            for entry in map.skim_for(&block.slug) {
-                if placed.contains(&entry.path) {
-                    continue;
-                }
-                let Some(change) = scope.change(&entry.path) else {
-                    continue;
-                };
-                placed.push(entry.path.clone());
-                files.push(FileView::build(
-                    map,
-                    change,
-                    progress,
-                    lenses,
-                    true,
-                    Some(entry.reason.clone()),
-                ));
-            }
-
-            // Over everything the block accounts for, read files and skim
-            // alike, and each path once however many roles it plays in here.
+            // Over everything the block reads that is still in the comparison.
             let held: BTreeSet<&str> = map
                 .paths_in(&block.slug)
                 .filter(|path| scope.contains(path))
@@ -115,22 +92,6 @@ impl ReviewView {
             });
         }
 
-        let mut loose_skim = Vec::new();
-        for entry in map.loose_skim() {
-            let Some(change) = scope.change(&entry.path) else {
-                continue;
-            };
-            placed.push(entry.path.clone());
-            loose_skim.push(FileView::build(
-                map,
-                change,
-                progress,
-                lenses,
-                true,
-                Some(entry.reason.clone()),
-            ));
-        }
-
         let unmapped: Vec<String> = scope
             .files
             .iter()
@@ -139,15 +100,9 @@ impl ReviewView {
             .collect();
 
         // The order the reader meets the files in: the blocks as the author
-        // arranged them, then the skim that belongs to no block. Written once
-        // and walked twice, because the count and where to resume are two
-        // questions about the same walk.
-        let in_reading_order = || {
-            blocks
-                .iter()
-                .flat_map(|b| b.files.iter())
-                .chain(loose_skim.iter())
-        };
+        // arranged them. Written once and walked twice, because the count and
+        // where to resume are two questions about the same walk.
+        let in_reading_order = || blocks.iter().flat_map(|b| b.files.iter());
 
         let total_files = placed.len();
         let viewed_files = in_reading_order().filter(|f| f.viewed).count();
@@ -161,7 +116,6 @@ impl ReviewView {
             generated_at: map.generated_at.clone(),
             commits_behind,
             blocks,
-            loose_skim,
             unmapped,
             total_files,
             viewed_files,
@@ -180,7 +134,7 @@ pub struct BlockView {
     /// The block's lenses, in order, between its context and its code.
     pub lenses: Vec<LensView>,
     pub files: Vec<FileView>,
-    /// What the block holds, read files and skim alike, each path once.
+    /// What the block holds, each path once.
     ///
     /// Never zero: a block with no path left in the comparison is not sent.
     pub total_files: usize,
@@ -198,15 +152,14 @@ pub struct FileView {
     /// The note the block wrote for this file.
     pub note: Option<String>,
     pub line_notes: Vec<LineNoteView>,
-    pub skim: bool,
-    pub skim_reason: Option<String>,
+    /// Why the map says this file is worth a closer look, when it does.
+    pub look: Option<String>,
     /// The file's own lenses, drawn under its header.
     pub lenses: Vec<LensView>,
     /// Whether its diff starts folded: on a review the lenses speak for, code
-    /// is opened by the reader, never shown to them by default.
+    /// is opened by the reader — unless the map says the file is worth a
+    /// closer look, which is the one thing that opens it.
     pub folded: bool,
-    /// The lens that asks a person to read this file themselves.
-    pub read_yourself: Option<String>,
 }
 
 impl FileView {
@@ -219,13 +172,12 @@ impl FileView {
         change: &FileChange,
         progress: &Progress,
         lenses: &LensReading,
-        skim: bool,
-        skim_reason: Option<String>,
     ) -> FileView {
         let path = change.path.as_str();
 
         let file = map.block_of(path).and_then(|block| block.file(path));
         let note = file.and_then(|f| f.note.clone());
+        let look = file.and_then(|f| f.look.clone());
         let mut line_notes: Vec<LineNoteView> = file
             .map(|f| {
                 f.line_notes
@@ -253,11 +205,9 @@ impl FileView {
             viewed,
             note,
             line_notes,
-            skim,
-            skim_reason,
+            folded: lenses.speaks() && look.is_none(),
+            look,
             lenses: LensView::all(lenses.for_file(path), progress),
-            folded: lenses.speaks(),
-            read_yourself: lenses.read_yourself(path).map(str::to_string),
         }
     }
 }
@@ -306,30 +256,11 @@ mod tests {
     }
 
     #[test]
-    fn skim_with_a_block_sits_inside_it_and_loose_skim_stays_at_the_bottom() {
-        let mut map = map_of(&[("one", "a.rs")]);
-        map.add_skim("a_test.rs", "fixture only", Some(slug("one")))
-            .unwrap();
-        map.add_skim("Cargo.lock", "generated", None).unwrap();
-
-        let source = FakeDiffSource::with_paths(&["a.rs", "a_test.rs", "Cargo.lock"]);
-        let view = built(&map, source, &Progress::new());
-
-        assert_eq!(view.blocks[0].files.len(), 2);
-        assert!(view.blocks[0].files[1].skim);
-        assert_eq!(view.loose_skim.len(), 1);
-        assert_eq!(view.loose_skim[0].path, "Cargo.lock");
-    }
-
-    #[test]
     fn a_mapped_file_the_comparison_no_longer_holds_is_not_offered_at_all() {
         // The base moved under the map — a merge, typically. The map still
         // names the file, git no longer does, and offering it anyway left the
         // pane asking for a diff the server refuses and loading forever.
-        let mut map = map_of(&[("one", "a.rs"), ("one", "gone.rs")]);
-        map.add_skim("skimmed_away.rs", "generated", Some(slug("one")))
-            .unwrap();
-        map.add_skim("loose_gone.rs", "generated", None).unwrap();
+        let map = map_of(&[("one", "a.rs"), ("one", "gone.rs")]);
 
         let view = built(
             &map,
@@ -339,7 +270,6 @@ mod tests {
 
         let paths: Vec<_> = view.blocks[0].files.iter().map(|f| &f.path).collect();
         assert_eq!(paths, vec!["a.rs"]);
-        assert!(view.loose_skim.is_empty());
         assert_eq!(view.total_files, 1);
         assert!(view.unmapped.is_empty());
     }
@@ -354,7 +284,6 @@ mod tests {
         let view = built(&map, FakeDiffSource::with_paths(&[]), &Progress::new());
 
         assert!(view.blocks.is_empty(), "{:?}", view.blocks);
-        assert!(view.loose_skim.is_empty());
         assert_eq!((view.total_files, view.viewed_files), (0, 0));
     }
 
@@ -386,45 +315,6 @@ mod tests {
         let view = built(&map, FakeDiffSource::with_paths(&["a.rs"]), &progress);
 
         assert_eq!(view.first_unread, None);
-    }
-
-    #[test]
-    fn loose_skim_is_reached_last_and_can_be_where_the_reader_resumes() {
-        // It sits at the bottom of the page, so it is the last thing left to
-        // read — and the only thing left once the blocks are done.
-        let mut map = map_of(&[("one", "a.rs")]);
-        map.add_skim("Cargo.lock", "generated", None).unwrap();
-        let mut progress = Progress::new();
-        progress.mark("a.rs", "hash-of-a.rs", "now");
-
-        let view = built(
-            &map,
-            FakeDiffSource::with_paths(&["a.rs", "Cargo.lock"]),
-            &progress,
-        );
-
-        assert_eq!(view.first_unread.as_deref(), Some("Cargo.lock"));
-    }
-
-    #[test]
-    fn skim_attached_to_a_block_counts_towards_finishing_it() {
-        // A skimmed file is still a file the reader ticks off, and the progress
-        // over the whole review counts it. A block that left it out would sit
-        // at done while a row under it was unticked.
-        let mut map = map_of(&[("one", "a.rs")]);
-        map.add_skim("gen.lock", "generated", Some(slug("one")))
-            .unwrap();
-
-        let view = built(
-            &map,
-            FakeDiffSource::with_paths(&["a.rs", "gen.lock"]),
-            &Progress::new(),
-        );
-
-        assert_eq!(
-            (view.blocks[0].total_files, view.blocks[0].viewed_files),
-            (2, 0)
-        );
     }
 
     #[test]
@@ -479,47 +369,6 @@ mod tests {
     }
 
     #[test]
-    fn a_file_marked_skim_inside_a_block_it_already_appears_in_is_not_listed_twice() {
-        // The reviewer would otherwise meet the same path twice in one block,
-        // once to read and once to skim.
-        let mut map = map_of(&[("first", "a.rs")]);
-        map.add_skim("a.rs", "mostly generated", Some(slug("first")))
-            .unwrap();
-
-        let view = built(
-            &map,
-            FakeDiffSource::with_paths(&["a.rs"]),
-            &Progress::new(),
-        );
-
-        let first = &view.blocks[0];
-        assert_eq!(
-            first.files.iter().filter(|f| f.path == "a.rs").count(),
-            1,
-            "{:?}",
-            first.files.iter().map(|f| &f.path).collect::<Vec<_>>()
-        );
-    }
-
-    #[test]
-    fn a_loose_skim_entry_already_read_in_a_block_does_not_reappear_at_the_bottom() {
-        let mut map = map_of(&[("first", "a.rs")]);
-        map.add_skim("a.rs", "mostly generated", None).unwrap();
-
-        let view = built(
-            &map,
-            FakeDiffSource::with_paths(&["a.rs"]),
-            &Progress::new(),
-        );
-
-        assert!(
-            !view.loose_skim.iter().any(|f| f.path == "a.rs"),
-            "it was already placed inside the block: {:?}",
-            view.loose_skim.iter().map(|f| &f.path).collect::<Vec<_>>()
-        );
-    }
-
-    #[test]
     fn line_notes_arrive_in_the_order_the_reader_meets_them() {
         // They are written in whatever order the session thought of them; the
         // screen shows them going down the file.
@@ -550,12 +399,14 @@ mod tests {
     }
 
     #[test]
-    fn with_lenses_written_every_file_starts_folded_and_carries_its_own_lens() {
+    fn with_lenses_written_only_a_file_worth_a_closer_look_starts_open() {
         use crate::lenses::application::LensReading;
         use crate::lenses::domain::{
             Covered, Freshness, LensAnswer, LensCatalog, LensId, LensTarget,
         };
-        let map = map_of(&[("core", "a.rs"), ("core", "b.rs")]);
+        let mut map = map_of(&[("core", "a.rs"), ("core", "b.rs")]);
+        map.look(&slug("core"), "b.rs", Some("dense".into()))
+            .unwrap();
         let source = FakeDiffSource::with_paths(&["a.rs", "b.rs"]);
         let scope = source.scope().unwrap().clone();
         let blob = |p: &str| scope.change(p).unwrap().content_hash.clone();
@@ -571,7 +422,6 @@ mod tests {
                 blob: blob("a.rs"),
             }],
             prompt_hash: "p".into(),
-            read: vec!["b.rs".into()],
             citations: vec![],
         };
         let reading = LensReading {
@@ -591,11 +441,15 @@ mod tests {
 
         let files = &view.blocks[0].files;
         assert!(
-            files.iter().all(|f| f.folded),
-            "once lenses are written no file is shown until it is opened"
+            files[0].folded,
+            "once lenses are written a file is not shown until it is opened"
         );
+        assert!(
+            !files[1].folded,
+            "unless the map says it is worth a closer look"
+        );
+        assert_eq!(files[1].look.as_deref(), Some("dense"));
         assert_eq!(files[0].lenses[0].title, "Tests");
-        assert_eq!(files[1].read_yourself.as_deref(), Some("Tests"));
         let pr: Vec<_> = view
             .lenses
             .iter()

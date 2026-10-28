@@ -212,7 +212,7 @@ mod tests {
             .into_iter()
             .map(|l| l.id.to_string())
             .collect();
-        assert_eq!(on, vec!["overview", "risk", "evidence", "tests"]);
+        assert_eq!(on, vec!["overview", "risk", "evidence", "summary", "tests"]);
         assert_eq!(
             serde_json::to_value(&catalog).unwrap(),
             serde_json::json!({})

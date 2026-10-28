@@ -66,9 +66,6 @@ pub(super) enum LensAction {
         /// lens does not apply here.
         #[arg(long, allow_hyphen_values = true)]
         text: String,
-        /// A file a person should read themselves. Repeat for several.
-        #[arg(long = "read")]
-        read: Vec<String>,
     },
 }
 
@@ -136,18 +133,12 @@ impl LensAction {
                 println!("Kept lens '{}' on {}.", answer.lens, answer.target);
                 Ok(())
             }
-            Self::Write {
-                lens,
-                target,
-                text,
-                read,
-            } => {
+            Self::Write { lens, target, text } => {
                 let ctx = scope.open()?;
                 let aim = target.aim(&ctx)?;
-                let read = ctx.scope.paths(&read)?;
                 let answer = ctx
                     .write_answer
-                    .execute(&LensId::parse(&lens)?, aim, text, read)?;
+                    .execute(&LensId::parse(&lens)?, aim, text)?;
                 println!("Wrote lens '{}' on {}.", answer.lens, answer.target);
                 Ok(())
             }
