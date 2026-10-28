@@ -30,6 +30,7 @@ describe("telling the files in the sidebar apart", () => {
       citations: [],
       target: { kind: "pr" as const },
       seen,
+      open: null,
     });
     const r = review([block("first", ["a.rs"], { lenses: [lens("Architecture", false)] })]);
     r.lenses = [lens("Overview", true)];

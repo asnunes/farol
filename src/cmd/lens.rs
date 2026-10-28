@@ -5,7 +5,7 @@ use clap::Subcommand;
 
 use super::{Ctx, ScopeArgs};
 use crate::error::Result;
-use crate::lenses::application::Aim;
+use crate::lenses::application::{Aim, Said};
 use crate::lenses::domain::{LensGroup, LensId};
 use crate::lenses::presentation::{AnswerReport, CatalogReport, PendingReport};
 use crate::map::domain::Slug;
@@ -66,6 +66,10 @@ pub(super) enum LensAction {
         /// lens does not apply here.
         #[arg(long, allow_hyphen_values = true)]
         text: String,
+        /// Open the file's code, saying what the reader will see there. File
+        /// lenses only, and the exception: most answers leave the code folded.
+        #[arg(long, allow_hyphen_values = true)]
+        open: Option<String>,
     },
 }
 
@@ -133,12 +137,17 @@ impl LensAction {
                 println!("Kept lens '{}' on {}.", answer.lens, answer.target);
                 Ok(())
             }
-            Self::Write { lens, target, text } => {
+            Self::Write {
+                lens,
+                target,
+                text,
+                open,
+            } => {
                 let ctx = scope.open()?;
                 let aim = target.aim(&ctx)?;
-                let answer = ctx
-                    .write_answer
-                    .execute(&LensId::parse(&lens)?, aim, text)?;
+                let answer =
+                    ctx.write_answer
+                        .execute(&LensId::parse(&lens)?, aim, Said { text, open })?;
                 println!("Wrote lens '{}' on {}.", answer.lens, answer.target);
                 Ok(())
             }

@@ -70,6 +70,7 @@ function FileLens({ lens, path, onCite }: FileLensProps) {
           {shown ? <Eye className="size-3.5" aria-hidden="true" /> : <EyeOff className="size-3.5" aria-hidden="true" />}
         </Button>
       </div>
+      {lens.open && <p className="opens font-sans text-xs text-highlight">Open: {lens.open}</p>}
       {shown && (
         <LensText
           className="font-serif text-sm leading-relaxed text-ink-soft"

@@ -1,11 +1,12 @@
 //! The lenses farol ships.
 //!
-//! Four are on, one for each thing "Solving code review at Anthropic" says
-//! stays with a person once machines do most of the reading: deciding whether
-//! the change should exist, reviewing the risky code and the patterns others
-//! will copy, and reading the evidence. Summary says in a line or three what
-//! each file does, and Tests lists the cases, both so a file can be judged
-//! without opening it. Each prompt asks for a few
+//! Three are on for the pull request, one for each thing "Solving code review
+//! at Anthropic" says stays with a person once machines do most of the
+//! reading: deciding whether the change should exist, reviewing the risky code
+//! and the patterns others will copy, and reading the evidence. Summary says
+//! in a line or three what each file does, and Tests lists the cases, both so
+//! a file can be judged without opening it; Smell is the one that exists to
+//! open a file, and is empty on most. Each prompt asks for a few
 //! lines, because lenses that take as long to read as the code have failed.
 
 use super::{LensDefinition, LensGroup, LensId};
@@ -59,7 +60,7 @@ pub(super) const BUILT_IN: &[BuiltIn] = &[
         id: "summary",
         title: "Summary",
         group: LensGroup::File,
-        prompt: "Write this for every file in the review whose change takes reading. In one to three short lines, say what the file does in this change, as plainly as: \"Defines the structs X and Y\", or \"Defines the use case Z, which: 1. … 2. … 3. …\". No more than it takes to know whether to open the file. Write an empty text when the diff is a few lines that say it by themselves: a summary is never longer than the change it summarizes.",
+        prompt: "Write this for every file in the review whose change takes reading. In one to three short lines, say what the file does in this change, as plainly as: \"Defines the structs X and Y\", or \"Defines the use case Z, which: 1. … 2. … 3. …\". No more than it takes to know whether to open the file. Write an empty text when the diff is a few lines that say it by themselves: a summary is never longer than the change it summarizes. Pass --open '<why>' only when the code has a particularity these lines cannot carry and the reviewer should see it: an ordering, a boundary condition, a trick that works for a subtle reason. Name it in the why. Most files have none.",
         enabled: true,
     },
     BuiltIn {
@@ -67,6 +68,13 @@ pub(super) const BUILT_IN: &[BuiltIn] = &[
         title: "Tests",
         group: LensGroup::File,
         prompt: "Write this for each file in the review that has tests, including a source file with tests inside it. List the tests this change adds or changes in that file, one sentence of behaviour each, with its line, so the reviewer learns the cases without reading the test code. Write an empty text for a file without tests.",
+        enabled: true,
+    },
+    BuiltIn {
+        id: "smell",
+        title: "Smell",
+        group: LensGroup::File,
+        prompt: "Only for a file whose code has a smell the reviewer should see before approving: duplicated logic, a responsibility in the wrong layer, a hidden coupling, an abstraction with one use, a rule broken from CLAUDE.md or AGENTS.md. One line per smell, with its line, and always pass --open '<the smell, in a few words>'. Write an empty text for every other file; style and naming are not smells.",
         enabled: true,
     },
     BuiltIn {

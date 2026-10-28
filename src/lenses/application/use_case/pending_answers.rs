@@ -120,8 +120,8 @@ mod tests {
             svc.versions.clone(),
         );
         let before = pending.execute().unwrap();
-        // overview, risk, evidence once; summary and tests for each of the two files.
-        assert_eq!(before.len(), 7);
+        // overview, risk, evidence once; summary, tests and smell for each of the two files.
+        assert_eq!(before.len(), 9);
 
         WriteAnswer::new(
             catalog,
@@ -135,14 +135,14 @@ mod tests {
         .execute(
             &LensId::parse("tests").unwrap(),
             Aim::File(scope.path("a.rs").unwrap()),
-            String::new(),
+            String::new().into(),
         )
         .unwrap();
 
         let after = pending.execute().unwrap();
         assert_eq!(
             after.len(),
-            6,
+            8,
             "an empty answer says the lens does not apply, and is not asked again"
         );
         assert!(after.iter().all(|p| p.why == Why::Missing));

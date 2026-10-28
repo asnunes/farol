@@ -45,7 +45,11 @@ impl WriteAnswer {
         }
     }
 
-    pub fn execute(&self, id: &LensId, aim: Aim, text: String) -> Result<LensAnswer> {
+    pub fn execute(&self, id: &LensId, aim: Aim, said: Said) -> Result<LensAnswer> {
+        let Said { text, open } = said;
+        let open = open
+            .map(|why| why.trim().to_string())
+            .filter(|why| !why.is_empty());
         let lens = self.catalog.read()?.require(id)?.definition;
         let map = self.versions.require_current()?;
         let target = match (lens.group, aim) {
@@ -65,6 +69,14 @@ impl WriteAnswer {
             },
             (group, _) => return Err(wrong_target(id, group).into()),
         };
+        if open.is_some() {
+            if !matches!(target, LensTarget::File { .. }) {
+                return Err(LensError::OpensOnlyFiles { id: id.to_string() }.into());
+            }
+            if text.trim().is_empty() {
+                return Err(LensError::OpensWithNothing { id: id.to_string() }.into());
+            }
+        }
         if let Some(there) = self.answers.find(id, &target)?
             && there.target != target
         {
@@ -87,6 +99,7 @@ impl WriteAnswer {
                 scope.head_sha.clone()
             },
             prompt_hash: lens.prompt_hash(),
+            open,
         };
         self.answers.write(&answer)?;
         Ok(answer)
@@ -139,6 +152,26 @@ fn wrong_target(id: &LensId, group: LensGroup) -> LensError {
         id: id.to_string(),
         wants,
         hint,
+    }
+}
+
+/// What the session says in an answer: the text, and whether the reader
+/// should open the file to see it for themselves.
+#[derive(Debug, Clone, Default)]
+pub struct Said {
+    pub text: String,
+    pub open: Option<String>,
+}
+
+impl From<String> for Said {
+    fn from(text: String) -> Self {
+        Self { text, open: None }
+    }
+}
+
+impl From<&str> for Said {
+    fn from(text: &str) -> Self {
+        text.to_string().into()
     }
 }
 
@@ -279,6 +312,40 @@ mod tests {
             answer.citations[1].side,
             Side::Old,
             "an old line is never held to the new file's length"
+        );
+    }
+
+    #[test]
+    fn only_a_file_lens_with_something_to_say_opens_its_file() {
+        let (write, _, scope) = setup();
+        let open = |text: &str| Said {
+            text: text.into(),
+            open: Some("the retry resends".into()),
+        };
+
+        let opened = write
+            .execute(
+                &id("smell"),
+                Aim::File(scope.path("a.rs").unwrap()),
+                open("- dup `a.rs:3`"),
+            )
+            .unwrap();
+        assert_eq!(opened.open.as_deref(), Some("the retry resends"));
+
+        let pr = write
+            .execute(&id("overview"), Aim::Pr, open("x"))
+            .unwrap_err();
+        assert!(pr.to_string().contains("only a file lens"), "{pr}");
+        let empty = write
+            .execute(
+                &id("smell"),
+                Aim::File(scope.path("b.rs").unwrap()),
+                open(""),
+            )
+            .unwrap_err();
+        assert!(
+            empty.to_string().contains("cannot open"),
+            "an empty answer says the lens does not apply, so it has nothing to show: {empty}"
         );
     }
 }

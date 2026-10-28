@@ -97,12 +97,15 @@ impl Display for AnswerReport<'_> {
         if answer.is_empty() {
             return writeln!(f, "(empty: the lens does not apply here)");
         }
+        if let Some(why) = &answer.open {
+            writeln!(f, "opens the file: {why}")?;
+        }
         writeln!(f, "\n{}", answer.text.trim())?;
         Ok(())
     }
 }
 
-const RULES: &str = "For an outdated lens, first check whether what it says still holds for the code as it is now: keep it if it does, rewrite it if not. Write each from what you know of the change, in the language of the map, for a reader who scans: the point first, in bold; then bullets of one line each, the key term of each in bold; no paragraph longer than two lines. Cite code in backticks as `path:from-to`, adding (old) for a removed line; a line that does not exist is refused. For a file lens, write an empty text for a file it does not apply to. Writing a lens changes no code: do not change, commit or publish anything while doing it.";
+const RULES: &str = "For an outdated lens, first check whether what it says still holds for the code as it is now: keep it if it does, rewrite it if not. Write each from what you know of the change, in the language of the map, for a reader who scans: the point first, in bold; then bullets of one line each, the key term of each in bold; no paragraph longer than two lines. Cite code in backticks as `path:from-to`, adding (old) for a removed line; a line that does not exist is refused. For a file lens, write an empty text for a file it does not apply to. A file lens may open its file with --open '<why>'; opening is the exception: use it only when reading the code could change whether the reviewer approves, and say what they will see there. A kept answer keeps its --open. Writing a lens changes no code: do not change, commit or publish anything while doing it.";
 
 fn written(group: LensGroup) -> &'static str {
     match group {

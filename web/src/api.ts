@@ -376,6 +376,8 @@ export type LensView = {
   target: LensTarget | null;
   /** Marked as seen, for this very answer. */
   seen: boolean;
+  /** Why the reader should see the file's code, when a file lens says so. */
+  open: string | null;
 };
 
 export type LensTarget = { kind: "pr" } | { kind: "block"; slug: string } | { kind: "file"; path: string };

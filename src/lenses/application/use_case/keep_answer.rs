@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::error::Result;
-use crate::lenses::application::{Aim, ShowAnswer, WriteAnswer};
+use crate::lenses::application::{Aim, Said, ShowAnswer, WriteAnswer};
 use crate::lenses::domain::{LensAnswer, LensAnswerRepository, LensError, LensId};
 
 /// Keep what a lens said, against the review as it is now.
@@ -29,7 +29,14 @@ impl KeepAnswer {
         let Some(answer) = self.show.execute(id, aim.clone())? else {
             return Err(LensError::NothingToKeep { id: id.to_string() }.into());
         };
-        self.write.execute(id, aim, answer.text)
+        self.write.execute(
+            id,
+            aim,
+            Said {
+                text: answer.text,
+                open: answer.open,
+            },
+        )
     }
 }
 

@@ -259,29 +259,38 @@ Do not invent a decision to fill an otherwise unexplained file.
 
 ## Put in focus what is worth opening
 
-On a review with lenses, every file starts folded: the reader learns
-the change from the lenses and opens the code when they want to check
-it. Put in focus the files that deserve to be opened anyway, and say
+On a review with lenses, a file a lens speaks about starts folded: the
+reader learns the change from the lenses and opens the code when they
+want to check it. Put in focus the files that deserve to be opened anyway, and say
 why:
 
     farol file focus <slug> <path> --reason '…'
     farol file unfocus <slug> <path>
 
-A file earns focus when reading its code pays: it holds the rule the
-change is about, it is dense enough that a summary loses what matters,
-or something in it is wrong in a way the reader should see for
-themselves. The reason names which, concretely, so the reader can
-decide whether to follow it:
+No file in focus is the default, and a map without focus is right. A
+file earns focus only when, after the lenses, reading its code could
+still change whether the reviewer approves:
+
+- it holds the rule the whole change rests on;
+- it has a subtlety a summary loses: ordering, concurrency, state, a
+  boundary;
+- a mistake in it is hard to undo: money, authentication, deleted data,
+  migrations.
+
+Size, being new, being a test, config or wiring never earns focus on
+their own. At most three per pull request and one per block; `farol map
+check` warns past that. The reason names which, concretely, so the
+reader can decide whether to follow it:
 
 - Vague: "Important file."
 - Concrete: "Holds the whole retry rule; the rest only calls it."
 - Vague: "Needs attention."
 - Concrete: "A retry here can resend a charge the provider accepted."
 
-Focus few. Focus on every file is no focus at all, and the point of the
-lenses is that reading them costs less than reading the code. Inspect a
-file before putting it in focus, and never do it to make up for a lens
-that explains it badly: fix the lens.
+Inspect a file before putting it in focus, and never do it to make up
+for a lens that explains it badly: fix the lens. A smell, or a
+particularity the summary cannot carry, is not focus: the file lens
+that saw it opens the file with `--open` (see Write the lenses).
 
 ## Write for someone arriving without context
 
@@ -408,7 +417,12 @@ reader who reads only the bold should already have the lens. Write them from wha
 knows, in the map's language. Cite code in backticks as `path:from-to`,
 adding `(old)` for a line the change removed; a cited line that does not
 exist is refused. A file lens is offered for every file in the review:
-write an empty text for a file it does not apply to.
+write an empty text for a file it does not apply to. A file lens may
+open its file with `--open '<why>'`, which is the exception: use it only
+when reading the code could change whether the reviewer approves, and
+say what they will see there. Smell always opens what it writes about;
+Summary opens only for a particularity its lines cannot carry. Files
+opened this way do not count against the focus limit.
 
 Lenses are where judgment goes. Unlike the map, a lens such as Risk or
 Evidence may assess the change, because the reviewer asked for it there.

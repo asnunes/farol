@@ -92,6 +92,7 @@ mod tests {
             }],
             prompt_hash: "p".into(),
             citations: vec![],
+            open: None,
         }
     }
 

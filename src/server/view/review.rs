@@ -158,8 +158,9 @@ pub struct FileView {
     pub lenses: Vec<LensView>,
     /// Whether its diff starts folded: when a lens says something about the
     /// file, the code is opened by the reader — unless the map puts the file
-    /// in focus. A file no lens speaks about shows its code: a change short
-    /// enough to need no summary is quicker read than opened.
+    /// in focus or a lens asks for it to be seen. A file no lens speaks about
+    /// shows its code: a change short enough to need no summary is quicker
+    /// read than opened.
     pub folded: bool,
 }
 
@@ -207,7 +208,9 @@ impl FileView {
             viewed,
             note,
             line_notes,
-            folded: focus.is_none() && file_lenses.iter().any(|l| l.state != "missing"),
+            folded: focus.is_none()
+                && file_lenses.iter().all(|l| l.open.is_none())
+                && file_lenses.iter().any(|l| l.state != "missing"),
             focus,
             lenses: file_lenses,
         }
@@ -425,10 +428,24 @@ mod tests {
             }],
             prompt_hash: "p".into(),
             citations: vec![],
+            open: None,
+        };
+        let smell = LensAnswer {
+            lens: LensId::parse("smell").unwrap(),
+            target: LensTarget::File {
+                path: "c.rs".into(),
+            },
+            text: "- duplicated rule".into(),
+            open: Some("the rule is written twice".into()),
+            covers: vec![Covered {
+                path: "c.rs".into(),
+                blob: blob("c.rs"),
+            }],
+            ..tests.clone()
         };
         let reading = LensReading {
             lenses: LensCatalog::default().enabled(),
-            answers: vec![(tests, Freshness::Written)],
+            answers: vec![(tests, Freshness::Written), (smell, Freshness::Written)],
         };
 
         let view = ReviewView::build(
@@ -449,7 +466,11 @@ mod tests {
         assert!(!files[1].folded, "unless the map puts it in focus");
         assert!(
             !files[2].folded,
-            "a file no lens speaks about shows its code, since nothing stands in for it"
+            "a lens that asks for the file to be seen opens it, as focus does"
+        );
+        assert_eq!(
+            files[2].lenses[0].open.as_deref(),
+            Some("the rule is written twice")
         );
         assert_eq!(files[1].focus.as_deref(), Some("dense"));
         assert_eq!(files[0].lenses[0].title, "Tests");

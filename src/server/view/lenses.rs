@@ -27,6 +27,8 @@ pub struct LensView {
     pub target: Option<LensTarget>,
     /// Marked as seen by the reader, for this very answer.
     pub seen: bool,
+    /// Why the reader should see the file's code, when a file lens says so.
+    pub open: Option<String>,
 }
 
 impl LensView {
@@ -46,6 +48,7 @@ impl LensView {
                 citations: Vec::new(),
                 target: None,
                 seen: false,
+                open: None,
             };
         };
         let (state, changed) = match freshness {
@@ -77,6 +80,7 @@ impl LensView {
                 .collect(),
             target: Some(answer.target.clone()),
             seen: progress.has_seen(&answer.seen_key(), &answer.fingerprint()),
+            open: answer.open.clone(),
         }
     }
 }

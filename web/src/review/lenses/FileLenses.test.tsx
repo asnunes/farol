@@ -14,6 +14,7 @@ const tests: LensView = {
   citations: [],
   target: { kind: "file", path: "src/a.rs" },
   seen: false,
+  open: null,
 };
 
 const none = () => {};
@@ -54,4 +55,16 @@ it("folds away with the code once the file is marked read", () => {
     <FileLenses file={file({ lenses: [tests], viewed: true })} open={false} onToggleOpen={none} onCite={none} />,
   );
   expect(container.innerHTML).toBe("");
+});
+
+it("says why a lens opens the file", () => {
+  render(
+    <FileLenses
+      file={file({ lenses: [{ ...tests, id: "smell", title: "Smell", open: "the rule is written twice" }] })}
+      open
+      onToggleOpen={none}
+      onCite={none}
+    />,
+  );
+  expect(screen.getByText("Open: the rule is written twice")).toBeTruthy();
 });

@@ -44,4 +44,12 @@ pub enum LensError {
         "lens answers for '{written}' and '{asked}' would share a file. Write it again; if this repeats, report it."
     )]
     Collision { written: String, asked: String },
+
+    #[error("only a file lens opens what it is about: drop --open for lens '{id}'.")]
+    OpensOnlyFiles { id: String },
+
+    #[error(
+        "an empty answer says lens '{id}' does not apply here, so it cannot open the file: write what the reader will see, or drop --open."
+    )]
+    OpensWithNothing { id: String },
 }

@@ -24,6 +24,10 @@ pub struct LensAnswer {
     pub prompt_hash: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub citations: Vec<Citation>,
+    /// Why the reader should see this file's code, when the lens says so. Only
+    /// a file lens opens its file, and only by saying what will be seen there.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub open: Option<String>,
 }
 
 impl LensAnswer {
@@ -130,6 +134,7 @@ mod tests {
             covers,
             prompt_hash: "p".into(),
             citations: vec![],
+            open: None,
         }
     }
 
