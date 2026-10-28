@@ -156,11 +156,9 @@ pub struct FileView {
     pub focus: Option<String>,
     /// The file's own lenses, drawn under its header.
     pub lenses: Vec<LensView>,
-    /// Whether its diff starts folded: when a lens says something about the
-    /// file, the code is opened by the reader — unless the map puts the file
-    /// in focus or a lens asks for it to be seen. A file no lens speaks about
-    /// shows its code: a change short enough to need no summary is quicker
-    /// read than opened.
+    /// Whether its diff starts folded: always, unless the map puts the file in
+    /// focus or a lens asks for it to be seen. The reader's time is what the
+    /// screen spends, and code nobody pointed at is not worth spending it on.
     pub folded: bool,
 }
 
@@ -208,9 +206,7 @@ impl FileView {
             viewed,
             note,
             line_notes,
-            folded: focus.is_none()
-                && file_lenses.iter().all(|l| l.open.is_none())
-                && file_lenses.iter().any(|l| l.state != "missing"),
+            folded: focus.is_none() && file_lenses.iter().all(|l| l.open.is_none()),
             focus,
             lenses: file_lenses,
         }

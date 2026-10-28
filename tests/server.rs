@@ -2127,8 +2127,8 @@ fn a_lens_written_from_the_cli_reaches_the_review_and_goes_outdated_when_its_fil
     assert_eq!(a["lenses"][0]["title"], "Tests");
     assert_eq!(a["folded"], false, "src/a.rs is in focus, so it stays open");
     assert_eq!(
-        review["blocks"][1]["files"][0]["folded"], false,
-        "a file no lens speaks about shows its code: nothing stands in for it"
+        review["blocks"][1]["files"][0]["folded"], true,
+        "code starts folded unless focus or a lens asks for it: the reader's time comes first"
     );
 
     s.repo.write("src/a.rs", &numbered(61));
