@@ -70,7 +70,7 @@
   --farol-ink-soft: light-dark(#3d444c, #bfc5cb);
   /* The two quiet inks are quiet for different reasons, and only one of them
      has words in it. `muted` carries meaning nobody may be asked to guess at —
-     the directory that tells two `mod.rs` apart, a skim marker, a line number,
+     the directory that tells two `mod.rs` apart, a closer-look marker, a line number,
      the band that says the file jumps — so it is held at 4.5:1 against every
      surface it lands on, the selected row and the wash under a drag included,
      which is where it used to sit at 3.9:1. `faint` is left for icons, which

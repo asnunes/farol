@@ -57,33 +57,6 @@ export function Sidebar({
         />
       ))}
 
-      {review.looseSkim.length > 0 && (
-        <section className="blk mb-4 px-3" data-state="loose">
-          <div className="blk-head flex items-center gap-2 px-2">
-            <div
-              aria-hidden="true"
-              className="num loose grid size-5 shrink-0 place-items-center rounded-full bg-sunken font-mono text-[0.6875rem] text-ink-muted"
-            >
-              ~
-            </div>
-            <div className="blk-title loose truncate font-sans text-[0.8125rem] text-ink-muted italic">
-              No block · safe to skim
-            </div>
-          </div>
-          <ul className="blk-files mt-1">
-            {review.looseSkim.map((f) => (
-              <FileRow
-                key={f.path}
-                file={f}
-                label={label(f.path)}
-                comments={comments(f.path).length}
-                current={current}
-                onPick={onPick}
-              />
-            ))}
-          </ul>
-        </section>
-      )}
     </aside>
   );
 }

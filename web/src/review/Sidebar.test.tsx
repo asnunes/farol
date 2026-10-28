@@ -81,10 +81,8 @@ describe("telling the files in the sidebar apart", () => {
     expect(named("src/diff/domain/mod.rs").textContent).toContain("diff/domain");
   });
 
-  it("keeps the reason a file can be skimmed, next to its path", async () => {
-    show(
-      review([], [file("src/gen/schema.rs", { skim: true, skimReason: "generated" })]),
-    );
+  it("keeps why a file is worth a closer look, next to its path", async () => {
+    show(review([{ ...block("one", []), files: [file("src/gen/schema.rs", { look: "generated" })] }]));
 
     fireEvent.focus(named("src/gen/schema.rs"));
 
@@ -194,11 +192,9 @@ function file(path: string, over: Partial<FileView> = {}): FileView {
     viewed: false,
     note: null,
     lineNotes: [],
-    skim: false,
-    skimReason: null,
+    look: null,
     lenses: [],
     folded: false,
-    readYourself: null,
     ...over,
   };
 }
@@ -220,19 +216,18 @@ function block(slug: string, paths: string[], over: Partial<BlockView> = {}): Bl
   };
 }
 
-function review(blocks: BlockView[], looseSkim: FileView[] = []): ReviewView {
+function review(blocks: BlockView[]): ReviewView {
   return {
     branch: "feature/x",
     base: "main",
     generatedAt: "abc1234",
     commitsBehind: 0,
     blocks,
-    looseSkim,
     unmapped: [],
-    totalFiles: blocks.flatMap((b) => b.files).length + looseSkim.length,
+    totalFiles: blocks.flatMap((b) => b.files).length,
     viewedFiles: 0,
     firstUnread:
-      [...blocks.flatMap((b) => b.files), ...looseSkim].find((f) => !f.viewed)?.path ?? null,
+      blocks.flatMap((b) => b.files).find((f) => !f.viewed)?.path ?? null,
     lenses: [],
   };
 }

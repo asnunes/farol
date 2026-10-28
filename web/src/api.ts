@@ -104,7 +104,6 @@ export function readingRows(review: ReviewView): ReadingRow[] {
       { block, number: i + 1 },
       ...block.files.map((file) => ({ file })),
     ]),
-    ...review.looseSkim.map((file) => ({ file })),
   ];
 }
 
@@ -137,7 +136,6 @@ export type ReviewView = {
   generatedAt: string;
   commitsBehind: number;
   blocks: BlockView[];
-  looseSkim: FileView[];
   unmapped: string[];
   totalFiles: number;
   viewedFiles: number;
@@ -172,14 +170,13 @@ export type FileView = {
   /** The note the block wrote for this file, if it wrote one. */
   note: string | null;
   lineNotes: LineNoteView[];
-  skim: boolean;
-  skimReason: string | null;
+  /** Why the map says this file is worth a closer look, when it does. */
+  look: string | null;
   /** The file's own lenses, drawn under its header. */
   lenses: LensView[];
-  /** The session wrote lenses on this review, so its diff starts folded. */
+  /** The session wrote lenses on this review and the file is not worth a
+   * closer look, so its diff starts folded. */
   folded: boolean;
-  /** The lens asking a person to read this file themselves. */
-  readYourself: string | null;
 };
 
 /** A note pinned to a span of lines on the new side. */

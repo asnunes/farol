@@ -79,9 +79,6 @@ export function FileSection({
 
       {!open ? null : (
         <>
-          {file.skim && file.skimReason && (
-            <FileNote>Safe to skim — {file.skimReason}</FileNote>
-          )}
           {file.note && (
             <FileNote>
               <Prose className="min-w-0 flex-1">{file.note}</Prose>

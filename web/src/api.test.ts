@@ -10,11 +10,9 @@ function file(path: string, viewed = false): FileView {
     viewed,
     note: null,
     lineNotes: [],
-    skim: false,
-    skimReason: null,
+    look: null,
     lenses: [],
     folded: false,
-    readYourself: null,
   };
 }
 
@@ -30,9 +28,8 @@ function review(): ReviewView {
       { slug: "two", title: "Second", context: "", lenses: [], files: [file("c.rs")],
         totalFiles: 1, viewedFiles: 0 },
     ],
-    looseSkim: [file("Cargo.lock")],
     unmapped: [],
-    totalFiles: 4,
+    totalFiles: 3,
     viewedFiles: 1,
     firstUnread: "b.rs",
     lenses: [],
@@ -40,14 +37,13 @@ function review(): ReviewView {
 }
 
 describe("reading order", () => {
-  it("walks blocks in order and puts loose skim last", () => {
+  it("walks blocks in order", () => {
     // The order the keyboard moves through has to match the order on screen,
     // or j/k would jump around.
     expect(readingOrder(review()).map((f) => f.path)).toEqual([
       "a.rs",
       "b.rs",
       "c.rs",
-      "Cargo.lock",
     ]);
   });
 
@@ -57,13 +53,13 @@ describe("reading order", () => {
     expect(next?.path).toBe("b.rs");
   });
 
-  it("announces each block above the files it holds, and ends on loose skim", () => {
+  it("announces each block above the files it holds", () => {
     // What the pane draws. It used to assemble this itself, and the comment on
     // the test above — that the keys and the screen have to agree — was a hope
     // rather than something the code held to.
     expect(
       readingRows(review()).map((row) => ("file" in row ? row.file.path : `[${row.block.slug}]`)),
-    ).toEqual(["[one]", "a.rs", "b.rs", "[two]", "c.rs", "Cargo.lock"]);
+    ).toEqual(["[one]", "a.rs", "b.rs", "[two]", "c.rs"]);
   });
 
   it("walks the keys through exactly the files the page draws", () => {
@@ -86,8 +82,7 @@ describe("block lookup", () => {
     expect(blockOf(r, "c.rs")?.block.title).toBe("Second");
   });
 
-  it("returns nothing for a file that only appears in loose skim", () => {
-    // It still renders, it just has no block band above it.
+  it("returns nothing for a file no block reads", () => {
     expect(blockOf(review(), "Cargo.lock")).toBeNull();
   });
 });
