@@ -4,7 +4,8 @@ use serde::Serialize;
 
 use crate::diff::domain::Side;
 use crate::lenses::application::Lensed;
-use crate::lenses::domain::Freshness;
+use crate::lenses::domain::{Freshness, LensTarget};
+use crate::progress::domain::Progress;
 use crate::shared::{WORKING, short};
 
 /// One lens on one target, and what it said.
@@ -22,16 +23,18 @@ pub struct LensView {
     pub changed: usize,
     /// The citations that can be followed, exactly as they appear in the text.
     pub citations: Vec<CitationView>,
+    /// What it is written about, sent back to mark it seen.
+    pub target: Option<LensTarget>,
+    /// Marked as seen by the reader, for this very answer.
+    pub seen: bool,
 }
 
 impl LensView {
-    pub fn all(lensed: Vec<Lensed<'_>>) -> Vec<Self> {
-        lensed.into_iter().map(Self::from).collect()
+    pub fn all(lensed: Vec<Lensed<'_>>, progress: &Progress) -> Vec<Self> {
+        lensed.into_iter().map(|l| Self::of(l, progress)).collect()
     }
-}
 
-impl From<Lensed<'_>> for LensView {
-    fn from(lensed: Lensed<'_>) -> Self {
+    fn of(lensed: Lensed<'_>, progress: &Progress) -> Self {
         let Some((answer, freshness)) = lensed.answer else {
             return Self {
                 id: lensed.lens.id.to_string(),
@@ -41,6 +44,8 @@ impl From<Lensed<'_>> for LensView {
                 written_at: None,
                 changed: 0,
                 citations: Vec::new(),
+                target: None,
+                seen: false,
             };
         };
         let (state, changed) = match freshness {
@@ -70,6 +75,8 @@ impl From<Lensed<'_>> for LensView {
                     to: c.to,
                 })
                 .collect(),
+            target: Some(answer.target.clone()),
+            seen: progress.has_seen(&answer.seen_key(), &answer.fingerprint()),
         }
     }
 }

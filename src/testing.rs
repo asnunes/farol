@@ -472,6 +472,10 @@ pub fn server_use_cases_over(
     );
     crate::cmd::ServerUseCases {
         scope: crate::map::application::GetScope::new(scope.clone()),
+        see_lens: crate::lenses::application::SeeLens::new(
+            Arc::new(InMemoryLensAnswers::default()),
+            progress.clone(),
+        ),
         review: crate::lenses::application::GetReviewWithLenses::new(
             review,
             Arc::new(InMemoryLensCatalog::default()),

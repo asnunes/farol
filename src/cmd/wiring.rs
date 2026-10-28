@@ -24,7 +24,7 @@ use crate::diff::infra::{GixSource, ScopeRequest};
 use crate::error::Result;
 use crate::lenses::application::{
     AddLens, DeleteLens, DisableLens, EnableLens, GetReviewWithLenses, KeepAnswer, ListLenses,
-    PendingAnswers, ShowAnswer, UpdateLens, WriteAnswer,
+    PendingAnswers, SeeLens, ShowAnswer, UpdateLens, WriteAnswer,
 };
 use crate::lenses::domain::LensCatalogRepository;
 use crate::lenses::infra::{JsonLensAnswers, JsonLensCatalog};
@@ -98,6 +98,7 @@ pub struct Ctx {
 pub struct ServerUseCases {
     pub scope: GetScope,
     pub review: GetReviewWithLenses,
+    pub see_lens: SeeLens,
     pub file_diff: GetFileDiff,
     pub file_lines: GetFileLines,
     pub mark_viewed: MarkViewed,
@@ -266,6 +267,7 @@ impl Ctx {
 
             server: serving.map(|serving| ServerUseCases {
                 scope: GetScope::new(scope.clone()),
+                see_lens: SeeLens::new(lens_answers.clone(), progress.clone()),
                 review: GetReviewWithLenses::new(
                     GetReview::new(versions, scope, progress.clone()),
                     lens_catalog,

@@ -47,6 +47,17 @@ impl LensAnswer {
         }
     }
 
+    /// What a seen mark is pinned to: the words and when they were written,
+    /// so a rewrite or a keep after a commit asks to be read again.
+    pub fn fingerprint(&self) -> String {
+        stable_hash(&format!("{}\0{}", self.written_at, self.text))
+    }
+
+    /// Where a seen mark is kept for this answer.
+    pub fn seen_key(&self) -> String {
+        format!("{}/{}", self.lens, self.target.file_name())
+    }
+
     pub fn is_empty(&self) -> bool {
         self.text.trim().is_empty()
     }

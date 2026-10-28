@@ -36,6 +36,19 @@ impl ProgressStore {
         Ok(paths)
     }
 
+    /// Mark a lens answer as seen, or take the mark back. A service operation
+    /// and not a use case of its own: which answer and which fingerprint is
+    /// the lenses' business, and their use case decides it.
+    pub fn see_lens(&self, key: &str, fingerprint: Option<&str>, at: &str) -> Result<Progress> {
+        let mut progress = self.load()?;
+        match fingerprint {
+            Some(fingerprint) => progress.see(key, fingerprint, at),
+            None => progress.unsee(key),
+        }
+        self.save(&progress)?;
+        Ok(progress)
+    }
+
     fn save(&self, progress: &Progress) -> Result<()> {
         self.repo.save(progress)
     }

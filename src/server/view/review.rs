@@ -108,7 +108,7 @@ impl ReviewView {
                 slug: block.slug.to_string(),
                 title: block.title.clone(),
                 context: block.context.clone(),
-                lenses: LensView::all(lenses.for_block(&block.slug)),
+                lenses: LensView::all(lenses.for_block(&block.slug), progress),
                 files,
                 total_files: held.len(),
                 viewed_files,
@@ -166,7 +166,7 @@ impl ReviewView {
             total_files,
             viewed_files,
             first_unread,
-            lenses: LensView::all(lenses.for_pr()),
+            lenses: LensView::all(lenses.for_pr(), progress),
         }
     }
 }
@@ -255,7 +255,7 @@ impl FileView {
             line_notes,
             skim,
             skim_reason,
-            lenses: LensView::all(lenses.for_file(path)),
+            lenses: LensView::all(lenses.for_file(path), progress),
             folded: lenses.speaks(),
             read_yourself: lenses.read_yourself(path).map(str::to_string),
         }

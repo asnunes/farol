@@ -316,6 +316,11 @@ fn foreign_origins_cannot_change_state_or_start_publication() {
         ),
         ("PUT", "/api/lenses/overview", r#"{"enabled":false}"#),
         ("DELETE", "/api/lenses/overview", ""),
+        (
+            "POST",
+            "/api/lenses/seen",
+            r#"{"lens":"overview","target":{"kind":"pr"},"seen":true}"#,
+        ),
         ("POST", "/api/comments/nonexistent/generate", "{}"),
         (
             "POST",
@@ -2148,6 +2153,20 @@ fn a_lens_written_from_the_cli_reaches_the_review_and_goes_outdated_when_its_fil
         "a kept lens is in date again"
     );
     assert_eq!(review["lenses"][0]["text"], "It fixes `src/a.rs:10-12`.");
+    let (status, body) = s.probe(
+        "POST",
+        "/api/lenses/seen",
+        Some(r#"{"lens":"overview","target":{"kind":"pr"},"seen":true}"#),
+    );
+    assert_eq!(status, 204, "{body}");
+    assert_eq!(s.json("/api/review")["lenses"][0]["seen"], true);
+    s.repo
+        .ok(&["lens", "write", "overview", "--text", "Rewritten."]);
+    assert_eq!(
+        s.json("/api/review")["lenses"][0]["seen"],
+        false,
+        "a lens the session rewrote asks to be read again"
+    );
 }
 
 #[test]

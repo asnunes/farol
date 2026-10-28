@@ -21,6 +21,19 @@ pub struct Progress {
     pub version: u32,
     #[serde(default)]
     pub viewed: Vec<ViewedFile>,
+    /// Lenses the reviewer marked as seen, each pinned to the answer it had.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub lenses: Vec<SeenLens>,
+}
+
+/// A lens answer the reviewer has read. Pinned to the answer's fingerprint,
+/// so a lens the session rewrites comes back unseen, the way a file that
+/// changed comes back unread.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SeenLens {
+    pub key: String,
+    pub fingerprint: String,
+    pub at: String,
 }
 
 impl Progress {
@@ -28,6 +41,7 @@ impl Progress {
         Self {
             version: PROGRESS_VERSION,
             viewed: Vec::new(),
+            lenses: Vec::new(),
         }
     }
 
@@ -56,6 +70,26 @@ impl Progress {
 
     pub fn unmark(&mut self, path: &str) {
         self.viewed.retain(|v| v.path != path);
+    }
+
+    /// Seen, and still the same answer.
+    pub fn has_seen(&self, key: &str, fingerprint: &str) -> bool {
+        self.lenses
+            .iter()
+            .any(|l| l.key == key && l.fingerprint == fingerprint)
+    }
+
+    pub fn see(&mut self, key: &str, fingerprint: &str, at: &str) {
+        self.lenses.retain(|l| l.key != key);
+        self.lenses.push(SeenLens {
+            key: key.into(),
+            fingerprint: fingerprint.into(),
+            at: at.into(),
+        });
+    }
+
+    pub fn unsee(&mut self, key: &str) {
+        self.lenses.retain(|l| l.key != key);
     }
 
     /// How many of `paths` are read at their current hash.

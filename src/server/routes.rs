@@ -34,6 +34,7 @@ pub(super) fn router(state: Arc<AppState>) -> Router {
         .route("/api/file", get(review::file))
         .route("/api/lines", get(review::lines))
         .route("/api/viewed", post(review::viewed))
+        .route("/api/lenses/seen", post(lenses::seen))
         .route(
             "/api/comments",
             get(threads::comments).post(threads::write_comment),

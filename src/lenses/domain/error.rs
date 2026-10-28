@@ -37,7 +37,7 @@ pub enum LensError {
         lines: u32,
     },
 
-    #[error("lens '{id}' has nothing written here to keep. Write it with farol lens write.")]
+    #[error("lens '{id}' has nothing written here yet. Write it with farol lens write.")]
     NothingToKeep { id: String },
 
     #[error(

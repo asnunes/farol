@@ -2,15 +2,17 @@
 
 use std::sync::Arc;
 
-use axum::Json;
 use axum::extract::{Path, State};
+use axum::http::StatusCode;
 use axum::response::IntoResponse;
+use axum::{Extension, Json};
 use serde::{Deserialize, Serialize};
 
 use super::super::AppState;
-use super::fail;
+use super::{away, fail};
+use crate::cmd::ServerUseCases;
 use crate::error::Result;
-use crate::lenses::domain::{LensCatalog, LensGroup, LensId};
+use crate::lenses::domain::{LensCatalog, LensGroup, LensId, LensTarget};
 
 pub(super) async fn list(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     answer(state.preferences.list_lenses.execute())
@@ -76,6 +78,22 @@ pub(super) async fn delete(
     }
 }
 
+/// The reader marking a lens as seen, or taking the mark back.
+pub(super) async fn seen(
+    Extension(cases): Extension<ServerUseCases>,
+    Json(body): Json<SeenBody>,
+) -> impl IntoResponse {
+    let id = match LensId::parse(&body.lens) {
+        Ok(id) => id,
+        Err(e) => return fail(e.into()),
+    };
+    let at = super::review::now();
+    match away(move || cases.see_lens.execute(&id, &body.target, body.seen, &at)).await {
+        Ok(()) => StatusCode::NO_CONTENT.into_response(),
+        Err(e) => fail(e),
+    }
+}
+
 /// Every change answers with the catalog as it now stands, so the panel
 /// redraws from the server rather than guessing.
 fn answer(outcome: Result<LensCatalog>) -> axum::response::Response {
@@ -83,6 +101,14 @@ fn answer(outcome: Result<LensCatalog>) -> axum::response::Response {
         Ok(catalog) => Json(CatalogView::from(&catalog)).into_response(),
         Err(e) => fail(e),
     }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct SeenBody {
+    lens: String,
+    target: LensTarget,
+    seen: bool,
 }
 
 #[derive(Deserialize)]
