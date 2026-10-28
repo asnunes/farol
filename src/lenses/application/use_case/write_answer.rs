@@ -69,6 +69,7 @@ impl WriteAnswer {
             },
             (group, _) => return Err(wrong_target(id, group).into()),
         };
+        lens.hold_to_length(&text)?;
         if open.is_some() {
             if !matches!(target, LensTarget::File { .. }) {
                 return Err(LensError::OpensOnlyFiles { id: id.to_string() }.into());

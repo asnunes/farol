@@ -26,6 +26,11 @@ impl Display for PendingReport<'_> {
                     written(pending.lens.group)
                 )?;
                 writeln!(f, "  asks: {}", pending.lens.prompt)?;
+                writeln!(
+                    f,
+                    "  limit: {} lines, refused past it",
+                    pending.lens.max_lines()
+                )?;
                 last = Some(&pending.lens.id);
             }
             let (id, at) = (&pending.lens.id, flag(&pending.target));
@@ -105,7 +110,7 @@ impl Display for AnswerReport<'_> {
     }
 }
 
-const RULES: &str = "For an outdated lens, first check whether what it says still holds for the code as it is now: keep it if it does, rewrite it if not. Write each from what you know of the change, in the language of the map, for a reader who scans: the point first, in bold; then bullets of one line each, the key term of each in bold; no paragraph longer than two lines; one item per bullet, never a list chained with semicolons. Cite code in backticks as `path:from-to`, adding (old) for a removed line; a line that does not exist is refused. For a file lens, write an empty text for a file it does not apply to. A file lens may open its file with --open '<why>'; opening is the exception: use it only when reading the code could change whether the reviewer approves, and say what they will see there. A kept answer keeps its --open. Writing a lens changes no code: do not change, commit or publish anything while doing it.";
+const RULES: &str = "A lens exists to save the reader time. If reading it takes anywhere near as long as reading the code, it failed, and the reader you were writing for paid for it. Write the least that lets them decide: every lens has a hard limit of lines, and lines of at most 140 characters, which farol lens write refuses to pass; aim well under it, not at it. Point first, in bold; then one-line bullets, one item each, never a list chained with semicolons; no paragraphs. Cut whatever would not change whether they approve. For an outdated lens, first check whether what it says still holds for the code as it is now: keep it if it does, rewrite it if not; a keep is held to the same limits. Write in the language of the map. Cite code in backticks as `path:from-to`, adding (old) for a removed line; a line that does not exist is refused. For a file lens, write an empty text for a file it does not apply to. A file lens may open its file with --open '<why>', and that is the exception: only when reading the code could change whether the reviewer approves, saying what they will see. Writing a lens changes no code: do not change, commit or publish anything while doing it.";
 
 fn written(group: LensGroup) -> &'static str {
     match group {

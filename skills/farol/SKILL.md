@@ -409,8 +409,12 @@ it. Write the missing ones, following their prompt:
     farol lens write <id> --block <slug> --text '…'   # a block
     farol lens write <id> --file <path> --text '…'    # a file
 
-Keep each answer to a few lines: the point of a lens is that reading it
-takes less time than reading the code. Write for a reader who scans, not
+**A lens exists to save the reader time.** If reading it takes anywhere
+near as long as reading the code, it failed, and the reader paid for it.
+Every lens has a hard limit of lines, and every line one of 140
+characters; `farol lens write` refuses an answer past either, and a keep
+is held to the same limits. Aim well under the limit, not at it, and cut
+whatever would not change whether the reviewer approves. Write for a reader who scans, not
 one who reads: the point first, in bold; then bullets of one line each,
 the key term of each in bold; no paragraph longer than two lines; one
 item per bullet, never a list chained with semicolons. A

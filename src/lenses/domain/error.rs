@@ -45,6 +45,24 @@ pub enum LensError {
     )]
     Collision { written: String, asked: String },
 
+    #[error(
+        "lens '{id}' has {lines} lines and may have at most {most}. A lens exists to save the reader time: cut everything that would not change whether they approve, and write again."
+    )]
+    TooLong {
+        id: String,
+        lines: usize,
+        most: usize,
+    },
+
+    #[error(
+        "lens '{id}' has a line over {most} characters: \"{line}…\". One line, one point: split it or cut it."
+    )]
+    LineTooLong {
+        id: String,
+        line: String,
+        most: usize,
+    },
+
     #[error("only a file lens opens what it is about: drop --open for lens '{id}'.")]
     OpensOnlyFiles { id: String },
 
