@@ -1,37 +1,54 @@
-import { useEffect, useState } from "react";
-import { Eye, EyeOff } from "lucide-react";
+import { useState } from "react";
+import { ChevronDown, ChevronRight, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LensState } from "@/review/lenses/LensState";
 import { LensText } from "@/review/lenses/LensText";
-import { SeenBox } from "@/review/lenses/SeenBox";
 import type { CitationView, FileView, LensView } from "@/api";
 
 /** A file's own lenses, under its header and before its diff, held to the file
  * by a rail under its name, with why the map puts the file in focus when it
- * does. They stay with the diff folded: they are what lets
- * the reader leave it folded. */
-export function FileLenses({ file, onCite, onSeen }: FileLensesProps) {
-  if (file.lenses.length === 0 && !file.focus) return null;
+ * does, and the way into the code after them: the lenses are read first, and
+ * they are what lets the reader leave the code folded.
+ *
+ * No tick of their own. They are about the file, so the file's tick is the one
+ * that says they were read, and marking it folds them away with the code. */
+export function FileLenses({ file, open, onToggleOpen, onCite }: FileLensesProps) {
+  if (!speaksAbout(file) || (file.viewed && !open)) return null;
   return (
     <div className="file-lenses border-b border-rule bg-surface pr-4 pb-2 pl-[4.25rem] md:pr-6">
       {file.focus && (
         <p className="focus py-1.5 font-sans text-xs text-highlight">Focus: {file.focus}</p>
       )}
       {file.lenses.map((lens) => (
-        <FileLens key={lens.id} lens={lens} path={file.path} onCite={onCite} onSeen={onSeen} />
+        <FileLens key={lens.id} lens={lens} path={file.path} onCite={onCite} />
       ))}
+      {!file.viewed && (
+        <Button
+          variant="ghost"
+          size="xs"
+          className="showcode mt-2 -ml-2 gap-1 font-sans text-xs text-ink-muted hover:bg-transparent hover:text-ink"
+          aria-expanded={open}
+          onClick={onToggleOpen}
+        >
+          {open ? <ChevronDown className="size-3.5" aria-hidden="true" /> : <ChevronRight className="size-3.5" aria-hidden="true" />}
+          {open ? "Hide code" : "Show code"}
+        </Button>
+      )}
     </div>
   );
 }
 
-function FileLens({ lens, path, onCite, onSeen }: FileLensProps) {
-  // Seen hides it, the way a file marked read folds, and a reload keeps it so.
-  const [shown, setShown] = useState(!lens.seen);
-  useEffect(() => setShown(!lens.seen), [lens.seen]);
+/** Whether a file has lenses to draw, which is also whether the way into its
+ * code sits under them instead of on the header. */
+export function speaksAbout(file: FileView): boolean {
+  return file.lenses.length > 0 || file.focus !== null;
+}
+
+function FileLens({ lens, path, onCite }: FileLensProps) {
+  const [shown, setShown] = useState(true);
   return (
     <div className="file-lens mt-1.5 border-l-2 border-rule-strong pl-3.5" data-lens={lens.id} data-lens-key={`file:${path}:${lens.id}`}>
       <div className="flex items-center gap-2">
-        <SeenBox lens={lens} onSeen={onSeen} />
         <span className="font-mono text-[0.6875rem] tracking-wide text-ink-muted uppercase">{lens.title}</span>
         <LensState lens={lens} />
         <Button
@@ -61,13 +78,13 @@ function FileLens({ lens, path, onCite, onSeen }: FileLensProps) {
 
 type FileLensesProps = {
   file: FileView;
+  open: boolean;
+  onToggleOpen: () => void;
   onCite: (citation: CitationView) => void;
-  onSeen: (lens: LensView, seen: boolean) => void;
 };
 
 type FileLensProps = {
   lens: LensView;
   path: string;
   onCite: (citation: CitationView) => void;
-  onSeen: (lens: LensView, seen: boolean) => void;
 };

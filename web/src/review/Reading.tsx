@@ -90,7 +90,6 @@ export function Reading({
               comments={comments.on(row.file.path)}
               commentActions={comments}
               onCite={cite}
-              onSeen={onSeen}
             />
             {/* After the block's last file: the threads of its files that the
                 diff no longer reaches. */}

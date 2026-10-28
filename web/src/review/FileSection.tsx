@@ -8,7 +8,7 @@ import { Prose } from "@/review/Prose";
 import { FileLenses } from "@/review/lenses/FileLenses";
 import type { CommentActions } from "@/hooks/useComments";
 import type { DiffView } from "@/hooks/useDiffView";
-import type { CitationView, CommentView, FileDiff, FileView, LensView } from "@/api";
+import type { CitationView, CommentView, FileDiff, FileView } from "@/api";
 
 /** One file on the long page: its header, the prose the session wrote about it,
  * and the diff. */
@@ -25,7 +25,6 @@ export function FileSection({
   comments,
   commentActions,
   onCite,
-  onSeen,
 }: FileSectionProps) {
   const visible = usePageVisible();
   const gone = file.status === "deleted";
@@ -75,7 +74,7 @@ export function FileSection({
       />
 
       {/* Drawn with the diff folded too: they are what lets it stay folded. */}
-      <FileLenses file={file} onCite={onCite} onSeen={onSeen} />
+      <FileLenses file={file} open={open} onToggleOpen={onToggleOpen} onCite={onCite} />
 
       {!open ? null : (
         <>
@@ -158,5 +157,4 @@ type FileSectionProps = {
   comments: CommentView[];
   commentActions: CommentActions;
   onCite: (citation: CitationView) => void;
-  onSeen: (lens: LensView, seen: boolean) => void;
 };

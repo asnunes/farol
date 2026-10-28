@@ -2,6 +2,7 @@ import { ChevronDown, ChevronRight, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CopyPath } from "@/review/CopyPath";
+import { speaksAbout } from "@/review/lenses/FileLenses";
 import { splitPath } from "@/lib/path";
 import type { CommentView, FileView } from "@/api";
 
@@ -18,6 +19,12 @@ export function FileHeader({ file, open, onToggleOpen, onToggleViewed, comments 
   return (
     <div className="filehead sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-rule bg-surface px-4 py-2 md:gap-4 md:px-6 md:py-2.5">
       <div className="left flex min-w-0 items-center gap-2 md:gap-3">
+        {/* A file with lenses opens its code from under them, where the reader
+            is when they decide to; the header keeps the place so the path does
+            not move. Once read, it folds whole, and opens from here again. */}
+        {speaksAbout(file) && !file.viewed ? (
+          <span className="size-5 shrink-0" aria-hidden="true" />
+        ) : (
         <Button
           variant="ghost"
           size="icon-xs"
@@ -33,6 +40,7 @@ export function FileHeader({ file, open, onToggleOpen, onToggleViewed, comments 
             <ChevronRight className="size-3.5" aria-hidden="true" />
           )}
         </Button>
+        )}
 
         {/* A checkbox, and built as one: it was a button pretending, with
             `aria-pressed` where a screen reader expects a checked state. */}

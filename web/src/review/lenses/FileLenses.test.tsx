@@ -16,8 +16,10 @@ const tests: LensView = {
   seen: false,
 };
 
+const none = () => {};
+
 it("hides and shows a file's lens with the eye, keeping its name", () => {
-  render(<FileLenses file={file({ lenses: [tests] })} onCite={() => {}} onSeen={() => {}} />);
+  render(<FileLenses file={file({ lenses: [tests] })} open={false} onToggleOpen={none} onCite={none} />);
   expect(screen.getByText(/tried again/)).toBeTruthy();
 
   fireEvent.click(screen.getByRole("button", { name: "Hide Tests" }));
@@ -29,20 +31,27 @@ it("hides and shows a file's lens with the eye, keeping its name", () => {
 });
 
 it("says why the map puts the file in focus", () => {
-  render(<FileLenses file={file({ focus: "the whole retry rule" })} onCite={() => {}} onSeen={() => {}} />);
+  render(<FileLenses file={file({ focus: "the whole retry rule" })} open={false} onToggleOpen={none} onCite={none} />);
   expect(screen.getByText("Focus: the whole retry rule")).toBeTruthy();
 });
 
 it("draws nothing for a file no lens speaks about", () => {
-  const { container } = render(<FileLenses file={file()} onCite={() => {}} onSeen={() => {}} />);
+  const { container } = render(<FileLenses file={file()} open={false} onToggleOpen={none} onCite={none} />);
   expect(container.innerHTML).toBe("");
 });
 
-it("starts a lens already seen hidden, and marks one seen with its tick", () => {
-  const seen = vi.fn();
-  render(<FileLenses file={file({ lenses: [{ ...tests, seen: true }] })} onCite={() => {}} onSeen={seen} />);
+it("opens the code from under the lenses, which carry no tick of their own", () => {
+  const toggle = vi.fn();
+  render(<FileLenses file={file({ lenses: [tests] })} open={false} onToggleOpen={toggle} onCite={none} />);
 
-  expect(screen.queryByText(/tried again/)).toBeNull();
-  fireEvent.click(screen.getByRole("checkbox", { name: "Mark Tests as seen" }));
-  expect(seen).toHaveBeenCalledWith(expect.objectContaining({ id: "tests" }), false);
+  expect(screen.queryByRole("checkbox"), "the file's tick is the one that says they were read").toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Show code" }));
+  expect(toggle).toHaveBeenCalled();
+});
+
+it("folds away with the code once the file is marked read", () => {
+  const { container } = render(
+    <FileLenses file={file({ lenses: [tests], viewed: true })} open={false} onToggleOpen={none} onCite={none} />,
+  );
+  expect(container.innerHTML).toBe("");
 });
