@@ -4,8 +4,9 @@ import type { FileView } from "@/api";
 /** Which files are open on the page.
  *
  * A file that has been read is closed: it is done, and the ones still to read
- * should not be buried under it. So is one the lenses already speak for, as it
- * stands: the reader learns it from them, and opens the code when they want it. Anything the reader says overrides that — a
+ * should not be buried under it. On a review the lenses speak for, every file
+ * starts closed: the reader learns the change from them, and opens the code
+ * when they want it. Anything the reader says overrides that — a
  * file they opened stays open however it is marked — but only for as long as
  * the thing it was overriding holds.
  *
@@ -31,8 +32,8 @@ export function useOpenFiles() {
 export type OpenFiles = ReturnType<typeof useOpenFiles>;
 
 /** What decides a file's opening on its own: whether it was read, and whether
- * the lenses speak for it as it is. A choice the reader made lapses when
- * either changes, so a file that changed under its lenses comes back open. */
+ * the review is read through lenses. A choice the reader made lapses when
+ * either changes. */
 function standing(file: FileView): string {
   return `${file.viewed}:${file.folded}`;
 }

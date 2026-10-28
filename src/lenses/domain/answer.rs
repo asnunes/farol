@@ -47,11 +47,6 @@ impl LensAnswer {
         }
     }
 
-    /// Whether it was written against this very content of the file.
-    pub fn saw(&self, path: &str, blob: &str) -> bool {
-        self.covers.iter().any(|c| c.path == path && c.blob == blob)
-    }
-
     pub fn is_empty(&self) -> bool {
         self.text.trim().is_empty()
     }

@@ -173,7 +173,7 @@ export type FileView = {
   skimReason: string | null;
   /** The file's own lenses, drawn under its header. */
   lenses: LensView[];
-  /** The lenses speak for this content of the file, so its diff starts folded. */
+  /** The session wrote lenses on this review, so its diff starts folded. */
   folded: boolean;
   /** The lens asking a person to read this file themselves. */
   readYourself: string | null;

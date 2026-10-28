@@ -38,12 +38,11 @@ impl LensReading {
         .collect()
     }
 
-    /// Whether some answer was written against this very content of the file:
-    /// then the lenses already speak for it, and its diff can start folded.
-    pub fn saw(&self, path: &str, blob: &str) -> bool {
-        self.answers
-            .iter()
-            .any(|(answer, _)| answer.saw(path, blob))
+    /// Whether the session has written any lens on this review. Once it has,
+    /// the review is read through the lenses, and the code is there to be
+    /// opened rather than shown.
+    pub fn speaks(&self) -> bool {
+        !self.answers.is_empty()
     }
 
     /// The lens that asks a person to read this file themselves, if one does.

@@ -2119,7 +2119,7 @@ fn a_lens_written_from_the_cli_reaches_the_review_and_goes_outdated_when_its_fil
     assert_eq!(a["lenses"][0]["title"], "Tests");
     assert_eq!(
         a["folded"], true,
-        "the lenses speak for a file they saw as it is"
+        "once lenses are written no file is shown until it is opened"
     );
 
     s.repo.write("src/a.rs", &numbered(61));
@@ -2128,8 +2128,8 @@ fn a_lens_written_from_the_cli_reaches_the_review_and_goes_outdated_when_its_fil
     let review = s.json("/api/review");
     assert_eq!(review["lenses"][0]["state"], "outdated");
     assert_eq!(
-        review["blocks"][0]["files"][0]["folded"], false,
-        "a file that changed since starts open"
+        review["blocks"][0]["files"][0]["folded"], true,
+        "a file that changed since stays folded too; its lenses say Outdated"
     );
     let pending = s.repo.ok(&["lens", "pending"]);
     assert!(

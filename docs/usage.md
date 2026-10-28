@@ -47,9 +47,9 @@ Vocabulary, Architecture (per block) and Security come switched off.
 
 The session writes them when it builds or updates the map. On the screen they
 are open sections in the reading: the pull request's before the first block,
-a block's after its context, a file's under its header. A file whose lenses
-were written against its current content starts folded; one that changed
-since starts open, and its lenses say Outdated until the map is updated.
+a block's after its context, a file's under its header. Once the session has
+written lenses, every file starts folded and opens when you ask for it; a lens
+whose code changed since says Outdated until the map is updated.
 
 Settings lists the lenses by group. Switch one off, edit its title or prompt,
 delete it, or add your own. The list is kept in `lenses.json` beside the

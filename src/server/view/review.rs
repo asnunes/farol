@@ -202,9 +202,8 @@ pub struct FileView {
     pub skim_reason: Option<String>,
     /// The file's own lenses, drawn under its header.
     pub lenses: Vec<LensView>,
-    /// Whether its diff starts folded: some lens answer was written against
-    /// this very content, so the lenses speak for it. One that changed since,
-    /// or that no answer covers, starts open.
+    /// Whether its diff starts folded: on a review the lenses speak for, code
+    /// is opened by the reader, never shown to them by default.
     pub folded: bool,
     /// The lens that asks a person to read this file themselves.
     pub read_yourself: Option<String>,
@@ -257,7 +256,7 @@ impl FileView {
             skim,
             skim_reason,
             lenses: LensView::all(lenses.for_file(path)),
-            folded: lenses.saw(path, &change.content_hash),
+            folded: lenses.speaks(),
             read_yourself: lenses.read_yourself(path).map(str::to_string),
         }
     }
@@ -551,7 +550,7 @@ mod tests {
     }
 
     #[test]
-    fn a_file_the_lenses_speak_for_starts_folded_and_carries_its_own_lens() {
+    fn with_lenses_written_every_file_starts_folded_and_carries_its_own_lens() {
         use crate::lenses::application::LensReading;
         use crate::lenses::domain::{
             Covered, Freshness, LensAnswer, LensCatalog, LensId, LensTarget,
@@ -591,10 +590,9 @@ mod tests {
         );
 
         let files = &view.blocks[0].files;
-        assert!(files[0].folded, "a.rs is what the Tests answer saw");
         assert!(
-            !files[1].folded,
-            "nothing speaks for b.rs, so its code is open"
+            files.iter().all(|f| f.folded),
+            "once lenses are written no file is shown until it is opened"
         );
         assert_eq!(files[0].lenses[0].title, "Tests");
         assert_eq!(files[1].read_yourself.as_deref(), Some("Tests"));
