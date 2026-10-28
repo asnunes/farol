@@ -25,9 +25,12 @@ impl SeeLens {
             .find(id, target)?
             .filter(|answer| &answer.target == target)
             .ok_or_else(|| LensError::NothingToKeep { id: id.to_string() })?;
-        let fingerprint = answer.fingerprint();
-        self.progress
-            .see_lens(&answer.seen_key(), seen.then_some(fingerprint.as_str()), at)?;
-        Ok(())
+        let mut progress = self.progress.load()?;
+        if seen {
+            progress.see(&answer.seen_key(), &answer.fingerprint(), at);
+        } else {
+            progress.unsee(&answer.seen_key());
+        }
+        self.progress.save(&progress)
     }
 }
