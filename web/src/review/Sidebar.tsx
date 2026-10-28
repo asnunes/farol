@@ -2,6 +2,8 @@ import { useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { fileLabels } from "@/lib/path";
 import { FileRow } from "./FileRow";
+import { LensRow } from "./LensRow";
+import { scrollToLens } from "@/lib/scroll";
 import { readingOrder } from "@/api";
 import type { CommentsOn } from "@/hooks/useComments";
 import type { FileLabels } from "@/lib/path";
@@ -31,6 +33,18 @@ export function Sidebar({
 
   return (
     <aside className="sidebar overflow-y-auto border-rule bg-surface py-3 max-md:max-h-[33dvh] max-md:border-b md:border-r">
+      {review.lenses.length > 0 && (
+        <section className="blk mb-4 px-3" data-state="lenses">
+          <div className="blk-head flex items-center gap-2 px-2">
+            <div className="blk-title truncate font-sans text-[0.8125rem] font-semibold text-ink">Pull request</div>
+          </div>
+          <ul className="blk-files mt-1">
+            {review.lenses.map((lens) => (
+              <LensRow key={lens.id} lens={lens} onPick={() => scrollToLens(`pr:${lens.id}`)} />
+            ))}
+          </ul>
+        </section>
+      )}
       {review.blocks.map((block, i) => (
         <Block
           key={block.slug}
@@ -117,6 +131,9 @@ function Block({
         </div>
       </div>
       <ul className="blk-files mt-1">
+        {block.lenses.map((lens) => (
+          <LensRow key={lens.id} lens={lens} onPick={() => scrollToLens(`block:${block.slug}:${lens.id}`)} />
+        ))}
         {block.files.map((f) => (
           <FileRow
             key={f.path}

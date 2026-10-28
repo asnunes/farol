@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, readingOrder, type ReviewView } from "@/api";
+import { api, readingOrder, type LensView, type ReviewView } from "@/api";
 import { onNudge } from "@/lib/watch";
 import { said } from "@/lib/utils";
 
@@ -61,7 +61,16 @@ export function useReview() {
     [load],
   );
 
-  return { review, current, setCurrent, error, toggleViewed, stale, generation, refresh: load };
+  const toggleSeen = useCallback(
+    async (lens: LensView, seen: boolean) => {
+      if (!lens.target) return;
+      await api.seeLens(lens.id, lens.target, seen);
+      await load(false);
+    },
+    [load],
+  );
+
+  return { review, current, setCurrent, error, toggleViewed, toggleSeen, stale, generation, refresh: load };
 }
 
 export type RefreshReason = "map" | "head" | "lenses";

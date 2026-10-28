@@ -48,6 +48,17 @@ export function scrollToThread(id: string) {
   requestAnimationFrame(look);
 }
 
+/** Bring a lens to the top of the pane, from the sidebar. */
+export function scrollToLens(key: string) {
+  stopAnchoring?.();
+  settling = Date.now() + SETTLES_IN;
+  requestAnimationFrame(() => {
+    const lens = document.querySelector<HTMLElement>(`[data-lens-key="${CSS.escape(key)}"]`);
+    lens?.scrollIntoView({ block: "start" });
+    if (lens) holdPosition(lens);
+  });
+}
+
 /** Bring a line of a file to the middle of the pane, and mark it for a moment.
  *
  * Waits for the row the way a thread jump does: the file was just opened, and

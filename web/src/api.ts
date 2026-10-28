@@ -32,6 +32,9 @@ export const api = {
     fetch(`/api/file?path=${encodeURIComponent(path)}`).then(json<FileDiff>),
   setViewed: (path: string, viewed: boolean) =>
     send("/api/viewed", "POST", { path, viewed }),
+  /** Mark a lens as seen, or take the mark back; it is pinned to the answer. */
+  seeLens: (lens: string, target: LensTarget, seen: boolean) =>
+    send("/api/lenses/seen", "POST", { lens, target, seen }),
 
   /** A stretch of the file the diff did not print, for a reader opening a gap. */
   lines: (path: string, from: number, to: number) =>
@@ -356,7 +359,13 @@ export type LensView = {
   changed: number;
   /** The citations that can be followed, as they appear in the text. */
   citations: CitationView[];
+  /** What it is written about; null while nothing is written. */
+  target: LensTarget | null;
+  /** Marked as seen, for this very answer. */
+  seen: boolean;
 };
+
+export type LensTarget = { kind: "pr" } | { kind: "block"; slug: string } | { kind: "file"; path: string };
 
 /** A place in the code a lens points at. */
 export type CitationView = { text: string; path: string; side: Side; from: number; to: number };

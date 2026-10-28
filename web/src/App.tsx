@@ -31,6 +31,7 @@ export default function App() {
     setCurrent,
     error,
     toggleViewed,
+    toggleSeen,
     stale,
     refresh,
     generation,
@@ -214,6 +215,7 @@ export default function App() {
           onToggleViewed={(path, viewed) => void mark(path, viewed)}
           files={files}
           comments={comments}
+          onSeen={(lens, seen) => void toggleSeen(lens, seen)}
         />
 
         <KeyBar

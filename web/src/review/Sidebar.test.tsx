@@ -19,6 +19,29 @@ describe("telling the files in the sidebar apart", () => {
     );
   });
 
+  it("lists the pull request's lenses first and a block's before its files, marking what was seen", () => {
+    const lens = (id: string, seen: boolean) => ({
+      id,
+      title: id,
+      state: "written" as const,
+      text: "x",
+      writtenAt: "abc",
+      changed: 0,
+      citations: [],
+      target: { kind: "pr" as const },
+      seen,
+    });
+    const r = review([block("first", ["a.rs"], { lenses: [lens("Architecture", false)] })]);
+    r.lenses = [lens("Overview", true)];
+    show(r);
+
+    const items = [...document.querySelectorAll(".lensitem, .fileitem")].map((el) => el.textContent);
+    expect(items[0]).toContain("Overview");
+    expect(items[1]).toContain("Architecture");
+    expect(items[2]).toContain("a.rs");
+    expect(document.querySelector(".lensitem[data-seen=true]")?.textContent).toContain("Overview");
+  });
+
   it("shows a unique name alone, with the path only in the tooltip", async () => {
     show(review([block("first", ["web/src/App.tsx"])]));
 

@@ -14,7 +14,7 @@ import type { CommentActions } from "@/hooks/useComments";
 import type { DiffView } from "@/hooks/useDiffView";
 import type { OpenFiles } from "@/hooks/useOpenFiles";
 import { blockOf, readingOrder, readingRows } from "@/api";
-import type { CitationView, CommentView, ReviewView } from "@/api";
+import type { CitationView, CommentView, LensView, ReviewView } from "@/api";
 
 /** The whole review, in one scroll.
  *
@@ -30,6 +30,7 @@ export function Reading({
   onToggleViewed,
   files,
   comments,
+  onSeen,
 }: ReadingProps) {
   const pane = useRef<HTMLElement>(null);
   const drifted = byBlock(review, comments.drifted);
@@ -66,12 +67,12 @@ export function Reading({
 
   return (
     <main ref={pane} className="pane overflow-y-auto bg-ground" data-current={current ?? ""}>
-      <ReviewLenses lenses={review.lenses} onCite={cite} />
+      <ReviewLenses lenses={review.lenses} onCite={cite} onSeen={onSeen} />
       {readingRows(review).map((row) =>
         "block" in row ? (
           <Fragment key={row.block.slug}>
             <BlockBar block={row.block} number={row.number} total={review.blocks.length} />
-            <BlockLenses lenses={row.block.lenses} onCite={cite} />
+            <BlockLenses slug={row.block.slug} lenses={row.block.lenses} onCite={cite} onSeen={onSeen} />
             {row.block.files.length > 0 && <CodeBar block={row.block} />}
           </Fragment>
         ) : (
@@ -89,6 +90,7 @@ export function Reading({
               comments={comments.on(row.file.path)}
               commentActions={comments}
               onCite={cite}
+              onSeen={onSeen}
             />
             {/* After the block's last file: the threads of its files that the
                 diff no longer reaches. */}
@@ -152,4 +154,5 @@ type ReadingProps = {
   onToggleViewed: (path: string, viewed: boolean) => void;
   files: OpenFiles;
   comments: CommentActions;
+  onSeen: (lens: LensView, seen: boolean) => void;
 };
