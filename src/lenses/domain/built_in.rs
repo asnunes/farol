@@ -59,7 +59,7 @@ pub(super) const BUILT_IN: &[BuiltIn] = &[
         id: "summary",
         title: "Summary",
         group: LensGroup::File,
-        prompt: "Write this for every file in the review. In one to three short lines, say what the file does in this change, as plainly as: \"Defines the structs X and Y\", or \"Defines the use case Z, which: 1. … 2. … 3. …\". No more than it takes to know whether to open the file.",
+        prompt: "Write this for every file in the review whose change takes reading. In one to three short lines, say what the file does in this change, as plainly as: \"Defines the structs X and Y\", or \"Defines the use case Z, which: 1. … 2. … 3. …\". No more than it takes to know whether to open the file. Write an empty text when the diff is a few lines that say it by themselves: a summary is never longer than the change it summarizes.",
         enabled: true,
     },
     BuiltIn {
