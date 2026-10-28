@@ -20,11 +20,9 @@ export function FileHeader({ file, open, onToggleOpen, onToggleViewed, comments 
     <div className="filehead sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-rule bg-surface px-4 py-2 md:gap-4 md:px-6 md:py-2.5">
       <div className="left flex min-w-0 items-center gap-2 md:gap-3">
         {/* A file with lenses opens its code from under them, where the reader
-            is when they decide to; the header keeps the place so the path does
-            not move. Once read, it folds whole, and opens from here again. */}
-        {speaksAbout(file) && !file.viewed ? (
-          <span className="size-5 shrink-0" aria-hidden="true" />
-        ) : (
+            is when they decide to. Once read, it folds whole, and opens from
+            here again. */}
+        {(!speaksAbout(file) || file.viewed) && (
         <Button
           variant="ghost"
           size="icon-xs"
