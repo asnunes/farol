@@ -69,7 +69,6 @@ impl WriteAnswer {
             },
             (group, _) => return Err(wrong_target(id, group).into()),
         };
-        lens.hold_to_length(&text)?;
         self.shorter_than_the_change(id, &target, &text)?;
         if open.is_some() {
             if !matches!(target, LensTarget::File { .. }) {
