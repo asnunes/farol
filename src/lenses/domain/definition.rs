@@ -1,6 +1,8 @@
 //! What a lens asks, and about what.
 
 use serde::{Deserialize, Serialize};
+use unicode_normalization::UnicodeNormalization;
+use unicode_normalization::char::is_combining_mark;
 
 use super::LensError;
 
@@ -79,20 +81,13 @@ impl LensId {
     /// folding the accents a Portuguese title carries rather than dropping the
     /// letters under them.
     pub fn from_title(title: &str) -> Self {
+        // NFD splits `õ` into `o` and its tilde; dropping the marks keeps the
+        // letter. Already in the build through gix, so it costs no new crate.
         let folded: String = title
             .to_lowercase()
-            .chars()
-            .map(|c| match c {
-                'á' | 'à' | 'â' | 'ã' | 'ä' => 'a',
-                'é' | 'è' | 'ê' | 'ë' => 'e',
-                'í' | 'ì' | 'î' | 'ï' => 'i',
-                'ó' | 'ò' | 'ô' | 'õ' | 'ö' => 'o',
-                'ú' | 'ù' | 'û' | 'ü' => 'u',
-                'ç' => 'c',
-                'ñ' => 'n',
-                c if c.is_ascii_alphanumeric() => c,
-                _ => '-',
-            })
+            .nfd()
+            .filter(|c| !is_combining_mark(*c))
+            .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
             .collect();
         let id = folded
             .split('-')
