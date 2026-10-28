@@ -88,8 +88,11 @@ export default function App() {
       // Through the ref because this function is handed to the keyboard effect
       // and has to keep its identity across renders, while the order it looks
       // the file up in is a new array on every one of them.
+      //
+      // Not one whose lenses stand in for it: its lenses are on screen, and
+      // the code stays behind Show code unless the map puts it in focus.
       const file = reading.current.find((f) => f.path === path);
-      if (file) files.set(file, true);
+      if (file && !(file.folded && !file.viewed)) files.set(file, true);
       scrollToFile(path);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
