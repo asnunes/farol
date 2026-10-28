@@ -14,7 +14,7 @@ identify the missing prerequisite and guide the user to install the complete
 Farol skill set.
 
 Apply its shared principles for self-contained explanations, reading order,
-skim, map verification, and handling running reviews.
+files worth a closer look, map verification, and handling running reviews.
 
 ## Recover the implementation context
 
@@ -69,7 +69,8 @@ existing map.
 - Add context for new decisions that affect the code.
 - Revise explanations whose reasons or consequences changed.
 - Add newly introduced files and place them in reading order.
-- Revisit skim markers when a file gains a substantive change.
+- Revisit which files are worth a closer look when a file gains or loses a
+  substantive change.
 - Remove or revise explanations that no longer describe the code.
 
 Preserve context that remains accurate. A new commit does not require
@@ -171,7 +172,7 @@ not implementation context.
 Use paths reported by `farol scope` and inspect the current file before
 adding a line note.
 
-A deleted file can belong to a block or be marked as skim, but it
+A deleted file belongs to a block like any other, but it
 cannot receive a line note: there is no current passage to attach it to.
 Explain the reason for its deletion at block or file level when that
 reason helps the reviewer understand the change.

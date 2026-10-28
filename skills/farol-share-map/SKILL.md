@@ -33,7 +33,7 @@ Use the filename and location reported by the command. Export through
 the CLI rather than assembling or editing the JSON manually.
 
 The generated JSON contains the review map: blocks, file assignments,
-explanations, notes, and skim markers. It does not contain the source
+explanations, notes, and the files worth a closer look. It does not contain the source
 code, reviewer comments, or marks indicating which files were read.
 
 ## Deliver the exported map

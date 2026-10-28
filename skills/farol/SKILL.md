@@ -8,7 +8,8 @@ description: Apply Farol's principles for organizing review maps, writing implem
 Farol shows a change in the order that makes its implementation understandable,
 carrying the context the diff does not.
 
-A map contains blocks, explanations, file and line notes, and skim markers.
+A map contains blocks, explanations, file and line notes, and the files
+worth a closer look.
 Reviewer comments and reading progress are separate from the map.
 
 Before using the CLI, check `farol --version`. If it is unavailable, direct the
@@ -59,9 +60,9 @@ Do not group by folder or by the file's role — controller, service,
 repository. That grouping does not depend on the change: two completely
 different changes would produce the same split.
 
-Ask of every file whether it needs close reading before deciding which
-block it belongs to. Mechanical changes may belong in skim, attached to
-the block whose decision caused them.
+Every file goes into a block. A mechanical change belongs to the block
+whose decision caused it, where the reader meets the decision first and
+its propagation after. A file with no story at all goes in `outros`.
 
 Do not force a file into a thematic block just to avoid leftovers.
 A misleading grouping is worse than acknowledging that a change stands
@@ -256,70 +257,30 @@ applies to the whole block, move that explanation to the block context.
 
 Do not invent a decision to fill an otherwise unexplained file.
 
-## Skim marks files the reviewer can skip
+## Mark what is worth a closer look
 
-A skim marker means the reviewer can skip reading this file without
-losing the understanding needed to review the implementation.
+On a review with lenses, every file starts folded: the reader learns
+the change from the lenses and opens the code when they want to check
+it. Mark the files that deserve to be opened anyway, and say why:
 
-The map should concentrate the reviewer's attention on the files that
-carry the change: its behavior, decisions, and reasons. Files that only
-follow those decisions mechanically can be marked as skim.
+    farol file look <slug> <path> --reason '…'
+    farol file unlook <slug> <path>
 
-Ask of every file:
+A file earns the mark when reading its code pays: it holds the rule the
+change is about, it is dense enough that a summary loses what matters,
+or something in it is wrong in a way the reader should see for
+themselves. The reason names which, concretely, so the reader can
+decide whether to follow it:
 
-If the reviewer skips this file entirely, will they miss anything
-needed to understand the implementation or a decision behind it?
+- Vague: "Important file."
+- Concrete: "Holds the whole retry rule; the rest only calls it."
+- Vague: "Needs attention."
+- Concrete: "A retry here can resend a charge the provider accepted."
 
-If the answer is no, the file is a candidate for skim.
-
-For example, a field rename may require changing twenty consumers.
-The decision and its implications belong in the main reading path.
-Consumers that only adopt the new name can be skipped once that
-decision is understood.
-
-Skim is not merely “read this faster”. It means the map does not
-require the reviewer to open this file.
-
-Inspect the file before making that recommendation. If it contains
-a separate behavior change or a decision the reviewer needs to
-understand, keep it in the main reading path.
-
-The skim reason states why the file can be skipped:
-“Only updates consumers to use the renamed response field.”
-
-This is a recommendation about what the reviewer needs to read,
-not a claim that the file is correct or free of defects.
-
-## Keep skim attached to its context
-
-Attach a skimmed file to the block whose change caused it, using
-`--block`, unless it genuinely belongs to no block.
-
-The reviewer should encounter the decision and then its propagation.
-Unattached skim entries lose that relationship.
-
-Do not create a block whose only explanation is that its files are
-mechanical. Associate those files with the decision they follow.
-
-A file that does not fit an existing block is not automatically skim.
-Give a separate change its own context when necessary.
-
-## Write a concrete skim reason
-
-The reason must let the reviewer understand the recommendation and
-decide whether to follow it.
-
-- Vague: “Mechanical change.”
-- Concrete: “Replaces the renamed field in the request payload.”
-- Vague: “Safe to skip.”
-- Concrete: “Regenerated lockfile after adding the HTTP client.”
-
-Name the change directly. Include enough context for the reason to
-make sense without access to the implementation session.
-
-A file you have not inspected must not be marked as skim. If it
-contains a substantive change alongside mechanical edits, keep that
-change in the main reading path and explain it at the appropriate level.
+Mark few. A mark on every file is no mark at all, and the point of the
+lenses is that reading them costs less than reading the code. Inspect a
+file before marking it, and never mark one to make up for a lens that
+explains it badly: fix the lens.
 
 ## Write for someone arriving without context
 
@@ -386,7 +347,7 @@ Run:
     farol map show
 
 `map check` must pass. Every file in the review scope must belong to
-a block or be marked as skim, and pending note decisions must be resolved.
+a block, and pending note decisions must be resolved.
 
 Coverage alone does not make the map useful. Read the complete output
 of `map show` as someone who did not participate in the implementation.
@@ -403,10 +364,10 @@ Check that:
 - Inferred reasons are identified as inference.
 - Notes explain choices and their consequences without endorsing them
   or turning into review findings.
-- Skimmed files can be skipped without losing necessary understanding,
-  and their reasons explain why.
-- Mechanical changes are not disguised as blocks with nothing to explain.
-- No file was marked as skim without being inspected.
+- The files marked worth a closer look are few, and each reason says
+  concretely why opening it pays.
+- Mechanical changes sit in the block of the decision they follow, not
+  in a block of their own with nothing to explain.
 - Titles, terminology, and sentences make sense without private
   vocabulary from the session.
 

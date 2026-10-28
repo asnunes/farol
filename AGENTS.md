@@ -317,7 +317,7 @@ writer primitives, not a component layer.
 ### The view model is assembled on the server
 
 `ReviewView::build` applies the reading rules — blocks in the author's order,
-each file under the one block that reads it, skim after. The frontend renders;
+each file under the one block that reads it. The frontend renders;
 it does not decide.
 
 **A file belongs to one block.** It used to be allowed in several, and the
