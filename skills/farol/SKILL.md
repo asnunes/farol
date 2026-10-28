@@ -412,7 +412,8 @@ it. Write the missing ones, following their prompt:
 Keep each answer to a few lines: the point of a lens is that reading it
 takes less time than reading the code. Write for a reader who scans, not
 one who reads: the point first, in bold; then bullets of one line each,
-the key term of each in bold; no paragraph longer than two lines. A
+the key term of each in bold; no paragraph longer than two lines; one
+item per bullet, never a list chained with semicolons. A
 reader who reads only the bold should already have the lens. Write them from what the session
 knows, in the map's language. Cite code in backticks as `path:from-to`,
 adding `(old)` for a line the change removed; a cited line that does not

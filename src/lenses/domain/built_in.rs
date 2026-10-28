@@ -67,7 +67,7 @@ pub(super) const BUILT_IN: &[BuiltIn] = &[
         id: "tests",
         title: "Tests",
         group: LensGroup::File,
-        prompt: "Write this for each file in the review that has tests, including a source file with tests inside it. List the tests this change adds or changes in that file, one sentence of behaviour each, with its line, so the reviewer learns the cases without reading the test code. Write an empty text for a file without tests.",
+        prompt: "Write this for each file in the review that has tests, including a source file with tests inside it. One bullet per test this change adds or changes: what it checks, as a plain sentence the way a describe or it reads (\"routes by the offer's phase\"), never the test's function name, with its lines cited. Under it, the cases it covers as short nested bullets, one case each. Never chain cases with semicolons. Write an empty text for a file without tests.",
         enabled: true,
     },
     BuiltIn {
