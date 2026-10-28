@@ -51,7 +51,7 @@ pub(super) const BUILT_IN: &[BuiltIn] = &[
         id: "evidence",
         title: "Evidence",
         group: LensGroup::Pr,
-        prompt: "What was checked, and what it would miss. The commands that ran and what they returned; then the problems a fresh reviewer finds in the diff, each tagged Important, Nit or Pre-existing, with its file and line, including anything that breaks CLAUDE.md, AGENTS.md or REVIEW.md; nothing about style alone. Review the diff in a subagent with a clean context for this part. Say \"Nothing to fix\" when there is nothing. End with what these checks would not catch.",
+        prompt: "What was checked, and what it would miss, in as few lines as it takes. The commands that ran and what they returned. Then only the problems that matter, found by reviewing the diff in a subagent with a clean context: each tagged Important or Pre-existing, with its file and line, including anything that breaks CLAUDE.md, AGENTS.md or REVIEW.md. Do not list nits; give only their count. Say \"Nothing to fix\" when there is nothing. End with what these checks would not catch.",
         enabled: true,
     },
     BuiltIn {
