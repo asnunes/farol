@@ -65,9 +65,9 @@ pub(super) const BUILT_IN: &[BuiltIn] = &[
         id: "summary",
         title: "Summary",
         group: LensGroup::File,
-        prompt: "What the file does in this change, as plainly as \"Defines the use case Z\", in one line, two or three only when the file does that many things. Empty when the diff is a few lines that say it by themselves: a summary is never longer than the change. Pass --open '<why>' only for a particularity these lines cannot carry: an ordering, a boundary, a trick that works for a subtle reason. Most files have none. At most 3 lines.",
+        prompt: "What this file does in the change that its name does not already say, and how or why where the reader would not guess it. As long as the file needs and no longer, and always far quicker to read than its diff: farol refuses a file lens with more characters than the lines the change adds and removes. Never restate the name: \"Defines CodeBar: the strip where the block's code starts\" says nothing; \"Draws the strip between a block's lenses and its files, with the file count and the lines added and removed, so the reader knows how much code they would open\" says what, how and why. If someone holding only the file name could write it, rewrite it. Empty when the diff says it by itself, and then the file shows its code. Pass --open '<why>' only for a particularity these lines cannot carry: an ordering, a boundary, a trick that works for a subtle reason. Most files have none.",
         enabled: true,
-        max_lines: 3,
+        max_lines: 8,
     },
     BuiltIn {
         id: "tests",

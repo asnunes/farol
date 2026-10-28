@@ -151,6 +151,24 @@ pub struct FileDiff {
 }
 
 impl FileDiff {
+    /// How much there is to read in the change: the characters on the lines
+    /// it adds and removes, without the context around them. `None` when the
+    /// diff prints no lines to count, as for a binary file.
+    pub fn changed_chars(&self) -> Option<usize> {
+        let changed: Vec<&Line> = self
+            .hunks
+            .iter()
+            .flat_map(|h| &h.lines)
+            .filter(|l| l.kind != LineKind::Context)
+            .collect();
+        (!changed.is_empty()).then(|| {
+            changed
+                .iter()
+                .map(|l| l.content.trim().chars().count())
+                .sum()
+        })
+    }
+
     /// Whether every line of a span appears in the diff.
     ///
     /// A comment can only be left where the diff reaches. GitHub refuses a

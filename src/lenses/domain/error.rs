@@ -63,6 +63,15 @@ pub enum LensError {
         most: usize,
     },
 
+    #[error(
+        "lens '{id}' says {said} characters about a change of {change}: reading the code is quicker. Write an empty text, and the file shows its code."
+    )]
+    LongerThanTheChange {
+        id: String,
+        said: usize,
+        change: usize,
+    },
+
     #[error("only a file lens opens what it is about: drop --open for lens '{id}'.")]
     OpensOnlyFiles { id: String },
 

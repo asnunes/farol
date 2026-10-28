@@ -194,8 +194,8 @@ mod tests {
     #[test]
     fn an_answer_past_its_lens_limit_is_refused_and_says_so() {
         let summary = LensDefinition {
-            id: LensId::parse("summary").unwrap(),
-            title: "Summary".into(),
+            id: LensId::parse("smell").unwrap(),
+            title: "Smell".into(),
             group: LensGroup::File,
             prompt: "p".into(),
         };

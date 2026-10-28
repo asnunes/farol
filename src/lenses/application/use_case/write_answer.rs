@@ -70,6 +70,7 @@ impl WriteAnswer {
             (group, _) => return Err(wrong_target(id, group).into()),
         };
         lens.hold_to_length(&text)?;
+        self.shorter_than_the_change(id, &target, &text)?;
         if open.is_some() {
             if !matches!(target, LensTarget::File { .. }) {
                 return Err(LensError::OpensOnlyFiles { id: id.to_string() }.into());
@@ -104,6 +105,32 @@ impl WriteAnswer {
         };
         self.answers.write(&answer)?;
         Ok(answer)
+    }
+
+    /// A file lens that takes longer to read than the change it is about has
+    /// failed at the one thing it is for, so it is refused; written empty, it
+    /// leaves the file showing its code. Only the changed lines count, and
+    /// only when the diff prints some: a binary file has nothing to compare.
+    fn shorter_than_the_change(&self, id: &LensId, target: &LensTarget, text: &str) -> Result<()> {
+        let LensTarget::File { path } = target else {
+            return Ok(());
+        };
+        let said = text
+            .lines()
+            .map(|l| l.trim().chars().count())
+            .sum::<usize>();
+        if said == 0 {
+            return Ok(());
+        }
+        match self.diffs.of(path).ok().and_then(|d| d.changed_chars()) {
+            Some(change) if said > change => Err(LensError::LongerThanTheChange {
+                id: id.to_string(),
+                said,
+                change,
+            }
+            .into()),
+            _ => Ok(()),
+        }
     }
 
     /// Each citation checked against the review. One on the new side is held to
@@ -347,6 +374,32 @@ mod tests {
         assert!(
             empty.to_string().contains("cannot open"),
             "an empty answer says the lens does not apply, so it has nothing to show: {empty}"
+        );
+    }
+
+    #[test]
+    fn a_file_lens_longer_than_the_change_is_refused() {
+        let (svc, scope) = with_block(&["a.rs"]);
+        let source = crate::testing::FakeDiffSource::with_paths(&["a.rs"])
+            .with_line_count("a.rs", 100)
+            .showing("a.rs", vec![crate::testing::hunk_with_lines(3, &["x = 1"])]);
+        let write = WriteAnswer::new(
+            Arc::new(InMemoryLensCatalog::default()),
+            Arc::new(InMemoryLensAnswers::default()),
+            scope.clone(),
+            FileDiffs::new(Arc::new(source)),
+            svc.versions,
+        );
+        let a = || Aim::File(scope.path("a.rs").unwrap());
+
+        let error = write
+            .execute(&id("summary"), a(), "Sets x to one, the default.".into())
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("reading the code is quicker"), "{error}");
+        assert!(
+            write.execute(&id("summary"), a(), "".into()).is_ok(),
+            "written empty, the file shows its code instead"
         );
     }
 }
