@@ -2127,8 +2127,8 @@ fn a_lens_written_from_the_cli_reaches_the_review_and_goes_outdated_when_its_fil
     assert_eq!(a["lenses"][0]["title"], "Tests");
     assert_eq!(a["folded"], false, "src/a.rs is in focus, so it stays open");
     assert_eq!(
-        review["blocks"][1]["files"][0]["folded"], true,
-        "once lenses are written any other file starts folded"
+        review["blocks"][1]["files"][0]["folded"], false,
+        "a file no lens speaks about shows its code: nothing stands in for it"
     );
 
     s.repo.write("src/a.rs", &numbered(61));
@@ -2137,8 +2137,8 @@ fn a_lens_written_from_the_cli_reaches_the_review_and_goes_outdated_when_its_fil
     let review = s.json("/api/review");
     assert_eq!(review["lenses"][0]["state"], "outdated");
     assert_eq!(
-        review["blocks"][1]["files"][0]["folded"], true,
-        "folding does not depend on the lenses being up to date"
+        review["blocks"][0]["files"][0]["lenses"][0]["state"], "outdated",
+        "an outdated file lens is still drawn, so it still stands in for the code"
     );
     let derived = s.repo.derive();
     assert!(

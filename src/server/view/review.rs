@@ -156,9 +156,10 @@ pub struct FileView {
     pub focus: Option<String>,
     /// The file's own lenses, drawn under its header.
     pub lenses: Vec<LensView>,
-    /// Whether its diff starts folded: on a review the lenses speak for, code
-    /// is opened by the reader — unless the map puts the file in focus,
-    /// which is the one thing that opens it.
+    /// Whether its diff starts folded: when a lens says something about the
+    /// file, the code is opened by the reader — unless the map puts the file
+    /// in focus. A file no lens speaks about shows its code: a change short
+    /// enough to need no summary is quicker read than opened.
     pub folded: bool,
 }
 
@@ -197,6 +198,7 @@ impl FileView {
         // the one thing this is supposed to catch.
         let viewed = progress.is_current(path, &change.content_hash);
 
+        let file_lenses = LensView::all(lenses.for_file(path), progress);
         FileView {
             path: path.to_string(),
             status: change.status.label(),
@@ -205,9 +207,9 @@ impl FileView {
             viewed,
             note,
             line_notes,
-            folded: lenses.speaks() && focus.is_none(),
+            folded: focus.is_none() && file_lenses.iter().any(|l| l.state != "missing"),
             focus,
-            lenses: LensView::all(lenses.for_file(path), progress),
+            lenses: file_lenses,
         }
     }
 }
@@ -404,10 +406,10 @@ mod tests {
         use crate::lenses::domain::{
             Covered, Freshness, LensAnswer, LensCatalog, LensId, LensTarget,
         };
-        let mut map = map_of(&[("core", "a.rs"), ("core", "b.rs")]);
+        let mut map = map_of(&[("core", "a.rs"), ("core", "b.rs"), ("core", "c.rs")]);
         map.focus(&slug("core"), "b.rs", Some("dense".into()))
             .unwrap();
-        let source = FakeDiffSource::with_paths(&["a.rs", "b.rs"]);
+        let source = FakeDiffSource::with_paths(&["a.rs", "b.rs", "c.rs"]);
         let scope = source.scope().unwrap().clone();
         let blob = |p: &str| scope.change(p).unwrap().content_hash.clone();
         let tests = LensAnswer {
@@ -445,6 +447,10 @@ mod tests {
             "once lenses are written a file is not shown until it is opened"
         );
         assert!(!files[1].folded, "unless the map puts it in focus");
+        assert!(
+            !files[2].folded,
+            "a file no lens speaks about shows its code, since nothing stands in for it"
+        );
         assert_eq!(files[1].focus.as_deref(), Some("dense"));
         assert_eq!(files[0].lenses[0].title, "Tests");
         let pr: Vec<_> = view

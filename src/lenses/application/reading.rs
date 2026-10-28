@@ -38,13 +38,6 @@ impl LensReading {
         .collect()
     }
 
-    /// Whether the session has written any lens on this review. Once it has,
-    /// the review is read through the lenses, and the code is there to be
-    /// opened rather than shown.
-    pub fn speaks(&self) -> bool {
-        !self.answers.is_empty()
-    }
-
     fn in_group(
         &self,
         group: LensGroup,
