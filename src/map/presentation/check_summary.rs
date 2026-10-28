@@ -2,7 +2,7 @@
 
 use std::fmt::{self, Display};
 
-use crate::map::application::CheckReport;
+use crate::map::application::{CheckReport, FOCUS_PER_BLOCK, FOCUS_PER_REVIEW};
 
 /// What the self-test found.
 pub struct CheckSummary<'a>(pub &'a CheckReport);
@@ -45,7 +45,7 @@ impl Display for CheckSummary<'_> {
             )?;
             writeln!(
                 f,
-                "Focus is the exception: at most 3 per review and 1 per block, each a file whose code could change\nwhether the reviewer approves. Run `farol file unfocus` on the rest."
+                "Focus is the exception: at most {FOCUS_PER_REVIEW} per review and {FOCUS_PER_BLOCK} per block, each a file whose code could change\nwhether the reviewer approves. Run `farol file unfocus` on the rest."
             )?;
         }
 

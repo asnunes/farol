@@ -3,8 +3,8 @@ use crate::error::Result;
 use crate::map::application::MapVersions;
 
 /// Focus is the exception: past these, the map has stopped choosing.
-const FOCUS_PER_REVIEW: usize = 3;
-const FOCUS_PER_BLOCK: usize = 1;
+pub const FOCUS_PER_REVIEW: usize = 3;
+pub const FOCUS_PER_BLOCK: usize = 1;
 
 /// What the self-test found.
 #[derive(Debug, Default)]
