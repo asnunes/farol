@@ -15,7 +15,7 @@ import type { CitationView, FileView, LensView } from "@/api";
 export function FileLenses({ file, open, onToggleOpen, onCite }: FileLensesProps) {
   if (!speaksAbout(file) || (file.viewed && !open)) return null;
   return (
-    <div className="file-lenses border-b border-rule bg-surface px-4 pb-2 md:px-6">
+    <div className="file-lenses border-b border-rule bg-surface px-4 pt-0.5 pb-2 md:px-6">
       {file.focus && (
         <p className="focus py-1.5 font-sans text-xs text-highlight">Focus: {file.focus}</p>
       )}
