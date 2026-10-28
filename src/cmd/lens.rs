@@ -110,6 +110,7 @@ impl LensAction {
                 &LensId::parse(&lens)?,
                 title.as_deref(),
                 prompt.as_deref(),
+                None,
             )?),
             Self::Enable { lens } => show(catalog()?.enable_lens.execute(&LensId::parse(&lens)?)?),
             Self::Disable { lens } => {

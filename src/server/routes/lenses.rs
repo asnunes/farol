@@ -45,27 +45,12 @@ pub(super) async fn save(
         Ok(id) => id,
         Err(e) => return fail(e.into()),
     };
-    let prefs = &state.preferences;
-    let outcome = (|| {
-        let mut catalog = None;
-        if body.title.is_some() || body.prompt.is_some() {
-            catalog = Some(prefs.update_lens.execute(
-                &id,
-                body.title.as_deref(),
-                body.prompt.as_deref(),
-            )?);
-        }
-        match body.enabled {
-            Some(true) => catalog = Some(prefs.enable_lens.execute(&id)?),
-            Some(false) => catalog = Some(prefs.disable_lens.execute(&id)?),
-            None => {}
-        }
-        match catalog {
-            Some(catalog) => Ok(catalog),
-            None => prefs.list_lenses.execute(),
-        }
-    })();
-    answer(outcome)
+    answer(state.preferences.update_lens.execute(
+        &id,
+        body.title.as_deref(),
+        body.prompt.as_deref(),
+        body.enabled,
+    ))
 }
 
 pub(super) async fn delete(
