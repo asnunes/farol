@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { blockOf, readingOrder, readingRows, type FileView, type ReviewView } from "./api";
+import { blockOf, lensAt, readingOrder, readingRows, type FileView, type ReviewView } from "./api";
 
 function file(path: string, viewed = false): FileView {
   return {
@@ -10,8 +10,9 @@ function file(path: string, viewed = false): FileView {
     viewed,
     note: null,
     lineNotes: [],
-    skim: false,
-    skimReason: null,
+    focus: null,
+    lenses: [],
+    folded: false,
   };
 }
 
@@ -22,28 +23,27 @@ function review(): ReviewView {
     generatedAt: "abc1234",
     commitsBehind: 0,
     blocks: [
-      { slug: "one", title: "First", context: "", files: [file("a.rs", true), file("b.rs")],
+      { slug: "one", title: "First", context: "", lenses: [], files: [file("a.rs", true), file("b.rs")],
         totalFiles: 2, viewedFiles: 1 },
-      { slug: "two", title: "Second", context: "", files: [file("c.rs")],
+      { slug: "two", title: "Second", context: "", lenses: [], files: [file("c.rs")],
         totalFiles: 1, viewedFiles: 0 },
     ],
-    looseSkim: [file("Cargo.lock")],
     unmapped: [],
-    totalFiles: 4,
+    totalFiles: 3,
     viewedFiles: 1,
     firstUnread: "b.rs",
+    lenses: [],
   };
 }
 
 describe("reading order", () => {
-  it("walks blocks in order and puts loose skim last", () => {
+  it("walks blocks in order", () => {
     // The order the keyboard moves through has to match the order on screen,
     // or j/k would jump around.
     expect(readingOrder(review()).map((f) => f.path)).toEqual([
       "a.rs",
       "b.rs",
       "c.rs",
-      "Cargo.lock",
     ]);
   });
 
@@ -53,13 +53,13 @@ describe("reading order", () => {
     expect(next?.path).toBe("b.rs");
   });
 
-  it("announces each block above the files it holds, and ends on loose skim", () => {
+  it("announces each block above the files it holds", () => {
     // What the pane draws. It used to assemble this itself, and the comment on
     // the test above — that the keys and the screen have to agree — was a hope
     // rather than something the code held to.
     expect(
       readingRows(review()).map((row) => ("file" in row ? row.file.path : `[${row.block.slug}]`)),
-    ).toEqual(["[one]", "a.rs", "b.rs", "[two]", "c.rs", "Cargo.lock"]);
+    ).toEqual(["[one]", "a.rs", "b.rs", "[two]", "c.rs"]);
   });
 
   it("walks the keys through exactly the files the page draws", () => {
@@ -82,8 +82,20 @@ describe("block lookup", () => {
     expect(blockOf(r, "c.rs")?.block.title).toBe("Second");
   });
 
-  it("returns nothing for a file that only appears in loose skim", () => {
-    // It still renders, it just has no block band above it.
+  it("returns nothing for a file no block reads", () => {
     expect(blockOf(review(), "Cargo.lock")).toBeNull();
+  });
+});
+
+describe("the lens the reader is on", () => {
+  it("is found by its key, with the block it opens, and a file path is never taken for one", () => {
+    const r = review();
+    const lens = { id: "architecture", title: "Architecture" } as ReviewView["lenses"][number];
+    r.blocks[1].lenses = [lens];
+    r.lenses = [{ ...lens, id: "overview" }];
+
+    expect(lensAt(r, "lens:block:two:architecture")).toEqual({ lens, block: r.blocks[1] });
+    expect(lensAt(r, "lens:pr:overview")?.block).toBeNull();
+    expect(lensAt(r, "c.rs"), "a file is a file, even beside a lens").toBeNull();
   });
 });

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, readingOrder, type ReviewView } from "@/api";
+import { api, lensAt, readingOrder, type LensView, type ReviewView } from "@/api";
 import { onNudge } from "@/lib/watch";
 import { said } from "@/lib/utils";
 
@@ -23,7 +23,7 @@ export function useReview() {
       setStale(null);
       setCurrent((prev) => {
         // Stay where the reader is, unless the file they were on is gone.
-        if (prev && readingOrder(next).some((f) => f.path === prev)) return prev;
+        if (prev && (readingOrder(next).some((f) => f.path === prev) || lensAt(next, prev))) return prev;
         // A review read to the end has no unread file to land on, and the top
         // is the sensible place to arrive at one. That fallback is a landing
         // decision and stays here; which file is first unread is not, and does
@@ -46,6 +46,9 @@ export function useReview() {
     const off = [
       onNudge("map", () => setStale("map")),
       onNudge("head", () => setStale((previous) => previous ?? "head")),
+      // New answers are offered like a new map, for the same reason: they
+      // can fold and unfold the files the reader is in the middle of.
+      onNudge("lenses", () => setStale((previous) => previous ?? "lenses")),
     ];
     return () => off.forEach((stop) => stop());
   }, []);
@@ -58,7 +61,16 @@ export function useReview() {
     [load],
   );
 
-  return { review, current, setCurrent, error, toggleViewed, stale, generation, refresh: load };
+  const toggleSeen = useCallback(
+    async (lens: LensView, seen: boolean) => {
+      if (!lens.target) return;
+      await api.seeLens(lens.id, lens.target, seen);
+      await load(false);
+    },
+    [load],
+  );
+
+  return { review, current, setCurrent, error, toggleViewed, toggleSeen, stale, generation, refresh: load };
 }
 
-export type RefreshReason = "map" | "head";
+export type RefreshReason = "map" | "head" | "lenses";

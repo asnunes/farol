@@ -186,7 +186,7 @@ impl Drop for Serving {
 }
 
 /// A branch with a map worth serving: two blocks, all three levels of prose,
-/// and something marked skim.
+/// and a file in focus.
 fn mapped() -> Repo {
     let repo = Repo::new();
     repo.feature();
@@ -215,7 +215,15 @@ fn mapped() -> Repo {
         "why",
         "src/b.rs",
     ]);
-    repo.ok(&["skim", "add", "Cargo.lock", "--reason", "regenerated"]);
+    repo.ok(&["file", "add", "wiring", "Cargo.lock"]);
+    repo.ok(&[
+        "file",
+        "focus",
+        "core",
+        "src/a.rs",
+        "--reason",
+        "the whole fix",
+    ]);
     repo
 }
 
@@ -309,6 +317,18 @@ fn foreign_origins_cannot_change_state_or_start_publication() {
             r#"{"key":"send_instruction","value":"unwanted"}"#,
         ),
         ("DELETE", "/api/config/send-instruction", ""),
+        (
+            "POST",
+            "/api/lenses",
+            r#"{"title":"x","group":"pr","prompt":"x"}"#,
+        ),
+        ("PUT", "/api/lenses/overview", r#"{"enabled":false}"#),
+        ("DELETE", "/api/lenses/overview", ""),
+        (
+            "POST",
+            "/api/lenses/seen",
+            r#"{"lens":"overview","target":{"kind":"pr"},"seen":true}"#,
+        ),
         ("POST", "/api/comments/nonexistent/generate", "{}"),
         (
             "POST",
@@ -424,15 +444,14 @@ fn every_level_of_prose_the_session_wrote_reaches_the_browser() {
 }
 
 #[test]
-fn a_file_marked_skim_arrives_with_the_reason_it_can_be_skimmed() {
+fn a_file_in_focus_arrives_with_why() {
     let s = Serving::new();
 
     let review = s.json("/api/review");
 
-    let loose = review["looseSkim"].as_array().unwrap();
-    assert_eq!(loose[0]["path"], "Cargo.lock");
-    assert_eq!(loose[0]["skim"], true);
-    assert_eq!(loose[0]["skimReason"], "regenerated");
+    let a = &review["blocks"][0]["files"][0];
+    assert_eq!(a["path"], "src/a.rs");
+    assert_eq!(a["focus"], "the whole fix");
 }
 
 #[test]
@@ -450,10 +469,6 @@ fn a_map_the_comparison_has_outlived_offers_nothing_to_read() {
     let review = s.json("/api/review");
     assert_eq!(review["totalFiles"], 0);
     assert!(review["blocks"].as_array().unwrap().is_empty(), "{review}");
-    assert!(
-        review["looseSkim"].as_array().unwrap().is_empty(),
-        "{review}"
-    );
     assert!(
         review["unmapped"].as_array().unwrap().is_empty(),
         "{review}"
@@ -485,7 +500,7 @@ fn only_the_files_that_left_the_comparison_go() {
     assert_eq!(review["blocks"].as_array().unwrap().len(), 1, "{review}");
     assert_eq!(review["blocks"][0]["slug"], "wiring");
     assert_eq!(review["blocks"][0]["files"][0]["path"], "src/b.rs");
-    assert_eq!(review["looseSkim"][0]["path"], "Cargo.lock");
+    assert_eq!(review["blocks"][0]["files"][1]["path"], "Cargo.lock");
     assert_eq!(review["totalFiles"], 2);
     assert!(
         review["unmapped"].as_array().unwrap().is_empty(),
@@ -2074,4 +2089,106 @@ fn the_agent_acknowledges_and_answers_from_its_shell_and_the_page_reads_the_conv
         listed.contains("And the new one?"),
         "the agent reads the replies too: {listed}"
     );
+}
+
+#[test]
+fn a_lens_written_from_the_cli_reaches_the_review_and_goes_outdated_when_its_file_changes() {
+    let s = Serving::new();
+    s.repo.ok(&[
+        "lens",
+        "write",
+        "overview",
+        "--text",
+        "It fixes `src/a.rs:10-12`.",
+    ]);
+    s.repo.ok(&[
+        "lens",
+        "write",
+        "tests",
+        "--file",
+        "src/a.rs",
+        "--text",
+        "- retries once",
+    ]);
+    let past_the_end = s
+        .repo
+        .farol(&["lens", "write", "overview", "--text", "`src/a.rs:500`"]);
+    assert!(
+        !past_the_end.status.success(),
+        "a citation past the end of the file is refused"
+    );
+
+    let review = s.json("/api/review");
+    assert_eq!(review["lenses"][0]["id"], "overview");
+    assert_eq!(review["lenses"][0]["state"], "written");
+    assert_eq!(review["lenses"][0]["citations"][0]["from"], 10);
+    let a = &review["blocks"][0]["files"][0];
+    assert_eq!(a["path"], "src/a.rs");
+    assert_eq!(a["lenses"][0]["title"], "Tests");
+    assert_eq!(a["folded"], false, "src/a.rs is in focus, so it stays open");
+    assert_eq!(
+        review["blocks"][1]["files"][0]["folded"], true,
+        "code starts folded unless focus or a lens asks for it: the reader's time comes first"
+    );
+
+    s.repo.write("src/a.rs", &numbered(61));
+    s.repo.commit("one more line");
+    s.repo.derive();
+    let review = s.json("/api/review");
+    assert_eq!(review["lenses"][0]["state"], "outdated");
+    assert_eq!(
+        review["blocks"][0]["files"][0]["lenses"][0]["state"], "outdated",
+        "an outdated file lens is still drawn, so it still stands in for the code"
+    );
+    let derived = s.repo.derive();
+    assert!(
+        derived.contains("lenses to review"),
+        "updating the map says there are lenses to review: {derived}"
+    );
+    let pending = s.repo.ok(&["lens", "pending"]);
+    assert!(
+        pending.contains("outdated: if it still holds, farol lens keep overview"),
+        "{pending}"
+    );
+    s.repo.ok(&["lens", "keep", "overview"]);
+    let review = s.json("/api/review");
+    assert_eq!(
+        review["lenses"][0]["state"], "written",
+        "a kept lens is in date again"
+    );
+    assert_eq!(review["lenses"][0]["text"], "It fixes `src/a.rs:10-12`.");
+    let (status, body) = s.probe(
+        "POST",
+        "/api/lenses/seen",
+        Some(r#"{"lens":"overview","target":{"kind":"pr"},"seen":true}"#),
+    );
+    assert_eq!(status, 204, "{body}");
+    assert_eq!(s.json("/api/review")["lenses"][0]["seen"], true);
+    s.repo
+        .ok(&["lens", "write", "overview", "--text", "Rewritten."]);
+    assert_eq!(
+        s.json("/api/review")["lenses"][0]["seen"],
+        false,
+        "a lens the session rewrote asks to be read again"
+    );
+}
+
+#[test]
+fn the_lens_catalog_is_edited_from_settings_and_the_cli_reads_the_same_one() {
+    let s = Serving::new();
+    let (status, body) = s.probe(
+        "POST",
+        "/api/lenses",
+        Some(r#"{"title":"Migrations","group":"file","prompt":"What each migration does."}"#),
+    );
+    assert_eq!(status, 200, "{body}");
+    let (status, _) = s.probe("PUT", "/api/lenses/overview", Some(r#"{"enabled":false}"#));
+    assert_eq!(status, 200);
+
+    let listed = s.repo.ok(&["lens", "list"]);
+    assert!(listed.contains("[on ] migrations"), "{listed}");
+    assert!(listed.contains("[off] overview"), "{listed}");
+    let lenses = s.json("/api/lenses");
+    assert_eq!(lenses["lenses"][0]["id"], "overview");
+    assert_eq!(lenses["lenses"][0]["enabled"], false);
 }

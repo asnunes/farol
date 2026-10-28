@@ -117,6 +117,12 @@ fn nudge_for(
         return Some("comments");
     }
 
+    // What the lenses say is its own news too: the session writes it while
+    // the reader reads, and the page offers it rather than swapping it in.
+    if paths.iter().any(|p| under(p, "/lenses/")) {
+        return Some("lenses");
+    }
+
     // Only the maps folder is the map. The store also holds `state.json`, which
     // is what the reader has marked as read, and that is written by the page on
     // every checkbox: reported as news it would raise the reload banner over
@@ -186,6 +192,18 @@ mod tests {
                 "/repo/.git/farol/feature-x/comments/18cb-3731.md"
             ])),
             Some("comments")
+        );
+    }
+
+    #[test]
+    fn a_lens_being_written_is_its_own_news() {
+        // Not the map: the reader is offered the new answers, and nothing
+        // about the blocks moved.
+        assert_eq!(
+            nudge_for(&paths(&[
+                "/repo/.git/farol/feature-x/lenses/tests/file/0a1b.json"
+            ])),
+            Some("lenses")
         );
     }
 

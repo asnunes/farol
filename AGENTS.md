@@ -32,7 +32,8 @@ src/
 ├── progress/    what has been read — written by the server
 ├── comments/    what the reviewer wrote back
 ├── config/      preferences for the user, across repositories
-└── agent/       reaching the session that implemented the branch
+├── agent/       reaching the session that implemented the branch
+└── lenses/      what the session says about the change, before the code
 ```
 
 `agent` has only `domain` and `infra`. It holds the `AgentChannel` port and one
@@ -51,6 +52,13 @@ id. Text and state are read back from GitHub, so there is no local copy to
 reconcile, and submitting the review is one call on something that already
 exists. The connection is the `gh` login, asked for at each call; there is no
 other way to publish and no agent fallback.
+
+`lenses` holds what the session says about the change so the reviewer can
+learn it before the code: a title and a prompt per lens, in the user's
+config, and one answer per lens and target in the branch's store, beside the
+map and not in it — some lenses judge, and the map only explains. An answer
+remembers the blobs it covered and the prompt it followed, and is Outdated
+when either moves; it never claims to be current.
 
 The parts were chosen by **who writes them**: the skill writes `map`, the server
 writes `progress`, nobody writes `diff`. That is the same line that separates the
@@ -309,7 +317,7 @@ writer primitives, not a component layer.
 ### The view model is assembled on the server
 
 `ReviewView::build` applies the reading rules — blocks in the author's order,
-each file under the one block that reads it, skim after. The frontend renders;
+each file under the one block that reads it. The frontend renders;
 it does not decide.
 
 **A file belongs to one block.** It used to be allowed in several, and the

@@ -25,8 +25,7 @@ impl Display for MapSummary<'_> {
             n => format!("{n} blocks"),
         }];
 
-        // A file in two blocks is one file to read, so it counts once.
-        let files = map.covered_paths().len() - map.skim().len();
+        let files = map.covered_paths().len();
         parts.push(match files {
             1 => "1 file".to_string(),
             n => format!("{n} files"),
@@ -45,8 +44,14 @@ impl Display for MapSummary<'_> {
             });
         }
 
-        if !map.skim().is_empty() {
-            parts.push(format!("{} marked skim", map.skim().len()));
+        let looks = map
+            .blocks()
+            .iter()
+            .flat_map(|b| b.files.iter())
+            .filter(|file| file.focus.is_some())
+            .count();
+        if looks > 0 {
+            parts.push(format!("{looks} in focus"));
         }
 
         writeln!(f, "{}", parts.join(" · "))
@@ -120,12 +125,12 @@ mod tests {
     }
 
     #[test]
-    fn skim_entries_are_counted_apart_from_files_to_read() {
+    fn files_in_focus_are_counted() {
         let mut m = mapped();
-        m.add_skim("Cargo.lock", "generated", None).unwrap();
+        let path = m.blocks()[0].files[0].path.clone();
+        m.focus(&slug("core"), &path, Some("dense".into())).unwrap();
 
         let out = summary(&m);
-        assert!(out.contains("1 file ·"), "{out}");
-        assert!(out.contains("1 marked skim"), "{out}");
+        assert!(out.contains("1 in focus"), "{out}");
     }
 }

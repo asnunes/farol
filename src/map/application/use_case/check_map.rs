@@ -2,12 +2,19 @@ use crate::diff::application::ReviewScope;
 use crate::error::Result;
 use crate::map::application::MapVersions;
 
+/// Focus is the exception: past these, the map has stopped choosing.
+pub const FOCUS_PER_REVIEW: usize = 3;
+pub const FOCUS_PER_BLOCK: usize = 1;
+
 /// What the self-test found.
 #[derive(Debug, Default)]
 pub struct CheckReport {
     pub uncovered: Vec<String>,
     pub pending_orphans: usize,
     pub commits_behind: u32,
+    /// Where the map puts more in focus than the limits allow. A warning, not
+    /// a failure: the map is still readable, it is just asking for too much.
+    pub too_much_focus: Vec<String>,
 }
 
 impl CheckReport {
@@ -46,8 +53,25 @@ impl CheckMap {
                 .collect(),
             pending_orphans: map.orphans().len(),
             commits_behind: self.versions.behind(&map),
+            too_much_focus: too_much_focus(&map),
         })
     }
+}
+
+fn too_much_focus(map: &crate::map::domain::ReviewMap) -> Vec<String> {
+    let in_focus =
+        |b: &crate::map::domain::Block| b.files.iter().filter(|f| f.focus.is_some()).count();
+    let mut out: Vec<String> = map
+        .blocks()
+        .iter()
+        .filter(|b| in_focus(b) > FOCUS_PER_BLOCK)
+        .map(|b| format!("block '{}' has {} files in focus", b.slug, in_focus(b)))
+        .collect();
+    let total: usize = map.blocks().iter().map(in_focus).sum();
+    if total > FOCUS_PER_REVIEW {
+        out.insert(0, format!("the review has {total} files in focus"));
+    }
+    out
 }
 
 #[cfg(test)]
@@ -90,28 +114,6 @@ mod tests {
         assert!(report.uncovered.is_empty());
         assert_eq!(report.pending_orphans, 0);
         assert!(report.passed());
-    }
-
-    #[test]
-    fn a_file_on_the_skim_list_counts_as_covered() {
-        // Saying "read this diagonally" is a decision about the file, not a
-        // failure to decide.
-        let paths = ["a.rs", "Cargo.lock"];
-        let (svc, scope) = use_case_setup(&paths);
-        svc.editor
-            .edit(|map| {
-                map.add_block(&slug("core"), "t", "c", crate::map::domain::Position::End)?;
-                map.add_file(&slug("core"), "a.rs", None, None)?;
-                map.add_skim("Cargo.lock", "regenerated", None)
-            })
-            .unwrap();
-
-        assert!(
-            CheckMap::new(svc.versions, scope)
-                .execute()
-                .unwrap()
-                .passed()
-        );
     }
 
     #[test]
@@ -174,6 +176,43 @@ mod tests {
                 ..Default::default()
             }
             .passed()
+        );
+    }
+
+    #[test]
+    fn focus_past_the_limits_is_a_warning_and_not_a_failure() {
+        let paths = ["a.rs", "b.rs", "c.rs", "d.rs"];
+        let (svc, scope) = use_case_setup(&paths);
+        svc.editor
+            .edit(|map| {
+                for (block, path) in [
+                    ("one", "a.rs"),
+                    ("one", "b.rs"),
+                    ("two", "c.rs"),
+                    ("three", "d.rs"),
+                ] {
+                    if map.block(&slug(block)).is_none() {
+                        map.add_block(&slug(block), "t", "c", crate::map::domain::Position::End)?;
+                    }
+                    map.add_file(&slug(block), path, None, None)?;
+                    map.focus(&slug(block), path, Some("why".into()))?;
+                }
+                Ok::<_, MapError>(())
+            })
+            .unwrap();
+
+        let report = CheckMap::new(svc.versions, scope).execute().unwrap();
+
+        assert_eq!(
+            report.too_much_focus,
+            vec![
+                "the review has 4 files in focus",
+                "block 'one' has 2 files in focus"
+            ]
+        );
+        assert!(
+            report.passed(),
+            "too much focus warns; it does not block the skill"
         );
     }
 }

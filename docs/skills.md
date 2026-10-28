@@ -31,7 +31,7 @@ npx skills add ./skills --skill '*'
 
 | Skill | Use it for | Skill prerequisites |
 |---|---|---|
-| `farol` | Shared map principles, context, reading order, skim, and server handling | None |
+| `farol` | Shared map principles, context, reading order, files in focus, lenses, and server handling | None |
 | `farol-maintain-map` | Creating or updating a map in the implementation session | `farol` |
 | `farol-pr-context` | Factual PR context inside a Farol workflow | Included checkout script; Git, gh, Bash |
 | `farol-map-from-review` | Preparing a map when the reviewer received a PR without one | `farol`, `farol-pr-context`; delegates to import when a map exists |

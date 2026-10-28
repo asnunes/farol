@@ -206,8 +206,8 @@ impl GixSource {
     /// The file as it stands after the change, line by line.
     ///
     /// A deleted file is under review but has no side to read: it comes back
-    /// empty, not as a rejection, the way it belongs in a block or in the skim
-    /// list like any other change. What is genuinely outside the window is
+    /// empty, not as a rejection, the way it belongs in a block like any
+    /// other change. What is genuinely outside the window is
     /// refused, in the scope's own words.
     fn new_text(&self, path: &str) -> Result<Vec<String>> {
         match self.head_blobs.get(path) {

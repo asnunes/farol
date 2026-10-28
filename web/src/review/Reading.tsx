@@ -6,11 +6,15 @@ import { BlockBar } from "@/review/BlockBar";
 import { FileSection } from "@/review/FileSection";
 import { DriftedThreads } from "@/review/DriftedThreads";
 import { Unmapped } from "@/review/Unmapped";
+import { BlockLenses } from "@/review/lenses/BlockLenses";
+import { CodeBar } from "@/review/lenses/CodeBar";
+import { ReviewLenses } from "@/review/lenses/ReviewLenses";
+import { scrollToFile, scrollToLine } from "@/lib/scroll";
 import type { CommentActions } from "@/hooks/useComments";
 import type { DiffView } from "@/hooks/useDiffView";
 import type { OpenFiles } from "@/hooks/useOpenFiles";
-import { blockOf, readingRows } from "@/api";
-import type { CommentView, ReviewView } from "@/api";
+import { blockOf, readingOrder, readingRows } from "@/api";
+import type { CitationView, CommentView, LensView, ReviewView } from "@/api";
 
 /** The whole review, in one scroll.
  *
@@ -26,17 +30,27 @@ export function Reading({
   onToggleViewed,
   files,
   comments,
+  onSeen,
 }: ReadingProps) {
   const pane = useRef<HTMLElement>(null);
   const drifted = byBlock(review, comments.drifted);
   const { diffs, errors, request, retry } = useDiffs();
+
+  // A citation in a lens: open its file, bring it up, and land on the line.
+  const cite = (citation: CitationView) => {
+    const file = readingOrder(review).find((f) => f.path === citation.path);
+    if (!file) return;
+    files.set(file, true);
+    scrollToFile(file.path);
+    scrollToLine(file.path, citation.side, citation.from);
+  };
 
   // Landing first, and the order is load-bearing: effects run in the order
   // they are called, and naming the current file from the scroll before the
   // page has been scrolled names whatever sits at the top of a pane nobody has
   // moved yet. That name then outlives the landing, because the correction that
   // follows the scroll is suppressed by the settling the scroll itself set.
-  useResumeAt(current);
+  useResumeAt(current, current === readingOrder(review)[0]?.path);
   useCurrentFile(pane, review, onCurrent);
 
   // Nothing left in the comparison: the base moved under the map, typically
@@ -53,14 +67,14 @@ export function Reading({
 
   return (
     <main ref={pane} className="pane overflow-y-auto bg-ground" data-current={current ?? ""}>
+      <ReviewLenses lenses={review.lenses} onCite={cite} onSeen={onSeen} />
       {readingRows(review).map((row) =>
         "block" in row ? (
-          <BlockBar
-            key={row.block.slug}
-            block={row.block}
-            number={row.number}
-            total={review.blocks.length}
-          />
+          <Fragment key={row.block.slug}>
+            <BlockBar block={row.block} number={row.number} total={review.blocks.length} />
+            <BlockLenses slug={row.block.slug} lenses={row.block.lenses} onCite={cite} onSeen={onSeen} />
+            {row.block.files.length > 0 && <CodeBar block={row.block} />}
+          </Fragment>
         ) : (
           <Fragment key={row.file.path}>
             <FileSection
@@ -75,6 +89,7 @@ export function Reading({
               onToggleViewed={() => onToggleViewed(row.file.path, !row.file.viewed)}
               comments={comments.on(row.file.path)}
               commentActions={comments}
+              onCite={cite}
             />
             {/* After the block's last file: the threads of its files that the
                 diff no longer reaches. */}
@@ -138,4 +153,5 @@ type ReadingProps = {
   onToggleViewed: (path: string, viewed: boolean) => void;
   files: OpenFiles;
   comments: CommentActions;
+  onSeen: (lens: LensView, seen: boolean) => void;
 };

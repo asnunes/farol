@@ -2,7 +2,7 @@
 
 use std::fmt::{self, Display};
 
-use crate::map::application::CheckReport;
+use crate::map::application::{CheckReport, FOCUS_PER_BLOCK, FOCUS_PER_REVIEW};
 
 /// What the self-test found.
 pub struct CheckSummary<'a>(pub &'a CheckReport);
@@ -14,7 +14,7 @@ impl Display for CheckSummary<'_> {
         if !report.uncovered.is_empty() {
             writeln!(
                 f,
-                "{} file(s) in the review are in no block and not marked skim:",
+                "{} file(s) in the review are in no block:",
                 report.uncovered.len()
             )?;
             for path in &report.uncovered {
@@ -22,7 +22,7 @@ impl Display for CheckSummary<'_> {
             }
             writeln!(
                 f,
-                "\nA file nobody assigned never appears on screen. Put each one in a\nblock, in the `outros` block, or mark it skim."
+                "\nA file nobody assigned never appears on screen. Put each one in the\nblock whose change it follows, or in the `outros` block."
             )?;
         }
 
@@ -34,6 +34,18 @@ impl Display for CheckSummary<'_> {
                 f,
                 "{} deactivated line note(s) still undecided. Run `farol map derive`\nto list them, then restore or discard each one.",
                 report.pending_orphans
+            )?;
+        }
+
+        if !report.too_much_focus.is_empty() {
+            writeln!(
+                f,
+                "Too much in focus: {}.",
+                report.too_much_focus.join("; ")
+            )?;
+            writeln!(
+                f,
+                "Focus is the exception: at most {FOCUS_PER_REVIEW} per review and {FOCUS_PER_BLOCK} per block, each a file whose code could change\nwhether the reviewer approves. Run `farol file unfocus` on the rest."
             )?;
         }
 

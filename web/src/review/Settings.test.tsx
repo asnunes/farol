@@ -1,8 +1,10 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { api, type BooleanSetting, type Config, type TextSetting } from "@/api";
 import { Settings } from "./Settings";
 
+// The lenses have tests of their own; here they stay out of the way.
+beforeEach(() => vi.spyOn(api, "lenses").mockResolvedValue({ lenses: [] }));
 afterEach(() => vi.restoreAllMocks());
 
 it("renders backend labels and sends the supplied key without knowing the setting", async () => {

@@ -481,8 +481,8 @@ fn check_fails_while_a_file_belongs_to_nobody() {
     assert!(text.contains("src/forgotten.rs"), "{text}");
     assert!(text.contains("never appears on screen"), "{text}");
 
-    // Marking it skim is a legitimate way to satisfy the rule.
-    repo.ok(&["skim", "add", "src/forgotten.rs", "--reason", "mechanical"]);
+    // Putting it in a block is what satisfies the rule.
+    repo.ok(&["file", "add", "core", "src/forgotten.rs"]);
     assert!(repo.ok(&["map", "check"]).contains("Map is complete."));
 }
 
@@ -750,15 +750,7 @@ fn a_malformed_block_name_is_refused_wherever_one_is_named() {
             "Not A Slug",
         ],
         vec!["block", "move", "core", "--after", "Not A Slug"],
-        vec![
-            "skim",
-            "add",
-            "src/a.rs",
-            "--reason",
-            "r",
-            "--block",
-            "Not A Slug",
-        ],
+        vec!["file", "focus", "Not A Slug", "src/a.rs", "--reason", "r"],
     ] {
         let err = repo.fails(&args);
         assert!(
@@ -978,18 +970,24 @@ fn notes_can_be_rewritten_and_withdrawn() {
 }
 
 #[test]
-fn a_skim_entry_can_be_taken_back_out() {
+fn a_file_in_focus_says_why_and_can_be_taken_out() {
     let repo = Repo::new();
     repo.feature();
-    repo.write("Cargo.lock", "checksums\n");
-    repo.commit("regenerate");
     repo.derive();
-    repo.ok(&["skim", "add", "Cargo.lock", "--reason", "regenerated"]);
-    assert!(repo.ok(&["map", "show"]).contains("Cargo.lock"));
+    repo.core_block(&["src/a.rs"]);
+    repo.ok(&[
+        "file",
+        "focus",
+        "core",
+        "src/a.rs",
+        "--reason",
+        "the whole rule",
+    ]);
+    assert!(repo.ok(&["map", "show"]).contains("focus: the whole rule"));
 
-    repo.ok(&["skim", "remove", "Cargo.lock"]);
+    repo.ok(&["file", "unfocus", "core", "src/a.rs"]);
 
-    assert!(!repo.ok(&["map", "show"]).contains("Cargo.lock"));
+    assert!(!repo.ok(&["map", "show"]).contains("focus:"));
 }
 
 #[test]
@@ -1608,4 +1606,32 @@ fn a_thread_whose_file_left_the_review_is_still_listed_and_answered() {
         repo.ok(&["thread", "list"]).contains("Removed it instead."),
         "the reply lands on the thread off the diff"
     );
+}
+
+#[test]
+fn the_lens_catalog_answers_from_outside_a_repository() {
+    let repo = Repo::new();
+    let outside = tempfile::tempdir().unwrap();
+
+    let out = repo.farol_in(outside.path(), &["lens", "list"]);
+
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(String::from_utf8_lossy(&out.stdout).contains("[on ] tests"));
+}
+
+#[test]
+fn a_lens_aimed_at_the_wrong_target_is_refused_with_the_way_out() {
+    let repo = Repo::new();
+    repo.feature();
+    repo.derive();
+    repo.core_block(&["src/a.rs"]);
+
+    let out = repo.farol(&["lens", "write", "tests", "--text", "x"]);
+
+    assert!(!out.status.success());
+    assert!(String::from_utf8_lossy(&out.stderr).contains("--file <path>"));
 }

@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { fileLabels } from "@/lib/path";
 import { FileRow } from "./FileRow";
+import { LensRow } from "./LensRow";
 import { readingOrder } from "@/api";
 import type { CommentsOn } from "@/hooks/useComments";
 import type { FileLabels } from "@/lib/path";
@@ -31,6 +32,18 @@ export function Sidebar({
 
   return (
     <aside className="sidebar overflow-y-auto border-rule bg-surface py-3 max-md:max-h-[33dvh] max-md:border-b md:border-r">
+      {review.lenses.length > 0 && (
+        <section className="blk mb-4 px-3" data-state="lenses">
+          <div className="blk-head flex items-center gap-2 px-2">
+            <div className="blk-title truncate font-sans text-[0.8125rem] font-semibold text-ink">Pull request</div>
+          </div>
+          <ul className="blk-files mt-1">
+            {review.lenses.map((lens) => (
+              <LensRow key={lens.id} lens={lens} current={current === `lens:pr:${lens.id}`} onPick={() => onPick(`lens:pr:${lens.id}`)} />
+            ))}
+          </ul>
+        </section>
+      )}
       {review.blocks.map((block, i) => (
         <Block
           key={block.slug}
@@ -43,33 +56,6 @@ export function Sidebar({
         />
       ))}
 
-      {review.looseSkim.length > 0 && (
-        <section className="blk mb-4 px-3" data-state="loose">
-          <div className="blk-head flex items-center gap-2 px-2">
-            <div
-              aria-hidden="true"
-              className="num loose grid size-5 shrink-0 place-items-center rounded-full bg-sunken font-mono text-[0.6875rem] text-ink-muted"
-            >
-              ~
-            </div>
-            <div className="blk-title loose truncate font-sans text-[0.8125rem] text-ink-muted italic">
-              No block · safe to skim
-            </div>
-          </div>
-          <ul className="blk-files mt-1">
-            {review.looseSkim.map((f) => (
-              <FileRow
-                key={f.path}
-                file={f}
-                label={label(f.path)}
-                comments={comments(f.path).length}
-                current={current}
-                onPick={onPick}
-              />
-            ))}
-          </ul>
-        </section>
-      )}
     </aside>
   );
 }
@@ -89,7 +75,7 @@ function Block({
   const state =
     block.viewedFiles === block.totalFiles
       ? "done"
-      : block.files.some((f) => f.path === current)
+      : block.files.some((f) => f.path === current) || current?.startsWith(`lens:block:${block.slug}:`)
         ? "current"
         : "todo";
 
@@ -117,6 +103,14 @@ function Block({
         </div>
       </div>
       <ul className="blk-files mt-1">
+        {block.lenses.map((lens) => (
+          <LensRow
+            key={lens.id}
+            lens={lens}
+            current={current === `lens:block:${block.slug}:${lens.id}`}
+            onPick={() => onPick(`lens:block:${block.slug}:${lens.id}`)}
+          />
+        ))}
         {block.files.map((f) => (
           <FileRow
             key={f.path}
@@ -137,7 +131,8 @@ type SidebarProps = {
   /** A file's comments, from the one place they are grouped. */
   comments: CommentsOn;
   current: string | null;
-  onPick: (path: string) => void;
+  /** A file path, or `lens:<key>` for a lens row. */
+  onPick: (place: string) => void;
 };
 
 type BlockProps = {

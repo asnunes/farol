@@ -8,7 +8,8 @@ description: Apply Farol's principles for organizing review maps, writing implem
 Farol shows a change in the order that makes its implementation understandable,
 carrying the context the diff does not.
 
-A map contains blocks, explanations, file and line notes, and skim markers.
+A map contains blocks, explanations, file and line notes, and the files
+in focus.
 Reviewer comments and reading progress are separate from the map.
 
 Before using the CLI, check `farol --version`. If it is unavailable, direct the
@@ -59,9 +60,9 @@ Do not group by folder or by the file's role — controller, service,
 repository. That grouping does not depend on the change: two completely
 different changes would produce the same split.
 
-Ask of every file whether it needs close reading before deciding which
-block it belongs to. Mechanical changes may belong in skim, attached to
-the block whose decision caused them.
+Every file goes into a block. A mechanical change belongs to the block
+whose decision caused it, where the reader meets the decision first and
+its propagation after. A file with no story at all goes in `outros`.
 
 Do not force a file into a thematic block just to avoid leftovers.
 A misleading grouping is worse than acknowledging that a change stands
@@ -177,7 +178,8 @@ is the reviewer's decision.
 
 If you identify a potential problem while preparing the map, keep
 that finding separate from the map and report it through the review
-or conversation workflow appropriate to the task.
+or conversation workflow appropriate to the task, or in the lens that
+asks for it (see Write the lenses).
 
 ## Give each block its context
 
@@ -255,70 +257,39 @@ applies to the whole block, move that explanation to the block context.
 
 Do not invent a decision to fill an otherwise unexplained file.
 
-## Skim marks files the reviewer can skip
+## Put in focus what is worth opening
 
-A skim marker means the reviewer can skip reading this file without
-losing the understanding needed to review the implementation.
+Every file starts folded: the reader learns the change from the map and
+the lenses, and opens the code when they want to check it. Put in focus the files that deserve to be opened anyway, and say
+why:
 
-The map should concentrate the reviewer's attention on the files that
-carry the change: its behavior, decisions, and reasons. Files that only
-follow those decisions mechanically can be marked as skim.
+    farol file focus <slug> <path> --reason '…'
+    farol file unfocus <slug> <path>
 
-Ask of every file:
+No file in focus is the default, and a map without focus is right. A
+file earns focus only when, after the lenses, reading its code could
+still change whether the reviewer approves:
 
-If the reviewer skips this file entirely, will they miss anything
-needed to understand the implementation or a decision behind it?
+- it holds the rule the whole change rests on;
+- it has a subtlety a summary loses: ordering, concurrency, state, a
+  boundary;
+- a mistake in it is hard to undo: money, authentication, deleted data,
+  migrations.
 
-If the answer is no, the file is a candidate for skim.
+Size, being new, being a test, config or wiring never earns focus on
+their own. At most three per pull request and one per block; `farol map
+check` warns past that. The reason names which, concretely, so the
+reader can decide whether to follow it:
 
-For example, a field rename may require changing twenty consumers.
-The decision and its implications belong in the main reading path.
-Consumers that only adopt the new name can be skipped once that
-decision is understood.
+- Vague: "Important file."
+- Concrete: "Holds the whole retry rule; the rest only calls it."
+- Vague: "Needs attention."
+- Concrete: "A retry here can resend a charge the provider accepted."
 
-Skim is not merely “read this faster”. It means the map does not
-require the reviewer to open this file.
-
-Inspect the file before making that recommendation. If it contains
-a separate behavior change or a decision the reviewer needs to
-understand, keep it in the main reading path.
-
-The skim reason states why the file can be skipped:
-“Only updates consumers to use the renamed response field.”
-
-This is a recommendation about what the reviewer needs to read,
-not a claim that the file is correct or free of defects.
-
-## Keep skim attached to its context
-
-Attach a skimmed file to the block whose change caused it, using
-`--block`, unless it genuinely belongs to no block.
-
-The reviewer should encounter the decision and then its propagation.
-Unattached skim entries lose that relationship.
-
-Do not create a block whose only explanation is that its files are
-mechanical. Associate those files with the decision they follow.
-
-A file that does not fit an existing block is not automatically skim.
-Give a separate change its own context when necessary.
-
-## Write a concrete skim reason
-
-The reason must let the reviewer understand the recommendation and
-decide whether to follow it.
-
-- Vague: “Mechanical change.”
-- Concrete: “Replaces the renamed field in the request payload.”
-- Vague: “Safe to skip.”
-- Concrete: “Regenerated lockfile after adding the HTTP client.”
-
-Name the change directly. Include enough context for the reason to
-make sense without access to the implementation session.
-
-A file you have not inspected must not be marked as skim. If it
-contains a substantive change alongside mechanical edits, keep that
-change in the main reading path and explain it at the appropriate level.
+Inspect a file before putting it in focus, and never do it to make up
+for a lens that explains it badly: fix the lens. A smell is not
+focus: the Smell lens opens the file with `--open` (see Write the
+lenses).
 
 ## Write for someone arriving without context
 
@@ -385,7 +356,7 @@ Run:
     farol map show
 
 `map check` must pass. Every file in the review scope must belong to
-a block or be marked as skim, and pending note decisions must be resolved.
+a block, and pending note decisions must be resolved.
 
 Coverage alone does not make the map useful. Read the complete output
 of `map show` as someone who did not participate in the implementation.
@@ -402,10 +373,10 @@ Check that:
 - Inferred reasons are identified as inference.
 - Notes explain choices and their consequences without endorsing them
   or turning into review findings.
-- Skimmed files can be skipped without losing necessary understanding,
-  and their reasons explain why.
-- Mechanical changes are not disguised as blocks with nothing to explain.
-- No file was marked as skim without being inspected.
+- The files in focus are few, and each reason says
+  concretely why opening it pays.
+- Mechanical changes sit in the block of the decision they follow, not
+  in a block of their own with nothing to explain.
 - Titles, terminology, and sentences make sense without private
   vocabulary from the session.
 
@@ -414,6 +385,56 @@ misleading grouping, repetition, or unsupported explanations.
 
 Do not add explanations merely to fill space. Do not remove context
 the reviewer needs merely to make the map shorter.
+
+## Write the lenses
+
+Lenses let the reviewer understand the change before reading the code:
+what the pull request does, where its risk is, what was checked, which
+tests exist. Each lens is a title and a prompt in a group: the pull
+request, each block, or each file the prompt applies to. The reviewer
+chooses which lenses exist and what each asks, so ask farol instead of
+assuming the list:
+
+    farol lens pending
+
+It lists every lens that is missing or outdated, with its prompt, the
+command for each target, and the rules every answer is held to. Every
+time you update the map, review the outdated ones: if what a lens says
+still holds for the code as it is now, keep it with
+`farol lens keep <id> [--block <slug> | --file <path>]`; if not, rewrite
+it. Write the missing ones, following their prompt:
+
+    farol lens write <id> --text '…'                  # the pull request
+    farol lens write <id> --block <slug> --text '…'   # a block
+    farol lens write <id> --file <path> --text '…'    # a file
+
+**A lens exists to save the reader time.** If reading it takes anywhere
+near as long as reading the code, it failed, and the reader paid for it.
+Every lens has a hard limit of lines, and every line one of 140
+characters; `farol lens write` refuses an answer past either, and a keep
+is held to the same limits. Aim well under the limit, not at it, and cut
+whatever would not change whether the reviewer approves. Write for a reader who scans, not
+one who reads: the point first, in bold; then bullets of one line each,
+the key term of each in bold; no paragraph longer than two lines; one
+item per bullet, never a list chained with semicolons. A
+reader who reads only the bold should already have the lens. Write them from what the session
+knows, in the map's language. Cite code in backticks as `path:from-to`,
+adding `(old)` for a line the change removed; a cited line that does not
+exist is refused. A file lens is offered for every file in the review:
+write an empty text for a file it does not apply to. A file lens may
+open its file with `--open '<why>'`, which is the exception: use it only
+when reading the code could change whether the reviewer approves, and
+say what they will see there. Smell always opens what it writes about.
+Files opened this way do not count against the focus limit.
+
+The block's context and its Summary lens answer different questions,
+and neither repeats the other. The context says what this piece of code
+does, what it is for and what problem it solves. The Summary says how it
+is built: which file does what and how the files relate.
+
+Lenses are where judgment goes. Unlike the map, a lens such as Risk or
+Evidence may assess the change, because the reviewer asked for it there.
+Writing a lens never changes, commits or publishes code.
 
 ## Respect running reviews
 

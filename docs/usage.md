@@ -26,8 +26,42 @@ farol serve
 ```
 
 Choose line ranges that exist in the file. Add more files with `farol file add`,
-or mark mechanical changes with `farol skim add`. `map check` fails until all
-changed files are assigned and pending note decisions are resolved.
+or put a file in focus with `farol file focus`. `map check` fails
+until all changed files are assigned and pending note decisions are resolved.
+
+## Lenses
+
+Lenses say what the change is before the code. Each is a title and a prompt
+in one of three groups: the pull request, each block, or each file it applies
+to. Four are on by default, one for each thing that stays with a person when
+machines do most of the reading:
+
+- **Overview** (pull request): what it does, why, and the decisions behind it.
+- **Risk** (pull request): how risky, the sensitive paths, a pattern others
+  will copy, and the files to read yourself.
+- **Evidence** (pull request): what ran and what it returned, the problems a
+  fresh review finds, and what those checks would miss.
+- **Tests** (file): the tests in each file that has them.
+
+Vocabulary, Architecture (per block) and Security come switched off.
+
+The session writes them when it builds or updates the map. On the screen they
+are open sections in the reading: the pull request's before the first block,
+a block's after its context, a file's under its header. Once the session has
+written lenses, every file starts folded and opens when you ask for it; a lens
+whose code changed since says Outdated until the map is updated.
+
+Settings lists the lenses by group. Switch one off, edit its title or prompt,
+delete it, or add your own. The list is kept in `lenses.json` beside the
+settings, for every repository.
+
+```bash
+farol lens list                                   # the catalog
+farol lens add --group file --title Migrations --prompt '…'
+farol lens pending                                # what the session owes
+farol lens write tests --file src/retry.rs --text '…'
+farol lens keep overview                          # still holds after a commit
+```
 
 ## Read and comment
 

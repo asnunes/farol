@@ -13,8 +13,9 @@ function file(path: string, over: Partial<FileView> = {}): FileView {
     viewed: false,
     note: null,
     lineNotes: [],
-    skim: false,
-    skimReason: null,
+    focus: null,
+    lenses: [],
+    folded: false,
     ...over,
   };
 }
@@ -30,18 +31,19 @@ function review(over: Partial<ReviewView> = {}): ReviewView {
         slug: "first",
         title: "The change itself",
         context: "why it exists",
+        lenses: [],
         files: [file("src/a.rs"), file("src/b.rs")],
         totalFiles: 2,
         viewedFiles: 0,
       },
-      { slug: "second", title: "The wiring", context: "", files: [file("src/c.rs")],
+      { slug: "second", title: "The wiring", context: "", lenses: [], files: [file("src/c.rs")],
         totalFiles: 1, viewedFiles: 0 },
     ],
-    looseSkim: [],
     unmapped: [],
     totalFiles: 3,
     viewedFiles: 0,
     firstUnread: null,
+    lenses: [],
     ...over,
   };
 
@@ -52,21 +54,19 @@ function review(over: Partial<ReviewView> = {}): ReviewView {
  * from the marks, so a stub that moved one without the others would hand the
  * page a review no server would ever send. */
 function markViewed(review: ReviewView, path: string, viewed: boolean) {
-  for (const file of [...review.blocks.flatMap((b) => b.files), ...review.looseSkim]) {
+  for (const file of review.blocks.flatMap((b) => b.files)) {
     if (file.path === path) file.viewed = viewed;
   }
   for (const block of review.blocks) {
     block.viewedFiles = block.files.filter((f) => f.viewed).length;
   }
-  review.viewedFiles = [...review.blocks.flatMap((b) => b.files), ...review.looseSkim].filter(
-    (f) => f.viewed,
-  ).length;
+  review.viewedFiles = review.blocks.flatMap((b) => b.files).filter((f) => f.viewed).length;
 }
 
-/** The first file in reading order nobody has read: blocks in order, then the
- * loose skim under them, which is the walk the server makes. */
+/** The first file in reading order nobody has read: blocks in order, which is
+ * the walk the server makes. */
 function firstUnread(review: ReviewView): string | null {
-  const order = [...review.blocks.flatMap((b) => b.files), ...review.looseSkim];
+  const order = review.blocks.flatMap((b) => b.files);
   return order.find((f) => !f.viewed)?.path ?? null;
 }
 
@@ -1143,32 +1143,17 @@ describe("when the backend fails", () => {
   });
 });
 
-describe("the skim list", () => {
-  it("renders files that belong to no block at the bottom", async () => {
-    // A lockfile has no story to sit in, but it is still in the diff and the
-    // reviewer has to be able to reach it.
+describe("a file in focus", () => {
+  it("carries why in the tooltip, so it can be read without leaving the list", async () => {
     const r = review();
-    r.looseSkim = [file("Cargo.lock", { skim: true, skimReason: "regenerated" })];
-    serve({ review: r });
-    render(<App />);
-
-    await waitForReading("a.rs");
-    const loose = document.querySelectorAll(".blk-files");
-    expect(
-      Array.from(loose).some((ul) => ul.textContent?.includes("Cargo.lock")),
-    ).toBe(true);
-  });
-
-  it("carries the reason as the tooltip so it can be read without leaving", async () => {
-    const r = review();
-    r.blocks[0].files[0] = file("src/a.rs", { skim: true, skimReason: "generated" });
+    r.blocks[0].files[0] = file("src/a.rs", { focus: "the whole retry rule" });
     serve({ review: r });
     render(<App />);
 
     await waitForReading("a.rs");
     fireEvent.focus(screen.getByRole("button", { name: "src/a.rs" }));
 
-    expect((await screen.findByRole("tooltip")).textContent).toContain("generated");
+    expect((await screen.findByRole("tooltip")).textContent).toContain("the whole retry rule");
   });
 });
 
@@ -1244,7 +1229,7 @@ describe("a comparison the map has outlived", () => {
     // server already dropped the blocks along with their files; what must not
     // happen here is a page of sections asking for diffs this same server
     // refuses, which is what left it on "Loading diff…".
-    serve({ review: review({ blocks: [], looseSkim: [], totalFiles: 0 }) });
+    serve({ review: review({ blocks: [], totalFiles: 0 }) });
 
     render(<App />);
     await screen.findByText("No changes in this comparison.");
@@ -1371,10 +1356,10 @@ describe("the sidebar on a screen too narrow to hold it", () => {
     // not the layout's.
     const drag = screenIs(1440);
     serve({ review: review({ viewedFiles: 1, blocks: [
-      { slug: "first", title: "The change itself", context: "why it exists",
+      { slug: "first", title: "The change itself", context: "why it exists", lenses: [],
         files: [file("src/a.rs", { viewed: true }), file("src/b.rs")],
         totalFiles: 2, viewedFiles: 1 },
-      { slug: "second", title: "The wiring", context: "", files: [file("src/c.rs")],
+      { slug: "second", title: "The wiring", context: "", lenses: [], files: [file("src/c.rs")],
         totalFiles: 1, viewedFiles: 0 },
     ] }) });
     render(<App />);

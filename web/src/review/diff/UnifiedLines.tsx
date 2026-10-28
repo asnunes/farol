@@ -36,6 +36,8 @@ export function UnifiedLines({
     return (
       <div key={i}>
         <div
+          data-old={line.oldNumber ?? undefined}
+          data-new={line.newNumber ?? undefined}
           className={cn(
             // The row is what the `+` comes up on, so the row is what names
             // the group: the pointer reading this line is over the code,

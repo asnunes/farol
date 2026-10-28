@@ -11,6 +11,15 @@ describe("which files are open", () => {
     expect(result.current.isOpen(file("a.rs", true))).toBe(false);
   });
 
+  it("keeps every file of a review read through lenses closed until it is opened", () => {
+    const { result } = renderHook(() => useOpenFiles());
+    const folded = { ...file("a.rs", false), folded: true };
+
+    expect(result.current.isOpen(folded)).toBe(false);
+    act(() => result.current.set(folded, true));
+    expect(result.current.isOpen(folded)).toBe(true);
+  });
+
   it("keeps a file the reader folded folded", () => {
     const { result } = renderHook(() => useOpenFiles());
     const unread = file("a.rs", false);
@@ -61,7 +70,8 @@ function file(path: string, viewed: boolean): FileView {
     viewed,
     note: null,
     lineNotes: [],
-    skim: false,
-    skimReason: null,
+    focus: null,
+    lenses: [],
+    folded: false,
   };
 }

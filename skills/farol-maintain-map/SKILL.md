@@ -14,7 +14,7 @@ identify the missing prerequisite and guide the user to install the complete
 Farol skill set.
 
 Apply its shared principles for self-contained explanations, reading order,
-skim, map verification, and handling running reviews.
+files in focus, map verification, and handling running reviews.
 
 ## Recover the implementation context
 
@@ -69,7 +69,8 @@ existing map.
 - Add context for new decisions that affect the code.
 - Revise explanations whose reasons or consequences changed.
 - Add newly introduced files and place them in reading order.
-- Revisit skim markers when a file gains a substantive change.
+- Revisit which files are in focus when a file gains or loses a
+  substantive change.
 - Remove or revise explanations that no longer describe the code.
 
 Preserve context that remains accurate. A new commit does not require
@@ -171,7 +172,7 @@ not implementation context.
 Use paths reported by `farol scope` and inspect the current file before
 adding a line note.
 
-A deleted file can belong to a block or be marked as skim, but it
+A deleted file belongs to a block like any other, but it
 cannot receive a line note: there is no current passage to attach it to.
 Explain the reason for its deletion at block or file level when that
 reason helps the reviewer understand the change.
@@ -201,6 +202,13 @@ Finish with:
 
 Resolve pending notes and coverage gaps, then reread the complete map
 for accuracy, self-contained context, and reading order.
+
+Then review the lenses, every time: run `farol lens pending`. A commit
+that changed a covered file makes its lenses outdated. For each one,
+decide whether it still holds: keep it with `farol lens keep` if it does,
+rewrite it with `farol lens write` if not. Write the missing ones too,
+following the farol skill's Write the lenses section. `map derive` and
+`map check` say how many are left.
 
 Before opening the review, inspect `farol servers`. Use `farol serve`
 for the intended worktree and comparison, following the shared rules

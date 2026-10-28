@@ -195,6 +195,11 @@ impl Store {
         self.root.join("comments")
     }
 
+    /// What the lenses say on this branch, one file per lens and target.
+    pub fn lenses_dir(&self) -> PathBuf {
+        self.root.join("lenses")
+    }
+
     pub fn state_file(&self) -> PathBuf {
         self.root.join("state.json")
     }

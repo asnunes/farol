@@ -5,9 +5,10 @@ import { Diff } from "@/review/diff/Diff";
 import { FileHeader } from "@/review/FileHeader";
 import { FileNote } from "@/review/FileNote";
 import { Prose } from "@/review/Prose";
+import { FileLenses } from "@/review/lenses/FileLenses";
 import type { CommentActions } from "@/hooks/useComments";
 import type { DiffView } from "@/hooks/useDiffView";
-import type { CommentView, FileDiff, FileView } from "@/api";
+import type { CitationView, CommentView, FileDiff, FileView } from "@/api";
 
 /** One file on the long page: its header, the prose the session wrote about it,
  * and the diff. */
@@ -23,6 +24,7 @@ export function FileSection({
   onToggleViewed,
   comments,
   commentActions,
+  onCite,
 }: FileSectionProps) {
   const visible = usePageVisible();
   const gone = file.status === "deleted";
@@ -62,7 +64,7 @@ export function FileSection({
   }, [visible, open, heavy, asked]);
 
   return (
-    <div ref={box} className="filesection" data-path={file.path}>
+    <div ref={box} className="filesection" data-path={file.path} data-done={file.viewed ? "true" : undefined}>
       <FileHeader
         file={file}
         open={open}
@@ -71,11 +73,11 @@ export function FileSection({
         comments={comments}
       />
 
+      {/* Drawn with the diff folded too: they are what lets it stay folded. */}
+      <FileLenses file={file} open={open} onToggleOpen={onToggleOpen} onCite={onCite} />
+
       {!open ? null : (
         <>
-          {file.skim && file.skimReason && (
-            <FileNote>Safe to skim — {file.skimReason}</FileNote>
-          )}
           {file.note && (
             <FileNote>
               <Prose className="min-w-0 flex-1">{file.note}</Prose>
@@ -154,4 +156,5 @@ type FileSectionProps = {
    * boxes under the lines are the same list. */
   comments: CommentView[];
   commentActions: CommentActions;
+  onCite: (citation: CitationView) => void;
 };

@@ -94,7 +94,7 @@ impl ReviewMap {
     ///
     /// A file that left the window cannot stay in the map, but its notes can:
     /// they are kept as orphans so the prose can be moved rather than silently
-    /// lost. Skim entries have no prose, so they simply go.
+    /// lost.
     pub fn retain_covered(&mut self, covered: impl Fn(&str) -> bool) {
         let mut orphans = Vec::new();
 
@@ -116,7 +116,6 @@ impl ReviewMap {
             });
         }
 
-        self.skim.retain(|s| covered(&s.path));
         self.orphans.extend(orphans);
     }
 
@@ -321,18 +320,6 @@ mod tests {
             .map(|f| f.path.as_str())
             .collect();
         assert_eq!(paths, vec!["a.rs"]);
-    }
-
-    #[test]
-    fn a_skim_entry_that_left_the_review_simply_goes() {
-        // It carries no prose, so there is nothing to keep.
-        let mut m = mapped();
-        m.add_skim("Cargo.lock", "generated", None).unwrap();
-
-        m.retain_covered(|path| path != "Cargo.lock");
-
-        assert!(m.skim().is_empty());
-        assert!(m.orphans().is_empty());
     }
 
     #[test]

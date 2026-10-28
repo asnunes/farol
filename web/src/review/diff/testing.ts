@@ -59,8 +59,9 @@ export function file(over: Partial<FileView> = {}): FileView {
     viewed: false,
     note: null,
     lineNotes: [],
-    skim: false,
-    skimReason: null,
+    focus: null,
+    lenses: [],
+    folded: false,
     ...over,
   };
 }

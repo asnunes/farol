@@ -22,11 +22,17 @@ use crate::config::infra::JsonConfigRepository;
 use crate::diff::application::{CommitHistory, FileDiffs, ReviewScope};
 use crate::diff::infra::{GixSource, ScopeRequest};
 use crate::error::Result;
+use crate::lenses::application::{
+    AddLens, DeleteLens, DisableLens, EnableLens, GetReviewWithLenses, KeepAnswer, ListLenses,
+    PendingAnswers, SeeLens, ShowAnswer, UpdateLens, WriteAnswer,
+};
+use crate::lenses::domain::LensCatalogRepository;
+use crate::lenses::infra::{JsonLensAnswers, JsonLensCatalog};
 use crate::map::application::{
-    AddBlock, AddFile, AddLineNote, AddSkim, CheckMap, DeriveMap, DiscardNote, ExportMap,
+    AddBlock, AddFile, AddLineNote, CheckMap, DeriveMap, DiscardNote, ExportMap, FocusFile,
     GetFileDiff, GetFileLines, GetReview, GetScope, ImportMap, MapDerivation, MapEditor,
-    MapReconciler, MapVersions, MoveBlock, RemoveBlock, RemoveFile, RemoveLineNote, RemoveSkim,
-    ResetMap, RestoreNote, ShowMap, UpdateBlock, UpdateFile, UpdateLineNote,
+    MapReconciler, MapVersions, MoveBlock, RemoveBlock, RemoveFile, RemoveLineNote, ResetMap,
+    RestoreNote, ShowMap, UpdateBlock, UpdateFile, UpdateLineNote,
 };
 use crate::map::infra::JsonMapRepository;
 use crate::progress::application::{MarkViewed, ProgressStore, UnmarkViewed};
@@ -54,8 +60,7 @@ pub struct Ctx {
     pub restore_note: RestoreNote,
     pub discard_note: DiscardNote,
 
-    pub add_skim: AddSkim,
-    pub remove_skim: RemoveSkim,
+    pub focus_file: FocusFile,
 
     pub derive_map: DeriveMap,
     pub show_map: ShowMap,
@@ -74,6 +79,11 @@ pub struct Ctx {
     pub readiness: ReviewReadiness,
     pub publish_review: PublishReview,
 
+    pub write_answer: WriteAnswer,
+    pub keep_answer: KeepAnswer,
+    pub pending_answers: PendingAnswers,
+    pub show_answer: ShowAnswer,
+
     /// Only when serving: the CLI never sends to an agent, and building this
     /// would make every command resolve the configuration folder for nothing.
     server: Option<ServerUseCases>,
@@ -86,7 +96,8 @@ pub struct Ctx {
 #[derive(Clone)]
 pub struct ServerUseCases {
     pub scope: GetScope,
-    pub review: GetReview,
+    pub review: GetReviewWithLenses,
+    pub see_lens: SeeLens,
     pub file_diff: GetFileDiff,
     pub file_lines: GetFileLines,
     pub mark_viewed: MarkViewed,
@@ -133,6 +144,10 @@ impl Ctx {
         let remote = workspace.remote();
 
         let comment_store = Arc::new(MarkdownComments::new(&workspace.store(), &root));
+        // Read here by the CLI too: the session writes answers from the terminal
+        // and each one is checked against the user's lenses.
+        let lens_catalog = lens_catalog()?;
+        let lens_answers = Arc::new(JsonLensAnswers::new(workspace.store().lenses_dir()));
         let modes = ReviewModes::new(Arc::new(JsonModeStore::new(workspace.store())));
         let maps = Arc::new(JsonMapRepository::new(workspace.store()));
         let maps_for_sharing = maps.clone();
@@ -194,6 +209,19 @@ impl Ctx {
         let edit_pending = EditPending::new(comments.clone(), publisher.clone());
         let remove_pending = RemovePending::new(comments.clone(), publisher.clone());
         let choose_mode = ChooseMode::new(modes.clone());
+        let write_answer = WriteAnswer::new(
+            lens_catalog.clone(),
+            lens_answers.clone(),
+            scope.clone(),
+            diffs.clone(),
+            versions.clone(),
+        );
+        let pending_answers = PendingAnswers::new(
+            lens_catalog.clone(),
+            lens_answers.clone(),
+            scope.clone(),
+            versions.clone(),
+        );
 
         Ok(Self {
             add_block: AddBlock::new(editor.clone()),
@@ -211,8 +239,7 @@ impl Ctx {
             restore_note: RestoreNote::new(editor.clone()),
             discard_note: DiscardNote::new(editor.clone()),
 
-            add_skim: AddSkim::new(editor.clone()),
-            remove_skim: RemoveSkim::new(editor.clone()),
+            focus_file: FocusFile::new(editor.clone()),
 
             derive_map: DeriveMap::new(derivation, versions.clone()),
             show_map: ShowMap::new(versions.clone()),
@@ -231,9 +258,19 @@ impl Ctx {
             readiness: readiness.clone(),
             publish_review: publish_review.clone(),
 
+            keep_answer: KeepAnswer::new(lens_answers.clone(), write_answer.clone()),
+            write_answer,
+            pending_answers,
+            show_answer: ShowAnswer::new(lens_answers.clone()),
+
             server: serving.map(|serving| ServerUseCases {
                 scope: GetScope::new(scope.clone()),
-                review: GetReview::new(versions, scope, progress.clone()),
+                see_lens: SeeLens::new(lens_answers.clone(), progress.clone()),
+                review: GetReviewWithLenses::new(
+                    GetReview::new(versions, scope, progress.clone()),
+                    lens_catalog,
+                    lens_answers,
+                ),
                 file_diff: GetFileDiff::new(diffs),
                 file_lines: GetFileLines::new(scope_for_lines),
                 mark_viewed: MarkViewed::new(progress.clone()),
@@ -276,7 +313,7 @@ impl Ctx {
 }
 
 pub fn config_cases() -> Result<ConfigUseCases> {
-    Ok(ConfigUseCases::new(config_repository()?))
+    Ok(ConfigUseCases::new(config_repository()?, lens_catalog()?))
 }
 
 /// The session this process was started from, read off what its harness
@@ -300,6 +337,12 @@ fn channel(address: &AgentAddress) -> Arc<dyn AgentChannel> {
     }
 }
 
+fn lens_catalog() -> Result<Arc<dyn LensCatalogRepository>> {
+    Ok(Arc::new(JsonLensCatalog::new(
+        crate::shared::paths::config_dir()?,
+    )))
+}
+
 fn config_repository() -> Result<Arc<dyn ConfigRepository>> {
     Ok(Arc::new(JsonConfigRepository::new(
         crate::shared::paths::config_dir()?,
@@ -311,11 +354,26 @@ pub struct ConfigUseCases {
     pub get: crate::config::application::GetConfig,
     pub set_setting: crate::config::application::SetSetting,
     pub reset_setting: crate::config::application::ResetSetting,
+    pub list_lenses: ListLenses,
+    pub add_lens: AddLens,
+    pub update_lens: UpdateLens,
+    pub enable_lens: EnableLens,
+    pub disable_lens: DisableLens,
+    pub delete_lens: DeleteLens,
 }
 
 impl ConfigUseCases {
-    pub fn new(repo: Arc<dyn crate::config::domain::ConfigRepository>) -> Self {
+    pub fn new(
+        repo: Arc<dyn crate::config::domain::ConfigRepository>,
+        lenses: Arc<dyn LensCatalogRepository>,
+    ) -> Self {
         Self {
+            list_lenses: ListLenses::new(lenses.clone()),
+            add_lens: AddLens::new(lenses.clone()),
+            update_lens: UpdateLens::new(lenses.clone()),
+            enable_lens: EnableLens::new(lenses.clone()),
+            disable_lens: DisableLens::new(lenses.clone()),
+            delete_lens: DeleteLens::new(lenses),
             get: crate::config::application::GetConfig::new(repo.clone()),
             set_setting: crate::config::application::SetSetting::new(repo.clone()),
             reset_setting: crate::config::application::ResetSetting::new(repo),

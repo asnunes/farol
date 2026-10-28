@@ -36,7 +36,7 @@ impl ProgressStore {
         Ok(paths)
     }
 
-    fn save(&self, progress: &Progress) -> Result<()> {
+    pub fn save(&self, progress: &Progress) -> Result<()> {
         self.repo.save(progress)
     }
 

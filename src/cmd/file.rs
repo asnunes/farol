@@ -27,6 +27,18 @@ pub(super) enum FileAction {
         slug: String,
         path: String,
     },
+    /// Put a file in focus, saying why; it starts open on screen.
+    Focus {
+        slug: String,
+        path: String,
+        #[arg(long)]
+        reason: String,
+    },
+    /// Take a file out of focus.
+    Unfocus {
+        slug: String,
+        path: String,
+    },
 }
 
 impl Action for FileAction {
@@ -54,6 +66,22 @@ impl Action for FileAction {
                 ctx.report(
                     format!("Updated the note on '{path}'."),
                     ctx.update_file.execute(&slug, &path, note),
+                )
+            }
+            FileAction::Focus { slug, path, reason } => {
+                let slug = Slug::parse(&slug)?;
+                let path = ctx.scope.path(&path)?;
+                ctx.report(
+                    format!("Put '{path}' in focus."),
+                    ctx.focus_file.execute(&slug, &path, Some(reason)),
+                )
+            }
+            FileAction::Unfocus { slug, path } => {
+                let slug = Slug::parse(&slug)?;
+                let path = ctx.scope.path(&path)?;
+                ctx.report(
+                    format!("Took '{path}' out of focus."),
+                    ctx.focus_file.execute(&slug, &path, None),
                 )
             }
             FileAction::Remove { slug, path } => {

@@ -12,7 +12,7 @@ The map puts the core implementation first and builds on it, with explanations
 from the coding session that made the change. Read the code, leave comments,
 and ask your agent to publish the finished review to GitHub.
 
-![A Farol review with reading-order blocks, implementation context, skim markers, and the code diff.](docs/review.jpg)
+![A Farol review with reading-order blocks, implementation context and the code diff.](docs/review.jpg)
 
 ## Install
 
@@ -163,13 +163,11 @@ app does not ask for a GitHub token.
 
 ![A local example comment beside the changed line and its implementation context.](docs/review-comments.jpg)
 
-### Know what you can skim
+### Know what is worth opening
 
-The map marks supporting files as **skim** when they can be skipped without
-missing the core implementation. Each carries a reason, so you can decide
-whether to open it anyway.
-
-![Skim markers in the sidebar and reasons above the supporting configuration changes.](docs/review-skim.jpg)
+With lenses written, every file starts folded: the lenses say what each one
+does and which tests it holds. The map puts the few files worth opening in
+**focus**, each with a reason, and those start open.
 
 Press `?` for keyboard shortcuts. Use `farol servers` to list open reviews.
 

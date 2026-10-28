@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { blockOf, type FileView, type ReviewView } from "@/api";
+import { blockOf, lensAt, type FileView, type LensView, type ReviewView } from "@/api";
 
 /** How the modifier is written on this machine, as the prefix it is: `⌘B` on a
  * Mac, `Ctrl+B` anywhere else. Spelled out by the key bar, the help and the
@@ -17,6 +17,7 @@ export function useShortcuts({
   goTo,
   nextUnread,
   toggleViewed,
+  toggleSeen,
   setHelpOpen,
   toggleSidebar,
   toggleActivity,
@@ -38,8 +39,13 @@ export function useShortcuts({
       const target = e.target as HTMLElement;
       if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") return;
       // A focused button already answers to Enter, and pressing it would both
-      // press the button and mark the file read.
-      if (target.tagName === "BUTTON") return;
+      // press the button and mark the file read. A row in the sidebar keeps
+      // focus after it is clicked, and Space there means mark, as anywhere:
+      // it lets go of the row first, so the press does not also click it.
+      if (target.tagName === "BUTTON") {
+        if (!(target.closest(".sidebar") && (e.key === " " || e.key === ";"))) return;
+        target.blur();
+      }
       if (!review) return;
 
       const go = (i: number) => {
@@ -68,6 +74,11 @@ export function useShortcuts({
         case " ": {
           // Space scrolls by default, and it cannot do both.
           e.preventDefault();
+          const here = lensAt(review, current);
+          if (here) {
+            void toggleSeen(here.lens, !here.lens.seen);
+            break;
+          }
           const file = order[index];
           if (file) void toggleViewed(file.path, !file.viewed);
           break;
@@ -97,7 +108,7 @@ export function useShortcuts({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [review, order, index, current, goTo, nextUnread, toggleViewed, setHelpOpen, toggleSidebar, toggleActivity]);
+  }, [review, order, index, current, goTo, nextUnread, toggleViewed, toggleSeen, setHelpOpen, toggleSidebar, toggleActivity]);
 }
 
 type Shortcuts = {
@@ -109,6 +120,8 @@ type Shortcuts = {
   /** Onward to the next file not yet read — shared with the progress count. */
   nextUnread: () => void;
   toggleViewed: (path: string, viewed: boolean) => Promise<void>;
+  /** The same mark, on a pull request or block lens the reader is on. */
+  toggleSeen: (lens: LensView, seen: boolean) => Promise<void>;
   setHelpOpen: (fn: (open: boolean) => boolean) => void;
   toggleSidebar: () => void;
   /** Open or close the agent activity box. */

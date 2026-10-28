@@ -48,6 +48,61 @@ export function scrollToThread(id: string) {
   requestAnimationFrame(look);
 }
 
+/** Bring a lens to the top of the pane, from the sidebar. */
+export function scrollToLens(key: string) {
+  stopAnchoring?.();
+  settling = Date.now() + SETTLES_IN;
+  requestAnimationFrame(() => {
+    const lens = document.querySelector<HTMLElement>(`[data-lens-key="${CSS.escape(key)}"]`);
+    lens?.scrollIntoView({ block: "start" });
+    if (lens) holdPosition(lens);
+  });
+}
+
+/** Bring a line of a file to the middle of the pane, and mark it for a moment.
+ *
+ * Waits for the row the way a thread jump does: the file was just opened, and
+ * its diff arrives when it comes near. A line the diff does not print is never
+ * drawn, and the jump stays on the file. */
+export function scrollToLine(path: string, side: "old" | "new", line: number) {
+  const giveUp = Date.now() + WAITS_FOR_THREAD;
+  let approached = false;
+  const look = () => {
+    const file = document.querySelector<HTMLElement>(`[data-path="${CSS.escape(path)}"]`);
+    const row = file?.querySelector<HTMLElement>(`.row[data-${side}="${line}"]`);
+    if (!row) {
+      // A long diff only draws the windows near the screen. Bring the one
+      // holding the line near once, and it draws the row this is waiting for.
+      const window = !approached && file ? windowHolding(file, side, line) : null;
+      if (window) {
+        approached = true;
+        stopAnchoring?.();
+        settling = Date.now() + SETTLES_IN;
+        window.scrollIntoView({ block: "center" });
+      }
+      if (Date.now() < giveUp) requestAnimationFrame(look);
+      return;
+    }
+    stopAnchoring?.();
+    settling = Date.now() + SETTLES_IN;
+    row.scrollIntoView({ block: "center" });
+    holdPosition(row);
+    row.classList.add("thread-flash");
+    window.setTimeout(() => row.classList.remove("thread-flash"), FLASHES_FOR);
+  };
+  requestAnimationFrame(look);
+}
+
+/** The window of a file's diff that holds a line, drawn or not. */
+function windowHolding(file: HTMLElement, side: "old" | "new", line: number) {
+  for (const window of file.querySelectorAll<HTMLElement>(".diff-window")) {
+    const from = Number(window.dataset[`${side}From`]);
+    const to = Number(window.dataset[`${side}To`]);
+    if (from <= line && line <= to) return window;
+  }
+  return null;
+}
+
 /** Nearby lazy diffs can grow above a jump after its first scroll lands. */
 function holdPosition(anchor: HTMLElement) {
   const pane = anchor.closest<HTMLElement>(".pane");
@@ -91,7 +146,12 @@ export function isSettling() {
  * files out as one flat list, in reading order, so only the first file of a
  * block has one before it. */
 function opens(file: HTMLElement | null | undefined) {
-  const before = file?.previousElementSibling;
+  // The block's lenses and the line where its code starts sit between the
+  // band and its first file, and belong to the band.
+  let before = file?.previousElementSibling;
+  while (before && (before.classList.contains("lens") || before.classList.contains("codebar"))) {
+    before = before.previousElementSibling;
+  }
   return before?.classList.contains("blockbar")
     ? (before as HTMLElement)
     : null;

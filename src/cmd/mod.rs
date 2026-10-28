@@ -6,26 +6,26 @@ mod block;
 mod config;
 mod file;
 mod github;
+mod lens;
 mod line;
 mod map;
 mod pending;
 mod scope;
 mod serve;
 mod servers;
-mod skim;
 mod thread;
 mod wiring;
 
 use block::BlockAction;
 use file::FileAction;
 use github::GithubAction;
+use lens::LensAction;
 use line::LineAction;
 use map::MapAction;
 use pending::PendingAction;
 use scope::ShowScope;
 use serve::ServeArgs;
 use servers::ServersArgs;
-use skim::SkimAction;
 use thread::ThreadAction;
 
 pub use wiring::{
@@ -187,12 +187,12 @@ enum Command {
         #[command(subcommand)]
         action: GithubAction,
     },
-    /// Files the reviewer may read diagonally.
-    Skim {
+    /// What the session says about the change, so it can be read before the code.
+    Lens {
         #[command(flatten)]
         scope: ScopeArgs,
         #[command(subcommand)]
-        action: SkimAction,
+        action: LensAction,
     },
 }
 
@@ -208,6 +208,10 @@ impl Command {
             // it answers from anywhere, including outside a git repository.
             Command::Servers(args) => args.run(),
 
+            // And `lens`, whose catalog commands answer from anywhere, like
+            // `config`; the rest open the window themselves.
+            Command::Lens { scope, action } => action.run(scope),
+
             // The rest are uniform. The window is resolved once per group and
             // handed down, instead of every action reopening it. The match
             // stays a match on purpose: it is exhaustive, so a new group that
@@ -218,7 +222,6 @@ impl Command {
             Command::Block { scope, action } => action.run(&scope.open()?),
             Command::File { scope, action } => action.run(&scope.open()?),
             Command::Line { scope, action } => action.run(&scope.open()?),
-            Command::Skim { scope, action } => action.run(&scope.open()?),
             Command::Thread { scope, action } => action.run(&scope.open()?),
             Command::Pending { scope, action } => action.run(&scope.open()?),
             Command::Github { scope, action } => action.run(&scope.open()?),
@@ -264,7 +267,7 @@ mod tests {
             vec!["scope", "--dirty"],
             vec!["map", "show", "--dirty"],
             vec!["block", "remove", "core", "--direct"],
-            vec!["skim", "remove", "Cargo.lock", "--base", "develop"],
+            vec!["file", "unfocus", "core", "a.rs", "--base", "develop"],
         ] {
             parse(&group);
         }

@@ -10,9 +10,9 @@ impl ReviewMap {
         after: Option<&str>,
     ) -> Result<()> {
         let path = path.into();
-        // One block per file, including skim attached to a block: a file read
-        // in two places is read once and claimed twice, and the screen had to
-        // pick a block, carry the other's notes over and tag the row to say so.
+        // One block per file: a file read in two places is read once and
+        // claimed twice, and the screen had to pick a block, carry the other's
+        // notes over and tag the row to say so.
         if let Some(owner) = self.owner_of(&path).filter(|owner| *owner != slug) {
             return Err(MapError::DuplicatePath {
                 slug: owner.to_string(),
@@ -55,6 +55,22 @@ impl ReviewMap {
                 existing: paths,
             })?;
         file.note = note;
+        Ok(())
+    }
+
+    /// Put a file in focus, saying why, or with `None` take it out.
+    /// Written again, the reason is replaced: the file names the mark.
+    pub fn focus(&mut self, slug: &Slug, path: &str, reason: Option<String>) -> Result<()> {
+        let block = self.block_mut(slug)?;
+        let paths = block.paths();
+        let file = block
+            .file_mut(path)
+            .ok_or_else(|| MapError::PathNotInBlock {
+                slug: slug.to_string(),
+                path: path.to_string(),
+                existing: paths,
+            })?;
+        file.focus = reason;
         Ok(())
     }
 
@@ -139,5 +155,33 @@ mod tests {
             msg.contains("a.rs"),
             "the alternatives have to be listed: {msg}"
         );
+    }
+
+    #[test]
+    fn a_file_in_focus_keeps_its_reason_until_it_is_taken_out() {
+        let mut m = map_with(&["one"]);
+        m.add_file(&slug("one"), "a.rs", None, None).unwrap();
+
+        m.focus(&slug("one"), "a.rs", Some("holds the retry rule".into()))
+            .unwrap();
+        assert_eq!(
+            m.block(&slug("one"))
+                .unwrap()
+                .file("a.rs")
+                .unwrap()
+                .focus
+                .as_deref(),
+            Some("holds the retry rule")
+        );
+        m.focus(&slug("one"), "a.rs", None).unwrap();
+        assert!(
+            m.block(&slug("one"))
+                .unwrap()
+                .file("a.rs")
+                .unwrap()
+                .focus
+                .is_none()
+        );
+        assert!(m.focus(&slug("one"), "b.rs", Some("x".into())).is_err());
     }
 }
