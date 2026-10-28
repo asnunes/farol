@@ -8,6 +8,7 @@ export function DiffWindow({
   rows,
   pinned = false,
   layout,
+  spans,
 }: DiffWindowProps) {
   const box = useRef<HTMLDivElement>(null);
   const [near, setNear] = useState(typeof IntersectionObserver === "undefined");
@@ -97,6 +98,12 @@ export function DiffWindow({
       ref={box}
       className="diff-window"
       data-rendered={mounted ? "true" : "false"}
+      // The lines it holds on each side, so a jump to a line not drawn yet can
+      // find the window to bring near, which is what draws it.
+      data-new-from={spans?.new?.[0]}
+      data-new-to={spans?.new?.[1]}
+      data-old-from={spans?.old?.[0]}
+      data-old-to={spans?.old?.[1]}
       onFocusCapture={() => setFocused(true)}
       onBlurCapture={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget as Node | null))
@@ -151,6 +158,8 @@ type DiffWindowProps = {
   rows: number;
   pinned?: boolean;
   layout: string;
+  /** The first and last line it holds on each side, when it holds any. */
+  spans?: { old?: [number, number]; new?: [number, number] };
 };
 
 type ObservedPane = {

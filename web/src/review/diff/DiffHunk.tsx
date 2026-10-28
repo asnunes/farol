@@ -50,6 +50,7 @@ export function DiffHunk({ hunk, file, view, commentary, gap }: DiffHunkProps) {
             }
             pinned={pinned}
             layout={`${view}-${narrow}`}
+            spans={spansOf(hunk, window)}
           >
             <WindowContents
               hunk={hunk}
@@ -64,6 +65,16 @@ export function DiffHunk({ hunk, file, view, commentary, gap }: DiffHunkProps) {
       })}
     </div>
   );
+}
+
+/** The lines a window holds on each side, first and last. */
+function spansOf(hunk: Hunk, window: HunkWindow): Spans {
+  const span = (numbers: (number | null)[]) => {
+    const at = numbers.filter((n): n is number => n !== null);
+    return at.length ? ([Math.min(...at), Math.max(...at)] as [number, number]) : undefined;
+  };
+  const lines = window.indices.map((i) => hunk.lines[i]);
+  return { old: span(lines.map((l) => l.oldNumber)), new: span(lines.map((l) => l.newNumber)) };
 }
 
 function WindowContents({
@@ -129,3 +140,5 @@ type WindowContentsProps = Omit<DiffHunkProps, "gap"> & {
   window: HunkWindow;
   text: HunkText;
 };
+
+type Spans = { old?: [number, number]; new?: [number, number] };

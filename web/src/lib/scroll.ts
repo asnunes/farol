@@ -55,11 +55,20 @@ export function scrollToThread(id: string) {
  * drawn, and the jump stays on the file. */
 export function scrollToLine(path: string, side: "old" | "new", line: number) {
   const giveUp = Date.now() + WAITS_FOR_THREAD;
+  let approached = false;
   const look = () => {
-    const row = document.querySelector<HTMLElement>(
-      `[data-path="${CSS.escape(path)}"] .row[data-${side}="${line}"]`,
-    );
+    const file = document.querySelector<HTMLElement>(`[data-path="${CSS.escape(path)}"]`);
+    const row = file?.querySelector<HTMLElement>(`.row[data-${side}="${line}"]`);
     if (!row) {
+      // A long diff only draws the windows near the screen. Bring the one
+      // holding the line near once, and it draws the row this is waiting for.
+      const window = !approached && file ? windowHolding(file, side, line) : null;
+      if (window) {
+        approached = true;
+        stopAnchoring?.();
+        settling = Date.now() + SETTLES_IN;
+        window.scrollIntoView({ block: "center" });
+      }
       if (Date.now() < giveUp) requestAnimationFrame(look);
       return;
     }
@@ -71,6 +80,16 @@ export function scrollToLine(path: string, side: "old" | "new", line: number) {
     window.setTimeout(() => row.classList.remove("thread-flash"), FLASHES_FOR);
   };
   requestAnimationFrame(look);
+}
+
+/** The window of a file's diff that holds a line, drawn or not. */
+function windowHolding(file: HTMLElement, side: "old" | "new", line: number) {
+  for (const window of file.querySelectorAll<HTMLElement>(".diff-window")) {
+    const from = Number(window.dataset[`${side}From`]);
+    const to = Number(window.dataset[`${side}To`]);
+    if (from <= line && line <= to) return window;
+  }
+  return null;
 }
 
 /** Nearby lazy diffs can grow above a jump after its first scroll lands. */
