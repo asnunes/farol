@@ -29,8 +29,8 @@ use crate::lenses::application::{
 use crate::lenses::domain::LensCatalogRepository;
 use crate::lenses::infra::{JsonLensAnswers, JsonLensCatalog};
 use crate::map::application::{
-    AddBlock, AddFile, AddLineNote, CheckMap, DeriveMap, DiscardNote, ExportMap, GetFileDiff,
-    GetFileLines, GetReview, GetScope, ImportMap, LookFile, MapDerivation, MapEditor,
+    AddBlock, AddFile, AddLineNote, CheckMap, DeriveMap, DiscardNote, ExportMap, FocusFile,
+    GetFileDiff, GetFileLines, GetReview, GetScope, ImportMap, MapDerivation, MapEditor,
     MapReconciler, MapVersions, MoveBlock, RemoveBlock, RemoveFile, RemoveLineNote, ResetMap,
     RestoreNote, ShowMap, UpdateBlock, UpdateFile, UpdateLineNote,
 };
@@ -60,7 +60,7 @@ pub struct Ctx {
     pub restore_note: RestoreNote,
     pub discard_note: DiscardNote,
 
-    pub look_file: LookFile,
+    pub focus_file: FocusFile,
 
     pub derive_map: DeriveMap,
     pub show_map: ShowMap,
@@ -239,7 +239,7 @@ impl Ctx {
             restore_note: RestoreNote::new(editor.clone()),
             discard_note: DiscardNote::new(editor.clone()),
 
-            look_file: LookFile::new(editor.clone()),
+            focus_file: FocusFile::new(editor.clone()),
 
             derive_map: DeriveMap::new(derivation, versions.clone()),
             show_map: ShowMap::new(versions.clone()),

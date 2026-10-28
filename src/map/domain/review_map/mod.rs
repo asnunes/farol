@@ -2,7 +2,7 @@
 //!
 //! The struct and the questions asked of it live here; changing it is split by
 //! what is being changed — blocks, the files inside them, the notes pinned to
-//! lines, the files worth a closer look, and the notes left over when code
+//! lines, the files in focus, and the notes left over when code
 //! moved.
 
 mod blocks;

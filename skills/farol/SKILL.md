@@ -9,7 +9,7 @@ Farol shows a change in the order that makes its implementation understandable,
 carrying the context the diff does not.
 
 A map contains blocks, explanations, file and line notes, and the files
-worth a closer look.
+in focus.
 Reviewer comments and reading progress are separate from the map.
 
 Before using the CLI, check `farol --version`. If it is unavailable, direct the
@@ -257,16 +257,17 @@ applies to the whole block, move that explanation to the block context.
 
 Do not invent a decision to fill an otherwise unexplained file.
 
-## Mark what is worth a closer look
+## Put in focus what is worth opening
 
 On a review with lenses, every file starts folded: the reader learns
 the change from the lenses and opens the code when they want to check
-it. Mark the files that deserve to be opened anyway, and say why:
+it. Put in focus the files that deserve to be opened anyway, and say
+why:
 
-    farol file look <slug> <path> --reason '…'
-    farol file unlook <slug> <path>
+    farol file focus <slug> <path> --reason '…'
+    farol file unfocus <slug> <path>
 
-A file earns the mark when reading its code pays: it holds the rule the
+A file earns focus when reading its code pays: it holds the rule the
 change is about, it is dense enough that a summary loses what matters,
 or something in it is wrong in a way the reader should see for
 themselves. The reason names which, concretely, so the reader can
@@ -277,10 +278,10 @@ decide whether to follow it:
 - Vague: "Needs attention."
 - Concrete: "A retry here can resend a charge the provider accepted."
 
-Mark few. A mark on every file is no mark at all, and the point of the
+Focus few. Focus on every file is no focus at all, and the point of the
 lenses is that reading them costs less than reading the code. Inspect a
-file before marking it, and never mark one to make up for a lens that
-explains it badly: fix the lens.
+file before putting it in focus, and never do it to make up for a lens
+that explains it badly: fix the lens.
 
 ## Write for someone arriving without context
 
@@ -364,7 +365,7 @@ Check that:
 - Inferred reasons are identified as inference.
 - Notes explain choices and their consequences without endorsing them
   or turning into review findings.
-- The files marked worth a closer look are few, and each reason says
+- The files in focus are few, and each reason says
   concretely why opening it pays.
 - Mechanical changes sit in the block of the decision they follow, not
   in a block of their own with nothing to explain.

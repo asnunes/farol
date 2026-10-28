@@ -13,7 +13,7 @@ function file(path: string, over: Partial<FileView> = {}): FileView {
     viewed: false,
     note: null,
     lineNotes: [],
-    look: null,
+    focus: null,
     lenses: [],
     folded: false,
     ...over,
@@ -1143,10 +1143,10 @@ describe("when the backend fails", () => {
   });
 });
 
-describe("a file worth a closer look", () => {
+describe("a file in focus", () => {
   it("carries why in the tooltip, so it can be read without leaving the list", async () => {
     const r = review();
-    r.blocks[0].files[0] = file("src/a.rs", { look: "the whole retry rule" });
+    r.blocks[0].files[0] = file("src/a.rs", { focus: "the whole retry rule" });
     serve({ review: r });
     render(<App />);
 

@@ -39,10 +39,10 @@ pub struct BlockFile {
     pub note: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub line_notes: Vec<LineNote>,
-    /// Why this file is worth a closer look, when it is: the one place the
+    /// Why this file is in focus, when it is: the one place the
     /// map asks for the code to be opened rather than read through the lenses.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub look: Option<String>,
+    pub focus: Option<String>,
 }
 
 impl BlockFile {
@@ -51,7 +51,7 @@ impl BlockFile {
             path: path.into(),
             note,
             line_notes: Vec::new(),
-            look: None,
+            focus: None,
         }
     }
 }

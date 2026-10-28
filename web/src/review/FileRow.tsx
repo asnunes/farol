@@ -60,14 +60,14 @@ export function FileRow({
               </span>
             )}
 
-            {/* Said by a badge, not by a brighter name: the map asks for this
-                one to be opened, and the reader should see that from the list. */}
-            {file.look && (
+            {/* Said by a badge, not by a brighter name: the map puts this one in
+                focus, and the reader should see that from the list. */}
+            {file.focus && (
               <Badge
                 variant="outline"
-                className="look ml-auto shrink-0 border-highlight px-1 font-mono text-[0.625rem] font-normal text-highlight"
+                className="focus ml-auto shrink-0 border-highlight px-1 font-mono text-[0.625rem] font-normal text-highlight"
               >
-                look
+                focus
               </Badge>
             )}
 
@@ -79,7 +79,7 @@ export function FileRow({
                 className={cn(
                   "asked grid h-4 min-w-4 shrink-0 place-items-center rounded-full",
                   "bg-comment-dim px-1 font-mono text-[0.625rem] text-comment-ink",
-                  !file.look && "ml-auto",
+                  !file.focus && "ml-auto",
                 )}
               >
                 {comments}
@@ -89,12 +89,12 @@ export function FileRow({
         </TooltipTrigger>
         {/* A real tooltip rather than `title`: the browser's own waits a second,
             never opens on keyboard focus, and would drop the reason the file
-            is worth a closer look. */}
+            is in focus. */}
         {/* To the right, over the diff, and never over the list: above the
             row it covered the neighbour the reader was reaching for. */}
         <TooltipContent side="right" sideOffset={8} className="max-w-[28rem]">
           <div className="font-mono text-[0.6875rem]">{file.path}</div>
-          {file.look && <div className="font-sans opacity-80">{file.look}</div>}
+          {file.focus && <div className="font-sans opacity-80">{file.focus}</div>}
           {/* The button is labelled with the path, which is what a screen
               reader reads instead of the row — so the count only reaches one
               from here. */}

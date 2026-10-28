@@ -35,7 +35,7 @@ const BEHIND_ICONS = ["surface", "ground", "sunken"];
 describe.each(["light", "dark"] as const)("the %s palette", (theme) => {
   it.each(UNDER)("reads meaningful small text against %s", (bg) => {
     // `ink-muted` carries the directory that tells two `mod.rs` apart, the
-    // closer-look marker, the line numbers and the band that says the file jumps.
+    // focus marker, the line numbers and the band that says the file jumps.
     // None of it may be left to guesswork, which is 4.5:1 at this size.
     expect(ratio(token("muted", theme), token(bg, theme))).toBeGreaterThanOrEqual(4.5);
   });

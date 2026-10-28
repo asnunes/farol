@@ -170,12 +170,12 @@ export type FileView = {
   /** The note the block wrote for this file, if it wrote one. */
   note: string | null;
   lineNotes: LineNoteView[];
-  /** Why the map says this file is worth a closer look, when it does. */
-  look: string | null;
+  /** Why the map puts this file in focus, when it does. */
+  focus: string | null;
   /** The file's own lenses, drawn under its header. */
   lenses: LensView[];
-  /** The session wrote lenses on this review and the file is not worth a
-   * closer look, so its diff starts folded. */
+  /** The session wrote lenses on this review and the file is not in focus,
+   * so its diff starts folded. */
   folded: boolean;
 };
 

@@ -48,8 +48,8 @@ impl Display for MapReport<'_> {
                     if let Some(note) = &file.note {
                         writeln!(f, "      note: {}", indent_rest(note, 8))?;
                     }
-                    if let Some(reason) = &file.look {
-                        writeln!(f, "      worth a closer look: {}", indent_rest(reason, 8))?;
+                    if let Some(reason) = &file.focus {
+                        writeln!(f, "      focus: {}", indent_rest(reason, 8))?;
                     }
                     for note in &file.line_notes {
                         writeln!(
@@ -89,7 +89,7 @@ mod tests {
     use crate::testing::slug;
 
     /// A map with every level of prose the report can print: block context,
-    /// file note, line note, and a file worth a closer look.
+    /// file note, line note, and a file in focus.
     fn sample() -> ReviewMap {
         let mut m = ReviewMap::new("fix/retry-on-timeout", "main", "a3f1e9c1234567");
         m.add_block(
@@ -115,7 +115,7 @@ mod tests {
             None,
         )
         .unwrap();
-        m.look(
+        m.focus(
             &slug("retry-window"),
             "src/retry.rs",
             Some("the whole retry rule is here".into()),
@@ -136,7 +136,7 @@ mod tests {
         assert!(out.contains("block 1  retry-window  \"Bound the retry window\""));
         assert!(out.contains("lines 82-116: The backoff resets only"));
         assert!(out.contains("note: The deletions are not an additional change."));
-        assert!(out.contains("worth a closer look: the whole retry rule is here"));
+        assert!(out.contains("focus: the whole retry rule is here"));
     }
 
     #[test]

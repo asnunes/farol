@@ -750,7 +750,7 @@ fn a_malformed_block_name_is_refused_wherever_one_is_named() {
             "Not A Slug",
         ],
         vec!["block", "move", "core", "--after", "Not A Slug"],
-        vec!["file", "look", "Not A Slug", "src/a.rs", "--reason", "r"],
+        vec!["file", "focus", "Not A Slug", "src/a.rs", "--reason", "r"],
     ] {
         let err = repo.fails(&args);
         assert!(
@@ -970,27 +970,24 @@ fn notes_can_be_rewritten_and_withdrawn() {
 }
 
 #[test]
-fn a_file_worth_a_closer_look_says_why_and_can_be_taken_back() {
+fn a_file_in_focus_says_why_and_can_be_taken_out() {
     let repo = Repo::new();
     repo.feature();
     repo.derive();
     repo.core_block(&["src/a.rs"]);
     repo.ok(&[
         "file",
-        "look",
+        "focus",
         "core",
         "src/a.rs",
         "--reason",
         "the whole rule",
     ]);
-    assert!(
-        repo.ok(&["map", "show"])
-            .contains("worth a closer look: the whole rule")
-    );
+    assert!(repo.ok(&["map", "show"]).contains("focus: the whole rule"));
 
-    repo.ok(&["file", "unlook", "core", "src/a.rs"]);
+    repo.ok(&["file", "unfocus", "core", "src/a.rs"]);
 
-    assert!(!repo.ok(&["map", "show"]).contains("worth a closer look"));
+    assert!(!repo.ok(&["map", "show"]).contains("focus:"));
 }
 
 #[test]

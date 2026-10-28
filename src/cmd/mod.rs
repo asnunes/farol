@@ -267,7 +267,7 @@ mod tests {
             vec!["scope", "--dirty"],
             vec!["map", "show", "--dirty"],
             vec!["block", "remove", "core", "--direct"],
-            vec!["file", "unlook", "core", "a.rs", "--base", "develop"],
+            vec!["file", "unfocus", "core", "a.rs", "--base", "develop"],
         ] {
             parse(&group);
         }

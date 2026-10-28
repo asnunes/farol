@@ -26,7 +26,7 @@ farol serve
 ```
 
 Choose line ranges that exist in the file. Add more files with `farol file add`,
-or mark a file worth a closer look with `farol file look`. `map check` fails
+or put a file in focus with `farol file focus`. `map check` fails
 until all changed files are assigned and pending note decisions are resolved.
 
 ## Lenses

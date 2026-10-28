@@ -48,10 +48,10 @@ impl Display for MapSummary<'_> {
             .blocks()
             .iter()
             .flat_map(|b| b.files.iter())
-            .filter(|file| file.look.is_some())
+            .filter(|file| file.focus.is_some())
             .count();
         if looks > 0 {
-            parts.push(format!("{looks} worth a closer look"));
+            parts.push(format!("{looks} in focus"));
         }
 
         writeln!(f, "{}", parts.join(" · "))
@@ -125,12 +125,12 @@ mod tests {
     }
 
     #[test]
-    fn files_worth_a_closer_look_are_counted() {
+    fn files_in_focus_are_counted() {
         let mut m = mapped();
         let path = m.blocks()[0].files[0].path.clone();
-        m.look(&slug("core"), &path, Some("dense".into())).unwrap();
+        m.focus(&slug("core"), &path, Some("dense".into())).unwrap();
 
         let out = summary(&m);
-        assert!(out.contains("1 worth a closer look"), "{out}");
+        assert!(out.contains("1 in focus"), "{out}");
     }
 }

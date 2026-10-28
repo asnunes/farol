@@ -13,7 +13,7 @@ This workflow requires [farol](../farol/SKILL.md) and
 Locate and read both before proceeding. If either is missing, identify
 the missing prerequisite and guide the user to install the complete Farol set.
 
-Follow `farol` for map construction, explanations, reading order, files worth a closer look,
+Follow `farol` for map construction, explanations, reading order, files in focus,
 verification, and handling running reviews.
 
 ## Gather the PR context

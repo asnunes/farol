@@ -70,7 +70,7 @@ function file(path: string, viewed: boolean): FileView {
     viewed,
     note: null,
     lineNotes: [],
-    look: null,
+    focus: null,
     lenses: [],
     folded: false,
   };

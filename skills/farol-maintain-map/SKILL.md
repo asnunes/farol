@@ -14,7 +14,7 @@ identify the missing prerequisite and guide the user to install the complete
 Farol skill set.
 
 Apply its shared principles for self-contained explanations, reading order,
-files worth a closer look, map verification, and handling running reviews.
+files in focus, map verification, and handling running reviews.
 
 ## Recover the implementation context
 
@@ -69,7 +69,7 @@ existing map.
 - Add context for new decisions that affect the code.
 - Revise explanations whose reasons or consequences changed.
 - Add newly introduced files and place them in reading order.
-- Revisit which files are worth a closer look when a file gains or loses a
+- Revisit which files are in focus when a file gains or loses a
   substantive change.
 - Remove or revise explanations that no longer describe the code.
 

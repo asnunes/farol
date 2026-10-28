@@ -58,9 +58,9 @@ impl ReviewMap {
         Ok(())
     }
 
-    /// Say why a file is worth a closer look, or with `None` take it back.
+    /// Put a file in focus, saying why, or with `None` take it out.
     /// Written again, the reason is replaced: the file names the mark.
-    pub fn look(&mut self, slug: &Slug, path: &str, reason: Option<String>) -> Result<()> {
+    pub fn focus(&mut self, slug: &Slug, path: &str, reason: Option<String>) -> Result<()> {
         let block = self.block_mut(slug)?;
         let paths = block.paths();
         let file = block
@@ -70,7 +70,7 @@ impl ReviewMap {
                 path: path.to_string(),
                 existing: paths,
             })?;
-        file.look = reason;
+        file.focus = reason;
         Ok(())
     }
 
@@ -158,30 +158,30 @@ mod tests {
     }
 
     #[test]
-    fn a_file_worth_a_closer_look_keeps_its_reason_until_it_is_taken_back() {
+    fn a_file_in_focus_keeps_its_reason_until_it_is_taken_out() {
         let mut m = map_with(&["one"]);
         m.add_file(&slug("one"), "a.rs", None, None).unwrap();
 
-        m.look(&slug("one"), "a.rs", Some("holds the retry rule".into()))
+        m.focus(&slug("one"), "a.rs", Some("holds the retry rule".into()))
             .unwrap();
         assert_eq!(
             m.block(&slug("one"))
                 .unwrap()
                 .file("a.rs")
                 .unwrap()
-                .look
+                .focus
                 .as_deref(),
             Some("holds the retry rule")
         );
-        m.look(&slug("one"), "a.rs", None).unwrap();
+        m.focus(&slug("one"), "a.rs", None).unwrap();
         assert!(
             m.block(&slug("one"))
                 .unwrap()
                 .file("a.rs")
                 .unwrap()
-                .look
+                .focus
                 .is_none()
         );
-        assert!(m.look(&slug("one"), "b.rs", Some("x".into())).is_err());
+        assert!(m.focus(&slug("one"), "b.rs", Some("x".into())).is_err());
     }
 }

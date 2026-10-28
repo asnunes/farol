@@ -152,13 +152,13 @@ pub struct FileView {
     /// The note the block wrote for this file.
     pub note: Option<String>,
     pub line_notes: Vec<LineNoteView>,
-    /// Why the map says this file is worth a closer look, when it does.
-    pub look: Option<String>,
+    /// Why the map puts this file in focus, when it does.
+    pub focus: Option<String>,
     /// The file's own lenses, drawn under its header.
     pub lenses: Vec<LensView>,
     /// Whether its diff starts folded: on a review the lenses speak for, code
-    /// is opened by the reader — unless the map says the file is worth a
-    /// closer look, which is the one thing that opens it.
+    /// is opened by the reader — unless the map puts the file in focus,
+    /// which is the one thing that opens it.
     pub folded: bool,
 }
 
@@ -177,7 +177,7 @@ impl FileView {
 
         let file = map.block_of(path).and_then(|block| block.file(path));
         let note = file.and_then(|f| f.note.clone());
-        let look = file.and_then(|f| f.look.clone());
+        let focus = file.and_then(|f| f.focus.clone());
         let mut line_notes: Vec<LineNoteView> = file
             .map(|f| {
                 f.line_notes
@@ -205,8 +205,8 @@ impl FileView {
             viewed,
             note,
             line_notes,
-            folded: lenses.speaks() && look.is_none(),
-            look,
+            folded: lenses.speaks() && focus.is_none(),
+            focus,
             lenses: LensView::all(lenses.for_file(path), progress),
         }
     }
@@ -399,13 +399,13 @@ mod tests {
     }
 
     #[test]
-    fn with_lenses_written_only_a_file_worth_a_closer_look_starts_open() {
+    fn with_lenses_written_only_a_file_in_focus_starts_open() {
         use crate::lenses::application::LensReading;
         use crate::lenses::domain::{
             Covered, Freshness, LensAnswer, LensCatalog, LensId, LensTarget,
         };
         let mut map = map_of(&[("core", "a.rs"), ("core", "b.rs")]);
-        map.look(&slug("core"), "b.rs", Some("dense".into()))
+        map.focus(&slug("core"), "b.rs", Some("dense".into()))
             .unwrap();
         let source = FakeDiffSource::with_paths(&["a.rs", "b.rs"]);
         let scope = source.scope().unwrap().clone();
@@ -444,11 +444,8 @@ mod tests {
             files[0].folded,
             "once lenses are written a file is not shown until it is opened"
         );
-        assert!(
-            !files[1].folded,
-            "unless the map says it is worth a closer look"
-        );
-        assert_eq!(files[1].look.as_deref(), Some("dense"));
+        assert!(!files[1].folded, "unless the map puts it in focus");
+        assert_eq!(files[1].focus.as_deref(), Some("dense"));
         assert_eq!(files[0].lenses[0].title, "Tests");
         let pr: Vec<_> = view
             .lenses

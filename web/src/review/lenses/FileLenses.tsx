@@ -7,15 +7,15 @@ import { SeenBox } from "@/review/lenses/SeenBox";
 import type { CitationView, FileView, LensView } from "@/api";
 
 /** A file's own lenses, under its header and before its diff, held to the file
- * by a rail under its name, with why the map says the file is worth a closer
- * look when it does. They stay with the diff folded: they are what lets
+ * by a rail under its name, with why the map puts the file in focus when it
+ * does. They stay with the diff folded: they are what lets
  * the reader leave it folded. */
 export function FileLenses({ file, onCite, onSeen }: FileLensesProps) {
-  if (file.lenses.length === 0 && !file.look) return null;
+  if (file.lenses.length === 0 && !file.focus) return null;
   return (
     <div className="file-lenses border-b border-rule bg-surface pr-4 pb-2 pl-[4.25rem] md:pr-6">
-      {file.look && (
-        <p className="look py-1.5 font-sans text-xs text-highlight">Worth a closer look: {file.look}</p>
+      {file.focus && (
+        <p className="focus py-1.5 font-sans text-xs text-highlight">Focus: {file.focus}</p>
       )}
       {file.lenses.map((lens) => (
         <FileLens key={lens.id} lens={lens} path={file.path} onCite={onCite} onSeen={onSeen} />

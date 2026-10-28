@@ -81,8 +81,8 @@ describe("telling the files in the sidebar apart", () => {
     expect(named("src/diff/domain/mod.rs").textContent).toContain("diff/domain");
   });
 
-  it("keeps why a file is worth a closer look, next to its path", async () => {
-    show(review([{ ...block("one", []), files: [file("src/gen/schema.rs", { look: "generated" })] }]));
+  it("keeps why a file is in focus, next to its path", async () => {
+    show(review([{ ...block("one", []), files: [file("src/gen/schema.rs", { focus: "generated" })] }]));
 
     fireEvent.focus(named("src/gen/schema.rs"));
 
@@ -192,7 +192,7 @@ function file(path: string, over: Partial<FileView> = {}): FileView {
     viewed: false,
     note: null,
     lineNotes: [],
-    look: null,
+    focus: null,
     lenses: [],
     folded: false,
     ...over,

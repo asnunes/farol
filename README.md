@@ -166,8 +166,8 @@ app does not ask for a GitHub token.
 ### Know what is worth opening
 
 With lenses written, every file starts folded: the lenses say what each one
-does and which tests it holds. The map marks the few files **worth a closer
-look**, each with a reason, and those start open.
+does and which tests it holds. The map puts the few files worth opening in
+**focus**, each with a reason, and those start open.
 
 Press `?` for keyboard shortcuts. Use `farol servers` to list open reviews.
 

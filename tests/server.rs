@@ -186,7 +186,7 @@ impl Drop for Serving {
 }
 
 /// A branch with a map worth serving: two blocks, all three levels of prose,
-/// and a file worth a closer look.
+/// and a file in focus.
 fn mapped() -> Repo {
     let repo = Repo::new();
     repo.feature();
@@ -218,7 +218,7 @@ fn mapped() -> Repo {
     repo.ok(&["file", "add", "wiring", "Cargo.lock"]);
     repo.ok(&[
         "file",
-        "look",
+        "focus",
         "core",
         "src/a.rs",
         "--reason",
@@ -444,14 +444,14 @@ fn every_level_of_prose_the_session_wrote_reaches_the_browser() {
 }
 
 #[test]
-fn a_file_worth_a_closer_look_arrives_with_why() {
+fn a_file_in_focus_arrives_with_why() {
     let s = Serving::new();
 
     let review = s.json("/api/review");
 
     let a = &review["blocks"][0]["files"][0];
     assert_eq!(a["path"], "src/a.rs");
-    assert_eq!(a["look"], "the whole fix");
+    assert_eq!(a["focus"], "the whole fix");
 }
 
 #[test]
@@ -2125,10 +2125,7 @@ fn a_lens_written_from_the_cli_reaches_the_review_and_goes_outdated_when_its_fil
     let a = &review["blocks"][0]["files"][0];
     assert_eq!(a["path"], "src/a.rs");
     assert_eq!(a["lenses"][0]["title"], "Tests");
-    assert_eq!(
-        a["folded"], false,
-        "src/a.rs is marked worth a closer look, so it stays open"
-    );
+    assert_eq!(a["folded"], false, "src/a.rs is in focus, so it stays open");
     assert_eq!(
         review["blocks"][1]["files"][0]["folded"], true,
         "once lenses are written any other file starts folded"

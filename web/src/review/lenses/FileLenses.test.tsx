@@ -28,9 +28,9 @@ it("hides and shows a file's lens with the eye, keeping its name", () => {
   expect(screen.getByText(/tried again/)).toBeTruthy();
 });
 
-it("says why the map finds the file worth a closer look", () => {
-  render(<FileLenses file={file({ look: "the whole retry rule" })} onCite={() => {}} onSeen={() => {}} />);
-  expect(screen.getByText("Worth a closer look: the whole retry rule")).toBeTruthy();
+it("says why the map puts the file in focus", () => {
+  render(<FileLenses file={file({ focus: "the whole retry rule" })} onCite={() => {}} onSeen={() => {}} />);
+  expect(screen.getByText("Focus: the whole retry rule")).toBeTruthy();
 });
 
 it("draws nothing for a file no lens speaks about", () => {

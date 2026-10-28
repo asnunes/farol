@@ -59,7 +59,7 @@ export function file(over: Partial<FileView> = {}): FileView {
     viewed: false,
     note: null,
     lineNotes: [],
-    look: null,
+    focus: null,
     lenses: [],
     folded: false,
     ...over,
