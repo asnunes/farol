@@ -3,7 +3,7 @@ import { TriangleAlert, X } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { lensAt, readingOrder, type CommentView } from "@/api";
+import { lensAt, readingOrder, type CommentView, type LensView } from "@/api";
 import { cn } from "@/lib/utils";
 import { useComments } from "@/hooks/useComments";
 import { useActivity } from "@/hooks/useActivity";
@@ -17,7 +17,8 @@ import { useSidebar } from "@/hooks/useSidebar";
 import { Activity } from "@/review/activity/Activity";
 import { HelpDialog } from "@/review/HelpDialog";
 import { KeyBar } from "@/review/KeyBar";
-import { scrollToFile, scrollToThread } from "@/lib/scroll";
+import { scrollToFile, scrollToLens, scrollToThread } from "@/lib/scroll";
+import { placeAfter } from "@/hooks/useCurrentFile";
 import { Reading } from "@/review/Reading";
 import { Sidebar } from "@/review/Sidebar";
 import { TopBar } from "@/review/TopBar";
@@ -124,6 +125,22 @@ export default function App() {
     [order, toggleViewed],
   );
 
+  // The same for a lens: seen folds it away, so the reader is taken to what
+  // comes after it rather than left on it for the next press to unfold.
+  const markLens = useCallback(
+    (lens: LensView, seen: boolean) => {
+      const next = seen ? placeAfter(current) : null;
+      if (next?.startsWith("lens:")) {
+        setCurrent(next);
+        scrollToLens(next.slice("lens:".length));
+      } else if (next) {
+        goTo(next);
+      }
+      return toggleSeen(lens, seen);
+    },
+    [current, goTo, setCurrent, toggleSeen],
+  );
+
   // From the activity box to a thread: its file opened if reading had folded
   // it, the thread opened if the reader had minimised it, and the thread
   // brought to the middle of the pane.
@@ -144,7 +161,7 @@ export default function App() {
     goTo,
     nextUnread,
     toggleViewed: mark,
-    toggleSeen,
+    toggleSeen: markLens,
     setHelpOpen,
     toggleSidebar,
     toggleActivity: () => setActivityOpen((open) => !open),

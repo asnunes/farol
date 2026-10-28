@@ -62,7 +62,20 @@ function whereTheReaderIs(root: HTMLElement): string | null {
   const passed = visible.filter(({ box }) => box.top <= line);
   const here = passed[passed.length - 1] ?? visible[0];
 
-  const { path, lensKey } = here.el.dataset;
+  return placeOf(here.el);
+}
+
+/** The place after this one on the page: the next lens or file, in the order
+ * they are drawn. What marking moves on to, so a press that folds a lens away
+ * does not leave the reader on it for the next press to unfold. */
+export function placeAfter(current: string | null): string | null {
+  const places = [...document.querySelectorAll<HTMLElement>(PLACES)];
+  const at = places.findIndex((el) => placeOf(el) === current);
+  return at < 0 ? null : (places.slice(at + 1).map(placeOf).find(Boolean) ?? null);
+}
+
+function placeOf(el: HTMLElement): string | null {
+  const { path, lensKey } = el.dataset;
   return path ?? (lensKey ? `lens:${lensKey}` : null);
 }
 
