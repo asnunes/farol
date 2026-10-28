@@ -120,8 +120,8 @@ mod tests {
             svc.versions.clone(),
         );
         let before = pending.execute().unwrap();
-        // overview, risk, evidence once; summary, tests and smell for each of the two files.
-        assert_eq!(before.len(), 9);
+        // overview, risk, evidence once; summary for the block; tests and smell for each of the two files.
+        assert_eq!(before.len(), 8);
 
         WriteAnswer::new(
             catalog,
@@ -142,7 +142,7 @@ mod tests {
         let after = pending.execute().unwrap();
         assert_eq!(
             after.len(),
-            8,
+            7,
             "an empty answer says the lens does not apply, and is not asked again"
         );
         assert!(after.iter().all(|p| p.why == Why::Missing));

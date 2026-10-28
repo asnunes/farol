@@ -147,6 +147,6 @@ mod tests {
         assert!(out.starts_with("PR:"), "{out}");
         assert!(out.contains("[on ] overview"), "{out}");
         assert!(out.contains("[off] vocabulary"), "{out}");
-        assert!(out.contains("File:\n  [on ] summary"), "{out}");
+        assert!(out.contains("File:\n  [on ] tests"), "{out}");
     }
 }

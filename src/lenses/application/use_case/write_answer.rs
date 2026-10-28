@@ -393,12 +393,12 @@ mod tests {
         let a = || Aim::File(scope.path("a.rs").unwrap());
 
         let error = write
-            .execute(&id("summary"), a(), "Sets x to one, the default.".into())
+            .execute(&id("smell"), a(), "Sets x to one, the default.".into())
             .unwrap_err()
             .to_string();
         assert!(error.contains("reading the code is quicker"), "{error}");
         assert!(
-            write.execute(&id("summary"), a(), "".into()).is_ok(),
+            write.execute(&id("smell"), a(), "".into()).is_ok(),
             "written empty, the file shows its code instead"
         );
     }

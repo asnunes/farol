@@ -259,9 +259,8 @@ Do not invent a decision to fill an otherwise unexplained file.
 
 ## Put in focus what is worth opening
 
-On a review with lenses, a file a lens speaks about starts folded: the
-reader learns the change from the lenses and opens the code when they
-want to check it. Put in focus the files that deserve to be opened anyway, and say
+Every file starts folded: the reader learns the change from the map and
+the lenses, and opens the code when they want to check it. Put in focus the files that deserve to be opened anyway, and say
 why:
 
     farol file focus <slug> <path> --reason '…'
@@ -288,9 +287,9 @@ reader can decide whether to follow it:
 - Concrete: "A retry here can resend a charge the provider accepted."
 
 Inspect a file before putting it in focus, and never do it to make up
-for a lens that explains it badly: fix the lens. A smell, or a
-particularity the summary cannot carry, is not focus: the file lens
-that saw it opens the file with `--open` (see Write the lenses).
+for a lens that explains it badly: fix the lens. A smell is not
+focus: the Smell lens opens the file with `--open` (see Write the
+lenses).
 
 ## Write for someone arriving without context
 
@@ -425,9 +424,13 @@ exist is refused. A file lens is offered for every file in the review:
 write an empty text for a file it does not apply to. A file lens may
 open its file with `--open '<why>'`, which is the exception: use it only
 when reading the code could change whether the reviewer approves, and
-say what they will see there. Smell always opens what it writes about;
-Summary opens only for a particularity its lines cannot carry. Files
-opened this way do not count against the focus limit.
+say what they will see there. Smell always opens what it writes about.
+Files opened this way do not count against the focus limit.
+
+The block's context and its Summary lens answer different questions,
+and neither repeats the other. The context says what this piece of code
+does, what it is for and what problem it solves. The Summary says how it
+is built: which file does what and how the files relate.
 
 Lenses are where judgment goes. Unlike the map, a lens such as Risk or
 Evidence may assess the change, because the reviewer asked for it there.

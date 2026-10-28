@@ -4,9 +4,9 @@
 //! at Anthropic" says stays with a person once machines do most of the
 //! reading: deciding whether the change should exist, reviewing the risky code
 //! and the patterns others will copy, and reading the evidence. Summary says
-//! in a line or three what each file does, and Tests lists the cases, both so
-//! a file can be judged without opening it; Smell is the one that exists to
-//! open a file, and is empty on most. Each prompt asks for a few
+//! per block how its files relate, so the block is read as one piece rather
+//! than file by file; Tests lists each file's cases; Smell is the one that
+//! exists to open a file, and is empty on most. Each prompt asks for a few
 //! lines, because lenses that take as long to read as the code have failed.
 
 use super::{LensDefinition, LensGroup, LensId};
@@ -64,8 +64,8 @@ pub(super) const BUILT_IN: &[BuiltIn] = &[
     BuiltIn {
         id: "summary",
         title: "Summary",
-        group: LensGroup::File,
-        prompt: "What this file does in the change that its name does not already say, and how or why where the reader would not guess it. As long as the file needs and no longer, and always far quicker to read than its diff: farol refuses a file lens with more characters than the lines the change adds and removes. Never restate the name: \"Defines CodeBar: the strip where the block's code starts\" says nothing; \"Draws the strip between a block's lenses and its files, with the file count and the lines added and removed, so the reader knows how much code they would open\" says what, how and why. If someone holding only the file name could write it, rewrite it. Empty when the diff says it by itself, and then the file shows its code. Pass --open '<why>' only for a particularity these lines cannot carry: an ordering, a boundary, a trick that works for a subtle reason. Most files have none.",
+        group: LensGroup::Block,
+        prompt: "How this block is built: which file does what, and how they relate — where it enters, who calls whom, what passes between them. Name each file with its role in that flow, one line each, in the order the flow runs. Never restate the block's context, which already says what the block is for and what problem it solves. Always far quicker to read than the block's code.",
         enabled: true,
         max_lines: 8,
     },
