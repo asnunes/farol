@@ -19,9 +19,15 @@ export function FileLenses({ file, open, onToggleOpen, onCite }: FileLensesProps
       {file.focus && (
         <p className="focus py-1.5 font-sans text-xs text-highlight">Focus: {file.focus}</p>
       )}
-      {file.lenses.map((lens) => (
-        <FileLens key={lens.id} lens={lens} path={file.path} onCite={onCite} />
-      ))}
+      {/* One rail for all of them, with a dot at each title: a timeline
+          down the file, read top to bottom before the code. */}
+      {file.lenses.length > 0 && (
+        <div className="timeline border-l-2 border-rule-strong">
+          {file.lenses.map((lens) => (
+            <FileLens key={lens.id} lens={lens} path={file.path} onCite={onCite} />
+          ))}
+        </div>
+      )}
       {!file.viewed && (
         <Button
           variant="ghost"
@@ -47,8 +53,9 @@ export function speaksAbout(file: FileView): boolean {
 function FileLens({ lens, path, onCite }: FileLensProps) {
   const [shown, setShown] = useState(true);
   return (
-    <div className="file-lens mt-1.5 border-l-2 border-rule-strong pl-3.5" data-lens={lens.id} data-lens-key={`file:${path}:${lens.id}`}>
+    <div className="file-lens relative pt-1.5 pl-3.5" data-lens={lens.id} data-lens-key={`file:${path}:${lens.id}`}>
       <div className="flex items-center gap-2">
+        <span aria-hidden="true" className="dot absolute top-3 -left-[5px] size-2 rounded-full bg-rule-strong" />
         <span className="font-mono text-[0.6875rem] tracking-wide text-ink-muted uppercase">{lens.title}</span>
         <LensState lens={lens} />
         <Button
