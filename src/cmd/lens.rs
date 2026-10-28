@@ -51,6 +51,12 @@ pub(super) enum LensAction {
         #[command(flatten)]
         target: TargetArgs,
     },
+    /// Keep what a lens said, after checking it still holds for the code as it is now.
+    Keep {
+        lens: String,
+        #[command(flatten)]
+        target: TargetArgs,
+    },
     /// Write what a lens says about its target, replacing what it said.
     Write {
         lens: String,
@@ -121,6 +127,13 @@ impl LensAction {
                     Some(answer) => print!("{}", AnswerReport(&answer)),
                     None => println!("Nothing written for this lens here yet."),
                 }
+                Ok(())
+            }
+            Self::Keep { lens, target } => {
+                let ctx = scope.open()?;
+                let aim = target.aim(&ctx)?;
+                let answer = ctx.keep_answer.execute(&LensId::parse(&lens)?, aim)?;
+                println!("Kept lens '{}' on {}.", answer.lens, answer.target);
                 Ok(())
             }
             Self::Write {

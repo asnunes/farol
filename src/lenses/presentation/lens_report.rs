@@ -28,18 +28,30 @@ impl Display for PendingReport<'_> {
                 writeln!(f, "  asks: {}", pending.lens.prompt)?;
                 last = Some(&pending.lens.id);
             }
-            let why = match pending.why {
-                Why::Missing => "not written",
-                Why::Outdated => "outdated",
-            };
-            writeln!(
-                f,
-                "  {why}: farol lens write {}{} --text '…'",
-                pending.lens.id,
-                flag(&pending.target)
-            )?;
+            let (id, at) = (&pending.lens.id, flag(&pending.target));
+            match pending.why {
+                Why::Missing => writeln!(f, "  not written: farol lens write {id}{at} --text '…'")?,
+                Why::Outdated => writeln!(
+                    f,
+                    "  outdated: if it still holds, farol lens keep {id}{at}; if not, farol lens write {id}{at} --text '…'"
+                )?,
+            }
         }
         Ok(())
+    }
+}
+
+/// One line for `map derive` and `map check`: updating the map is when the
+/// lenses are reviewed, so the session is told there is work left.
+pub struct LensReminder<'a>(pub &'a [Pending]);
+
+impl Display for LensReminder<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.0.len() {
+            0 => Ok(()),
+            1 => writeln!(f, "1 lens to review — run `farol lens pending`."),
+            n => writeln!(f, "{n} lenses to review — run `farol lens pending`."),
+        }
     }
 }
 
@@ -93,7 +105,7 @@ impl Display for AnswerReport<'_> {
     }
 }
 
-const RULES: &str = "Write each from what you know of the change, in the language of the map, in a few lines. Cite code in backticks as `path:from-to`, adding (old) for a removed line; a line that does not exist is refused. For a file lens, write an empty text for a file it does not apply to. Writing a lens changes no code: do not change, commit or publish anything while doing it.";
+const RULES: &str = "For an outdated lens, first check whether what it says still holds for the code as it is now: keep it if it does, rewrite it if not. Write each from what you know of the change, in the language of the map, in a few lines. Cite code in backticks as `path:from-to`, adding (old) for a removed line; a line that does not exist is refused. For a file lens, write an empty text for a file it does not apply to. Writing a lens changes no code: do not change, commit or publish anything while doing it.";
 
 fn written(group: LensGroup) -> &'static str {
     match group {

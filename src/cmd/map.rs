@@ -4,6 +4,7 @@ use clap::Subcommand;
 
 use super::{Action, Ctx};
 use crate::error::Result;
+use crate::lenses::presentation::LensReminder;
 use crate::map::application::ResetOutcome;
 use crate::map::presentation::{CheckSummary, MapReport, MapSummary, OrphanReport};
 use crate::shared::short;
@@ -97,6 +98,7 @@ impl Action for MapAction {
                     print!("{}", MapSummary(map));
                 }
                 print!("{}", OrphanReport(map.orphans()));
+                print!("{}", LensReminder(&ctx.pending_answers.execute()?));
                 Ok(())
             }
             MapAction::Show => {
@@ -117,6 +119,10 @@ impl Action for MapAction {
             MapAction::Check => {
                 let report = ctx.check_map.execute()?;
                 print!("{}", CheckSummary(&report));
+                // Not part of passing: a map can be complete while its lenses
+                // wait for the session. Said here because this is the step the
+                // skill runs last, and the lenses are reviewed with the map.
+                print!("{}", LensReminder(&ctx.pending_answers.execute()?));
                 if report.passed() {
                     Ok(())
                 } else {

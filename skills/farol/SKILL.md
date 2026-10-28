@@ -428,8 +428,11 @@ assuming the list:
     farol lens pending
 
 It lists every lens that is missing or outdated, with its prompt, the
-command for each target, and the rules every answer is held to. Write
-each one, following its prompt:
+command for each target, and the rules every answer is held to. Every
+time you update the map, review the outdated ones: if what a lens says
+still holds for the code as it is now, keep it with
+`farol lens keep <id> [--block <slug> | --file <path>]`; if not, rewrite
+it. Write the missing ones, following their prompt:
 
     farol lens write <id> --text '…'                  # the pull request
     farol lens write <id> --block <slug> --text '…'   # a block

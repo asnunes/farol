@@ -2131,11 +2131,23 @@ fn a_lens_written_from_the_cli_reaches_the_review_and_goes_outdated_when_its_fil
         review["blocks"][0]["files"][0]["folded"], true,
         "a file that changed since stays folded too; its lenses say Outdated"
     );
+    let derived = s.repo.derive();
+    assert!(
+        derived.contains("lenses to review"),
+        "updating the map says there are lenses to review: {derived}"
+    );
     let pending = s.repo.ok(&["lens", "pending"]);
     assert!(
-        pending.contains("outdated: farol lens write overview"),
+        pending.contains("outdated: if it still holds, farol lens keep overview"),
         "{pending}"
     );
+    s.repo.ok(&["lens", "keep", "overview"]);
+    let review = s.json("/api/review");
+    assert_eq!(
+        review["lenses"][0]["state"], "written",
+        "a kept lens is in date again"
+    );
+    assert_eq!(review["lenses"][0]["text"], "It fixes `src/a.rs:10-12`.");
 }
 
 #[test]

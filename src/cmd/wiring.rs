@@ -23,8 +23,8 @@ use crate::diff::application::{CommitHistory, FileDiffs, ReviewScope};
 use crate::diff::infra::{GixSource, ScopeRequest};
 use crate::error::Result;
 use crate::lenses::application::{
-    AddLens, DeleteLens, DisableLens, EnableLens, GetReviewWithLenses, ListLenses, PendingAnswers,
-    ShowAnswer, UpdateLens, WriteAnswer,
+    AddLens, DeleteLens, DisableLens, EnableLens, GetReviewWithLenses, KeepAnswer, ListLenses,
+    PendingAnswers, ShowAnswer, UpdateLens, WriteAnswer,
 };
 use crate::lenses::domain::LensCatalogRepository;
 use crate::lenses::infra::{JsonLensAnswers, JsonLensCatalog};
@@ -81,6 +81,7 @@ pub struct Ctx {
     pub publish_review: PublishReview,
 
     pub write_answer: WriteAnswer,
+    pub keep_answer: KeepAnswer,
     pub pending_answers: PendingAnswers,
     pub show_answer: ShowAnswer,
 
@@ -258,6 +259,7 @@ impl Ctx {
             readiness: readiness.clone(),
             publish_review: publish_review.clone(),
 
+            keep_answer: KeepAnswer::new(lens_answers.clone(), write_answer.clone(), scope.clone()),
             write_answer,
             pending_answers,
             show_answer: ShowAnswer::new(lens_answers.clone()),

@@ -60,6 +60,7 @@ farol lens list                                   # the catalog
 farol lens add --group file --title Migrations --prompt '…'
 farol lens pending                                # what the session owes
 farol lens write tests --file src/retry.rs --text '…'
+farol lens keep overview                          # still holds after a commit
 ```
 
 ## Read and comment
