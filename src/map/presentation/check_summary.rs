@@ -37,6 +37,18 @@ impl Display for CheckSummary<'_> {
             )?;
         }
 
+        if !report.too_much_focus.is_empty() {
+            writeln!(
+                f,
+                "Too much in focus: {}.",
+                report.too_much_focus.join("; ")
+            )?;
+            writeln!(
+                f,
+                "Focus is the exception: at most 3 per review and 1 per block, each a file whose code could change\nwhether the reviewer approves. Run `farol file unfocus` on the rest."
+            )?;
+        }
+
         if report.passed() {
             writeln!(f, "Map is complete.")?;
             match report.commits_behind {
