@@ -80,7 +80,8 @@ export function useShortcuts({
             break;
           }
           const file = order[index];
-          if (file) void toggleViewed(file.path, !file.viewed);
+          // A file read through its block's lenses has no tick to take back.
+          if (file && !file.covered) void toggleViewed(file.path, !file.viewed);
           break;
         }
         // The page keys are left alone on purpose. They are the only way to

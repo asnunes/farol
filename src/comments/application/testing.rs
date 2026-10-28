@@ -111,7 +111,26 @@ impl World {
             self.gate(),
             self.publisher.clone(),
             ReviewScope::new(self.source.clone()),
+            self.read_files(),
+        )
+    }
+
+    /// What the reviewer read, over a review with no map: the ticks alone.
+    fn read_files(&self) -> crate::lenses::application::ReadFiles {
+        let scope = ReviewScope::new(self.source.clone());
+        let versions = crate::map::application::MapVersions::new(
+            scope.clone(),
+            CommitHistory::new(self.source.clone()),
+            Arc::new(crate::testing::InMemoryMapRepository::default()),
+        );
+        crate::lenses::application::ReadFiles::new(
             self.progress.clone(),
+            scope.clone(),
+            crate::lenses::application::GetReviewWithLenses::new(
+                crate::map::application::GetReview::new(versions, scope, self.progress.clone()),
+                Arc::new(crate::testing::InMemoryLensCatalog::default()),
+                Arc::new(crate::testing::InMemoryLensAnswers::default()),
+            ),
         )
     }
 }

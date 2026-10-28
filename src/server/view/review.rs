@@ -78,7 +78,10 @@ impl ReviewView {
                 .filter_map(|path| scope.change(path))
                 // The same question `FileView` asks of a row: read, and still
                 // the same file.
-                .filter(|change| progress.is_current(&change.path, &change.content_hash))
+                .filter(|change| {
+                    progress.is_current(&change.path, &change.content_hash)
+                        || lenses.covers(map, progress, &change.path)
+                })
                 .count();
 
             blocks.push(BlockView {
@@ -149,6 +152,9 @@ pub struct FileView {
     pub additions: u32,
     pub deletions: u32,
     pub viewed: bool,
+    /// Read through its block's lenses rather than by a tick of its own, so
+    /// there is no tick to take back.
+    pub covered: bool,
     /// The note the block wrote for this file.
     pub note: Option<String>,
     pub line_notes: Vec<LineNoteView>,
@@ -195,7 +201,11 @@ impl FileView {
         // Read *and still the same file*. Comparing paths alone was what kept
         // a file struck through after it had changed under the mark, which is
         // the one thing this is supposed to catch.
-        let viewed = progress.is_current(path, &change.content_hash);
+        //
+        // Or covered: a file with nothing of its own to read counts as read
+        // once its block's lenses are seen.
+        let covered = lenses.covers(map, progress, path);
+        let viewed = progress.is_current(path, &change.content_hash) || covered;
 
         let file_lenses = LensView::all(lenses.for_file(path), progress);
         FileView {
@@ -204,6 +214,7 @@ impl FileView {
             additions: change.additions,
             deletions: change.deletions,
             viewed,
+            covered,
             note,
             line_notes,
             folded: focus.is_none() && file_lenses.iter().all(|l| l.open.is_none()),

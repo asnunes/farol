@@ -73,5 +73,6 @@ function file(path: string, viewed: boolean): FileView {
     focus: null,
     lenses: [],
     folded: false,
+    covered: false,
   };
 }

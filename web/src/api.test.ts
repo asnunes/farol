@@ -13,6 +13,7 @@ function file(path: string, viewed = false): FileView {
     focus: null,
     lenses: [],
     folded: false,
+    covered: false,
   };
 }
 

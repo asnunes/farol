@@ -45,9 +45,10 @@ export function FileHeader({ file, open, onToggleOpen, onToggleViewed, comments 
         <Checkbox
           className="markbox size-5 border-rule-strong hover:border-highlight data-[state=checked]:border-highlight data-[state=checked]:bg-highlight data-[state=checked]:text-surface"
           checked={file.viewed}
+          disabled={file.covered}
           onCheckedChange={onToggleViewed}
           aria-label="Mark as read"
-          title="Mark as read — key ;"
+          title={file.covered ? "Read through its block's lenses" : "Mark as read — key ;"}
         />
 
         <div className="path truncate font-mono text-sm font-semibold text-ink">

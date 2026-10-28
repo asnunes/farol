@@ -16,6 +16,7 @@ function file(path: string, over: Partial<FileView> = {}): FileView {
     focus: null,
     lenses: [],
     folded: false,
+    covered: false,
     ...over,
   };
 }

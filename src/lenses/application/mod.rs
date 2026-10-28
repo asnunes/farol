@@ -1,9 +1,11 @@
 //! What the CLI and the server call about lenses, and the reading of them the
 //! screen is drawn from.
 
+mod read_files;
 mod reading;
 mod use_case;
 
+pub use read_files::*;
 pub use reading::*;
 pub use use_case::*;
 
