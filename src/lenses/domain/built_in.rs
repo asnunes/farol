@@ -65,7 +65,7 @@ pub(super) const BUILT_IN: &[BuiltIn] = &[
         id: "summary",
         title: "Summary",
         group: LensGroup::Block,
-        prompt: "How this block is built, in two parts. First one bold line with the flow, the pieces joined by arrows in the order it runs: **route → `UseCase` → `Reading` → view**. Name a piece by its type or file name, never by its full path. Then at most three one-line bullets, only for relations a reader would not guess from the flow: a decision one piece makes for the others, a side effect, a dependency that runs the other way. Nothing a name already says. Never repeat the block's context, which says what the block is for.",
+        prompt: "How this block works, for a reader who has never seen its types. First one bold sentence in plain words saying how it is built: what is computed from what, what is stored where, who asks whom. Then at most three one-line bullets for the main pieces, each type or file named together with what it does, never a bare name. Arrows only for a real sequence at run time, and only between steps the reader already understands. Never repeat the block's context, which says what the block is for. If the sentence only makes sense to someone who read the code, rewrite it.",
         enabled: true,
         max_lines: 4,
     },
