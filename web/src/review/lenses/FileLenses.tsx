@@ -72,7 +72,7 @@ function FileLens({ lens, path, onCite }: FileLensProps) {
       </div>
       {shown && (
         <LensText
-          className="font-serif text-[0.9rem] leading-relaxed text-ink-soft"
+          className="font-serif text-sm leading-relaxed text-ink-soft"
           text={lens.text}
           citations={lens.citations}
           inFile={path}

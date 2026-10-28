@@ -401,12 +401,14 @@ it. Write the missing ones, following their prompt:
     farol lens write <id> --file <path> --text '…'    # a file
 
 Keep each answer to a few lines: the point of a lens is that reading it
-takes less time than reading the code. Write them from what the session
+takes less time than reading the code. Write for a reader who scans, not
+one who reads: the point first, in bold; then bullets of one line each,
+the key term of each in bold; no paragraph longer than two lines. A
+reader who reads only the bold should already have the lens. Write them from what the session
 knows, in the map's language. Cite code in backticks as `path:from-to`,
 adding `(old)` for a line the change removed; a cited line that does not
 exist is refused. A file lens is offered for every file in the review:
-write an empty text for a file it does not apply to. When a lens asks for
-files a person should read themselves, pass each with `--read <path>`.
+write an empty text for a file it does not apply to.
 
 Lenses are where judgment goes. Unlike the map, a lens such as Risk or
 Evidence may assess the change, because the reviewer asked for it there.

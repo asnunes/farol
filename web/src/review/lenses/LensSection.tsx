@@ -35,7 +35,7 @@ export function LensSection({ lens, where, onCite, onSeen }: LensSectionProps) {
           <p className="mt-1 pl-7 font-sans text-sm text-ink-muted">Not written yet — written on the next map update.</p>
         ) : (
           <LensText
-            className={`mt-1 max-w-[72ch] pl-7 font-serif text-[0.9375rem] leading-relaxed text-ink-soft ${lens.state === "outdated" ? "opacity-70" : ""}`}
+            className={`mt-1 max-w-[72ch] pl-7 font-serif text-sm leading-relaxed text-ink-soft ${lens.state === "outdated" ? "opacity-70" : ""}`}
             text={lens.text}
             citations={lens.citations}
             onCite={onCite}

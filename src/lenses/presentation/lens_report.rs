@@ -102,7 +102,7 @@ impl Display for AnswerReport<'_> {
     }
 }
 
-const RULES: &str = "For an outdated lens, first check whether what it says still holds for the code as it is now: keep it if it does, rewrite it if not. Write each from what you know of the change, in the language of the map, in a few lines. Cite code in backticks as `path:from-to`, adding (old) for a removed line; a line that does not exist is refused. For a file lens, write an empty text for a file it does not apply to. Writing a lens changes no code: do not change, commit or publish anything while doing it.";
+const RULES: &str = "For an outdated lens, first check whether what it says still holds for the code as it is now: keep it if it does, rewrite it if not. Write each from what you know of the change, in the language of the map, for a reader who scans: the point first, in bold; then bullets of one line each, the key term of each in bold; no paragraph longer than two lines. Cite code in backticks as `path:from-to`, adding (old) for a removed line; a line that does not exist is refused. For a file lens, write an empty text for a file it does not apply to. Writing a lens changes no code: do not change, commit or publish anything while doing it.";
 
 fn written(group: LensGroup) -> &'static str {
     match group {
