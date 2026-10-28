@@ -64,7 +64,7 @@ export function FileSection({
   }, [visible, open, heavy, asked]);
 
   return (
-    <div ref={box} className="filesection" data-path={file.path}>
+    <div ref={box} className="filesection" data-path={file.path} data-done={file.viewed ? "true" : undefined}>
       <FileHeader
         file={file}
         open={open}

@@ -18,7 +18,7 @@ import { Activity } from "@/review/activity/Activity";
 import { HelpDialog } from "@/review/HelpDialog";
 import { KeyBar } from "@/review/KeyBar";
 import { scrollToFile, scrollToLens, scrollToThread } from "@/lib/scroll";
-import { placeAfter } from "@/hooks/useCurrentFile";
+import { unreadAfter } from "@/hooks/useCurrentFile";
 import { Reading } from "@/review/Reading";
 import { Sidebar } from "@/review/Sidebar";
 import { TopBar } from "@/review/TopBar";
@@ -117,32 +117,35 @@ export default function App() {
   const mark = useCallback(
     (path: string, viewed: boolean) => {
       // Marking one read folds it away, which leaves the reader looking at
-      // whatever was underneath. Take them to the next file instead.
-      if (viewed) {
-        const next = order[order.findIndex((f) => f.path === path) + 1];
-        if (next) goTo(next.path);
-      }
+      // whatever was underneath. Take them to what is still to be read.
+      if (viewed) goToPlace(unreadAfter(path));
       return toggleViewed(path, viewed);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [order, toggleViewed],
+    [toggleViewed],
   );
 
   // The same for a lens: seen folds it away, so the reader is taken to what
   // comes after it rather than left on it for the next press to unfold.
   const markLens = useCallback(
     (lens: LensView, seen: boolean) => {
-      const next = seen ? placeAfter(current) : null;
-      if (next?.startsWith("lens:")) {
-        setCurrent(next);
-        scrollToLens(next.slice("lens:".length));
-      } else if (next) {
-        goTo(next);
-      }
+      if (seen) goToPlace(unreadAfter(current));
       return toggleSeen(lens, seen);
     },
-    [current, goTo, setCurrent, toggleSeen],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [current, toggleSeen],
   );
+
+  // A place is a file path or `lens:<key>`; going to a lens names it and
+  // scrolls, going to a file goes the way the keys do.
+  function goToPlace(place: string | null) {
+    if (place?.startsWith("lens:")) {
+      setCurrent(place);
+      scrollToLens(place.slice("lens:".length));
+    } else if (place) {
+      goTo(place);
+    }
+  }
 
   // From the activity box to a thread: its file opened if reading had folded
   // it, the thread opened if the reader had minimised it, and the thread
@@ -224,8 +227,8 @@ export default function App() {
             review={review}
             comments={comments.on}
             current={current}
-            onPick={(path) => {
-              goTo(path);
+            onPick={(place) => {
+              goToPlace(place);
               // Over the code, picking is the end of what the sidebar was for,
               // so it goes — and the row that was clicked goes with it.
               if (dismiss()) sidebarToggle.current?.focus();

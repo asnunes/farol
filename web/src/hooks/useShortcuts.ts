@@ -39,8 +39,13 @@ export function useShortcuts({
       const target = e.target as HTMLElement;
       if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") return;
       // A focused button already answers to Enter, and pressing it would both
-      // press the button and mark the file read.
-      if (target.tagName === "BUTTON") return;
+      // press the button and mark the file read. A row in the sidebar keeps
+      // focus after it is clicked, and Space there means mark, as anywhere:
+      // it lets go of the row first, so the press does not also click it.
+      if (target.tagName === "BUTTON") {
+        if (!(target.closest(".sidebar") && (e.key === " " || e.key === ";"))) return;
+        target.blur();
+      }
       if (!review) return;
 
       const go = (i: number) => {

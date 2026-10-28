@@ -3,7 +3,6 @@ import { cn } from "@/lib/utils";
 import { fileLabels } from "@/lib/path";
 import { FileRow } from "./FileRow";
 import { LensRow } from "./LensRow";
-import { scrollToLens } from "@/lib/scroll";
 import { readingOrder } from "@/api";
 import type { CommentsOn } from "@/hooks/useComments";
 import type { FileLabels } from "@/lib/path";
@@ -40,7 +39,7 @@ export function Sidebar({
           </div>
           <ul className="blk-files mt-1">
             {review.lenses.map((lens) => (
-              <LensRow key={lens.id} lens={lens} current={current === `lens:pr:${lens.id}`} onPick={() => scrollToLens(`pr:${lens.id}`)} />
+              <LensRow key={lens.id} lens={lens} current={current === `lens:pr:${lens.id}`} onPick={() => onPick(`lens:pr:${lens.id}`)} />
             ))}
           </ul>
         </section>
@@ -109,7 +108,7 @@ function Block({
             key={lens.id}
             lens={lens}
             current={current === `lens:block:${block.slug}:${lens.id}`}
-            onPick={() => scrollToLens(`block:${block.slug}:${lens.id}`)}
+            onPick={() => onPick(`lens:block:${block.slug}:${lens.id}`)}
           />
         ))}
         {block.files.map((f) => (
@@ -132,7 +131,8 @@ type SidebarProps = {
   /** A file's comments, from the one place they are grouped. */
   comments: CommentsOn;
   current: string | null;
-  onPick: (path: string) => void;
+  /** A file path, or `lens:<key>` for a lens row. */
+  onPick: (place: string) => void;
 };
 
 type BlockProps = {
