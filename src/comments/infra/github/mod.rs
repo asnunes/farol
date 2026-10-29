@@ -12,7 +12,7 @@ use std::sync::Arc;
 use serde::Serialize;
 
 use crate::comments::domain::{
-    Comment, CommentError, Credentials, Readiness, RemoteComment, RemoteState, Review,
+    CommentError, Credentials, Lines, Readiness, RemoteComment, RemoteState, Review,
     ReviewPublisher,
 };
 use crate::error::Result;
@@ -149,7 +149,7 @@ impl ReviewPublisher for GitHub {
     /// GitHub keeps one pending review per person per pull request, so this
     /// asks for it before starting one. A new one is anchored at `head`, which
     /// the use case has checked is the commit the reviewer is reading.
-    fn add_pending(&self, pull: &str, head: &str, at: &Comment, body: &str) -> Result<String> {
+    fn add_pending(&self, pull: &str, head: &str, at: &Lines, body: &str) -> Result<String> {
         let token = self.token()?;
         let review = match self.pending_review(&token, pull)? {
             Some(review) => review.id,
@@ -466,17 +466,17 @@ struct Thread {
     start_side: Option<&'static str>,
 }
 
-impl From<&Comment> for Thread {
-    fn from(comment: &Comment) -> Self {
-        let spans = comment.from != comment.to;
-        let side = sided(comment.side);
+impl From<&Lines> for Thread {
+    fn from(lines: &Lines) -> Self {
+        let spans = lines.from != lines.to;
+        let side = sided(lines.side);
         Self {
             review: String::new(),
-            path: comment.path.clone(),
+            path: lines.path.clone(),
             body: String::new(),
-            line: comment.to,
+            line: lines.to,
             side,
-            start_line: spans.then_some(comment.from),
+            start_line: spans.then_some(lines.from),
             start_side: spans.then_some(side),
         }
     }
@@ -666,6 +666,7 @@ fn sided(side: crate::diff::domain::Side) -> &'static str {
 mod tests {
     use super::*;
     use crate::comments::domain::{Comment, Verdict};
+    use crate::comments::domain::{Lines, Subject};
 
     fn review() -> Review {
         Review {
@@ -679,10 +680,12 @@ mod tests {
     fn comment(from: u32, to: u32) -> Comment {
         Comment {
             id: "1".into(),
-            path: "src/a.rs".into(),
-            side: crate::diff::domain::Side::New,
-            from,
-            to,
+            about: Subject::Lines(Lines {
+                path: "src/a.rs".into(),
+                side: crate::diff::domain::Side::New,
+                from,
+                to,
+            }),
             body: "Why this order?".into(),
             pending: None,
             conversation: Default::default(),
@@ -692,12 +695,13 @@ mod tests {
     #[test]
     fn a_span_is_sent_as_a_range_and_a_single_line_is_not() {
         // A range of one is a validation error at the far end, not a range.
-        let span = serde_json::to_value(Thread::from(&comment(82, 116))).unwrap();
+        let span =
+            serde_json::to_value(Thread::from(comment(82, 116).about.lines().unwrap())).unwrap();
         assert_eq!(span["line"], 116);
         assert_eq!(span["startLine"], 82);
         assert_eq!(span["startSide"], "RIGHT");
 
-        let one = serde_json::to_value(Thread::from(&comment(9, 9))).unwrap();
+        let one = serde_json::to_value(Thread::from(comment(9, 9).about.lines().unwrap())).unwrap();
         assert_eq!(one["line"], 9);
         assert_eq!(one["side"], "RIGHT");
         assert!(one["startLine"].is_null(), "{one}");
@@ -709,11 +713,11 @@ mod tests {
         // The numbers are read against the side, so a span sent without
         // `startSide` would have its first line taken on the right and land
         // somewhere nobody wrote about.
-        let old = Comment {
-            side: crate::diff::domain::Side::Old,
-            ..comment(82, 116)
-        };
-        let span = serde_json::to_value(Thread::from(&old)).unwrap();
+        let old = crate::comments::domain::Comment::on_side(
+            comment(82, 116),
+            crate::diff::domain::Side::Old,
+        );
+        let span = serde_json::to_value(Thread::from(old.about.lines().unwrap())).unwrap();
         assert_eq!(span["side"], "LEFT");
         assert_eq!(span["startSide"], "LEFT");
         assert_eq!(span["startLine"], 82);
@@ -950,7 +954,7 @@ mod tests {
         assert!(github.mark_read("pull", &["a.rs".into()]).is_err());
         assert!(
             github
-                .add_pending("pull", "head", &comment(1, 1), "hi")
+                .add_pending("pull", "head", comment(1, 1).about.lines().unwrap(), "hi")
                 .is_err()
         );
         assert!(github.edit_pending("id", "hi").is_err());

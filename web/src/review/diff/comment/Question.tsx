@@ -5,6 +5,7 @@ import { Copy } from "./Copy";
 import { Send } from "./Send";
 import { UseAsPending } from "./UseAsPending";
 import { span } from "./quoted";
+import { linesOf } from "@/api";
 import type { CommentActions } from "@/hooks/useComments";
 import type { CommentView } from "@/api";
 
@@ -14,7 +15,7 @@ export function Question({ comment, actions, minimized, offerUse, discardsPendin
   return (
     <div className="flex items-start gap-2 md:gap-3">
       <span className="lbl mt-0.5 shrink-0 font-mono text-xs text-comment-ink">
-        {span(comment, "–")}
+        {threadLabel(comment)}
       </span>
 
       <div className="min-w-0 flex-1">
@@ -73,3 +74,9 @@ type QuestionProps = {
   /** The thread's pending comment is still on the pull request, and goes too. */
   discardsPending: boolean;
 };
+
+/** The lines a thread is on, or what it is about when it sits on no line. */
+function threadLabel(comment: CommentView): string {
+  const lines = linesOf(comment);
+  return lines ? span(lines, "–") : "Thread";
+}

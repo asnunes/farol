@@ -74,7 +74,7 @@ export function FileSection({
       />
 
       {/* Drawn with the diff folded too: they are what lets it stay folded. */}
-      <FileLenses file={file} open={open} onToggleOpen={onToggleOpen} onCite={onCite} />
+      <FileLenses file={file} open={open} onToggleOpen={onToggleOpen} onCite={onCite} comments={commentActions} />
 
       {!open ? null : (
         <>

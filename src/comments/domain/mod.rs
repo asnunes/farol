@@ -1,15 +1,17 @@
 mod error;
 mod mode;
 mod publishing;
+mod subject;
 
 pub use error::*;
 pub use mode::*;
 pub use publishing::*;
+pub use subject::*;
 
-use crate::diff::domain::Side;
 use crate::error::Result;
 
-/// Something the reviewer wrote about a span of lines — a thread, on screen.
+/// Something the reviewer wrote about the change — a thread, on screen. About
+/// a span of lines, a lens or a block's description: see [`Subject`].
 ///
 /// Theirs, not the session's: the map carries what the author explained, and
 /// this carries what the reader asked back. They sit in different files for the
@@ -21,16 +23,7 @@ use crate::error::Result;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Comment {
     pub id: String,
-    pub path: String,
-    /// Which side of the diff `from` and `to` are counted on.
-    ///
-    /// Not a detail of how it is displayed: the same pair of numbers names one
-    /// passage on the old side and a different one on the new, and the host is
-    /// told the side along with the numbers. A comment without it is a comment
-    /// that could land on either.
-    pub side: Side,
-    pub from: u32,
-    pub to: u32,
+    pub about: Subject,
     /// Markdown, kept as written.
     pub body: String,
     /// The comment for the pull request that came out of this thread, which
@@ -111,21 +104,18 @@ impl Comment {
         format!("{}\n\n{}", self.at(), self.body.trim())
     }
 
-    /// Where it sits, the way a person would type it to go there.
-    ///
-    /// The side is written only when it is the old one. Both sides number from
-    /// one, so `src/a.rs:12` alone would be two different places — and the
-    /// unmarked form has to keep meaning what it has always meant, which is the
-    /// file as it now reads.
+    /// Where it sits, the way a person would say it.
     pub fn at(&self) -> String {
-        let lines = match self.from == self.to {
-            true => format!("{}", self.from),
-            false => format!("{}-{}", self.from, self.to),
-        };
-        match self.side {
-            Side::New => format!("{}:{lines}", self.path),
-            Side::Old => format!("{}:{lines} (old)", self.path),
+        self.about.at()
+    }
+
+    /// The same thread on the other column, for tests that need one.
+    #[cfg(test)]
+    pub fn on_side(mut self, side: crate::diff::domain::Side) -> Self {
+        if let Subject::Lines(lines) = &mut self.about {
+            lines.side = side;
         }
+        self
     }
 }
 
@@ -255,19 +245,25 @@ pub enum Unread {
     /// guessing wrong puts the comment on the column the reviewer was not
     /// reading.
     BadSide,
+    /// A lens or a block that cannot be read back: an id farol would not
+    /// write, or a lens with nothing saying what it is on.
+    BadSubject,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::diff::domain::Side;
 
     fn comment(from: u32, to: u32) -> Comment {
         Comment {
             id: "1".into(),
-            path: "src/a.rs".into(),
-            side: Side::New,
-            from,
-            to,
+            about: Subject::Lines(Lines {
+                path: "src/a.rs".into(),
+                side: Side::New,
+                from,
+                to,
+            }),
             body: "  Why this order?  ".into(),
             pending: None,
             conversation: Conversation::default(),
@@ -293,18 +289,11 @@ mod tests {
         // Line 82 exists on both sides of the same file. Pasted somewhere the
         // diff is not open, the numbers alone would send the reader to the
         // wrong one.
-        let removed = Comment {
-            side: Side::Old,
-            ..comment(82, 116)
-        };
+        let removed = crate::comments::domain::Comment::on_side(comment(82, 116), Side::Old);
 
         assert_eq!(removed.at(), "src/a.rs:82-116 (old)");
         assert_eq!(
-            Comment {
-                side: Side::Old,
-                ..comment(9, 9)
-            }
-            .at(),
+            crate::comments::domain::Comment::on_side(comment(9, 9), Side::Old).at(),
             "src/a.rs:9 (old)"
         );
     }

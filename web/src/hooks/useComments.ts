@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, type CommentsView, type CommentView, type RemotePendingView, type Side } from "@/api";
+import { api, type CommentsView, type CommentView, type NewAbout, type RemotePendingView } from "@/api";
 import type { GitHubState } from "@/hooks/useGitHub";
 import { onNudge } from "@/lib/watch";
 import { said } from "@/lib/utils";
@@ -75,6 +75,10 @@ export function useComments(
      * its lines, which are the same array because the server sent them as one.
      * A lookup and not a filter — the cut was decided before it got here. */
     on: useCallback((path: string) => found.files[path] ?? NONE, [found.files]),
+    /** A lens's threads, by the key its section carries. */
+    onLens: useCallback((key: string) => found.lenses[key] ?? NONE, [found.lenses]),
+    /** The threads on a block's description. */
+    onBlock: useCallback((slug: string) => found.blocks[slug] ?? NONE, [found.blocks]),
     unreadable: found.unreadable,
     /** Whether the threads have come back at least once. */
     loaded,
@@ -93,11 +97,15 @@ export function useComments(
         return next;
       }),
     /** Every thread, on the diff or off it, for what counts them across files. */
-    all: [...Object.values(found.files).flat(), ...found.drifted],
+    all: [
+      ...Object.values(found.files).flat(),
+      ...Object.values(found.lenses).flat(),
+      ...Object.values(found.blocks).flat(),
+      ...found.drifted,
+    ],
     /** Threads whose lines the diff no longer shows. */
     drifted: found.drifted,
-    add: (path: string, side: Side, from: number, to: number, body: string) =>
-      write(api.addComment(path, side, from, to, body)),
+    add: (about: NewAbout, body: string) => write(api.addComment(about, body)),
     close: (id: string, discardPending = false) => write(api.closeComment(id, discardPending)),
     /** Write back under a comment, and with `andSend` hand the conversation on. */
     reply: (id: string, body: string, andSend: boolean) =>
@@ -108,8 +116,8 @@ export function useComments(
       ),
     /** Write it and hand it to the agent in one go. A send that fails leaves
      * the comment saved, so nothing typed is lost and Send can be pressed again. */
-    addAndSend: (path: string, side: Side, from: number, to: number, body: string) =>
-      write(api.addComment(path, side, from, to, body).then((comment) => api.sendComment(comment.id))),
+    addAndSend: (about: NewAbout, body: string) =>
+      write(api.addComment(about, body).then((comment) => api.sendComment(comment.id))),
     /** Which harness a Send reaches, or null when no session is connected. */
     agent: found.agent,
     /** Whether threads can have comments for the pull request here: a peer
@@ -123,8 +131,8 @@ export function useComments(
     removePending: (id: string) => write(api.removePending(id)),
     generate: (id: string, instruction = "") => write(api.generatePending(id, instruction)),
     /** A thread whose first words go to the pull request as they are. */
-    addAsPending: (path: string, side: Side, from: number, to: number, body: string) =>
-      write(api.addComment(path, side, from, to, body).then((comment) => api.writePending(comment.id, body))),
+    addAsPending: (about: NewAbout, body: string) =>
+      write(api.addComment(about, body).then((comment) => api.writePending(comment.id, body))),
     /** True once the harness took it. Nothing to reload: sending changes no
      * comment, and the one the agent closes comes back through the watcher. */
     send: async (id: string) => {
@@ -152,4 +160,4 @@ export type CommentsOn = (path: string) => CommentView[];
  * handed a fresh one on each render. */
 const NONE: CommentView[] = [];
 
-const EMPTY: CommentsView = { files: {}, drifted: [], unreadable: [], agent: null };
+const EMPTY: CommentsView = { files: {}, lenses: {}, blocks: {}, drifted: [], unreadable: [], agent: null };

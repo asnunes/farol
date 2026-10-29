@@ -1,12 +1,14 @@
 import { vi } from "vitest";
 import type { CommentActions } from "@/hooks/useComments";
-import type { CommentView, FileView } from "@/api";
+import type { CommentView, FileView, LinesAbout } from "@/api";
 
 /** Comment actions that record the call and do nothing else, for the tests
  * about what reaches the screen rather than what reaches the server. */
 export function noComments(): CommentActions {
   return {
     on: () => [],
+    onLens: () => [],
+    onBlock: () => [],
     unreadable: [],
     drifted: [],
     add: vi.fn().mockResolvedValue(undefined),
@@ -30,18 +32,19 @@ export function noComments(): CommentActions {
   };
 }
 
-export function comment(over: Partial<CommentView> = {}): CommentView {
+/** A thread on lines, with the span given flat the way tests think of it. */
+export function comment(over: Partial<CommentView> & Partial<Omit<LinesAbout, "kind">> = {}): CommentView {
+  const { path = "src/a.rs", side = "new", from = 1, to = 1, ...rest } = over;
+  const lines = from === to ? `${from}` : `${from}-${to}`;
   return {
     id: "18cb-3731",
-    path: "src/a.rs",
-    side: "new",
-    from: 1,
-    to: 1,
+    about: { kind: "lines", path, side, from, to },
+    at: `${path}:${lines}${side === "old" ? " (old)" : ""}`,
     body: "Why this order?",
     pending: null,
     replies: [],
     waiting: null,
-    ...over,
+    ...rest,
   };
 }
 

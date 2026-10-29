@@ -13,7 +13,7 @@ import { scrollToFile, scrollToLine } from "@/lib/scroll";
 import type { CommentActions } from "@/hooks/useComments";
 import type { DiffView } from "@/hooks/useDiffView";
 import type { OpenFiles } from "@/hooks/useOpenFiles";
-import { blockOf, readingOrder, readingRows } from "@/api";
+import { blockOf, linesOf, readingOrder, readingRows } from "@/api";
 import type { CitationView, CommentView, LensView, ReviewView } from "@/api";
 
 /** The whole review, in one scroll.
@@ -67,12 +67,12 @@ export function Reading({
 
   return (
     <main ref={pane} className="pane overflow-y-auto bg-ground" data-current={current ?? ""}>
-      <ReviewLenses lenses={review.lenses} onCite={cite} onSeen={onSeen} />
+      <ReviewLenses lenses={review.lenses} onCite={cite} onSeen={onSeen} comments={comments} />
       {readingRows(review).map((row) =>
         "block" in row ? (
           <Fragment key={row.block.slug}>
-            <BlockBar block={row.block} number={row.number} total={review.blocks.length} />
-            <BlockLenses slug={row.block.slug} lenses={row.block.lenses} onCite={cite} onSeen={onSeen} />
+            <BlockBar block={row.block} number={row.number} total={review.blocks.length} comments={comments} />
+            <BlockLenses slug={row.block.slug} lenses={row.block.lenses} onCite={cite} onSeen={onSeen} comments={comments} />
             {row.block.files.length > 0 && <CodeBar block={row.block} />}
           </Fragment>
         ) : (
@@ -128,7 +128,7 @@ function byBlock(review: ReviewView, threads: CommentView[]): Placement {
   const lastOf = new Map<string, CommentView[]>();
   const homeless: CommentView[] = [];
   for (const thread of threads) {
-    const home = blockOf(review, thread.path)?.block;
+    const home = blockOf(review, linesOf(thread)?.path ?? "")?.block;
     const last = home?.files[home.files.length - 1]?.path;
     if (!last) {
       homeless.push(thread);

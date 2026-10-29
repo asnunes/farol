@@ -61,17 +61,23 @@ impl CommentReach {
         let mut split = Reached::default();
 
         for comment in comments {
-            let diff = match seen.entry(comment.path.clone()) {
+            // A thread on a lens or a block's description sits on no line, so
+            // no move of the code can take it off the screen.
+            let Some(lines) = comment.about.lines() else {
+                split.live.push(comment);
+                continue;
+            };
+            let diff = match seen.entry(lines.path.clone()) {
                 Entry::Occupied(e) => e.into_mut(),
-                Entry::Vacant(e) => e.insert(match scope.contains(&comment.path) {
-                    true => Some(self.diffs.of(&comment.path)?),
+                Entry::Vacant(e) => e.insert(match scope.contains(&lines.path) {
+                    true => Some(self.diffs.of(&lines.path)?),
                     false => None,
                 }),
             };
 
             match diff
                 .as_ref()
-                .is_some_and(|d| d.shows(comment.side, comment.from, comment.to))
+                .is_some_and(|d| d.shows(lines.side, lines.from, lines.to))
             {
                 true => split.live.push(comment),
                 false => split.drifted.push(comment),

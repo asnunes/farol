@@ -265,10 +265,7 @@ describe("commenting on the diff", () => {
     fireEvent.click(screen.getByText("Comment"));
 
     expect(actions.add).toHaveBeenCalledWith(
-      "src/a.rs",
-      "new",
-      2,
-      2,
+      { path: "src/a.rs", side: "new", from: 2, to: 2 },
       "Why this order?",
     );
   });
@@ -338,7 +335,7 @@ describe("commenting on the old side of the diff", () => {
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "Why did this go?" } });
     fireEvent.click(screen.getByText("Comment"));
 
-    expect(actions.add).toHaveBeenCalledWith("src/a.rs", "old", 1, 1, "Why did this go?");
+    expect(actions.add).toHaveBeenCalledWith({ path: "src/a.rs", side: "old", from: 1, to: 1 }, "Why did this go?");
   });
 
   it("covers a span dragged down the removed lines, either way round", () => {
@@ -358,7 +355,7 @@ describe("commenting on the old side of the diff", () => {
       fireEvent.change(screen.getByRole("textbox"), { target: { value: "All of it?" } });
       fireEvent.click(screen.getByText("Comment"));
 
-      expect(actions.add).toHaveBeenCalledWith("src/gone.rs", "old", 1, 2, "All of it?");
+      expect(actions.add).toHaveBeenCalledWith({ path: "src/gone.rs", side: "old", from: 1, to: 2 }, "All of it?");
       unmount();
     }
   });
@@ -455,7 +452,7 @@ describe("picking the lines a comment is about with the keyboard", () => {
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "Both of these?" } });
     fireEvent.click(screen.getByText("Comment"));
 
-    expect(actions.add).toHaveBeenCalledWith("src/a.rs", "new", 1, 2, "Both of these?");
+    expect(actions.add).toHaveBeenCalledWith({ path: "src/a.rs", side: "new", from: 1, to: 2 }, "Both of these?");
   });
 
   it("marks every line reached, the way a drag does", () => {
@@ -509,7 +506,7 @@ describe("picking the lines a comment is about with the keyboard", () => {
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "All of it?" } });
     fireEvent.click(screen.getByText("Comment"));
 
-    expect(actions.add).toHaveBeenCalledWith("src/gone.rs", "old", 1, 2, "All of it?");
+    expect(actions.add).toHaveBeenCalledWith({ path: "src/gone.rs", side: "old", from: 1, to: 2 }, "All of it?");
   });
 
   it("will not reach across into the other side, however far it is pushed", () => {
@@ -524,7 +521,7 @@ describe("picking the lines a comment is about with the keyboard", () => {
     fireEvent.click(plus);
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "Why both?" } });
     fireEvent.click(screen.getByText("Comment"));
-    expect(actions.add).toHaveBeenCalledWith("src/a.rs", "old", 1, 2, "Why both?");
+    expect(actions.add).toHaveBeenCalledWith({ path: "src/a.rs", side: "old", from: 1, to: 2 }, "Why both?");
   });
 
   it("picks a passage in the left column of a split view too", () => {
@@ -536,7 +533,7 @@ describe("picking the lines a comment is about with the keyboard", () => {
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "Why both?" } });
     fireEvent.click(screen.getByText("Comment"));
 
-    expect(actions.add).toHaveBeenCalledWith("src/a.rs", "old", 1, 2, "Why both?");
+    expect(actions.add).toHaveBeenCalledWith({ path: "src/a.rs", side: "old", from: 1, to: 2 }, "Why both?");
   });
 
   it("gives the span up when the reader tabs off the plus", () => {

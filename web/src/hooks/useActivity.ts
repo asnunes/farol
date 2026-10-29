@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { CommentView, PullRequestView, WaitingView } from "@/api";
 import { waitingLine } from "@/review/diff/comment/waiting";
-import { span } from "@/review/diff/comment/quoted";
 
 /** What the agents did on the threads, for the box in the corner.
  *
@@ -97,10 +96,6 @@ export type Working = {
   since: number;
 };
 
-/** Where a thread sits, short enough for a row: `module.go:26`. */
-export function where(thread: CommentView): string {
-  return `${thread.path.split("/").pop()}:${span(thread, "–")}`;
-}
 
 /** "just now", "2 min ago", "3 h ago". */
 export function ago(seconds: number, now = Date.now() / 1000): string {

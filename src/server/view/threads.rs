@@ -5,9 +5,10 @@ use std::collections::BTreeMap;
 
 use serde::Serialize;
 
-use crate::comments::domain::{Author, Comment, Found, Purpose, Stage};
+use crate::comments::domain::{Author, Comment, Found, Purpose, Stage, Subject};
 use crate::comments::presentation::says;
 use crate::diff::domain::Side;
+use crate::lenses::domain::{LensId, LensTarget};
 
 /// The comments, under the file each one is about, and what the store could not
 /// read at all.
@@ -30,6 +31,11 @@ use crate::diff::domain::Side;
 #[serde(rename_all = "camelCase")]
 pub struct CommentsView {
     pub files: BTreeMap<String, Vec<CommentView>>,
+    /// Threads on a lens, under the key the page gives the lens's section:
+    /// `pr:<id>`, `block:<slug>:<id>` or `file:<path>:<id>`.
+    pub lenses: BTreeMap<String, Vec<CommentView>>,
+    /// Threads on a block's description, under the block's slug.
+    pub blocks: BTreeMap<String, Vec<CommentView>>,
     /// Threads whose lines the diff no longer prints, oldest first. Not under
     /// their file, because there is no line left in it to draw them at: the
     /// screen puts them at the end of the file's block, or in a block of their
@@ -44,18 +50,28 @@ pub struct CommentsView {
 impl CommentsView {
     pub fn of(found: &Found, agent: Option<&'static str>) -> Self {
         let mut files: BTreeMap<String, Vec<CommentView>> = BTreeMap::new();
+        let mut lenses: BTreeMap<String, Vec<CommentView>> = BTreeMap::new();
+        let mut blocks: BTreeMap<String, Vec<CommentView>> = BTreeMap::new();
         for comment in &found.comments {
-            files
-                .entry(comment.path.clone())
-                .or_default()
-                .push(CommentView::of(comment));
+            let under = match &comment.about {
+                Subject::Lines(lines) => files.entry(lines.path.clone()),
+                Subject::Lens { lens, target } => lenses.entry(lens_key(lens, target)),
+                Subject::Block { slug } => blocks.entry(slug.to_string()),
+            };
+            under.or_default().push(CommentView::of(comment));
         }
-        for here in files.values_mut() {
+        for here in files
+            .values_mut()
+            .chain(lenses.values_mut())
+            .chain(blocks.values_mut())
+        {
             here.sort_by(|a, b| a.id.cmp(&b.id));
         }
 
         Self {
             files,
+            lenses,
+            blocks,
             drifted: found.drifted.iter().map(CommentView::of).collect(),
             unreadable: found
                 .unreadable
@@ -80,13 +96,9 @@ impl CommentsView {
 #[serde(rename_all = "camelCase")]
 pub struct CommentView {
     pub id: String,
-    pub path: String,
-    /// Which side of the diff `from` and `to` are counted on. The screen draws
-    /// the comment in the column it was written in, and the two columns number
-    /// separately.
-    pub side: Side,
-    pub from: u32,
-    pub to: u32,
+    pub about: AboutView,
+    /// Where it sits, said for a person: `src/a.rs:12`, or the lens or block.
+    pub at: String,
     pub body: String,
     /// Who wrote the thread's comment for the pull request, when it has one.
     /// What it says and whether it went are on the pull request, and arrive
@@ -102,10 +114,21 @@ impl CommentView {
     pub fn of(comment: &Comment) -> Self {
         Self {
             id: comment.id.clone(),
-            path: comment.path.clone(),
-            side: comment.side,
-            from: comment.from,
-            to: comment.to,
+            about: match &comment.about {
+                Subject::Lines(lines) => AboutView::Lines {
+                    path: lines.path.clone(),
+                    side: lines.side,
+                    from: lines.from,
+                    to: lines.to,
+                },
+                Subject::Lens { lens, target } => AboutView::Lens {
+                    key: lens_key(lens, target),
+                },
+                Subject::Block { slug } => AboutView::Block {
+                    slug: slug.to_string(),
+                },
+            },
+            at: comment.at(),
             body: comment.body.clone(),
             pending: comment.pending.as_ref().map(|pending| match &pending.by {
                 Author::Reviewer => PendingByView {
@@ -171,6 +194,37 @@ pub struct ReplyView {
     pub at: String,
 }
 
+/// What a thread is about, for the wire: the same three shapes as
+/// `Subject`, tagged so the page can tell them apart.
+#[derive(Debug, Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum AboutView {
+    /// The screen draws it in the column it was written in; the two columns
+    /// number separately.
+    Lines {
+        path: String,
+        side: Side,
+        from: u32,
+        to: u32,
+    },
+    Lens {
+        key: String,
+    },
+    Block {
+        slug: String,
+    },
+}
+
+/// The key the page gives a lens's section, so a thread finds the lens it is
+/// drawn under.
+fn lens_key(lens: &LensId, target: &LensTarget) -> String {
+    match target {
+        LensTarget::Pr => format!("pr:{lens}"),
+        LensTarget::Block { slug } => format!("block:{slug}:{lens}"),
+        LensTarget::File { path } => format!("file:{path}:{lens}"),
+    }
+}
+
 /// Something owed, as the screen marks it.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -211,6 +265,7 @@ pub struct UnreadableView {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::comments::domain::{Lines, Subject};
 
     #[test]
     fn comments_go_out_under_the_file_they_are_about() {
@@ -251,10 +306,12 @@ mod tests {
     fn comment(id: &str, path: &str) -> Comment {
         Comment {
             id: id.into(),
-            path: path.into(),
-            side: Side::New,
-            from: 1,
-            to: 1,
+            about: Subject::Lines(Lines {
+                path: path.into(),
+                side: Side::New,
+                from: 1,
+                to: 1,
+            }),
             body: "Por que essa ordem?".into(),
             pending: None,
             conversation: Default::default(),

@@ -3,7 +3,7 @@ import { ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { span } from "@/review/diff/comment/quoted";
+import { where } from "@/review/diff/comment/quoted";
 import type { CommentView, PullRequestView, SentView, Verdict } from "@/api";
 
 /** Submitting the review: the verdict and the summary, over the pending
@@ -75,7 +75,7 @@ export function SubmitReview({ pull, threads, onSubmit }: SubmitReviewProps) {
                 {going.map((thread) => (
                   <li key={thread.id} className="text-ink-soft">
                     <span className="font-mono text-xs text-comment-ink">
-                      {thread.path.split("/").pop()}:{span(thread, "–")}
+                      {where(thread)}
                     </span>{" "}
                     — {excerpt(pull.pending[thread.id]?.body ?? "")}
                   </li>

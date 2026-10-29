@@ -139,7 +139,7 @@ describe("picking a span with the keyboard where the columns are stacked", () =>
 
     expect(plus.getAttribute("aria-label")).toBe("Comment on old lines 1–2");
     write(plus, "Why did this go?");
-    expect(actions.add).toHaveBeenCalledWith("src/a.rs", "old", 1, 2, "Why did this go?");
+    expect(actions.add).toHaveBeenCalledWith({ path: "src/a.rs", side: "old", from: 1, to: 2 }, "Why did this go?");
   });
 
   it("reaches down the new side of that same row, on the new numbering", () => {
@@ -152,7 +152,7 @@ describe("picking a span with the keyboard where the columns are stacked", () =>
 
     expect(plus.getAttribute("aria-label")).toBe("Comment on new lines 1–2");
     write(plus, "Why is this here?");
-    expect(actions.add).toHaveBeenCalledWith("src/a.rs", "new", 1, 2, "Why is this here?");
+    expect(actions.add).toHaveBeenCalledWith({ path: "src/a.rs", side: "new", from: 1, to: 2 }, "Why is this here?");
   });
 
   it("reaches back up from a line the change touched", () => {
@@ -165,7 +165,7 @@ describe("picking a span with the keyboard where the columns are stacked", () =>
 
     expect(plus.getAttribute("aria-label")).toBe("Comment on old lines 1–2");
     write(plus, "This pair, then?");
-    expect(actions.add).toHaveBeenCalledWith("src/a.rs", "old", 1, 2, "This pair, then?");
+    expect(actions.add).toHaveBeenCalledWith({ path: "src/a.rs", side: "old", from: 1, to: 2 }, "This pair, then?");
   });
 
   it("stops at the end of the hunk rather than crossing to the other side", () => {

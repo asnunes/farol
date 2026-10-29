@@ -5,9 +5,12 @@
 //! spelled is a change here and nowhere else.
 
 use crate::comments::domain::{
-    Author, Comment, Conversation, PendingRef, Purpose, Reply, Stage, Unread, Unreadable, Waiting,
+    Author, Comment, Conversation, Lines, PendingRef, Purpose, Reply, Stage, Subject, Unread,
+    Unreadable, Waiting,
 };
 use crate::diff::domain::Side;
+use crate::lenses::domain::{LensId, LensTarget};
+use crate::map::domain::Slug;
 
 /// The file a thread is kept as.
 pub(super) fn render(comment: &Comment) -> String {
@@ -56,13 +59,43 @@ pub(super) fn render(comment: &Comment) -> String {
     // This is a file somebody opens and edits, and a key that appears only
     // sometimes is a key they have to know about before they can use it.
     format!(
-        "---\npath: {}\nside: {}\nlines: {}-{}\n{header}---\n\n{}\n",
-        comment.path,
-        comment.side,
-        comment.from,
-        comment.to,
+        "---\n{}{header}---\n\n{}\n",
+        about(&comment.about),
         comment.body.trim()
     ) + &replies
+}
+
+/// The header lines that say what a thread is about, one shape per subject.
+fn about(subject: &Subject) -> String {
+    match subject {
+        Subject::Lines(lines) => format!(
+            "path: {}\nside: {}\nlines: {}-{}\n",
+            lines.path, lines.side, lines.from, lines.to
+        ),
+        Subject::Lens { lens, target } => format!(
+            "lens: {lens}\non: {}\n",
+            match target {
+                LensTarget::Pr => "pr".to_string(),
+                LensTarget::Block { slug } => format!("block {slug}"),
+                LensTarget::File { path } => format!("file {path}"),
+            }
+        ),
+        Subject::Block { slug } => format!("block: {slug}\n"),
+    }
+}
+
+/// `pr`, `block <slug>` or `file <path>`: what a lens thread's lens is on.
+fn lens_on(raw: &str) -> Option<LensTarget> {
+    match raw.split_once(' ') {
+        None if raw == "pr" => Some(LensTarget::Pr),
+        Some(("block", slug)) => Some(LensTarget::Block {
+            slug: Slug::parse(slug.trim()).ok()?,
+        }),
+        Some(("file", path)) => Some(LensTarget::File {
+            path: path.trim().to_string(),
+        }),
+        _ => None,
+    }
 }
 
 /// Where a turn of the conversation starts in the file.
@@ -175,6 +208,9 @@ pub(super) fn parse(id: &str, file: String, raw: &str) -> std::result::Result<Co
     };
 
     let mut path = None;
+    let mut lens = None;
+    let mut on = None;
+    let mut block = None;
     let mut side = None;
     let mut lines = None;
     let mut pending_ref = None;
@@ -185,6 +221,9 @@ pub(super) fn parse(id: &str, file: String, raw: &str) -> std::result::Result<Co
     for (key, value) in head.lines().filter_map(|line| line.split_once(':')) {
         match key.trim() {
             "path" => path = Some(value.trim().to_string()),
+            "lens" => lens = Some(value.trim().to_string()),
+            "on" => on = Some(value.trim().to_string()),
+            "block" => block = Some(value.trim().to_string()),
             "side" => side = Some(value.trim().to_string()),
             "lines" => lines = Some(value.trim().to_string()),
             "pending" => pending_ref = pending(value.trim()),
@@ -194,6 +233,32 @@ pub(super) fn parse(id: &str, file: String, raw: &str) -> std::result::Result<Co
         }
     }
     let owed = owed.map(|waiting| Waiting { purpose, ..waiting });
+    let (question, replies) = conversation(body);
+    let thread = |about| Comment {
+        id: id.to_string(),
+        about,
+        body: question.clone(),
+        pending: pending_ref.clone(),
+        conversation: Conversation {
+            replies: replies.clone(),
+            waiting: owed.clone(),
+        },
+    };
+
+    if let Some(lens) = lens {
+        let subject = LensId::parse(&lens)
+            .ok()
+            .zip(on.as_deref().and_then(lens_on))
+            .map(|(lens, target)| Subject::Lens { lens, target });
+        return subject
+            .map(thread)
+            .ok_or_else(|| unreadable(Unread::BadSubject, Some(format!("lens {lens}")), body));
+    }
+    if let Some(block) = block {
+        return Slug::parse(&block)
+            .map(|slug| thread(Subject::Block { slug }))
+            .map_err(|_| unreadable(Unread::BadSubject, Some(format!("block {block}")), body));
+    }
 
     let Some(path) = path else {
         return Err(unreadable(Unread::NoPath, None, body));
@@ -219,20 +284,12 @@ pub(super) fn parse(id: &str, file: String, raw: &str) -> std::result::Result<Co
         return Err(unreadable(Unread::NoLines, Some(path), body));
     };
 
-    let (question, replies) = conversation(body);
-    Ok(Comment {
-        id: id.to_string(),
+    Ok(thread(Subject::Lines(Lines {
         path,
         side,
         from,
         to,
-        body: question,
-        pending: pending_ref,
-        conversation: Conversation {
-            replies,
-            waiting: owed,
-        },
-    })
+    })))
 }
 
 /// How much of a comment it takes to recognise it. One line, because that is

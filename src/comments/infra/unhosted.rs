@@ -1,6 +1,4 @@
-use crate::comments::domain::{
-    Comment, CommentError, Readiness, RemoteComment, Review, ReviewPublisher,
-};
+use crate::comments::domain::{CommentError, Readiness, RemoteComment, Review, ReviewPublisher};
 use crate::error::Result;
 
 /// A repository with nowhere to publish to.
@@ -16,7 +14,13 @@ impl ReviewPublisher for Unhosted {
         Ok(Readiness::NoRemote)
     }
 
-    fn add_pending(&self, _pull: &str, _head: &str, _at: &Comment, _body: &str) -> Result<String> {
+    fn add_pending(
+        &self,
+        _pull: &str,
+        _head: &str,
+        _at: &crate::comments::domain::Lines,
+        _body: &str,
+    ) -> Result<String> {
         Err(CommentError::NoRemote.into())
     }
 

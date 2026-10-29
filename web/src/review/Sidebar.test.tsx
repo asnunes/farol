@@ -161,7 +161,7 @@ describe("telling the files in the sidebar apart", () => {
 });
 
 function show(view: ReviewView, onPick = vi.fn(), comments: CommentView[] = []) {
-  const on = (path: string) => comments.filter((c) => c.path === path);
+  const on = (path: string) => comments.filter((c) => c.about.kind === "lines" && c.about.path === path);
   return render(
     <TooltipProvider>
       <Sidebar review={view} comments={on} current={null} onPick={onPick} />
@@ -170,7 +170,7 @@ function show(view: ReviewView, onPick = vi.fn(), comments: CommentView[] = []) 
 }
 
 function comment(path: string, id: string): CommentView {
-  return { id, path, side: "new", from: 1, to: 1, body: "why?", pending: null, replies: [], waiting: null };
+  return { id, about: { kind: "lines", path, side: "new", from: 1, to: 1 }, at: `${path}:1`, body: "why?", pending: null, replies: [], waiting: null };
 }
 
 /** The row for a path, found the way a screen reader would name it. */

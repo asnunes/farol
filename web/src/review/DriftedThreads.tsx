@@ -32,7 +32,7 @@ export function DriftedThreads({ threads, actions, heading }: DriftedThreadsProp
       {threads.map((thread) => (
         <div key={thread.id}>
           <p className="border-t border-comment-rule bg-comment-bg px-8 pt-2 font-mono text-xs text-comment-faint md:px-16">
-            {thread.path}
+            {thread.at}
           </p>
           <Comment comment={thread} actions={offDiff} />
         </div>

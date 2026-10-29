@@ -157,9 +157,16 @@ export default function App() {
   //
   // A thread off the diff is not in its file but after its block, or at the
   // end of the page, and is always drawn: there is no file to open first.
+  // A thread on a lens or a block is drawn where its text is: the lens is
+  // reached the way the sidebar reaches it, a file's lens by opening its file.
   const jumpToThread = (thread: CommentView) => {
     comments.expand(thread.id);
-    if (!comments.drifted.some((t) => t.id === thread.id)) goTo(thread.path);
+    const about = thread.about;
+    if (about.kind === "lines") {
+      if (!comments.drifted.some((t) => t.id === thread.id)) goTo(about.path);
+    } else if (about.kind === "lens" && about.key.startsWith("file:")) {
+      goTo(about.key.slice("file:".length, about.key.lastIndexOf(":")));
+    }
     scrollToThread(thread.id);
   };
 

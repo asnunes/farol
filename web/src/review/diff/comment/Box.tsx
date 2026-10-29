@@ -1,8 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { span } from "./quoted";
-import type { Span } from "../useLineSelection";
 
 
 /** Where a comment gets written: a plain box under the lines it is about.
@@ -15,7 +13,7 @@ import type { Span } from "../useLineSelection";
  * it. A box whose only name was its placeholder had no name at all once a word
  * was typed into it, and the placeholder is where the keys live, which is a
  * description of how to use the box and not a name for it. */
-export function Box({ span: lines, onSave, onCancel, agent, onSaveAndSend, onAddAsPending }: BoxProps) {
+export function Box({ label, onSave, onCancel, agent, onSaveAndSend, onAddAsPending }: BoxProps) {
   const field = useId();
   const keys = useId();
   const [text, setText] = useState("");
@@ -57,7 +55,7 @@ export function Box({ span: lines, onSave, onCancel, agent, onSaveAndSend, onAdd
     // the screen, which the page then grew a scrollbar for.
     <div className="commentbox commented relative border-b border-comment-rule bg-comment-bg py-3 pr-4 pl-8 md:pr-6 md:pl-16">
       <label htmlFor={field} className="lbl mb-1.5 block font-mono text-xs text-comment-ink">
-        {about(lines)}
+        {label}
       </label>
 
       <Textarea
@@ -144,11 +142,6 @@ export function Box({ span: lines, onSave, onCancel, agent, onSaveAndSend, onAdd
  * else. Worded the other way round from the `+` in the gutter on purpose: the
  * two sit on the same line while the box is open, and one name over both would
  * leave nothing to tell the control apart from the box it opened. */
-function about(lines: Span): string {
-  return lines.from === lines.to
-    ? `Thread on line ${span(lines, "–")}`
-    : `Thread on lines ${span(lines, "–")}`;
-}
 
 /** How the box is worked, which is a description of it and never its name. */
 function keysFor(agent: string | null, pending: boolean): string {
@@ -158,7 +151,9 @@ function keysFor(agent: string | null, pending: boolean): string {
 }
 
 type BoxProps = {
-  span: Span;
+  /** What the box is writing about, which is also its name: the lines, or
+   * the lens or block. */
+  label: string;
   onSave: (body: string) => Promise<void>;
   onCancel: () => void;
   /** The harness a send reaches, or null — and then there is only Comment. */

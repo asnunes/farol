@@ -77,7 +77,7 @@ function aside(url: string): Response | null {
     return new Response(JSON.stringify({ settings: [] }));
   }
   if (url.startsWith("/api/comments")) {
-    return new Response('{"files":{},"drifted":[],"unreadable":[]}', {
+    return new Response('{"files":{},"lenses":{},"blocks":{},"drifted":[],"unreadable":[]}', {
       headers: { "content-type": "application/json" },
     });
   }
@@ -548,7 +548,7 @@ describe("refreshing an open review", () => {
     const announce = notifications();
     serve({ review: review() });
     const files = vi.spyOn(api, "file").mockResolvedValue(diff("OLD_CONTENT"));
-    const comments = vi.spyOn(api, "comments").mockResolvedValue({ files: {}, drifted: [], unreadable: [], agent: null });
+    const comments = vi.spyOn(api, "comments").mockResolvedValue({ files: {}, lenses: {}, blocks: {}, drifted: [], unreadable: [], agent: null });
     render(<App />);
     await waitFor(() => expect(section("src/a.rs").textContent).toContain("OLD_CONTENT"));
     const beforeComments = comments.mock.calls.length;
@@ -827,6 +827,8 @@ describe("threads the diff no longer reaches", () => {
     serve({ review: review() });
     vi.spyOn(api, "comments").mockResolvedValue({
       files: {},
+      lenses: {},
+      blocks: {},
       drifted: [
         comment({ id: "moved", path: "src/a.rs", body: "Why this order?" }),
         comment({ id: "gone", path: "src/gone.rs", body: "Where did this go?" }),
@@ -965,6 +967,8 @@ describe("a comment file that cannot be read", () => {
           return new Response(
             JSON.stringify({
               files: {},
+              lenses: {},
+              blocks: {},
               drifted: [],
               unreadable: [
                 {

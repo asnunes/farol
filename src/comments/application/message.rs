@@ -12,8 +12,9 @@ use crate::comments::domain::{Author, Comment, ReviewMode};
 pub fn answer(comment: &Comment, mode: ReviewMode, instruction: &str) -> String {
     let id = &comment.id;
     let text = format!(
-        "A reviewer left a comment on this branch in farol (thread {id}):\n\n{}{}\n\nBefore you start, run `farol thread ack {id}` so the reviewer sees you are on it. Answer with `farol thread reply {id} --text '…'`, in single quotes: that is where the reviewer reads it.",
+        "A reviewer left a comment on this branch in farol (thread {id}):\n\n{}{}{}\n\nBefore you start, run `farol thread ack {id}` so the reviewer sees you are on it. Answer with `farol thread reply {id} --text '…'`, in single quotes: that is where the reviewer reads it.",
         comment.quoted(),
+        shown(comment),
         conversation(comment),
     );
     finish(text, &[instruction], mode)
@@ -46,6 +47,18 @@ pub fn pending(
         extra => format!("For this one: {extra}"),
     };
     finish(text, &[instruction, &this_time], mode)
+}
+
+/// For a thread on a lens or a block's description: how to read what it is
+/// about, and that rewriting it is part of answering when the reviewer is
+/// right.
+fn shown(comment: &Comment) -> String {
+    match comment.about.shown_by() {
+        Some(command) => format!(
+            "\n\nThe thread is about text you wrote, not code: read it with `{command}`, and when the reviewer is right, rewrite it as well as answering."
+        ),
+        None => String::new(),
+    }
 }
 
 /// The conversation under the question, oldest first.
@@ -85,15 +98,18 @@ fn finish(text: String, instructions: &[&str], mode: ReviewMode) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::comments::domain::{Lines, Subject};
     use crate::diff::domain::Side;
 
     fn comment() -> Comment {
         Comment {
             id: "t1".into(),
-            path: "src/a.rs".into(),
-            side: Side::New,
-            from: 3,
-            to: 4,
+            about: Subject::Lines(Lines {
+                path: "src/a.rs".into(),
+                side: Side::New,
+                from: 3,
+                to: 4,
+            }),
             body: "Why?".into(),
             pending: None,
             conversation: Default::default(),
