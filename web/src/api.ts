@@ -44,11 +44,11 @@ export const api = {
 
   comments: () => fetch("/api/comments").then(json<CommentsView>),
   /** Answers with the comment as stored, whose id is what a Send needs. */
-  addComment: (path: string, side: Side, from: number, to: number, body: string) =>
+  addComment: (about: NewAbout, body: string) =>
     fetch("/api/comments", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ path, side, from, to, body }),
+      body: JSON.stringify({ ...about, body }),
     }).then(json<CommentView>),
   /** With `discardPending`, the thread's pending comment is taken off the pull
    * request too; without it, a thread that still has one is refused. */
@@ -250,6 +250,11 @@ export type CommentsView = {
    * server like every other answer, so the browser looks a file up instead of
    * grouping the list again wherever it needs the cut. */
   files: Record<string, CommentView[]>;
+  /** Threads on a lens, under the key its section carries: `pr:<id>`,
+   * `block:<slug>:<id>` or `file:<path>:<id>`. */
+  lenses: Record<string, CommentView[]>;
+  /** Threads on a block's description, under the block's slug. */
+  blocks: Record<string, CommentView[]>;
   /** Threads whose lines the diff no longer shows, oldest first. The screen
    * puts them at the end of their file's block, or in a block of their own. */
   drifted: CommentView[];
@@ -278,11 +283,11 @@ export type Unreadable = {
  * page holds is still waiting. */
 export type CommentView = {
   id: string;
-  path: string;
-  /** Which side of the diff `from` and `to` are counted on. */
-  side: Side;
-  from: number;
-  to: number;
+  /** What the thread is about: lines of a file, a lens, or a block's
+   * description. */
+  about: AboutView;
+  /** Where it sits, said for a person: `src/a.rs:12`, or the lens or block. */
+  at: string;
   /** Markdown, as it was typed. */
   body: string;
   /** Who wrote the thread's comment for the pull request, when it has one.
@@ -293,6 +298,22 @@ export type CommentView = {
   /** Set while an agent owes an answer. */
   waiting: WaitingView | null;
 };
+
+export type AboutView = LinesAbout | { kind: "lens"; key: string } | { kind: "block"; slug: string };
+
+/** A span of a file's lines, counted on one side of the diff. */
+export type LinesAbout = { kind: "lines"; path: string; side: Side; from: number; to: number };
+
+/** What a new thread is about, as the server takes it. */
+export type NewAbout =
+  | { path: string; side: Side; from: number; to: number }
+  | { lens: string; target: LensTarget }
+  | { block: string };
+
+/** The lines a thread is about, or null for one on a lens or a block. */
+export function linesOf(thread: CommentView): LinesAbout | null {
+  return thread.about.kind === "lines" ? thread.about : null;
+}
 
 /** One turn of a comment's conversation. */
 export type ReplyView = {

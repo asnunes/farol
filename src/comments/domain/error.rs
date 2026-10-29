@@ -94,6 +94,11 @@ pub enum CommentError {
     )]
     OffTheDiff { id: String },
 
+    #[error(
+        "thread {id} is about {about}, not lines of code, so it cannot have a comment for the pull request\nGitHub only takes a review comment on a line of the diff; answer it in farol instead."
+    )]
+    NotOnCode { id: String, about: String },
+
     #[error("thread {id} has no pending comment — write one first")]
     NoPending { id: String },
 

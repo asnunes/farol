@@ -14,10 +14,11 @@ pub use use_case::*;
 use std::sync::Arc;
 
 use crate::comments::domain::{
-    Author, Comment, CommentError, CommentStore, Found, PendingRef, Purpose,
+    Author, Comment, CommentError, CommentStore, Found, Lines, PendingRef, Purpose, Subject,
 };
 use crate::diff::domain::Side;
 use crate::error::Result;
+use crate::lenses::domain::LensTarget;
 use crate::map::application::GetScope;
 use crate::map::domain::LineRange;
 
@@ -100,10 +101,40 @@ impl Comments {
 
         let comment = Comment {
             id: fresh_id(),
-            path: path.as_str().to_string(),
-            side,
-            from,
-            to,
+            about: Subject::Lines(Lines {
+                path: path.as_str().to_string(),
+                side,
+                from,
+                to,
+            }),
+            body: body.trim().to_string(),
+            pending: None,
+            conversation: Default::default(),
+        };
+        self.store.save(&comment)?;
+        Ok(comment)
+    }
+
+    /// A thread on anything a reviewer can talk about. Lines go through
+    /// `add`, which holds them to the diff; a lens or a block's description
+    /// has no line to check, and a lens on a file is held to the review.
+    pub fn add_about(&self, about: Subject, body: &str) -> Result<Comment> {
+        if let Subject::Lines(lines) = &about {
+            return self.add(&lines.path, lines.side, lines.from, lines.to, body);
+        }
+        if body.trim().is_empty() {
+            return Err(CommentError::Empty.into());
+        }
+        if let Subject::Lens {
+            target: LensTarget::File { path },
+            ..
+        } = &about
+        {
+            self.scope.path(path)?;
+        }
+        let comment = Comment {
+            id: fresh_id(),
+            about,
             body: body.trim().to_string(),
             pending: None,
             conversation: Default::default(),
@@ -126,16 +157,26 @@ impl Comments {
 
     /// One thread whose lines the diff still prints, for what only makes sense
     /// on a line of the diff: a comment for the pull request.
+    /// A thread on a lens or a block's description is refused the same way:
+    /// it has no line to sit on.
     pub fn live(&self, id: &str) -> Result<Comment> {
         let found = self.all()?;
         if found.drifted.iter().any(|comment| comment.id == id) {
             return Err(CommentError::OffTheDiff { id: id.into() }.into());
         }
-        found
+        let comment = found
             .comments
             .into_iter()
             .find(|comment| comment.id == id)
-            .ok_or_else(|| CommentError::Unknown { id: id.into() }.into())
+            .ok_or_else(|| CommentError::Unknown { id: id.into() })?;
+        if comment.about.lines().is_none() {
+            return Err(CommentError::NotOnCode {
+                id: id.into(),
+                about: comment.at(),
+            }
+            .into());
+        }
+        Ok(comment)
     }
 
     /// Every thread, on the diff or off it: what has a pending comment on the
@@ -491,8 +532,8 @@ mod tests {
 
         let all = comments.all().unwrap().comments;
         assert_eq!(all.len(), 2);
-        assert_eq!(all[0].side, Side::Old);
-        assert_eq!(all[1].side, Side::New);
+        assert_eq!(all[0].about.lines().unwrap().side, Side::Old);
+        assert_eq!(all[1].about.lines().unwrap().side, Side::New);
     }
 
     #[test]
@@ -545,7 +586,10 @@ mod tests {
         let all = comments.all().unwrap().comments;
         assert_eq!(all.len(), 2);
         assert_eq!(
-            (all[0].side, all[1].side),
+            (
+                all[0].about.lines().unwrap().side,
+                all[1].about.lines().unwrap().side
+            ),
             (Side::Old, Side::New),
             "each kept the side it was written on"
         );
@@ -582,5 +626,29 @@ mod tests {
 
         let all = comments.all().unwrap().comments;
         assert_ne!(all[0].id, all[1].id);
+    }
+
+    #[test]
+    fn a_thread_on_a_lens_is_kept_and_cannot_become_a_comment_for_the_pull_request() {
+        use crate::lenses::domain::{LensId, LensTarget};
+        let (_dir, comments) = comments();
+
+        let one = comments
+            .add_about(
+                Subject::Lens {
+                    lens: LensId::parse("overview").unwrap(),
+                    target: LensTarget::Pr,
+                },
+                "This misses the cache.",
+            )
+            .unwrap();
+
+        assert_eq!(
+            comments.all().unwrap().comments.len(),
+            1,
+            "no line to drift from, so it stays"
+        );
+        let refused = comments.live(&one.id).unwrap_err().to_string();
+        assert!(refused.contains("not lines of code"), "{refused}");
     }
 }

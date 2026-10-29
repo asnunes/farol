@@ -1,6 +1,6 @@
 //! Sending the review somewhere the rest of the team will read it.
 
-use crate::comments::domain::Comment;
+use crate::comments::domain::Lines;
 use crate::error::Result;
 
 /// Where a review goes, and where its pending comments live until it does.
@@ -21,7 +21,7 @@ pub trait ReviewPublisher: Send + Sync {
 
     /// Put a comment in the reviewer's pending review on `pull`, starting one
     /// at `head` when there is none. Answers with the comment's id.
-    fn add_pending(&self, pull: &str, head: &str, at: &Comment, body: &str) -> Result<String>;
+    fn add_pending(&self, pull: &str, head: &str, at: &Lines, body: &str) -> Result<String>;
 
     fn edit_pending(&self, id: &str, body: &str) -> Result<()>;
 

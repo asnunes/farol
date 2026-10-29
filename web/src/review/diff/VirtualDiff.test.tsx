@@ -138,10 +138,7 @@ it("keeps a draft and its selected range while the editor is offscreen", () => {
   );
   fireEvent.click(screen.getByRole("button", { name: "Comment" }));
   expect(actions.add).toHaveBeenCalledWith(
-    "sample.rs",
-    "new",
-    79,
-    81,
+    { path: "sample.rs", side: "new", from: 79, to: 81 },
     "Keep this draft",
   );
 });

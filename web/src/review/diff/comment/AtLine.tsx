@@ -1,4 +1,5 @@
 import { Box } from "./Box";
+import { threadOn } from "./quoted";
 import { Comment } from "./Comment";
 import { commentsAt, numberOn } from "../line";
 import type { Anchor, Commentary } from "../line";
@@ -33,20 +34,20 @@ export function AtLine({ at, commentary }: AtLineProps) {
       ))}
       {writing && (
         <Box
-          span={span}
+          label={threadOn(span)}
           onSave={async (body) => {
-            await actions.add(path, span.side, span.from, span.to, body);
+            await actions.add({ path, ...span }, body);
             select.close();
           }}
           agent={actions.agent}
           onSaveAndSend={async (body) => {
-            await actions.addAndSend(path, span.side, span.from, span.to, body);
+            await actions.addAndSend({ path, ...span }, body);
             select.close();
           }}
           onAddAsPending={
             actions.pendingOffered
               ? async (body) => {
-                  await actions.addAsPending(path, span.side, span.from, span.to, body);
+                  await actions.addAsPending({ path, ...span }, body);
                   select.close();
                 }
               : undefined

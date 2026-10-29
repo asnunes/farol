@@ -1,9 +1,11 @@
 import { Prose } from "@/review/Prose";
 import { cn } from "@/lib/utils";
+import { ProseThreads } from "@/review/ProseThreads";
+import type { CommentActions } from "@/hooks/useComments";
 import type { BlockView } from "@/api";
 
 /** The band above the diff: which block you are in and why it exists. */
-export function BlockBar({ block, number, total }: BlockBarProps) {
+export function BlockBar({ block, number, total, comments }: BlockBarProps) {
   return (
     <div
       data-block={block.slug}
@@ -23,6 +25,12 @@ export function BlockBar({ block, number, total }: BlockBarProps) {
           {block.context}
         </Prose>
       )}
+      <ProseThreads
+        about={{ block: block.slug }}
+        label="Thread on this block"
+        threads={comments.onBlock(block.slug)}
+        actions={comments}
+      />
     </div>
   );
 }
@@ -31,4 +39,5 @@ type BlockBarProps = {
   block: BlockView;
   number: number;
   total: number;
+  comments: CommentActions;
 };

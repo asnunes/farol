@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import { where } from "@/hooks/useActivity";
+import { where } from "@/review/diff/comment/quoted";
 import type { CommentView } from "@/api";
 
 /** One line of the box, whatever it reports: a mark, what happened, where and

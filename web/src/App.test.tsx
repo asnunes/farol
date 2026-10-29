@@ -77,7 +77,7 @@ function aside(url: string): Response | null {
     return new Response(JSON.stringify({ settings: [] }));
   }
   if (url.startsWith("/api/comments")) {
-    return new Response('{"files":{},"drifted":[],"unreadable":[]}', {
+    return new Response('{"files":{},"lenses":{},"blocks":{},"drifted":[],"unreadable":[]}', {
       headers: { "content-type": "application/json" },
     });
   }
@@ -548,7 +548,7 @@ describe("refreshing an open review", () => {
     const announce = notifications();
     serve({ review: review() });
     const files = vi.spyOn(api, "file").mockResolvedValue(diff("OLD_CONTENT"));
-    const comments = vi.spyOn(api, "comments").mockResolvedValue({ files: {}, drifted: [], unreadable: [], agent: null });
+    const comments = vi.spyOn(api, "comments").mockResolvedValue({ files: {}, lenses: {}, blocks: {}, drifted: [], unreadable: [], agent: null });
     render(<App />);
     await waitFor(() => expect(section("src/a.rs").textContent).toContain("OLD_CONTENT"));
     const beforeComments = comments.mock.calls.length;
@@ -827,6 +827,8 @@ describe("threads the diff no longer reaches", () => {
     serve({ review: review() });
     vi.spyOn(api, "comments").mockResolvedValue({
       files: {},
+      lenses: {},
+      blocks: {},
       drifted: [
         comment({ id: "moved", path: "src/a.rs", body: "Why this order?" }),
         comment({ id: "gone", path: "src/gone.rs", body: "Where did this go?" }),
@@ -842,7 +844,7 @@ describe("threads the diff no longer reaches", () => {
     expect(lastOfFirst.compareDocumentPosition(moved) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(moved.compareDocumentPosition(secondBand) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
-    const own = screen.getByText("Threads on code that left the review").closest("section")!;
+    const own = screen.getByText("Threads on something no longer in the review").closest("section")!;
     expect(within(own).getByText("Where did this go?")).toBeTruthy();
     expect(within(own).queryByText("Why this order?")).toBeNull();
   });
@@ -965,6 +967,8 @@ describe("a comment file that cannot be read", () => {
           return new Response(
             JSON.stringify({
               files: {},
+              lenses: {},
+              blocks: {},
               drifted: [],
               unreadable: [
                 {

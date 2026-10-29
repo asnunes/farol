@@ -108,6 +108,7 @@ impl CommentStore for MarkdownComments {
 mod tests {
     use super::*;
     use crate::comments::domain::{Author, PendingRef, Purpose, Unread};
+    use crate::comments::domain::{Lines, Subject};
     use crate::diff::domain::Side;
 
     fn store() -> (tempfile::TempDir, MarkdownComments) {
@@ -120,10 +121,12 @@ mod tests {
     fn comment(id: &str) -> Comment {
         Comment {
             id: id.into(),
-            path: "src/a.rs".into(),
-            side: Side::New,
-            from: 82,
-            to: 116,
+            about: Subject::Lines(Lines {
+                path: "src/a.rs".into(),
+                side: Side::New,
+                from: 82,
+                to: 116,
+            }),
             body: "Why **this** order?".into(),
             pending: None,
             conversation: Default::default(),
@@ -189,15 +192,22 @@ mod tests {
         // would move the comment onto code it was never about.
         let (_dir, store) = store();
         store
-            .save(&Comment {
-                side: Side::Old,
-                ..comment("1")
-            })
+            .save(&crate::comments::domain::Comment::on_side(
+                comment("1"),
+                Side::Old,
+            ))
             .unwrap();
 
         let raw = std::fs::read_to_string(store.file("1")).unwrap();
         assert!(raw.contains("side: old"), "{raw}");
-        assert_eq!(store.list().unwrap().comments[0].side, Side::Old);
+        assert_eq!(
+            store.list().unwrap().comments[0]
+                .about
+                .lines()
+                .unwrap()
+                .side,
+            Side::Old
+        );
     }
 
     #[test]
@@ -273,15 +283,27 @@ mod tests {
     fn a_comment_on_a_single_line_survives_the_round_trip() {
         let (_dir, store) = store();
         store
-            .save(&Comment {
-                from: 9,
-                to: 9,
-                ..comment("1")
+            .save(&{
+                let mut one = comment("1");
+                if let crate::comments::domain::Subject::Lines(lines) = &mut one.about {
+                    (lines.from, lines.to) = (9, 9);
+                }
+                one
             })
             .unwrap();
 
-        assert_eq!(store.list().unwrap().comments[0].from, 9);
-        assert_eq!(store.list().unwrap().comments[0].to, 9);
+        assert_eq!(
+            store.list().unwrap().comments[0]
+                .about
+                .lines()
+                .unwrap()
+                .from,
+            9
+        );
+        assert_eq!(
+            store.list().unwrap().comments[0].about.lines().unwrap().to,
+            9
+        );
     }
 
     #[test]
@@ -372,7 +394,7 @@ mod tests {
         let found = store.list().unwrap();
 
         assert!(found.unreadable.is_empty(), "{:?}", found.unreadable);
-        assert_eq!(found.comments[0].from, 4);
+        assert_eq!(found.comments[0].about.lines().unwrap().from, 4);
         assert_eq!(found.comments[0].body, "Why?");
     }
 
@@ -418,5 +440,48 @@ mod tests {
             .map(|c| c.id)
             .collect();
         assert_eq!(ids, ["1", "2"]);
+    }
+
+    #[test]
+    fn a_thread_on_a_lens_or_a_block_survives_the_round_trip() {
+        use crate::comments::domain::Subject;
+        use crate::lenses::domain::{LensId, LensTarget};
+        use crate::map::domain::Slug;
+        let (_dir, store) = store();
+        let lens = Subject::Lens {
+            lens: LensId::parse("summary").unwrap(),
+            target: LensTarget::Block {
+                slug: Slug::parse("core").unwrap(),
+            },
+        };
+        let block = Subject::Block {
+            slug: Slug::parse("core").unwrap(),
+        };
+        store
+            .save(&Comment {
+                about: lens.clone(),
+                ..comment("1")
+            })
+            .unwrap();
+        store
+            .save(&Comment {
+                about: block.clone(),
+                ..comment("2")
+            })
+            .unwrap();
+
+        let read: Vec<Subject> = store
+            .list()
+            .unwrap()
+            .comments
+            .into_iter()
+            .map(|c| c.about)
+            .collect();
+
+        assert_eq!(
+            read,
+            vec![lens, block],
+            "what a thread is about is read back as it was written"
+        );
     }
 }

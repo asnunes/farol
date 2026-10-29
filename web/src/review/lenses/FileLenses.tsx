@@ -3,6 +3,8 @@ import { ChevronDown, ChevronRight, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LensState } from "@/review/lenses/LensState";
 import { LensText } from "@/review/lenses/LensText";
+import { ProseThreads } from "@/review/ProseThreads";
+import type { CommentActions } from "@/hooks/useComments";
 import type { CitationView, FileView, LensView } from "@/api";
 
 /** A file's own lenses, under its header and before its diff, held to the file
@@ -12,7 +14,7 @@ import type { CitationView, FileView, LensView } from "@/api";
  *
  * No tick of their own. They are about the file, so the file's tick is the one
  * that says they were read, and marking it folds them away with the code. */
-export function FileLenses({ file, open, onToggleOpen, onCite }: FileLensesProps) {
+export function FileLenses({ file, open, onToggleOpen, onCite, comments }: FileLensesProps) {
   if (!speaksAbout(file) || (file.viewed && !open)) return null;
   return (
     <div className="file-lenses border-b border-rule bg-surface px-4 pt-0.5 pb-2 md:px-6">
@@ -24,7 +26,7 @@ export function FileLenses({ file, open, onToggleOpen, onCite }: FileLensesProps
       {file.lenses.length > 0 && (
         <div className="timeline border-l-2 border-rule-strong">
           {file.lenses.map((lens) => (
-            <FileLens key={lens.id} lens={lens} path={file.path} onCite={onCite} />
+            <FileLens key={lens.id} lens={lens} path={file.path} onCite={onCite} comments={comments} />
           ))}
         </div>
       )}
@@ -50,7 +52,7 @@ export function speaksAbout(file: FileView): boolean {
   return file.lenses.length > 0 || file.focus !== null;
 }
 
-function FileLens({ lens, path, onCite }: FileLensProps) {
+function FileLens({ lens, path, onCite, comments }: FileLensProps) {
   const [shown, setShown] = useState(true);
   return (
     <div className="file-lens relative pt-1.5 pl-3.5" data-lens={lens.id} data-lens-key={`file:${path}:${lens.id}`}>
@@ -80,6 +82,12 @@ function FileLens({ lens, path, onCite }: FileLensProps) {
           onCite={onCite}
         />
       )}
+      <ProseThreads
+        about={shown && lens.target ? { lens: lens.id, target: lens.target } : null}
+        label={`Thread on the ${lens.title} lens`}
+        threads={comments.onLens(`file:${path}:${lens.id}`)}
+        actions={comments}
+      />
     </div>
   );
 }
@@ -89,10 +97,12 @@ type FileLensesProps = {
   open: boolean;
   onToggleOpen: () => void;
   onCite: (citation: CitationView) => void;
+  comments: CommentActions;
 };
 
 type FileLensProps = {
   lens: LensView;
   path: string;
   onCite: (citation: CitationView) => void;
+  comments: CommentActions;
 };

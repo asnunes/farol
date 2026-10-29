@@ -55,9 +55,16 @@ impl WritePending {
             }
         }
 
+        let lines = thread
+            .about
+            .lines()
+            .ok_or_else(|| CommentError::NotOnCode {
+                id: id.into(),
+                about: thread.at(),
+            })?;
         let added = self
             .publisher
-            .add_pending(&pull.id, &pull.head, &thread, body)?;
+            .add_pending(&pull.id, &pull.head, lines, body)?;
         let written = self
             .comments
             .record_pending(id, PendingRef { id: added, by })?;

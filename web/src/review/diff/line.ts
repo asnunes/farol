@@ -1,6 +1,6 @@
 import type { CommentActions } from "@/hooks/useComments";
 import type { LineSelection } from "./useLineSelection";
-import type { CommentView, DiffLine, FileView, Hunk, Side, LineNoteView } from "@/api";
+import { linesOf, type CommentView, type DiffLine, type FileView, type Hunk, type Side, type LineNoteView } from "@/api";
 
 /** The comment layer over one file's diff: what is already written, what can be
  * done to it, and which lines the reader is choosing right now.
@@ -82,7 +82,9 @@ export function notesAt(file: FileView, line: DiffLine): LineNoteView[] {
  * Each comment is asked about the side it was written on, so line 12 as it was
  * and line 12 as it now reads mark the rows they are actually about. */
 export function commentedBy(comments: CommentView[], at: Anchor): boolean {
-  return comments.some((c) => {
+  return comments.some((thread) => {
+    const c = linesOf(thread);
+    if (!c) return false;
     const line = numberOn(at[c.side], c.side);
     return line !== null && c.from <= line && line <= c.to;
   });
@@ -93,6 +95,9 @@ export function commentedBy(comments: CommentView[], at: Anchor): boolean {
  * They arrive oldest first and stay that way: the order is the server's to
  * decide, like the grouping that put them on this file in the first place. */
 export function commentsAt(comments: CommentView[], at: Anchor): CommentView[] {
-  return comments.filter((c) => numberOn(at[c.side], c.side) === c.to);
+  return comments.filter((thread) => {
+    const c = linesOf(thread);
+    return c !== null && numberOn(at[c.side], c.side) === c.to;
+  });
 }
 

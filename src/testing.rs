@@ -772,7 +772,7 @@ impl crate::comments::domain::ReviewPublisher for FakePublisher {
         &self,
         _pull: &str,
         _head: &str,
-        _at: &crate::comments::domain::Comment,
+        _at: &crate::comments::domain::Lines,
         body: &str,
     ) -> Result<String> {
         if let Some(why) = self.adding.lock().unwrap().clone() {

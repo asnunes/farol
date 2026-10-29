@@ -13,7 +13,7 @@ import { scrollToFile, scrollToLine } from "@/lib/scroll";
 import type { CommentActions } from "@/hooks/useComments";
 import type { DiffView } from "@/hooks/useDiffView";
 import type { OpenFiles } from "@/hooks/useOpenFiles";
-import { blockOf, readingOrder, readingRows } from "@/api";
+import { blockOf, linesOf, readingOrder, readingRows } from "@/api";
 import type { CitationView, CommentView, LensView, ReviewView } from "@/api";
 
 /** The whole review, in one scroll.
@@ -67,12 +67,12 @@ export function Reading({
 
   return (
     <main ref={pane} className="pane overflow-y-auto bg-ground" data-current={current ?? ""}>
-      <ReviewLenses lenses={review.lenses} onCite={cite} onSeen={onSeen} />
+      <ReviewLenses lenses={review.lenses} onCite={cite} onSeen={onSeen} comments={comments} />
       {readingRows(review).map((row) =>
         "block" in row ? (
           <Fragment key={row.block.slug}>
-            <BlockBar block={row.block} number={row.number} total={review.blocks.length} />
-            <BlockLenses slug={row.block.slug} lenses={row.block.lenses} onCite={cite} onSeen={onSeen} />
+            <BlockBar block={row.block} number={row.number} total={review.blocks.length} comments={comments} />
+            <BlockLenses slug={row.block.slug} lenses={row.block.lenses} onCite={cite} onSeen={onSeen} comments={comments} />
             {row.block.files.length > 0 && <CodeBar block={row.block} />}
           </Fragment>
         ) : (
@@ -101,9 +101,9 @@ export function Reading({
       {review.unmapped.length > 0 && <Unmapped paths={review.unmapped} />}
 
       <DriftedThreads
-        threads={drifted.homeless}
+        threads={[...drifted.homeless, ...unplaced(review, comments.all)]}
         actions={comments}
-        heading="Threads on code that left the review"
+        heading="Threads on something no longer in the review"
       />
 
       {/* Room under the last file, so it too can be brought up to the line a
@@ -122,13 +122,31 @@ export function Reading({
   );
 }
 
+/** Threads on a lens or a block the page does not draw: a block renamed or
+ * dropped, a lens switched off or written empty. Without this they would count
+ * in the activity box and be drawn nowhere, with no way to answer or close
+ * them. */
+function unplaced(review: ReviewView, threads: CommentView[]): CommentView[] {
+  const lenses = new Set([
+    ...review.lenses.map((l) => `pr:${l.id}`),
+    ...review.blocks.flatMap((b) => [
+      ...b.lenses.map((l) => `block:${b.slug}:${l.id}`),
+      ...b.files.flatMap((f) => f.lenses.map((l) => `file:${f.path}:${l.id}`)),
+    ]),
+  ]);
+  const blocks = new Set(review.blocks.map((b) => b.slug));
+  return threads.filter(
+    (t) => (t.about.kind === "lens" && !lenses.has(t.about.key)) || (t.about.kind === "block" && !blocks.has(t.about.slug)),
+  );
+}
+
 /** Where each thread off the diff goes: after the last file of the block its
  * file is read in, or, with no such block, into the block of their own. */
 function byBlock(review: ReviewView, threads: CommentView[]): Placement {
   const lastOf = new Map<string, CommentView[]>();
   const homeless: CommentView[] = [];
   for (const thread of threads) {
-    const home = blockOf(review, thread.path)?.block;
+    const home = blockOf(review, linesOf(thread)?.path ?? "")?.block;
     const last = home?.files[home.files.length - 1]?.path;
     if (!last) {
       homeless.push(thread);

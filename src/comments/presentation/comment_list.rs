@@ -98,6 +98,7 @@ pub fn says(why: Unread) -> &'static str {
         Unread::NoPath => "the header no longer says which file it is about",
         Unread::NoLines => "the header no longer says which lines",
         Unread::BadSide => "the header says a side that is neither 'old' nor 'new'",
+        Unread::BadSubject => "the header names a lens or a block farol cannot read back",
     }
 }
 
@@ -105,14 +106,17 @@ pub fn says(why: Unread) -> &'static str {
 mod tests {
     use super::*;
     use crate::comments::domain::Comment;
+    use crate::comments::domain::{Lines, Subject};
 
     fn comment(from: u32, to: u32) -> Comment {
         Comment {
             id: "abc-1".into(),
-            path: "src/a.rs".into(),
-            side: crate::diff::domain::Side::New,
-            from,
-            to,
+            about: Subject::Lines(Lines {
+                path: "src/a.rs".into(),
+                side: crate::diff::domain::Side::New,
+                from,
+                to,
+            }),
             body: "Why this order?\nIt reads backwards.".into(),
             pending: None,
             conversation: Default::default(),
@@ -157,10 +161,7 @@ mod tests {
         // The list is read by a session as well as by a person, and both of
         // them would otherwise go looking at line 82 of the wrong file.
         let out = CommentList(&found(
-            vec![Comment {
-                side: crate::diff::domain::Side::Old,
-                ..comment(82, 116)
-            }],
+            vec![comment(82, 116).on_side(crate::diff::domain::Side::Old)],
             vec![],
         ))
         .to_string();

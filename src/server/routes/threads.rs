@@ -8,7 +8,10 @@ use serde::Deserialize;
 
 use super::{away, fail, view};
 use crate::cmd::ServerUseCases;
+use crate::comments::domain::{Lines, Subject};
 use crate::diff::domain::Side;
+use crate::lenses::domain::{LensId, LensTarget};
+use crate::map::domain::Slug;
 
 /// What the reviewer wrote back, which is everything still waiting for an
 /// answer: closing a comment removes it, so there is nothing here to filter.
@@ -23,24 +26,70 @@ pub(super) async fn comments(Extension(cases): Extension<ServerUseCases>) -> imp
 
 #[derive(Deserialize)]
 pub(super) struct NewComment {
-    path: String,
-    /// Which side the numbers are counted on. Absent is the new side, which is
-    /// what every comment written before there was a choice was about.
-    #[serde(default)]
-    side: Side,
-    from: u32,
-    to: u32,
+    #[serde(flatten)]
+    about: NewSubject,
     body: String,
+}
+
+/// What a new thread is about, as the page sends it: lines, a lens, or a
+/// block's description. Untagged so a body written before there was a choice
+/// still reads as lines.
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum NewSubject {
+    Lines {
+        path: String,
+        /// Which side the numbers are counted on. Absent is the new side, which
+        /// is what every comment written before there was a choice was about.
+        #[serde(default)]
+        side: Side,
+        from: u32,
+        to: u32,
+    },
+    Lens {
+        lens: String,
+        target: LensTarget,
+    },
+    Block {
+        block: String,
+    },
+}
+
+impl NewSubject {
+    /// Raw ids turned into proven ones here, at the edge.
+    fn parse(self) -> crate::error::Result<Subject> {
+        Ok(match self {
+            Self::Lines {
+                path,
+                side,
+                from,
+                to,
+            } => Subject::Lines(Lines {
+                path,
+                side,
+                from,
+                to,
+            }),
+            Self::Lens { lens, target } => Subject::Lens {
+                lens: LensId::parse(&lens)?,
+                target,
+            },
+            Self::Block { block } => Subject::Block {
+                slug: Slug::parse(&block)?,
+            },
+        })
+    }
 }
 
 pub(super) async fn write_comment(
     Extension(cases): Extension<ServerUseCases>,
     Json(body): Json<NewComment>,
 ) -> impl IntoResponse {
-    match cases
-        .comments
-        .add(&body.path, body.side, body.from, body.to, &body.body)
-    {
+    let written = body
+        .about
+        .parse()
+        .and_then(|about| cases.comments.add_about(about, &body.body));
+    match written {
         Ok(comment) => Json(view::CommentView::of(&comment)).into_response(),
         Err(e) => fail(e),
     }

@@ -4,11 +4,13 @@ import { Button } from "@/components/ui/button";
 import { LensState } from "@/review/lenses/LensState";
 import { LensText } from "@/review/lenses/LensText";
 import { SeenBox } from "@/review/lenses/SeenBox";
+import { ProseThreads } from "@/review/ProseThreads";
+import type { CommentActions } from "@/hooks/useComments";
 import type { CitationView, LensView } from "@/api";
 
 /** One lens of the pull request or of a block: open, in the flow of the
  * reading, and folded away with its chevron the way a file is. */
-export function LensSection({ lens, where, onCite, onSeen }: LensSectionProps) {
+export function LensSection({ lens, where, onCite, onSeen, comments }: LensSectionProps) {
   // Seen folds it away, like a file marked read, and a reload keeps it so.
   const [open, setOpen] = useState(!lens.seen);
   useEffect(() => setOpen(!lens.seen), [lens.seen]);
@@ -34,13 +36,26 @@ export function LensSection({ lens, where, onCite, onSeen }: LensSectionProps) {
         (lens.state === "missing" ? (
           <p className="mt-1 pl-7 font-sans text-sm text-ink-muted">Not written yet — written on the next map update.</p>
         ) : (
-          <LensText
-            className={`mt-1 max-w-[72ch] pl-7 font-serif text-sm leading-relaxed text-ink-soft ${lens.state === "outdated" ? "opacity-70" : ""}`}
-            text={lens.text}
-            citations={lens.citations}
-            onCite={onCite}
-          />
+          <>
+            <LensText
+              className={`mt-1 max-w-[72ch] pl-7 font-serif text-sm leading-relaxed text-ink-soft ${lens.state === "outdated" ? "opacity-70" : ""}`}
+              text={lens.text}
+              citations={lens.citations}
+              onCite={onCite}
+            />
+          </>
         ))}
+      {/* Outside the fold: a lens folded away once seen, or not written yet,
+          still shows its threads, so none is left drawn nowhere. A new one is
+          started only on a lens open with something written. */}
+      <div className="pl-7">
+        <ProseThreads
+          about={open && lens.target ? { lens: lens.id, target: lens.target } : null}
+          label={`Thread on the ${lens.title} lens`}
+          threads={comments.onLens(where)}
+          actions={comments}
+        />
+      </div>
     </section>
   );
 }
@@ -51,4 +66,5 @@ type LensSectionProps = {
   where: string;
   onCite: (citation: CitationView) => void;
   onSeen: (lens: LensView, seen: boolean) => void;
+  comments: CommentActions;
 };

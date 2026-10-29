@@ -686,6 +686,45 @@ fn marking_a_path_outside_the_review_is_refused() {
 // ---- what the reviewer writes back --------------------------------------
 
 #[test]
+fn a_thread_on_a_lens_or_a_block_is_written_from_the_page_and_read_under_it() {
+    let s = Serving::new();
+
+    let (status, body) = s.probe(
+        "POST",
+        "/api/comments",
+        Some(r#"{"lens":"overview","target":{"kind":"pr"},"body":"This misses the cache."}"#),
+    );
+    assert_eq!(status, 200, "{body}");
+    let (status, body) = s.probe(
+        "POST",
+        "/api/comments",
+        Some(r#"{"block":"core","body":"Why is this its own block?"}"#),
+    );
+    assert_eq!(status, 200, "{body}");
+
+    let all = s.json("/api/comments");
+    assert_eq!(
+        all["lenses"]["pr:overview"][0]["body"],
+        "This misses the cache."
+    );
+    assert_eq!(all["lenses"]["pr:overview"][0]["about"]["kind"], "lens");
+    assert_eq!(
+        all["blocks"]["core"][0]["about"]["slug"], "core",
+        "a thread on a block's description comes back under the block"
+    );
+
+    let (status, body) = s.probe(
+        "POST",
+        "/api/comments",
+        Some(r#"{"block":"Not A Slug","body":"?"}"#),
+    );
+    assert_eq!(
+        status, 400,
+        "an id farol would not write is refused at the edge: {body}"
+    );
+}
+
+#[test]
 fn a_comment_written_from_the_page_can_be_read_and_closed() {
     // The whole life of a comment over the wire, in one go: each step is only
     // worth anything if the one before it stuck.
@@ -704,9 +743,9 @@ fn a_comment_written_from_the_page_can_be_read_and_closed() {
         .to_string();
 
     let all = s.comments_on("src/a.rs");
-    assert_eq!(all[0]["path"], "src/a.rs");
-    assert_eq!(all[0]["from"], 10);
-    assert_eq!(all[0]["to"], 12);
+    assert_eq!(all[0]["about"]["path"], "src/a.rs");
+    assert_eq!(all[0]["about"]["from"], 10);
+    assert_eq!(all[0]["about"]["to"], 12);
     assert_eq!(all[0]["body"], "Why this order?");
 
     // Closing is answering, and an answered question is not kept: what comes
@@ -830,10 +869,10 @@ fn a_comment_on_a_removed_line_survives_the_page_being_reloaded() {
     assert_eq!(status, 200, "{body}");
 
     let all = s.comments_on("src/gone.rs");
-    assert_eq!(all[0]["path"], "src/gone.rs");
-    assert_eq!(all[0]["side"], "old");
-    assert_eq!(all[0]["from"], 2);
-    assert_eq!(all[0]["to"], 4);
+    assert_eq!(all[0]["about"]["path"], "src/gone.rs");
+    assert_eq!(all[0]["about"]["side"], "old");
+    assert_eq!(all[0]["about"]["from"], 2);
+    assert_eq!(all[0]["about"]["to"], 4);
 
     // And on disk, which is what outlives the server.
     let dir = s.repo.path().join(".git/farol/feature-x/comments");
@@ -882,10 +921,13 @@ fn the_same_numbers_on_the_two_sides_are_two_different_comments() {
     let all = s.comments_on("src/keep.rs");
     assert_eq!(all.len(), 2);
     for one in &all {
-        assert_eq!(one["from"], 5);
+        assert_eq!(one["about"]["from"], 5);
         assert_eq!(
             one["body"],
-            format!("about the {} line 5", one["side"].as_str().unwrap()),
+            format!(
+                "about the {} line 5",
+                one["about"]["side"].as_str().unwrap()
+            ),
             "each kept the side it was written on"
         );
     }

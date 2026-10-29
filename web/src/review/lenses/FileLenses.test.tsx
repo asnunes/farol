@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 import { FileLenses } from "./FileLenses";
-import { file } from "@/review/diff/testing";
+import { file, noComments } from "@/review/diff/testing";
 import type { LensView } from "@/api";
 
 const tests: LensView = {
@@ -20,7 +20,7 @@ const tests: LensView = {
 const none = () => {};
 
 it("hides and shows a file's lens with the eye, keeping its name", () => {
-  render(<FileLenses file={file({ lenses: [tests] })} open={false} onToggleOpen={none} onCite={none} />);
+  render(<FileLenses file={file({ lenses: [tests] })} open={false} onToggleOpen={none} onCite={none} comments={noComments()} />);
   expect(screen.getByText(/tried again/)).toBeTruthy();
 
   fireEvent.click(screen.getByRole("button", { name: "Hide Tests" }));
@@ -32,18 +32,18 @@ it("hides and shows a file's lens with the eye, keeping its name", () => {
 });
 
 it("says why the map puts the file in focus", () => {
-  render(<FileLenses file={file({ focus: "the whole retry rule" })} open={false} onToggleOpen={none} onCite={none} />);
+  render(<FileLenses file={file({ focus: "the whole retry rule" })} open={false} onToggleOpen={none} onCite={none} comments={noComments()} />);
   expect(screen.getByText("Focus: the whole retry rule")).toBeTruthy();
 });
 
 it("draws nothing for a file no lens speaks about", () => {
-  const { container } = render(<FileLenses file={file()} open={false} onToggleOpen={none} onCite={none} />);
+  const { container } = render(<FileLenses file={file()} open={false} onToggleOpen={none} onCite={none} comments={noComments()} />);
   expect(container.innerHTML).toBe("");
 });
 
 it("opens the code from under the lenses, which carry no tick of their own", () => {
   const toggle = vi.fn();
-  render(<FileLenses file={file({ lenses: [tests] })} open={false} onToggleOpen={toggle} onCite={none} />);
+  render(<FileLenses file={file({ lenses: [tests] })} open={false} onToggleOpen={toggle} onCite={none} comments={noComments()} />);
 
   expect(screen.queryByRole("checkbox"), "the file's tick is the one that says they were read").toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "Show code" }));
@@ -52,7 +52,7 @@ it("opens the code from under the lenses, which carry no tick of their own", () 
 
 it("folds away with the code once the file is marked read", () => {
   const { container } = render(
-    <FileLenses file={file({ lenses: [tests], viewed: true })} open={false} onToggleOpen={none} onCite={none} />,
+    <FileLenses file={file({ lenses: [tests], viewed: true })} open={false} onToggleOpen={none} onCite={none} comments={noComments()} />,
   );
   expect(container.innerHTML).toBe("");
 });
@@ -64,6 +64,7 @@ it("says why a lens opens the file", () => {
       open
       onToggleOpen={none}
       onCite={none}
+      comments={noComments()}
     />,
   );
   expect(screen.getByText("Open: the rule is written twice")).toBeTruthy();
