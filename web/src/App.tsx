@@ -131,7 +131,10 @@ export default function App() {
     (lens: LensView, seen: boolean) => {
       // After the server answers, not before: seeing a block's lenses can
       // make its files read, and the next unread place is only known then.
-      const from = current;
+      //
+      // From the lens that was marked, which is not always where the reader
+      // is: a tick can be clicked on a lens that has not reached the line yet.
+      const from = placeOf(lens) ?? current;
       return toggleSeen(lens, seen).then(() => {
         if (seen) requestAnimationFrame(() => goToPlace(unreadAfter(from)));
       });
@@ -256,7 +259,7 @@ export default function App() {
           onToggleViewed={(path, viewed) => void mark(path, viewed)}
           files={files}
           comments={comments}
-          onSeen={(lens, seen) => void toggleSeen(lens, seen)}
+          onSeen={(lens, seen) => void markLens(lens, seen)}
         />
 
         <KeyBar
@@ -310,4 +313,16 @@ function Failed({ what, onClose }: { what: string; onClose: () => void }) {
       </Button>
     </Alert>
   );
+}
+
+/** The place a pull request or block lens holds on the page, as `lens:<key>`. */
+function placeOf(lens: LensView): string | null {
+  switch (lens.target?.kind) {
+    case "pr":
+      return `lens:pr:${lens.id}`;
+    case "block":
+      return `lens:block:${lens.target.slug}:${lens.id}`;
+    default:
+      return null;
+  }
 }

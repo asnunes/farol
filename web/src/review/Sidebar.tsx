@@ -111,6 +111,10 @@ function Block({
             onPick={() => onPick(`lens:block:${block.slug}:${lens.id}`)}
           />
         ))}
+        {/* A rule between what the block says and the files it reads. */}
+        {block.lenses.length > 0 && block.files.length > 0 && (
+          <li aria-hidden="true" className="mx-2 my-1 border-t border-rule" />
+        )}
         {block.files.map((f) => (
           <FileRow
             key={f.path}
