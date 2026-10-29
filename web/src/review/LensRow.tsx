@@ -1,4 +1,4 @@
-import { Circle, CircleCheck } from "lucide-react";
+import { ScrollText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { LensView } from "@/api";
@@ -14,11 +14,12 @@ export function LensRow({ lens, current, onPick }: LensRowProps) {
         aria-current={current ? "true" : undefined}
         onClick={onPick}
       >
-        {lens.seen ? (
-          <CircleCheck className="chk size-3.5 shrink-0 text-add-ink" aria-hidden="true" />
-        ) : (
-          <Circle className="chk size-3.5 shrink-0 text-faint" aria-hidden="true" />
-        )}
+        {/* Text, not a ring: the ring is a file's, and a lens beside the
+            files read as one more of them. Green once seen, as a file's is. */}
+        <ScrollText
+          className={cn("chk size-3.5 shrink-0", lens.seen ? "text-add-ink" : "text-faint")}
+          aria-hidden="true"
+        />
         <span className={cn("nm truncate", lens.seen && "text-faint line-through", current && "font-semibold")}>{lens.title}</span>
         {lens.state === "outdated" && (
           <span className="ml-auto shrink-0 text-[0.625rem] text-highlight">outdated</span>
