@@ -4,17 +4,17 @@ use crate::lenses::application::GetReviewWithLenses;
 use crate::map::domain::MapError;
 use crate::progress::application::ProgressStore;
 
-/// A **service**: the files the reviewer has read, as GitHub is told about
-/// them. The same answer the screen draws — ticked, or covered by the block's
-/// lenses — so a file shown read is a file marked read on the pull request.
+/// List the files the reviewer has read, as GitHub is told about them. The
+/// same answer the screen draws — ticked, or covered by the block's lenses —
+/// so a file shown read is a file marked read on the pull request.
 #[derive(Clone)]
-pub struct ReadFiles {
+pub struct ListReadFiles {
     progress: ProgressStore,
     scope: ReviewScope,
     review: GetReviewWithLenses,
 }
 
-impl ReadFiles {
+impl ListReadFiles {
     pub fn new(progress: ProgressStore, scope: ReviewScope, review: GetReviewWithLenses) -> Self {
         Self {
             progress,
@@ -23,7 +23,7 @@ impl ReadFiles {
         }
     }
 
-    pub fn paths(&self) -> Result<Vec<String>> {
+    pub fn execute(&self) -> Result<Vec<String>> {
         let mut read = self.progress.current_paths(&self.scope.get()?.files)?;
         // No map means no blocks, so nothing is covered; the ticks still are.
         match self.review.execute() {

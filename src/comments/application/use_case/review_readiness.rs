@@ -19,7 +19,7 @@ pub struct ReviewReadiness {
     publisher: Arc<dyn ReviewPublisher>,
     scope: ReviewScope,
     host: Option<String>,
-    read: crate::lenses::application::ReadFiles,
+    read: crate::lenses::application::ListReadFiles,
 }
 
 impl ReviewReadiness {
@@ -30,7 +30,7 @@ impl ReviewReadiness {
         publisher: Arc<dyn ReviewPublisher>,
         scope: ReviewScope,
         host: Option<String>,
-        read: crate::lenses::application::ReadFiles,
+        read: crate::lenses::application::ListReadFiles,
     ) -> Self {
         Self {
             pull,
@@ -63,7 +63,7 @@ impl ReviewReadiness {
             mode,
             pending,
             pending_failed,
-            read: self.read.paths()?,
+            read: self.read.execute()?,
         })
     }
 

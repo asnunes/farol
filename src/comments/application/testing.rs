@@ -116,14 +116,14 @@ impl World {
     }
 
     /// What the reviewer read, over a review with no map: the ticks alone.
-    fn read_files(&self) -> crate::lenses::application::ReadFiles {
+    fn read_files(&self) -> crate::lenses::application::ListReadFiles {
         let scope = ReviewScope::new(self.source.clone());
         let versions = crate::map::application::MapVersions::new(
             scope.clone(),
             CommitHistory::new(self.source.clone()),
             Arc::new(crate::testing::InMemoryMapRepository::default()),
         );
-        crate::lenses::application::ReadFiles::new(
+        crate::lenses::application::ListReadFiles::new(
             self.progress.clone(),
             scope.clone(),
             crate::lenses::application::GetReviewWithLenses::new(

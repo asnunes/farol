@@ -20,7 +20,7 @@ pub struct PublishReview {
     pull: PullRequestGate,
     publisher: Arc<dyn ReviewPublisher>,
     scope: ReviewScope,
-    read: crate::lenses::application::ReadFiles,
+    read: crate::lenses::application::ListReadFiles,
 }
 
 impl PublishReview {
@@ -29,7 +29,7 @@ impl PublishReview {
         pull: PullRequestGate,
         publisher: Arc<dyn ReviewPublisher>,
         scope: ReviewScope,
-        read: crate::lenses::application::ReadFiles,
+        read: crate::lenses::application::ListReadFiles,
     ) -> Self {
         Self {
             comments,
@@ -101,7 +101,7 @@ impl PublishReview {
 
     /// The files the reviewer has read and that have not moved since.
     fn already_read(&self) -> Result<Vec<String>> {
-        self.read.paths()
+        self.read.execute()
     }
 
     /// How many of the threads' comments are about to go, as the host has

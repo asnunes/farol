@@ -475,8 +475,11 @@ pub fn server_use_cases_over(
         Arc::new(InMemoryLensCatalog::default()),
         Arc::new(InMemoryLensAnswers::default()),
     );
-    let read =
-        crate::lenses::application::ReadFiles::new(progress.clone(), scope.clone(), review.clone());
+    let read = crate::lenses::application::ListReadFiles::new(
+        progress.clone(),
+        scope.clone(),
+        review.clone(),
+    );
     crate::cmd::ServerUseCases {
         scope: crate::map::application::GetScope::new(scope.clone()),
         see_lens: crate::lenses::application::SeeLens::new(

@@ -24,7 +24,7 @@ use crate::diff::infra::{GixSource, ScopeRequest};
 use crate::error::Result;
 use crate::lenses::application::{
     AddLens, DeleteLens, DisableLens, EnableLens, GetReviewWithLenses, KeepAnswer, ListLenses,
-    PendingAnswers, ReadFiles, SeeLens, ShowAnswer, UpdateLens, WriteAnswer,
+    ListReadFiles, PendingAnswers, SeeLens, ShowAnswer, UpdateLens, WriteAnswer,
 };
 use crate::lenses::domain::LensCatalogRepository;
 use crate::lenses::infra::{JsonLensAnswers, JsonLensCatalog};
@@ -192,7 +192,7 @@ impl Ctx {
             lens_catalog.clone(),
             lens_answers.clone(),
         );
-        let read = ReadFiles::new(progress.clone(), scope.clone(), review.clone());
+        let read = ListReadFiles::new(progress.clone(), scope.clone(), review.clone());
         let gate = PullRequestGate::new(publisher.clone(), scope.clone(), history.clone());
         let readiness = ReviewReadiness::new(
             gate.clone(),
