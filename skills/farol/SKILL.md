@@ -408,16 +408,27 @@ it. Write the missing ones, following their prompt:
     farol lens write <id> --block <slug> --text '…'   # a block
     farol lens write <id> --file <path> --text '…'    # a file
 
-**A lens exists to save the reader time.** If reading it takes anywhere
-near as long as reading the code, it failed, and the reader paid for it.
-Every lens has a hard limit of lines, and every line one of 140
-characters; `farol lens write` refuses an answer past either, and a keep
-is held to the same limits. Aim well under the limit, not at it, and cut
-whatever would not change whether the reviewer approves. Write for a reader who scans, not
-one who reads: the point first, in bold; then bullets of one line each,
-the key term of each in bold; no paragraph longer than two lines; one
-item per bullet, never a list chained with semicolons. A
-reader who reads only the bold should already have the lens. Write them from what the session
+**A lens exists to save the reader time, and it does that by being
+understood on the first read.** Being short is worth nothing if the
+reader has to read it twice to rebuild what it meant. Write complete
+sentences in natural Portuguese, with their subjects and the connections
+that make the explanation hold: what causes what, what depends on what,
+why. Use short paragraphs when they read more clearly than bullets, and
+bullets when the content really is a list. Do not force a structure: no
+bold labels, no headline line, no fragments standing in for sentences.
+
+A label costs little room and says little. Compare:
+
+- Compressed: "A abertura é enviada uma vez por permanência no mapping.
+  Mudança observada: A → B → A libera novo envio."
+- Natural: "A mensagem de abertura não se repete enquanto o chat
+  continuar no mesmo mapping. Se o chat mudar de mapping e depois
+  voltar, a abertura pode ser enviada de novo."
+
+Each lens shows about how long it usually runs; that is a guide, not a
+limit, and longer is not better by default. Concision comes from
+editing: cut repetition and detail the reader does not need, and keep
+what they would otherwise have to reconstruct. Write them from what the session
 knows, in the map's language. Cite code in backticks as `path:from-to`,
 adding `(old)` for a line the change removed; a cited line that does not
 exist is refused. A file lens is offered for every file in the review:

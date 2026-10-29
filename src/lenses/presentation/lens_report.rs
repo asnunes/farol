@@ -28,8 +28,8 @@ impl Display for PendingReport<'_> {
                 writeln!(f, "  asks: {}", pending.lens.prompt)?;
                 writeln!(
                     f,
-                    "  limit: {} lines, refused past it",
-                    pending.lens.max_lines()
+                    "  length: about {} lines, a guide and not a limit",
+                    pending.lens.about_lines()
                 )?;
                 last = Some(&pending.lens.id);
             }
@@ -110,7 +110,7 @@ impl Display for AnswerReport<'_> {
     }
 }
 
-const RULES: &str = "A lens exists to save the reader time. If reading it takes anywhere near as long as reading the code, it failed, and the reader you were writing for paid for it. Write the least that lets them decide: every lens has a hard limit of lines, and lines of at most 140 characters, which farol lens write refuses to pass; aim well under it, not at it. Point first, in bold; then one-line bullets, one item each, never a list chained with semicolons; no paragraphs. Cut whatever would not change whether they approve. For an outdated lens, first check whether what it says still holds for the code as it is now: keep it if it does, rewrite it if not; a keep is held to the same limits. Write in the language of the map. Cite code in backticks as `path:from-to`, adding (old) for a removed line; a line that does not exist is refused. For a file lens, write an empty text for a file it does not apply to; a file lens with more characters than the lines its change adds and removes is refused, because the code would be quicker to read. A file lens may open its file with --open '<why>', and that is the exception: only when reading the code could change whether the reviewer approves, saying what they will see. Writing a lens changes no code: do not change, commit or publish anything while doing it.";
+const RULES: &str = "A lens exists to save the reader time, and it does that by being understood on the first read. Write in natural, complete sentences in the language of the map, with subjects and the connections that make the explanation hold: what causes what, what depends on what, why. Use short paragraphs when they read more clearly than bullets, and bullets when the content really is a list. Do not force a structure: no bold labels, no headline line, no fragments standing in for sentences. Each lens shows about how long it usually runs; that is a guide, not a limit. Concision comes from editing, not from compressing: cut repetition and detail the reader does not need, and keep what they would otherwise have to reconstruct. A file lens with more characters than the lines its change adds and removes is refused, because the code would be quicker to read. For an outdated lens, first check whether what it says still holds for the code as it is now: keep it if it does, rewrite it if not. Cite code in backticks as `path:from-to`, adding (old) for a removed line; a line that does not exist is refused. For a file lens, write an empty text for a file it does not apply to. A file lens may open its file with --open '<why>', and that is the exception: only when reading the code could change whether the reviewer approves, saying what they will see. Writing a lens changes no code: do not change, commit or publish anything while doing it.";
 
 fn written(group: LensGroup) -> &'static str {
     match group {
