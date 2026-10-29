@@ -20,7 +20,7 @@ export function ProseThreads({ about, label, threads, actions }: ProseThreadsPro
       {threads.map((thread) => (
         <Comment key={thread.id} comment={thread} actions={here} />
       ))}
-      {writing ? (
+      {!about ? null : writing ? (
         <Box
           label={label}
           agent={actions.agent}
@@ -48,8 +48,9 @@ export function ProseThreads({ about, label, threads, actions }: ProseThreadsPro
 }
 
 type ProseThreadsProps = {
-  /** What a new thread will be about. */
-  about: NewAbout;
+  /** What a new thread will be about, or null where none can be started —
+   * a lens folded away or not written yet still shows the threads it has. */
+  about: NewAbout | null;
   /** The box's name: "Thread on the Overview lens", "Thread on this block". */
   label: string;
   threads: CommentView[];

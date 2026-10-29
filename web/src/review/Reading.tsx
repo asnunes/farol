@@ -101,9 +101,9 @@ export function Reading({
       {review.unmapped.length > 0 && <Unmapped paths={review.unmapped} />}
 
       <DriftedThreads
-        threads={drifted.homeless}
+        threads={[...drifted.homeless, ...unplaced(review, comments.all)]}
         actions={comments}
-        heading="Threads on code that left the review"
+        heading="Threads on something no longer in the review"
       />
 
       {/* Room under the last file, so it too can be brought up to the line a
@@ -119,6 +119,24 @@ export function Reading({
           line, and the review ends up reporting a file nobody is looking at. */}
       <div aria-hidden="true" className="tail h-3/4" />
     </main>
+  );
+}
+
+/** Threads on a lens or a block the page does not draw: a block renamed or
+ * dropped, a lens switched off or written empty. Without this they would count
+ * in the activity box and be drawn nowhere, with no way to answer or close
+ * them. */
+function unplaced(review: ReviewView, threads: CommentView[]): CommentView[] {
+  const lenses = new Set([
+    ...review.lenses.map((l) => `pr:${l.id}`),
+    ...review.blocks.flatMap((b) => [
+      ...b.lenses.map((l) => `block:${b.slug}:${l.id}`),
+      ...b.files.flatMap((f) => f.lenses.map((l) => `file:${f.path}:${l.id}`)),
+    ]),
+  ]);
+  const blocks = new Set(review.blocks.map((b) => b.slug));
+  return threads.filter(
+    (t) => (t.about.kind === "lens" && !lenses.has(t.about.key)) || (t.about.kind === "block" && !blocks.has(t.about.slug)),
   );
 }
 

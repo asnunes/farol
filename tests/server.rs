@@ -686,6 +686,39 @@ fn marking_a_path_outside_the_review_is_refused() {
 // ---- what the reviewer writes back --------------------------------------
 
 #[test]
+fn a_thread_on_a_lens_or_a_block_is_written_from_the_page_and_read_under_it() {
+    let s = Serving::new();
+
+    let (status, body) = s.probe(
+        "POST",
+        "/api/comments",
+        Some(r#"{"lens":"overview","target":{"kind":"pr"},"body":"This misses the cache."}"#),
+    );
+    assert_eq!(status, 200, "{body}");
+    let (status, body) = s.probe(
+        "POST",
+        "/api/comments",
+        Some(r#"{"block":"core","body":"Why is this its own block?"}"#),
+    );
+    assert_eq!(status, 200, "{body}");
+
+    let all = s.json("/api/comments");
+    assert_eq!(all["lenses"]["pr:overview"][0]["body"], "This misses the cache.");
+    assert_eq!(all["lenses"]["pr:overview"][0]["about"]["kind"], "lens");
+    assert_eq!(
+        all["blocks"]["core"][0]["about"]["slug"], "core",
+        "a thread on a block's description comes back under the block"
+    );
+
+    let (status, body) = s.probe(
+        "POST",
+        "/api/comments",
+        Some(r#"{"block":"Not A Slug","body":"?"}"#),
+    );
+    assert_eq!(status, 400, "an id farol would not write is refused at the edge: {body}");
+}
+
+#[test]
 fn a_comment_written_from_the_page_can_be_read_and_closed() {
     // The whole life of a comment over the wire, in one go: each step is only
     // worth anything if the one before it stuck.

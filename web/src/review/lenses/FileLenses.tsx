@@ -82,14 +82,12 @@ function FileLens({ lens, path, onCite, comments }: FileLensProps) {
           onCite={onCite}
         />
       )}
-      {shown && lens.target && (
-        <ProseThreads
-          about={{ lens: lens.id, target: lens.target }}
-          label={`Thread on the ${lens.title} lens`}
-          threads={comments.onLens(`file:${path}:${lens.id}`)}
-          actions={comments}
-        />
-      )}
+      <ProseThreads
+        about={shown && lens.target ? { lens: lens.id, target: lens.target } : null}
+        label={`Thread on the ${lens.title} lens`}
+        threads={comments.onLens(`file:${path}:${lens.id}`)}
+        actions={comments}
+      />
     </div>
   );
 }

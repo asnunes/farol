@@ -844,7 +844,7 @@ describe("threads the diff no longer reaches", () => {
     expect(lastOfFirst.compareDocumentPosition(moved) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(moved.compareDocumentPosition(secondBand) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
-    const own = screen.getByText("Threads on code that left the review").closest("section")!;
+    const own = screen.getByText("Threads on something no longer in the review").closest("section")!;
     expect(within(own).getByText("Where did this go?")).toBeTruthy();
     expect(within(own).queryByText("Why this order?")).toBeNull();
   });

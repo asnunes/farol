@@ -43,18 +43,19 @@ export function LensSection({ lens, where, onCite, onSeen, comments }: LensSecti
               citations={lens.citations}
               onCite={onCite}
             />
-            {lens.target && (
-              <div className="pl-7">
-                <ProseThreads
-                  about={{ lens: lens.id, target: lens.target }}
-                  label={`Thread on the ${lens.title} lens`}
-                  threads={comments.onLens(where)}
-                  actions={comments}
-                />
-              </div>
-            )}
           </>
         ))}
+      {/* Outside the fold: a lens folded away once seen, or not written yet,
+          still shows its threads, so none is left drawn nowhere. A new one is
+          started only on a lens open with something written. */}
+      <div className="pl-7">
+        <ProseThreads
+          about={open && lens.target ? { lens: lens.id, target: lens.target } : null}
+          label={`Thread on the ${lens.title} lens`}
+          threads={comments.onLens(where)}
+          actions={comments}
+        />
+      </div>
     </section>
   );
 }

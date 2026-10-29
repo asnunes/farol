@@ -20,8 +20,8 @@ export function DriftedThreads({ threads, actions, heading }: DriftedThreadsProp
         <div className="blockbar border-y border-rule bg-surface px-4 py-3 md:px-6 md:py-4">
           <h2 className="font-sans text-lg font-semibold text-ink">{heading}</h2>
           <p className="mt-2 max-w-[68ch] font-serif text-[0.9375rem] leading-relaxed text-ink-soft">
-            The files these threads were about are no longer in the review. They can still be answered and
-            closed.
+            What these threads were about — a file, a lens or a block — is no longer in the review. They can
+            still be answered and closed.
           </p>
         </div>
       ) : (
