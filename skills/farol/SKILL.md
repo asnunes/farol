@@ -183,34 +183,30 @@ asks for it (see Write the lenses).
 
 ## Give each block its context
 
-A block context has three moves, in this order:
+A block context is one sentence: the problem this piece of the change
+solves. For the first block, that sentence says what the whole change is
+for; for later blocks, it reconnects the reader to it. It sits under the
+title and tells the reader where they are, nothing more.
 
-1. Where this block sits in the change. For the first block, explain the
-   whole change in one sentence. For later blocks, reconnect the reader
-   to it in a clause.
-2. What this block does, with a verb.
-3. The decision recovered from the session, the evidence explaining it,
-   and its consequence in the implementation.
+Everything that explains the block goes into its Summary lens: what it
+does, the decision recovered from the session and the evidence behind
+it, what that choice costs, and how its files fit together. One text
+explains a block, so the reader never reads the same thing twice, and
+the Summary is a lens the reviewer can reshape in Settings.
 
-The first move is the one most often skipped. Without it, the block
-starts with a conclusion before the reader knows what it is about.
+A fact about the implementation history earns its place in the Summary
+when it explains something the reader should understand or expect:
 
-These moves determine the length, not a word budget. If there is no
-non-obvious decision to explain, keep the context short rather than
-inventing one.
-
-A fact about the implementation history earns its place when it explains
-something the reader should understand or expect:
-
-- Incomplete: “The collections were public until late in this change.”
-- Useful: “The reconciler used to modify the collections directly, which
-  is why changes now go through methods that preserve the map's rules.”
+- Incomplete: "The collections were public until late in this change."
+- Useful: "The reconciler used to modify the collections directly, which
+  is why changes now go through methods that preserve the map's rules."
 
 ## Put the explanation where it belongs
 
 Three levels: block, file, line. Use the highest level that serves.
 
-- Block context explains a decision that shapes the group of changes.
+- The block's Summary lens explains a decision that shapes the group of
+  changes; the block context only names the problem it solves.
 - A file note explains why that file participates in the change or which
   session decision shaped its implementation.
 - A line note explains a decision whose consequences are local to a
@@ -330,8 +326,8 @@ to explain it.
 
 Prefer “How notes follow changing code” to an abstract slogan.
 
-The title names the subject. The context explains its place in the
-change, the implementation choice, and the reason behind it.
+The title names the subject. The context says, in one sentence, the
+problem the block solves; the Summary explains the rest.
 
 ## Let the explanation determine its length
 
@@ -364,7 +360,8 @@ of `map show` as someone who did not participate in the implementation.
 Check that:
 
 - The first block explains what the change is for.
-- Each block gives enough context to be understood independently.
+- Each block's context situates it in one sentence, and its Summary
+  explains it well enough to be understood independently.
 - The reading order follows dependencies of understanding.
 - Tests appear immediately after the implementation they cover.
 - Explanations connect implementation choices to the available evidence.
@@ -438,10 +435,10 @@ when reading the code could change whether the reviewer approves, and
 say what they will see there. Smell always opens what it writes about.
 Files opened this way do not count against the focus limit.
 
-The block's context and its Summary lens answer different questions,
-and neither repeats the other. The context says what this piece of code
-does, what it is for and what problem it solves. The Summary says how it
-is built: which file does what and how the files relate.
+The block's context and its Summary lens do not repeat each other. The
+context is one sentence on the problem the block solves. The Summary is
+the explanation: what the block does, why, and how its files fit
+together.
 
 Lenses are where judgment goes. Unlike the map, a lens such as Risk or
 Evidence may assess the change, because the reviewer asked for it there.
