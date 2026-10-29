@@ -1,4 +1,4 @@
-import { Search } from "lucide-react";
+import { ScanSearch } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { LensView } from "@/api";
@@ -16,7 +16,7 @@ export function LensRow({ lens, current, onPick }: LensRowProps) {
       >
         {/* A lens, not a ring: the ring is a file's, and a lens beside the
             files read as one more of them. Green once seen, as a file's is. */}
-        <Search
+        <ScanSearch
           className={cn("chk size-3.5 shrink-0", lens.seen ? "text-add-ink" : "text-faint")}
           aria-hidden="true"
         />
