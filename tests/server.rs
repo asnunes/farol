@@ -703,7 +703,10 @@ fn a_thread_on_a_lens_or_a_block_is_written_from_the_page_and_read_under_it() {
     assert_eq!(status, 200, "{body}");
 
     let all = s.json("/api/comments");
-    assert_eq!(all["lenses"]["pr:overview"][0]["body"], "This misses the cache.");
+    assert_eq!(
+        all["lenses"]["pr:overview"][0]["body"],
+        "This misses the cache."
+    );
     assert_eq!(all["lenses"]["pr:overview"][0]["about"]["kind"], "lens");
     assert_eq!(
         all["blocks"]["core"][0]["about"]["slug"], "core",
@@ -715,7 +718,10 @@ fn a_thread_on_a_lens_or_a_block_is_written_from_the_page_and_read_under_it() {
         "/api/comments",
         Some(r#"{"block":"Not A Slug","body":"?"}"#),
     );
-    assert_eq!(status, 400, "an id farol would not write is refused at the edge: {body}");
+    assert_eq!(
+        status, 400,
+        "an id farol would not write is refused at the edge: {body}"
+    );
 }
 
 #[test]
