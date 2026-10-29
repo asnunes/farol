@@ -19,7 +19,7 @@ pub struct ReviewReadiness {
     publisher: Arc<dyn ReviewPublisher>,
     scope: ReviewScope,
     host: Option<String>,
-    progress: crate::progress::application::ProgressStore,
+    read: crate::lenses::application::ListReadFiles,
 }
 
 impl ReviewReadiness {
@@ -30,7 +30,7 @@ impl ReviewReadiness {
         publisher: Arc<dyn ReviewPublisher>,
         scope: ReviewScope,
         host: Option<String>,
-        progress: crate::progress::application::ProgressStore,
+        read: crate::lenses::application::ListReadFiles,
     ) -> Self {
         Self {
             pull,
@@ -39,7 +39,7 @@ impl ReviewReadiness {
             publisher,
             scope,
             host,
-            progress,
+            read,
         }
     }
 
@@ -63,7 +63,7 @@ impl ReviewReadiness {
             mode,
             pending,
             pending_failed,
-            read: self.progress.current_paths(&scope.files)?,
+            read: self.read.execute()?,
         })
     }
 

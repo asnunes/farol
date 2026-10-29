@@ -183,6 +183,8 @@ export type FileView = {
   additions: number;
   deletions: number;
   viewed: boolean;
+  /** Read through its block's lenses, not by a tick of its own. */
+  covered: boolean;
   /** The note the block wrote for this file, if it wrote one. */
   note: string | null;
   lineNotes: LineNoteView[];

@@ -54,8 +54,12 @@ export function scrollToLens(key: string) {
   settling = Date.now() + SETTLES_IN;
   requestAnimationFrame(() => {
     const lens = document.querySelector<HTMLElement>(`[data-lens-key="${CSS.escape(key)}"]`);
-    lens?.scrollIntoView({ block: "start" });
-    if (lens) holdPosition(lens);
+    // The first lens of a block is reached through the block, like its first
+    // file: the band above says what the block is for, and is read first.
+    const before = lens?.previousElementSibling;
+    const anchor = before?.classList.contains("blockbar") ? (before as HTMLElement) : lens;
+    anchor?.scrollIntoView({ block: "start" });
+    if (anchor) holdPosition(anchor);
   });
 }
 

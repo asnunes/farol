@@ -4,7 +4,6 @@ use crate::comments::application::{Comments, OpenPull, PullRequestGate};
 use crate::comments::domain::{CommentError, RemoteState, Review, ReviewPublisher, Verdict};
 use crate::diff::application::ReviewScope;
 use crate::error::Result;
-use crate::progress::application::ProgressStore;
 use crate::shared::short;
 
 /// Submit the review: the verdict and summary, over the pending comments that
@@ -21,7 +20,7 @@ pub struct PublishReview {
     pull: PullRequestGate,
     publisher: Arc<dyn ReviewPublisher>,
     scope: ReviewScope,
-    progress: ProgressStore,
+    read: crate::lenses::application::ListReadFiles,
 }
 
 impl PublishReview {
@@ -30,14 +29,14 @@ impl PublishReview {
         pull: PullRequestGate,
         publisher: Arc<dyn ReviewPublisher>,
         scope: ReviewScope,
-        progress: ProgressStore,
+        read: crate::lenses::application::ListReadFiles,
     ) -> Self {
         Self {
             comments,
             pull,
             publisher,
             scope,
-            progress,
+            read,
         }
     }
 
@@ -102,7 +101,7 @@ impl PublishReview {
 
     /// The files the reviewer has read and that have not moved since.
     fn already_read(&self) -> Result<Vec<String>> {
-        self.progress.current_paths(&self.scope.get()?.files)
+        self.read.execute()
     }
 
     /// How many of the threads' comments are about to go, as the host has

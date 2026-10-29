@@ -24,7 +24,7 @@ use crate::diff::infra::{GixSource, ScopeRequest};
 use crate::error::Result;
 use crate::lenses::application::{
     AddLens, DeleteLens, DisableLens, EnableLens, GetReviewWithLenses, KeepAnswer, ListLenses,
-    PendingAnswers, SeeLens, ShowAnswer, UpdateLens, WriteAnswer,
+    ListReadFiles, PendingAnswers, SeeLens, ShowAnswer, UpdateLens, WriteAnswer,
 };
 use crate::lenses::domain::LensCatalogRepository;
 use crate::lenses::infra::{JsonLensAnswers, JsonLensCatalog};
@@ -187,6 +187,12 @@ impl Ctx {
         let scope_for_publishing = scope.clone();
         let scope_for_lines = scope.clone();
 
+        let review = GetReviewWithLenses::new(
+            GetReview::new(versions.clone(), scope.clone(), progress.clone()),
+            lens_catalog.clone(),
+            lens_answers.clone(),
+        );
+        let read = ListReadFiles::new(progress.clone(), scope.clone(), review.clone());
         let gate = PullRequestGate::new(publisher.clone(), scope.clone(), history.clone());
         let readiness = ReviewReadiness::new(
             gate.clone(),
@@ -195,14 +201,14 @@ impl Ctx {
             publisher.clone(),
             scope_for_publishing.clone(),
             host.clone(),
-            progress.clone(),
+            read.clone(),
         );
         let publish_review = PublishReview::new(
             comments.clone(),
             gate.clone(),
             publisher.clone(),
             scope_for_publishing,
-            progress.clone(),
+            read,
         );
         let close_thread = CloseThread::new(comments.clone(), publisher.clone());
         let write_pending = WritePending::new(comments.clone(), gate, publisher.clone());
@@ -266,11 +272,7 @@ impl Ctx {
             server: serving.map(|serving| ServerUseCases {
                 scope: GetScope::new(scope.clone()),
                 see_lens: SeeLens::new(lens_answers.clone(), progress.clone()),
-                review: GetReviewWithLenses::new(
-                    GetReview::new(versions, scope, progress.clone()),
-                    lens_catalog,
-                    lens_answers,
-                ),
+                review,
                 file_diff: GetFileDiff::new(diffs),
                 file_lines: GetFileLines::new(scope_for_lines),
                 mark_viewed: MarkViewed::new(progress.clone()),

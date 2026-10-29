@@ -470,17 +470,23 @@ pub fn server_use_cases_over(
         scope.clone(),
         CommitHistory::new(source.clone()),
     );
+    let review = crate::lenses::application::GetReviewWithLenses::new(
+        review,
+        Arc::new(InMemoryLensCatalog::default()),
+        Arc::new(InMemoryLensAnswers::default()),
+    );
+    let read = crate::lenses::application::ListReadFiles::new(
+        progress.clone(),
+        scope.clone(),
+        review.clone(),
+    );
     crate::cmd::ServerUseCases {
         scope: crate::map::application::GetScope::new(scope.clone()),
         see_lens: crate::lenses::application::SeeLens::new(
             Arc::new(InMemoryLensAnswers::default()),
             progress.clone(),
         ),
-        review: crate::lenses::application::GetReviewWithLenses::new(
-            review,
-            Arc::new(InMemoryLensCatalog::default()),
-            Arc::new(InMemoryLensAnswers::default()),
-        ),
+        review,
         file_diff: GetFileDiff::new(FileDiffs::new(source.clone())),
         file_lines: GetFileLines::new(scope.clone()),
         mark_viewed: MarkViewed::new(progress.clone()),
@@ -505,9 +511,9 @@ pub fn server_use_cases_over(
             publisher.clone(),
             scope.clone(),
             None,
-            progress.clone(),
+            read.clone(),
         ),
-        publish_review: PublishReview::new(comments.clone(), gate, publisher, scope, progress),
+        publish_review: PublishReview::new(comments.clone(), gate, publisher, scope, read),
         comments,
     }
 }

@@ -129,8 +129,12 @@ export default function App() {
   // comes after it rather than left on it for the next press to unfold.
   const markLens = useCallback(
     (lens: LensView, seen: boolean) => {
-      if (seen) goToPlace(unreadAfter(current));
-      return toggleSeen(lens, seen);
+      // After the server answers, not before: seeing a block's lenses can
+      // make its files read, and the next unread place is only known then.
+      const from = current;
+      return toggleSeen(lens, seen).then(() => {
+        if (seen) requestAnimationFrame(() => goToPlace(unreadAfter(from)));
+      });
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [current, toggleSeen],
