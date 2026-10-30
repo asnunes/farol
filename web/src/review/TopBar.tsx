@@ -11,7 +11,7 @@ import type { DiffView } from "@/hooks/useDiffView";
 import { GitHubMark } from "@/components/GitHubMark";
 import { Connection } from "@/review/Connection";
 import { ReviewMode } from "@/review/ReviewMode";
-import { CreatePullRequest } from "@/review/CreatePullRequest";
+import { CreatePullRequest } from "@/review/pull/CreatePullRequest";
 import { StopReview } from "@/review/StopReview";
 import { SubmitReview } from "@/review/SubmitReview";
 import type { GitHubState } from "@/hooks/useGitHub";
