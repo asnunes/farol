@@ -509,9 +509,22 @@ pub fn server_use_cases_over(
             modes,
             comments.clone(),
             publisher.clone(),
-            scope.clone(),
             None,
             read.clone(),
+            Arc::new(InMemoryPullDrafts::default()),
+        ),
+        open_pull_request: crate::comments::application::OpenPullRequest::new(
+            gate.clone(),
+            publisher.clone(),
+            Arc::new(RecordingPusher::default()),
+            scope.clone(),
+            Arc::new(InMemoryPullDrafts::default()),
+        ),
+        generate_pull_draft: crate::comments::application::GeneratePullDraft::new(
+            None,
+            Arc::new(crate::testing::InMemoryConfigRepository::default()),
+            ReviewModes::new(Arc::new(crate::testing::InMemoryModeStore::default())),
+            scope.clone(),
         ),
         publish_review: PublishReview::new(comments.clone(), gate, publisher, scope, read),
         comments,
@@ -833,6 +846,59 @@ impl crate::comments::domain::ReviewPublisher for FakePublisher {
         }
         self.marked.lock().unwrap().extend_from_slice(paths);
         Ok(paths.len())
+    }
+
+    fn open_pull(
+        &self,
+        base: &str,
+        branch: &str,
+        draft: &crate::comments::domain::PullDraft,
+    ) -> Result<crate::comments::domain::OpenedPull> {
+        self.calls
+            .lock()
+            .unwrap()
+            .push(format!("open {branch} into {base}: {}", draft.title));
+        Ok(crate::comments::domain::OpenedPull {
+            number: 13,
+            url: "https://example.test/pull/13".into(),
+        })
+    }
+}
+
+/// A pull request draft, remembered in memory.
+#[derive(Default)]
+pub struct InMemoryPullDrafts(Mutex<Option<crate::comments::domain::PullDraft>>);
+
+impl crate::comments::domain::PullDraftStore for InMemoryPullDrafts {
+    fn read(&self) -> Result<Option<crate::comments::domain::PullDraft>> {
+        Ok(self.0.lock().unwrap().clone())
+    }
+
+    fn write(&self, draft: &crate::comments::domain::PullDraft) -> Result<()> {
+        *self.0.lock().unwrap() = Some(draft.clone());
+        Ok(())
+    }
+
+    fn clear(&self) -> Result<()> {
+        *self.0.lock().unwrap() = None;
+        Ok(())
+    }
+}
+
+/// A push that only remembers which branches it was asked to send.
+#[derive(Default)]
+pub struct RecordingPusher(Mutex<Vec<String>>);
+
+impl RecordingPusher {
+    pub fn pushed(&self) -> Vec<String> {
+        self.0.lock().unwrap().clone()
+    }
+}
+
+impl crate::comments::domain::BranchPusher for RecordingPusher {
+    fn push(&self, branch: &str) -> Result<()> {
+        self.0.lock().unwrap().push(branch.to_string());
+        Ok(())
     }
 }
 

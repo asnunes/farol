@@ -1,11 +1,13 @@
 mod error;
 mod mode;
 mod publishing;
+mod pull_request;
 mod subject;
 
 pub use error::*;
 pub use mode::*;
 pub use publishing::*;
+pub use pull_request::*;
 pub use subject::*;
 
 use crate::error::Result;

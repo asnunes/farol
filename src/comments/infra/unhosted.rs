@@ -43,4 +43,13 @@ impl ReviewPublisher for Unhosted {
     fn mark_read(&self, _pull: &str, _paths: &[String]) -> Result<usize> {
         Err(CommentError::NoRemote.into())
     }
+
+    fn open_pull(
+        &self,
+        _base: &str,
+        _branch: &str,
+        _draft: &crate::comments::domain::PullDraft,
+    ) -> Result<crate::comments::domain::OpenedPull> {
+        Err(CommentError::NoRemote.into())
+    }
 }

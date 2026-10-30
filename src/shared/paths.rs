@@ -204,6 +204,12 @@ impl Store {
         self.root.join("state.json")
     }
 
+    /// What the pull request will say, before it is opened. In a folder of its
+    /// own so the watcher can tell the page a draft arrived.
+    pub fn pull_draft_file(&self) -> PathBuf {
+        self.root.join("pull-request").join("draft.json")
+    }
+
     /// Self or peer review, as chosen or as the pull request said.
     pub fn mode_file(&self) -> PathBuf {
         self.root.join("review-mode.json")

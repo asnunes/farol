@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use crate::comments::application::{Comments, PullRequestGate, ReviewModes};
 use crate::comments::domain::{ModeChoice, Readiness, RemoteState, ReviewPublisher};
-use crate::diff::application::ReviewScope;
 use crate::error::Result;
 
 /// Where the review stands with the pull request: whether there is one to
@@ -17,9 +16,9 @@ pub struct ReviewReadiness {
     modes: ReviewModes,
     comments: Comments,
     publisher: Arc<dyn ReviewPublisher>,
-    scope: ReviewScope,
     host: Option<String>,
     read: crate::lenses::application::ListReadFiles,
+    drafts: std::sync::Arc<dyn crate::comments::domain::PullDraftStore>,
 }
 
 impl ReviewReadiness {
@@ -28,23 +27,23 @@ impl ReviewReadiness {
         modes: ReviewModes,
         comments: Comments,
         publisher: Arc<dyn ReviewPublisher>,
-        scope: ReviewScope,
         host: Option<String>,
         read: crate::lenses::application::ListReadFiles,
+        drafts: std::sync::Arc<dyn crate::comments::domain::PullDraftStore>,
     ) -> Self {
         Self {
             pull,
             modes,
             comments,
             publisher,
-            scope,
             host,
             read,
+            drafts,
         }
     }
 
     pub fn execute(&self) -> Result<Standing> {
-        let scope = self.scope.get()?;
+        let branch = self.pull.branch()?;
         let readiness = self.pull.readiness()?;
         let mode = self.modes.detect(&readiness)?;
         let (pending, pending_failed) = match readiness.can_send() {
@@ -58,12 +57,20 @@ impl ReviewReadiness {
         };
         Ok(Standing {
             host: self.host.clone(),
-            branch: scope.branch.clone(),
-            readiness,
+            branch,
             mode,
             pending,
             pending_failed,
             read: self.read.execute()?,
+            // Only while there is a pull request to open: once it exists, the
+            // draft has said what it had to.
+            draft: match readiness {
+                Readiness::NoPullRequest { .. } | Readiness::BranchNotPushed => {
+                    self.drafts.read()?
+                }
+                _ => None,
+            },
+            readiness,
         })
     }
 
@@ -106,6 +113,8 @@ pub struct Standing {
     /// Why the pending comments could not be read, when they could not.
     pub pending_failed: Option<String>,
     pub read: Vec<String>,
+    /// What the pull request will say, while there is none to open yet.
+    pub draft: Option<crate::comments::domain::PullDraft>,
 }
 
 /// One thread's pending comment, as the pull request has it.

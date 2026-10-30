@@ -87,6 +87,15 @@ export const api = {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ verdict, summary }),
     }).then(json<SentView>),
+  /** Pushes the branch first when the host has not seen it. */
+  openPull: (title: string, body: string) =>
+    fetch("/api/github/pull", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title, body }),
+    }).then(json<OpenedPullView>),
+  /** The agent writes the draft back; it arrives with `PullRequestView.draft`. */
+  generatePullDraft: () => send("/api/github/pull/draft", "POST"),
 };
 
 /** The page, top to bottom: each block announced, then the files it holds, then
@@ -362,7 +371,14 @@ export type PullRequestView = {
   /** By thread id. */
   pending: Record<string, RemotePendingView>;
   pendingFailed: string | null;
+  /** What the pull request will say, while there is none open. */
+  draft: PullDraftView | null;
 };
+
+export type PullDraftView = { title: string; body: string };
+
+/** The pull request the host just opened. */
+export type OpenedPullView = { number: number; url: string };
 
 export type ReviewMode = "self" | "peer";
 

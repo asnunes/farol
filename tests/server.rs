@@ -1774,10 +1774,11 @@ fn browser_and_cli_share_preferences_without_restarting_the_server() {
     let s = Serving::new();
     let response = s.json("/api/config");
     let fields = response["settings"].as_array().unwrap();
-    assert_eq!(fields.len(), 2 + usize::from(cfg!(target_os = "macos")));
-    let instruction = &fields[fields.len() - 2];
+    assert_eq!(fields.len(), 3 + usize::from(cfg!(target_os = "macos")));
+    let instruction = &fields[fields.len() - 3];
     assert_eq!(instruction["key"], "send_instruction");
-    assert_eq!(fields.last().unwrap()["key"], "pending_instruction");
+    assert_eq!(fields[fields.len() - 2]["key"], "pending_instruction");
+    assert_eq!(fields.last().unwrap()["key"], "pull_request_instruction");
     assert_eq!(instruction["type"], "text");
     assert_eq!(instruction["value"], instruction["default"]);
     if cfg!(target_os = "macos") {

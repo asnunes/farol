@@ -31,6 +31,12 @@ impl Config {
         self.text(&PENDING_INSTRUCTION)
     }
 
+    /// What the agent follows when it writes a pull request's title and
+    /// description.
+    pub fn pull_request_instruction(&self) -> &str {
+        self.text(&PULL_REQUEST_INSTRUCTION)
+    }
+
     pub fn value(&self, definition: &SettingDefinition) -> SettingValue {
         self.0
             .get(definition.key)
@@ -142,7 +148,12 @@ pub struct SettingDefinition {
 
 impl SettingDefinition {
     pub fn all() -> &'static [Self] {
-        &[OPEN_BROWSER, SEND_INSTRUCTION, PENDING_INSTRUCTION]
+        &[
+            OPEN_BROWSER,
+            SEND_INSTRUCTION,
+            PENDING_INSTRUCTION,
+            PULL_REQUEST_INSTRUCTION,
+        ]
     }
 }
 
@@ -234,6 +245,18 @@ const PENDING_INSTRUCTION: SettingDefinition = SettingDefinition {
     ),
     kind: SettingKind::Text {
         default: "Write it as a review comment for the author of the pull request: say what to change and why, kindly and briefly, without repeating the conversation.",
+    },
+    visible: true,
+};
+
+const PULL_REQUEST_INSTRUCTION: SettingDefinition = SettingDefinition {
+    key: "pull_request_instruction",
+    title: "Instruction for generated pull requests",
+    description: Some(
+        "What the agent follows when you press Generate in Create pull request. Farol always includes the branch, the base and how to write the title and description back.",
+    ),
+    kind: SettingKind::Text {
+        default: "Write the title as plain text saying what the change does, with no prefix such as feat or fix. Write the description as a summary of two or three sentences, then a short list of the main changes, five at most. Leave out test plans, file lists and emojis.",
     },
     visible: true,
 };

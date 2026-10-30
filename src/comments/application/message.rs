@@ -61,6 +61,18 @@ fn shown(comment: &Comment) -> String {
     }
 }
 
+/// Asking for the pull request's title and description.
+///
+/// The command that brings them back is fixed, like the others: without it the
+/// draft would only ever reach the agent's terminal. Opening the pull request
+/// is the reviewer's to do, from the page, so the agent is told not to.
+pub fn pull_draft(branch: &str, base: &str, mode: ReviewMode, instruction: &str) -> String {
+    let text = format!(
+        "A reviewer wants to open a pull request for {branch} into {base} from farol, and asks you to write its title and description. Read the change with `git diff {base}...{branch}`, and the map with `farol map show` when there is one.\n\nWrite them with `farol github draft --title '…' --text '…'`, in single quotes: the reviewer reads and edits them in farol before opening the pull request. Do not open the pull request, push or post anything yourself."
+    );
+    finish(text, &[instruction], mode)
+}
+
 /// The conversation under the question, oldest first.
 fn conversation(comment: &Comment) -> String {
     if comment.conversation.replies.is_empty() {

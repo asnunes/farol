@@ -99,6 +99,15 @@ pub enum CommentError {
     )]
     NotOnCode { id: String, about: String },
 
+    #[error("could not push {branch} to origin: {why}\nPush it from a terminal, then try again.")]
+    PushRefused { branch: String, why: String },
+
+    #[error("a pull request is already open for {branch}: #{number}")]
+    AlreadyOpen { branch: String, number: u32 },
+
+    #[error("a pull request needs a title.")]
+    NoTitle,
+
     #[error("thread {id} has no pending comment — write one first")]
     NoPending { id: String },
 

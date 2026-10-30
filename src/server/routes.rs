@@ -54,6 +54,8 @@ pub(super) fn router(state: Arc<AppState>) -> Router {
         )
         .route("/api/github", get(github::pull_request))
         .route("/api/github/review", post(github::submit_review))
+        .route("/api/github/pull", post(github::open_pull))
+        .route("/api/github/pull/draft", post(github::generate_pull_draft))
         .route("/api/mode", put(github::choose_mode))
         .route_layer(middleware::from_fn_with_state(state.clone(), resolve))
         .route(

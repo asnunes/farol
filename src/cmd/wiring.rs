@@ -10,12 +10,14 @@ use std::sync::Arc;
 use crate::agent::domain::AgentChannel;
 use crate::agent::infra::{AgentAddress, ClaudeSocket, CodexQueue};
 use crate::comments::application::{
-    ChooseMode, CloseThread, CommentReach, Comments, EditPending, GeneratePending, PublishReview,
-    PullRequestGate, RemovePending, ReviewModes, ReviewReadiness, SendComment, WritePending,
+    ChooseMode, CloseThread, CommentReach, Comments, EditPending, GeneratePending,
+    GeneratePullDraft, OpenPullRequest, PublishReview, PullRequestGate, RemovePending, ReviewModes,
+    ReviewReadiness, SendComment, WritePending, WritePullDraft,
 };
-use crate::comments::domain::ReviewPublisher;
+use crate::comments::domain::{BranchPusher, PullDraftStore, ReviewPublisher};
 use crate::comments::infra::{
-    GhCredentials, GitHub, JsonModeStore, Logins, MarkdownComments, Unhosted,
+    GhCredentials, GitHub, GitPush, JsonModeStore, JsonPullDraft, Logins, MarkdownComments,
+    Unhosted,
 };
 use crate::config::domain::ConfigRepository;
 use crate::config::infra::JsonConfigRepository;
@@ -78,6 +80,7 @@ pub struct Ctx {
     pub choose_mode: ChooseMode,
     pub readiness: ReviewReadiness,
     pub publish_review: PublishReview,
+    pub write_pull_draft: WritePullDraft,
 
     pub write_answer: WriteAnswer,
     pub keep_answer: KeepAnswer,
@@ -112,6 +115,8 @@ pub struct ServerUseCases {
     pub choose_mode: ChooseMode,
     pub readiness: ReviewReadiness,
     pub publish_review: PublishReview,
+    pub open_pull_request: OpenPullRequest,
+    pub generate_pull_draft: GeneratePullDraft,
 }
 
 /// What a server adds to a context: the session it reports to, and where the
@@ -144,11 +149,13 @@ impl Ctx {
         let remote = workspace.remote();
 
         let comment_store = Arc::new(MarkdownComments::new(&workspace.store(), &root));
+        let pusher: Arc<dyn BranchPusher> = Arc::new(GitPush::new(workspace.root()));
         // Read here by the CLI too: the session writes answers from the terminal
         // and each one is checked against the user's lenses.
         let lens_catalog = lens_catalog()?;
         let lens_answers = Arc::new(JsonLensAnswers::new(workspace.store().lenses_dir()));
         let modes = ReviewModes::new(Arc::new(JsonModeStore::new(workspace.store())));
+        let drafts: Arc<dyn PullDraftStore> = Arc::new(JsonPullDraft::new(workspace.store()));
         let maps = Arc::new(JsonMapRepository::new(workspace.store()));
         let maps_for_sharing = maps.clone();
         let progress_repo = Arc::new(JsonProgressRepository::new(workspace.store()));
@@ -199,9 +206,9 @@ impl Ctx {
             modes.clone(),
             comments.clone(),
             publisher.clone(),
-            scope_for_publishing.clone(),
             host.clone(),
             read.clone(),
+            drafts.clone(),
         );
         let publish_review = PublishReview::new(
             comments.clone(),
@@ -209,6 +216,13 @@ impl Ctx {
             publisher.clone(),
             scope_for_publishing,
             read,
+        );
+        let open_pull_request = OpenPullRequest::new(
+            gate.clone(),
+            publisher.clone(),
+            pusher,
+            scope.clone(),
+            drafts.clone(),
         );
         let close_thread = CloseThread::new(comments.clone(), publisher.clone());
         let write_pending = WritePending::new(comments.clone(), gate, publisher.clone());
@@ -263,6 +277,7 @@ impl Ctx {
             choose_mode: choose_mode.clone(),
             readiness: readiness.clone(),
             publish_review: publish_review.clone(),
+            write_pull_draft: WritePullDraft::new(drafts),
 
             keep_answer: KeepAnswer::new(lens_answers.clone(), write_answer.clone()),
             write_answer,
@@ -283,6 +298,12 @@ impl Ctx {
                     serving.config.clone(),
                     modes.clone(),
                 ),
+                generate_pull_draft: GeneratePullDraft::new(
+                    serving.agent.as_ref().map(channel),
+                    serving.config.clone(),
+                    modes.clone(),
+                    scope.clone(),
+                ),
                 generate_pending: GeneratePending::new(
                     comments.clone(),
                     serving.agent.as_ref().map(channel),
@@ -290,6 +311,7 @@ impl Ctx {
                     modes,
                     publisher,
                 ),
+                open_pull_request,
                 comments,
                 close_thread,
                 write_pending,

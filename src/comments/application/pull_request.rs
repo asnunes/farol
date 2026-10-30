@@ -33,6 +33,12 @@ impl PullRequestGate {
         }
     }
 
+    /// The branch under review, which every answer about the pull request is
+    /// about.
+    pub fn branch(&self) -> Result<String> {
+        Ok(self.scope.get()?.branch.clone())
+    }
+
     /// What the host says, as it says it.
     pub fn readiness(&self) -> Result<Readiness> {
         let scope = self.scope.get()?;
