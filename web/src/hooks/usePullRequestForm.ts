@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { GitHubState } from "@/hooks/useGitHub";
 import type { PullDraftView } from "@/api";
 
@@ -14,9 +14,13 @@ export function usePullRequestForm(draft: PullDraftView | null, github: GitHubSt
   const [body, setBody] = useState("");
   const [asked, setAsked] = useState(false);
   const [creating, setCreating] = useState(false);
+  // The draft there was when Generate was pressed. Only a different one is
+  // the answer: the old one is still there the moment the agent is asked, and
+  // taking it would fill the form with what it already said.
+  const before = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!draft || !asked) return;
+    if (!draft || !asked || said(draft) === before.current) return;
     setTitle(draft.title);
     setBody(draft.body);
     setAsked(false);
@@ -36,7 +40,10 @@ export function usePullRequestForm(draft: PullDraftView | null, github: GitHubSt
         setBody(draft.body);
       }
     },
-    generate: async () => setAsked(await github.generatePullDraft()),
+    generate: async () => {
+      before.current = draft ? said(draft) : null;
+      setAsked(await github.generatePullDraft());
+    },
     /** True once the pull request is open. */
     create: async () => {
       setCreating(true);
@@ -48,3 +55,8 @@ export function usePullRequestForm(draft: PullDraftView | null, github: GitHubSt
 }
 
 export type PullRequestForm = ReturnType<typeof usePullRequestForm>;
+
+/** A draft as text, to tell a new one from the one already there. */
+function said(draft: PullDraftView): string {
+  return `${draft.title}\n${draft.body}`;
+}

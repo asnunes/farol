@@ -62,3 +62,25 @@ it("starts from the agent's draft and asks for a new one with Generate", () => {
   fireEvent.click(screen.getByRole("button", { name: "Generate" }));
   expect(gh.generatePullDraft).toHaveBeenCalled();
 });
+
+it("waits for a new draft after Generate instead of taking the one already there", async () => {
+  const gh = github();
+  const old = pull({ openAt: "x", draft: { title: "Old", body: "Old." } });
+  const { rerender } = render(<CreatePullRequest pull={old} branch="feature/x" agent="Claude Code" github={gh} />);
+
+  fireEvent.click(screen.getByRole("button", { name: "Create pull request…" }));
+  fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Mine" } });
+  fireEvent.click(screen.getByRole("button", { name: "Generate" }));
+  await waitFor(() => expect(screen.getByRole("button", { name: /Asked Claude Code/ })).toBeTruthy());
+  expect((screen.getByLabelText("Title") as HTMLInputElement).value, "the old draft is not the answer").toBe("Mine");
+
+  rerender(
+    <CreatePullRequest
+      pull={pull({ openAt: "x", draft: { title: "New", body: "New." } })}
+      branch="feature/x"
+      agent="Claude Code"
+      github={gh}
+    />,
+  );
+  await waitFor(() => expect((screen.getByLabelText("Title") as HTMLInputElement).value).toBe("New"));
+});
