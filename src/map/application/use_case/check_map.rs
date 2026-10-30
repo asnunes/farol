@@ -2,9 +2,10 @@ use crate::diff::application::ReviewScope;
 use crate::error::Result;
 use crate::map::application::MapVersions;
 
-/// Focus is the exception: past these, the map has stopped choosing.
-pub const FOCUS_PER_REVIEW: usize = 3;
-pub const FOCUS_PER_BLOCK: usize = 1;
+/// About how many files a block opens before it stops choosing: its core,
+/// rarely more. A guide the check mentions, never a limit — a pull request
+/// has as many cores as it has blocks.
+pub const FOCUS_PER_BLOCK: usize = 2;
 
 /// What the self-test found.
 #[derive(Debug, Default)]
@@ -12,9 +13,9 @@ pub struct CheckReport {
     pub uncovered: Vec<String>,
     pub pending_orphans: usize,
     pub commits_behind: u32,
-    /// Where the map puts more in focus than the limits allow. A warning, not
-    /// a failure: the map is still readable, it is just asking for too much.
-    pub too_much_focus: Vec<String>,
+    /// Blocks that open nothing, or a lot. Hints, not failures: the map is
+    /// still readable, it is just showing too little or too much.
+    pub focus_hints: Vec<String>,
 }
 
 impl CheckReport {
@@ -53,25 +54,26 @@ impl CheckMap {
                 .collect(),
             pending_orphans: map.orphans().len(),
             commits_behind: self.versions.behind(&map),
-            too_much_focus: too_much_focus(&map),
+            focus_hints: focus_hints(&map),
         })
     }
 }
 
-fn too_much_focus(map: &crate::map::domain::ReviewMap) -> Vec<String> {
-    let in_focus =
-        |b: &crate::map::domain::Block| b.files.iter().filter(|f| f.focus.is_some()).count();
-    let mut out: Vec<String> = map
-        .blocks()
+/// Every block shows its core, and little more. A block that opens nothing
+/// is either missing its core or is not a block at all; one that opens many
+/// has stopped choosing.
+fn focus_hints(map: &crate::map::domain::ReviewMap) -> Vec<String> {
+    map.blocks()
         .iter()
-        .filter(|b| in_focus(b) > FOCUS_PER_BLOCK)
-        .map(|b| format!("block '{}' has {} files in focus", b.slug, in_focus(b)))
-        .collect();
-    let total: usize = map.blocks().iter().map(in_focus).sum();
-    if total > FOCUS_PER_REVIEW {
-        out.insert(0, format!("the review has {total} files in focus"));
-    }
-    out
+        .filter_map(|b| {
+            let open = b.files.iter().filter(|f| f.focus.is_some()).count();
+            match open {
+                0 => Some(format!("block '{}' opens no file", b.slug)),
+                n if n > FOCUS_PER_BLOCK => Some(format!("block '{}' opens {n} files", b.slug)),
+                _ => None,
+            }
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -180,22 +182,24 @@ mod tests {
     }
 
     #[test]
-    fn focus_past_the_limits_is_a_warning_and_not_a_failure() {
+    fn a_block_that_opens_nothing_or_many_files_is_a_hint_and_not_a_failure() {
         let paths = ["a.rs", "b.rs", "c.rs", "d.rs"];
         let (svc, scope) = use_case_setup(&paths);
         svc.editor
             .edit(|map| {
-                for (block, path) in [
-                    ("one", "a.rs"),
-                    ("one", "b.rs"),
-                    ("two", "c.rs"),
-                    ("three", "d.rs"),
+                for (block, path, core) in [
+                    ("wide", "a.rs", true),
+                    ("wide", "b.rs", true),
+                    ("wide", "c.rs", true),
+                    ("bare", "d.rs", false),
                 ] {
                     if map.block(&slug(block)).is_none() {
                         map.add_block(&slug(block), "t", "c", crate::map::domain::Position::End)?;
                     }
                     map.add_file(&slug(block), path, None, None)?;
-                    map.focus(&slug(block), path, Some("why".into()))?;
+                    if core {
+                        map.focus(&slug(block), path, Some("why".into()))?;
+                    }
                 }
                 Ok::<_, MapError>(())
             })
@@ -204,15 +208,12 @@ mod tests {
         let report = CheckMap::new(svc.versions, scope).execute().unwrap();
 
         assert_eq!(
-            report.too_much_focus,
-            vec![
-                "the review has 4 files in focus",
-                "block 'one' has 2 files in focus"
-            ]
+            report.focus_hints,
+            vec!["block 'wide' opens 3 files", "block 'bare' opens no file"]
         );
         assert!(
             report.passed(),
-            "too much focus warns; it does not block the skill"
+            "a hint about what is open never blocks the skill"
         );
     }
 }

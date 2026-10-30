@@ -68,6 +68,11 @@ Do not force a file into a thematic block just to avoid leftovers.
 A misleading grouping is worse than acknowledging that a change stands
 apart.
 
+Every block has a core: the file, or the few files, that carry the
+block's intent, where the change it describes is actually made. If you
+cannot name one, the block has nothing worth showing and is not a
+block: move its files to the block whose change caused them.
+
 ## Choose the reading order
 
 To understand this, what does the reviewer need to have understood already?
@@ -253,29 +258,33 @@ applies to the whole block, move that explanation to the block context.
 
 Do not invent a decision to fill an otherwise unexplained file.
 
-## Put in focus what is worth opening
+## Put in focus the core of each block
 
 Every file starts folded: the reader learns the change from the map and
-the lenses, and opens the code when they want to check it. Put in focus the files that deserve to be opened anyway, and say
-why:
+the lenses, and opens the code when they want to check it. What stays
+open is the core of each block, put in focus with the reason it is the
+core:
 
     farol file focus <slug> <path> --reason '…'
     farol file unfocus <slug> <path>
 
-No file in focus is the default, and a map without focus is right. A
-file earns focus only when, after the lenses, reading its code could
-still change whether the reviewer approves:
+The core is the file that carries the block's intent: the one a reader
+would have to open to check that the change does what the block says.
+Usually one file, sometimes two when the change is split evenly between
+them, rarely more. Aim for few: a block that opens most of its files has
+stopped choosing. There is no limit per pull request, because a large
+pull request has more blocks and so more cores, and a limit would hide
+exactly what matters in it.
 
-- it holds the rule the whole change rests on;
-- it has a subtlety a summary loses: ordering, concurrency, state, a
-  boundary;
-- a mistake in it is hard to undo: money, authentication, deleted data,
-  migrations.
+Never open a file whose change says itself: a rename, a deleted file, an
+import, a test fixture following a new field. Being large, new or a test
+does not make a file the core on its own.
 
-Size, being new, being a test, config or wiring never earns focus on
-their own. At most three per pull request and one per block; `farol map
-check` warns past that. The reason names which, concretely, so the
-reader can decide whether to follow it:
+`farol map check` mentions a block that opens nothing and a block that
+opens many files. It is a hint, not a refusal.
+
+The reason says why this file is the core, concretely, so the reader
+can decide whether to follow it:
 
 - Vague: "Important file."
 - Concrete: "Holds the whole retry rule; the rest only calls it."
@@ -283,8 +292,8 @@ reader can decide whether to follow it:
 - Concrete: "A retry here can resend a charge the provider accepted."
 
 Inspect a file before putting it in focus, and never do it to make up
-for a lens that explains it badly: fix the lens. A smell is not
-focus: the Smell lens opens the file with `--open` (see Write the
+for a lens that explains it badly: fix the lens. A smell is not the
+core: the Smell lens opens the file with `--open` (see Write the
 lenses).
 
 ## Write for someone arriving without context
@@ -370,8 +379,8 @@ Check that:
 - Inferred reasons are identified as inference.
 - Notes explain choices and their consequences without endorsing them
   or turning into review findings.
-- The files in focus are few, and each reason says
-  concretely why opening it pays.
+- Every block opens its core, few files in all, and each reason says
+  concretely why that file is the core.
 - Mechanical changes sit in the block of the decision they follow, not
   in a block of their own with nothing to explain.
 - Titles, terminology, and sentences make sense without private
