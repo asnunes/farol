@@ -69,8 +69,8 @@ existing map.
 - Add context for new decisions that affect the code.
 - Revise explanations whose reasons or consequences changed.
 - Add newly introduced files and place them in reading order.
-- Revisit each block's core, the files in focus, when a file gains or
-  loses the change the block is about.
+- Revisit the files in focus when a file gains or loses the change the
+  block is about. Focus is optional: only code worth checking.
 - Remove or revise explanations that no longer describe the code.
 
 Preserve context that remains accurate. A new commit does not require

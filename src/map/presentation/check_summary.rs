@@ -45,7 +45,7 @@ impl Display for CheckSummary<'_> {
             )?;
             writeln!(
                 f,
-                "Each block opens its core, the file that carries its intent, and rarely more than {FOCUS_PER_BLOCK}.\nA block with nothing worth opening is not a block: move its files to the block that caused them."
+                "A block opens the code worth checking, rarely more than {FOCUS_PER_BLOCK} files."
             )?;
         }
 

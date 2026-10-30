@@ -59,19 +59,15 @@ impl CheckMap {
     }
 }
 
-/// Every block shows its core, and little more. A block that opens nothing
-/// is either missing its core or is not a block at all; one that opens many
-/// has stopped choosing.
+/// A block that opens many files has stopped choosing. One that opens none is
+/// not flagged: focus is for code worth checking, and asking for it everywhere
+/// put a markdown file in focus to satisfy the hint.
 fn focus_hints(map: &crate::map::domain::ReviewMap) -> Vec<String> {
     map.blocks()
         .iter()
         .filter_map(|b| {
             let open = b.files.iter().filter(|f| f.focus.is_some()).count();
-            match open {
-                0 => Some(format!("block '{}' opens no file", b.slug)),
-                n if n > FOCUS_PER_BLOCK => Some(format!("block '{}' opens {n} files", b.slug)),
-                _ => None,
-            }
+            (open > FOCUS_PER_BLOCK).then(|| format!("block '{}' opens {open} files", b.slug))
         })
         .collect()
 }
@@ -209,7 +205,8 @@ mod tests {
 
         assert_eq!(
             report.focus_hints,
-            vec!["block 'wide' opens 3 files", "block 'bare' opens no file"]
+            vec!["block 'wide' opens 3 files"],
+            "a block with nothing in focus is fine: focus is a recommendation"
         );
         assert!(
             report.passed(),
