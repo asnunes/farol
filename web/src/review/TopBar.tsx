@@ -143,11 +143,14 @@ export function TopBar({
                 <Button
                   asChild
                   variant="ghost"
-                  size="icon-xs"
-                  className="open-pull text-ink-muted hover:bg-sunken hover:text-ink"
+                  size="xs"
+                  className="open-pull gap-1.5 font-sans text-xs text-ink-muted hover:bg-sunken hover:text-ink"
                 >
+                  {/* Named, not only the mark: the logo alone did not say it was
+                      the pull request it opened. */}
                   <a href={pull.url} target="_blank" rel="noreferrer" aria-label="Open PR on GitHub">
                     <GitHubMark className="size-4" />
+                    Pull request
                   </a>
                 </Button>
               </TooltipTrigger>
