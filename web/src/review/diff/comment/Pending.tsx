@@ -11,11 +11,15 @@ import type { CommentView, RemotePendingView } from "@/api";
  * A card of its own under the thread, as the approved mockup draws it: the
  * state is a small pill with a dot — amber while it waits, green once it went
  * — and nothing else is coloured, so the card reads as the thread's outcome
- * rather than as the point of the thread. */
-export function Pending({ comment, remote, actions, busy }: PendingProps) {
+ * rather than as the point of the thread.
+ *
+ * Drawn the same with no thread above it, for a comment written on the pull
+ * request's page or left by a thread that was closed: then it goes by its own
+ * id, and there is no conversation to ask the agent from. */
+export function Pending({ id, thread, remote, actions, busy }: PendingProps) {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState("");
-  const by = comment.pending?.name ?? "you";
+  const by = thread?.pending?.name ?? "you";
 
   if (remote === undefined) {
     return (
@@ -33,7 +37,7 @@ export function Pending({ comment, remote, actions, busy }: PendingProps) {
           variant="link"
           size="xs"
           className="h-auto p-0 text-xs text-comment-ink underline"
-          onClick={() => void actions.removePending(comment.id)}
+          onClick={() => void actions.removePending(id)}
         >
           Forget it
         </Button>
@@ -119,14 +123,15 @@ export function Pending({ comment, remote, actions, busy }: PendingProps) {
           {/* What the agent wrote can be written again; what the reviewer
               wrote is theirs, and the agent is asked about it instead. */}
           {actions.agent &&
-            (comment.pending?.by === "agent" ? (
-              <Generate label="Regenerate" onGenerate={(note) => actions.generate(comment.id, note)} />
+            thread &&
+            (thread.pending?.by === "agent" ? (
+              <Generate label="Regenerate" onGenerate={(note) => actions.generate(thread.id, note)} />
             ) : (
               <Button
                 variant="outline"
                 size="xs"
                 className="h-6 px-2 font-sans"
-                onClick={() => void actions.send(comment.id)}
+                onClick={() => void actions.send(thread.id)}
               >
                 Ask {actions.agent} about it
               </Button>
@@ -135,7 +140,7 @@ export function Pending({ comment, remote, actions, busy }: PendingProps) {
             variant="ghost"
             size="xs"
             className="h-6 px-2 font-sans text-ink-muted"
-            onClick={() => void actions.removePending(comment.id)}
+            onClick={() => void actions.removePending(id)}
           >
             Remove
           </Button>
@@ -146,12 +151,15 @@ export function Pending({ comment, remote, actions, busy }: PendingProps) {
 
   async function save() {
     if (!text.trim()) return;
-    if (await actions.editPending(comment.id, text)) setEditing(false);
+    if (await actions.editPending(id, text)) setEditing(false);
   }
 }
 
 type PendingProps = {
-  comment: CommentView;
+  /** What edits and removals go by: the thread's id, or the comment's own. */
+  id: string;
+  /** The thread it came out of, when one still points at it. */
+  thread: CommentView | null;
   /** Undefined until GitHub has answered. */
   remote: RemotePendingView | undefined;
   actions: CommentActions;

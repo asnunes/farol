@@ -42,7 +42,7 @@ describe("a comment on the page", () => {
     fireEvent.click(screen.getByLabelText("Close this thread"));
     fireEvent.click(screen.getByLabelText("Press again to close this thread"));
 
-    expect(actions.close).toHaveBeenCalledWith("18cb-3731", false);
+    expect(actions.close).toHaveBeenCalledWith("18cb-3731");
   });
 
   it("copies where it was and what it said, in one paste", () => {
@@ -262,7 +262,7 @@ describe("a comment on the page", () => {
       expect(actions.writePending).toHaveBeenCalledWith("18cb-3731", "Rename it.");
     });
 
-    it("shows the pending comment as GitHub has it, and closing takes it along", () => {
+    it("shows the pending comment as GitHub has it, and closing leaves it on the pull request", () => {
       const actions = {
         ...peer(),
         pendingOf: () => ({ state: "pending" as const, body: "Please rename it.", url: null }),
@@ -277,7 +277,8 @@ describe("a comment on the page", () => {
 
       fireEvent.click(screen.getByLabelText("Close this thread"));
       fireEvent.click(screen.getByLabelText("Press again to close this thread"));
-      expect(actions.close).toHaveBeenCalledWith("18cb-3731", true);
+      expect(actions.close).toHaveBeenCalledWith("18cb-3731");
+      expect(actions.removePending).not.toHaveBeenCalled();
     });
 
     it("offers nothing to change on a comment that went with the review", () => {

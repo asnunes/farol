@@ -32,6 +32,11 @@ pub trait ReviewPublisher: Send + Sync {
     /// What the host holds for these comment ids, in the same order.
     fn remote(&self, ids: &[String]) -> Result<Vec<RemoteComment>>;
 
+    /// Every comment in the reviewer's pending review on `pull`, wherever it
+    /// was written: here, on the pull request's page, or by a thread that has
+    /// since been closed. The pending review is the list; farol keeps none.
+    fn pending_comments(&self, pull: &str) -> Result<Vec<PendingComment>>;
+
     /// Submit the pending review with the verdict and summary, or post the
     /// verdict alone when nothing is pending. Answers with where it landed.
     fn submit(&self, review: &Review) -> Result<String>;
@@ -49,6 +54,14 @@ pub trait ReviewPublisher: Send + Sync {
     /// Open a pull request from `branch` into `base`. The branch has to be on
     /// the host already.
     fn open_pull(&self, base: &str, branch: &str, draft: &PullDraft) -> Result<OpenedPull>;
+}
+
+/// A comment in the pending review, with the lines it is on.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PendingComment {
+    pub id: String,
+    pub body: String,
+    pub at: Lines,
 }
 
 /// One comment as the host has it.

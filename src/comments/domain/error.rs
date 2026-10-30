@@ -112,11 +112,6 @@ pub enum CommentError {
     NoPending { id: String },
 
     #[error(
-        "thread {id} still has a pending comment on the pull request\nRemove it with `farol pending remove {id}`, or submit the review, before closing the thread."
-    )]
-    PendingStillOpen { id: String },
-
-    #[error(
         "the pending comment of thread {id} was already submitted with a review, so it can no longer change"
     )]
     AlreadyPublished { id: String },

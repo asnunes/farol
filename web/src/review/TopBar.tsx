@@ -38,7 +38,7 @@ export function TopBar({
   const pull = github.pull;
   const peer = pull?.mode.mode === "peer";
   const pending = pull
-    ? threads.filter((thread) => pull.pending[thread.id]?.state === "pending").length
+    ? threads.filter((thread) => pull.pending[thread.id]?.state === "pending").length + pull.loose.length
     : 0;
 
   return (

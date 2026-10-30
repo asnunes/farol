@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, type CommentsView, type CommentView, type NewAbout, type RemotePendingView } from "@/api";
+import {
+  api,
+  type CommentsView,
+  type CommentView,
+  type LoosePendingView,
+  type NewAbout,
+  type RemotePendingView,
+} from "@/api";
 import type { GitHubState } from "@/hooks/useGitHub";
 import { onNudge } from "@/lib/watch";
 import { said } from "@/lib/utils";
@@ -106,7 +113,7 @@ export function useComments(
     /** Threads whose lines the diff no longer shows. */
     drifted: found.drifted,
     add: (about: NewAbout, body: string) => write(api.addComment(about, body)),
-    close: (id: string, discardPending = false) => write(api.closeComment(id, discardPending)),
+    close: (id: string) => write(api.closeComment(id)),
     /** Write back under a comment, and with `andSend` hand the conversation on. */
     reply: (id: string, body: string, andSend: boolean) =>
       write(
@@ -126,6 +133,8 @@ export function useComments(
     /** The thread's pending comment as GitHub has it, when it has one and
      * GitHub has answered. */
     pendingOf: (id: string): RemotePendingView | undefined => pull?.pending[id],
+    /** A file's pending comments that no thread points at. */
+    looseOn: (path: string): LoosePendingView[] => pull?.loose.filter((one) => one.path === path) ?? [],
     writePending: (id: string, body: string) => write(api.writePending(id, body)),
     editPending: (id: string, body: string) => write(api.editPending(id, body)),
     removePending: (id: string) => write(api.removePending(id)),

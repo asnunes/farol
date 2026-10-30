@@ -20,6 +20,7 @@ export function noComments(): CommentActions {
     all: [],
     pendingOffered: false,
     pendingOf: () => undefined,
+    looseOn: () => [],
     writePending: vi.fn().mockResolvedValue(true),
     editPending: vi.fn().mockResolvedValue(true),
     removePending: vi.fn().mockResolvedValue(true),

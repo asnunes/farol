@@ -11,7 +11,7 @@ import type { CommentView } from "@/api";
 
 /** The line a thread opens on: where it is, what was asked, and what can be
  * done to the thread as a whole — send it, copy it, close it, fold it. */
-export function Question({ comment, actions, minimized, offerUse, discardsPending }: QuestionProps) {
+export function Question({ comment, actions, minimized, offerUse }: QuestionProps) {
   return (
     <div className="flex items-start gap-2 md:gap-3">
       <span className="lbl mt-0.5 shrink-0 font-mono text-xs text-comment-ink">
@@ -34,7 +34,7 @@ export function Question({ comment, actions, minimized, offerUse, discardsPendin
           <Send comment={comment} agent={actions.agent} actions={actions} held={held(comment)} />
         )}
         <Copy comment={comment} />
-        <Close comment={comment} actions={actions} discardsPending={discardsPending} />
+        <Close comment={comment} actions={actions} />
         {/* Folds the thread to its question, for a reader who is done with it
             for now; the activity box opens it again when something arrives. */}
         <Button
@@ -71,8 +71,6 @@ type QuestionProps = {
   minimized: boolean;
   /** Whether the question itself may become the pending comment. */
   offerUse: boolean;
-  /** The thread's pending comment is still on the pull request, and goes too. */
-  discardsPending: boolean;
 };
 
 /** The lines a thread is on, or what it is about when it sits on no line. */

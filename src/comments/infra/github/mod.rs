@@ -12,8 +12,8 @@ use std::sync::Arc;
 use serde::Serialize;
 
 use crate::comments::domain::{
-    CommentError, Credentials, Lines, OpenedPull, PullDraft, Readiness, RemoteComment, RemoteState,
-    Review, ReviewPublisher,
+    CommentError, Credentials, Lines, OpenedPull, PendingComment, PullDraft, Readiness,
+    RemoteComment, RemoteState, Review, ReviewPublisher,
 };
 use crate::error::Result;
 use crate::shared::paths::Remote;
@@ -220,6 +220,21 @@ impl ReviewPublisher for GitHub {
                     .unwrap_or(RemoteState::Gone),
             })
             .collect())
+    }
+
+    /// Read off the review threads rather than the pending review, because
+    /// only a thread knows which side of the diff it is on, and a comment
+    /// without its side could land on either.
+    fn pending_comments(&self, pull: &str) -> Result<Vec<PendingComment>> {
+        let token = self.token()?;
+        let data =
+            self.graphql_call(&token, PENDING_THREADS, serde_json::json!({ "pull": pull }))?;
+        let threads = data
+            .pointer("/node/reviewThreads/nodes")
+            .and_then(|n| n.as_array())
+            .cloned()
+            .unwrap_or_default();
+        Ok(threads.iter().flat_map(pending_in).collect())
     }
 
     /// The pending review, submitted, or the verdict on its own.
@@ -506,6 +521,45 @@ impl From<&Lines> for Thread {
     }
 }
 
+/// The pending comments of one review thread, on the thread's lines. A thread
+/// without a line is on the file as a whole, which farol has no place to draw.
+fn pending_in(thread: &serde_json::Value) -> Vec<PendingComment> {
+    let side = |key: &str| match thread.get(key).and_then(|s| s.as_str()) {
+        Some("LEFT") => crate::diff::domain::Side::Old,
+        _ => crate::diff::domain::Side::New,
+    };
+    let (Some(path), Some(to)) = (
+        thread.get("path").and_then(|p| p.as_str()),
+        thread.get("line").and_then(|l| l.as_u64()),
+    ) else {
+        return vec![];
+    };
+    let from = thread
+        .get("startLine")
+        .and_then(|l| l.as_u64())
+        .unwrap_or(to);
+    let at = Lines {
+        path: path.to_string(),
+        side: side("diffSide"),
+        from: from as u32,
+        to: to as u32,
+    };
+    thread
+        .pointer("/comments/nodes")
+        .and_then(|n| n.as_array())
+        .into_iter()
+        .flatten()
+        .filter(|c| c.get("state").and_then(|s| s.as_str()) == Some("PENDING"))
+        .filter_map(|c| {
+            Some(PendingComment {
+                id: c.get("id")?.as_str()?.to_string(),
+                body: c.get("body")?.as_str()?.to_string(),
+                at: at.clone(),
+            })
+        })
+        .collect()
+}
+
 /// One node of a `nodes(ids:)` answer, as farol reads it.
 fn remote_state(node: &serde_json::Value) -> RemoteState {
     let body = node
@@ -555,6 +609,9 @@ fn not_found(answer: &serde_json::Value) -> bool {
 }
 
 const PENDING_REVIEW: &str = "query($pull: ID!) { node(id: $pull) { ... on PullRequest { reviews(states: [PENDING], first: 1) { nodes { id comments { totalCount } } } } } }";
+// ponytail: the first 100 threads and 50 comments each; paginate if a pull
+// request ever carries more.
+const PENDING_THREADS: &str = "query($pull: ID!) { node(id: $pull) { ... on PullRequest { reviewThreads(first: 100) { nodes { path line startLine diffSide comments(first: 50) { nodes { id body state } } } } } } }";
 const NUMBER: &str = "query($pull: ID!) { node(id: $pull) { ... on PullRequest { number } } }";
 const START_REVIEW: &str = "mutation($pull: ID!, $head: GitObjectID!) { addPullRequestReview(input: {pullRequestId: $pull, commitOID: $head}) { pullRequestReview { id } } }";
 const ADD_THREAD: &str = "mutation($review: ID!, $path: String!, $body: String!, $line: Int!, $side: DiffSide!, $startLine: Int, $startSide: DiffSide) { addPullRequestReviewThread(input: {pullRequestReviewId: $review, path: $path, body: $body, line: $line, side: $side, startLine: $startLine, startSide: $startSide}) { thread { comments(first: 1) { nodes { id } } } } }";
@@ -714,6 +771,30 @@ mod tests {
             pending: None,
             conversation: Default::default(),
         }
+    }
+
+    #[test]
+    fn only_the_pending_comments_of_a_thread_come_back_on_its_lines() {
+        let thread = serde_json::json!({
+            "path": "src/a.rs", "line": 12, "startLine": 10, "diffSide": "LEFT",
+            "comments": { "nodes": [
+                { "id": "PRRC_1", "body": "Already out.", "state": "SUBMITTED" },
+                { "id": "PRRC_2", "body": "Still mine.", "state": "PENDING" },
+            ] },
+        });
+
+        let found = pending_in(&thread);
+
+        assert_eq!(
+            found.len(),
+            1,
+            "a submitted reply is the pull request's, not pending"
+        );
+        assert_eq!(found[0].id, "PRRC_2");
+        assert_eq!(
+            (found[0].at.from, found[0].at.to, found[0].at.side),
+            (10, 12, crate::diff::domain::Side::Old)
+        );
     }
 
     #[test]

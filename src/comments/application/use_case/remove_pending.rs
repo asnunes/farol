@@ -23,18 +23,17 @@ impl RemovePending {
     /// One already deleted on the pull request's page is simply forgotten
     /// here; one already submitted is refused, because removing it from the
     /// thread would not remove it from the pull request.
+    /// `id` is the thread's, or the comment's own when no thread points at it.
     pub fn execute(&self, id: &str) -> Result<()> {
-        let pending = self
-            .comments
-            .get(id)?
-            .pending
-            .ok_or_else(|| CommentError::NoPending { id: id.into() })?;
+        let pending = super::edit_pending::pending_named(&self.comments, id)?;
         let state = self.publisher.remote(std::slice::from_ref(&pending.id))?;
         if let Some(RemoteState::Published { .. }) = state.first().map(|remote| &remote.state) {
             return Err(CommentError::AlreadyPublished { id: id.into() }.into());
         }
         self.publisher.remove_pending(&pending.id)?;
-        self.comments.clear_pending(id)?;
+        if let Some(thread) = pending.thread {
+            self.comments.clear_pending(&thread)?;
+        }
         Ok(())
     }
 }
@@ -59,5 +58,22 @@ mod tests {
 
         assert_eq!(world.publisher.state_of(&pending.id), RemoteState::Gone);
         assert_eq!(world.comments.get(&thread.id).unwrap().pending, None);
+    }
+
+    #[test]
+    fn a_comment_no_thread_points_at_is_removed_by_its_own_id() {
+        let world = World::ready();
+        let thread = world.thread();
+        let pending = world
+            .write_pending()
+            .execute(&thread.id, "Rename it.", Author::Reviewer)
+            .unwrap()
+            .pending
+            .unwrap();
+        world.close_thread().execute(&thread.id).unwrap();
+
+        world.remove_pending().execute(&pending.id).unwrap();
+
+        assert_eq!(world.publisher.state_of(&pending.id), RemoteState::Gone);
     }
 }

@@ -77,6 +77,7 @@ function view(connection: PullRequestView["connection"]): PullRequestView {
     numbers: [],
     mode: { mode: "peer", reason: "chosen by you" },
     pending: {},
+    loose: [],
     pendingFailed: null,
     draft: null,
   };

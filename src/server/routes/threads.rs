@@ -1,6 +1,6 @@
 //! The threads: writing, answering, closing, and handing one to the agent.
 
-use axum::extract::{Path, Query};
+use axum::extract::Path;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::{Extension, Json};
@@ -95,21 +95,11 @@ pub(super) async fn write_comment(
     }
 }
 
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub(super) struct CloseQuery {
-    /// Set once the reviewer confirmed that the thread's pending comment goes
-    /// too. Without it a thread with one is refused, as in the terminal.
-    #[serde(default)]
-    discard_pending: bool,
-}
-
 pub(super) async fn close_comment(
     Extension(cases): Extension<ServerUseCases>,
     Path(id): Path<String>,
-    Query(q): Query<CloseQuery>,
 ) -> impl IntoResponse {
-    match away(move || cases.close_thread.execute(&id, q.discard_pending)).await {
+    match away(move || cases.close_thread.execute(&id)).await {
         Ok(()) => StatusCode::NO_CONTENT.into_response(),
         Err(e) => fail(e),
     }

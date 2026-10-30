@@ -63,7 +63,7 @@ impl Action for ThreadAction {
                 Ok(())
             }
             ThreadAction::Close { id } => {
-                ctx.close_thread.execute(&id, false)?;
+                ctx.close_thread.execute(&id)?;
                 println!("Closed thread {id}.");
                 Ok(())
             }

@@ -33,6 +33,9 @@ pub struct PullRequestView {
     pub mode: ModeView,
     /// By thread id.
     pub pending: BTreeMap<String, RemotePendingView>,
+    /// Pending comments no thread points at: written on the pull request's
+    /// page, or left behind by a thread that was closed.
+    pub loose: Vec<LoosePendingView>,
     pub pending_failed: Option<String>,
     /// What the pull request will say, while there is none open: written by
     /// the agent after Generate, for the form to start from.
@@ -85,6 +88,21 @@ impl PullRequestView {
                         },
                     };
                     (one.thread.clone(), view)
+                })
+                .collect(),
+            loose: standing
+                .loose
+                .iter()
+                .map(|one| LoosePendingView {
+                    id: one.id.clone(),
+                    path: one.at.path.clone(),
+                    side: match one.at.side {
+                        crate::diff::domain::Side::Old => "old",
+                        crate::diff::domain::Side::New => "new",
+                    },
+                    from: one.at.from,
+                    to: one.at.to,
+                    body: one.body.clone(),
                 })
                 .collect(),
             pending_failed: standing.pending_failed.clone(),
@@ -153,6 +171,18 @@ pub struct RemotePendingView {
     pub state: &'static str,
     pub body: Option<String>,
     pub url: Option<String>,
+}
+
+/// A pending comment with no thread, on the lines it is about.
+#[derive(Debug, Serialize)]
+pub struct LoosePendingView {
+    pub id: String,
+    pub path: String,
+    /// "old" or "new".
+    pub side: &'static str,
+    pub from: u32,
+    pub to: u32,
+    pub body: String,
 }
 
 /// What a submitted review came to.
