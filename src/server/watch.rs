@@ -117,6 +117,11 @@ fn nudge_for(
         return Some("comments");
     }
 
+    // A pull request draft written by the agent: the open form fills itself.
+    if paths.iter().any(|p| under(p, "/pull-request/")) {
+        return Some("pull-request");
+    }
+
     // What the lenses say is its own news too: the session writes it while
     // the reader reads, and the page offers it rather than swapping it in.
     if paths.iter().any(|p| under(p, "/lenses/")) {

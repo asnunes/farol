@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, type PullRequestView, type ReviewMode, type SentView, type Verdict } from "@/api";
+import { api, type OpenedPullView, type PullRequestView, type ReviewMode, type SentView, type Verdict } from "@/api";
 import { onNudge } from "@/lib/watch";
 import { usePageVisible } from "@/hooks/usePageVisible";
 import { said } from "@/lib/utils";
@@ -32,6 +32,8 @@ export function useGitHub(onError: (message: string) => void, generation = 0) {
 
   useEffect(() => onNudge("comments", () => void load()), [load]);
   useEffect(() => onNudge("head", () => void load()), [load]);
+  // The agent wrote the pull request's draft: the open form fills itself.
+  useEffect(() => onNudge("pull-request", () => void load()), [load]);
 
   // What is missing is fixed somewhere else — a pull request opened on
   // GitHub, `gh auth login` in a terminal — and nothing local announces it.
@@ -58,6 +60,27 @@ export function useGitHub(onError: (message: string) => void, generation = 0) {
         onError(said(e));
       }
       await load();
+    },
+    /** The pull request the host opened, or null when it did not open. */
+    openPull: async (title: string, body: string): Promise<OpenedPullView | null> => {
+      try {
+        const opened = await api.openPull(title, body);
+        await load();
+        return opened;
+      } catch (e) {
+        onError(said(e));
+        return null;
+      }
+    },
+    /** Ask the agent for the draft; true once the harness took it. */
+    generatePullDraft: async () => {
+      try {
+        await api.generatePullDraft();
+        return true;
+      } catch (e) {
+        onError(said(e));
+        return false;
+      }
     },
     /** What the submitted review came to, or null when it did not go. */
     submit: async (verdict: Verdict, summary: string): Promise<SentView | null> => {

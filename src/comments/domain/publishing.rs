@@ -1,6 +1,6 @@
 //! Sending the review somewhere the rest of the team will read it.
 
-use crate::comments::domain::Lines;
+use crate::comments::domain::{Lines, OpenedPull, PullDraft};
 use crate::error::Result;
 
 /// Where a review goes, and where its pending comments live until it does.
@@ -45,6 +45,10 @@ pub trait ReviewPublisher: Send + Sync {
     /// anything. Folded together, the second failing would hide inside the
     /// first succeeding.
     fn mark_read(&self, pull: &str, paths: &[String]) -> Result<usize>;
+
+    /// Open a pull request from `branch` into `base`. The branch has to be on
+    /// the host already.
+    fn open_pull(&self, base: &str, branch: &str, draft: &PullDraft) -> Result<OpenedPull>;
 }
 
 /// One comment as the host has it.

@@ -34,6 +34,9 @@ pub struct PullRequestView {
     /// By thread id.
     pub pending: BTreeMap<String, RemotePendingView>,
     pub pending_failed: Option<String>,
+    /// What the pull request will say, while there is none open: written by
+    /// the agent after Generate, for the form to start from.
+    pub draft: Option<PullDraftView>,
 }
 
 impl PullRequestView {
@@ -85,6 +88,10 @@ impl PullRequestView {
                 })
                 .collect(),
             pending_failed: standing.pending_failed.clone(),
+            draft: standing.draft.as_ref().map(|draft| PullDraftView {
+                title: draft.title.clone(),
+                body: draft.body.clone(),
+            }),
         };
         match &standing.readiness {
             Readiness::Ready {
@@ -114,6 +121,20 @@ impl PullRequestView {
         }
         view
     }
+}
+
+/// The title and description the pull request will be opened with.
+#[derive(Debug, Serialize)]
+pub struct PullDraftView {
+    pub title: String,
+    pub body: String,
+}
+
+/// The pull request the host just opened.
+#[derive(Debug, Serialize)]
+pub struct OpenedPullView {
+    pub number: u32,
+    pub url: String,
 }
 
 #[derive(Debug, Serialize)]

@@ -137,3 +137,41 @@ pub(super) async fn choose_mode(
         Err(e) => fail(e),
     }
 }
+
+#[derive(Deserialize)]
+pub(super) struct PullBody {
+    title: String,
+    #[serde(default)]
+    body: String,
+}
+
+/// Open the pull request, pushing the branch first when the host has not seen
+/// it. GitHub's to answer, so off the request thread.
+pub(super) async fn open_pull(
+    Extension(cases): Extension<ServerUseCases>,
+    Json(pull): Json<PullBody>,
+) -> impl IntoResponse {
+    let draft = crate::comments::domain::PullDraft {
+        title: pull.title,
+        body: pull.body,
+    };
+    match away(move || cases.open_pull_request.execute(draft)).await {
+        Ok(opened) => Json(view::OpenedPullView {
+            number: opened.number,
+            url: opened.url,
+        })
+        .into_response(),
+        Err(e) => fail(e),
+    }
+}
+
+/// Ask the agent to write the pull request's title and description. It writes
+/// them back through the CLI, and the page reloads the draft when it lands.
+pub(super) async fn generate_pull_draft(
+    Extension(cases): Extension<ServerUseCases>,
+) -> impl IntoResponse {
+    match away(move || cases.generate_pull_draft.execute()).await {
+        Ok(()) => StatusCode::ACCEPTED.into_response(),
+        Err(e) => fail(e),
+    }
+}

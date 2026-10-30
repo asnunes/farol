@@ -12,8 +12,8 @@ use std::sync::Arc;
 use serde::Serialize;
 
 use crate::comments::domain::{
-    CommentError, Credentials, Lines, Readiness, RemoteComment, RemoteState, Review,
-    ReviewPublisher,
+    CommentError, Credentials, Lines, OpenedPull, PullDraft, Readiness, RemoteComment, RemoteState,
+    Review, ReviewPublisher,
 };
 use crate::error::Result;
 use crate::shared::paths::Remote;
@@ -290,6 +290,30 @@ impl ReviewPublisher for GitHub {
         match (took(&answer), refusal(&answer)) {
             (0, Some(why)) => Err(CommentError::Refused { what: why }.into()),
             (marked, _) => Ok(marked),
+        }
+    }
+
+    fn open_pull(&self, base: &str, branch: &str, draft: &PullDraft) -> Result<OpenedPull> {
+        let token = self.token()?;
+        let body = serde_json::json!({
+            "title": draft.title,
+            "body": draft.body,
+            "head": branch,
+            "base": base,
+        });
+        let opened = self.read(self.http.post(
+            &token,
+            &format!("{}/pulls", self.repo()),
+            body.to_string(),
+        )?)?;
+        let number = opened.get("number").and_then(|n| n.as_u64());
+        let url = opened.get("html_url").and_then(|u| u.as_str());
+        match (number, url) {
+            (Some(number), Some(url)) => Ok(OpenedPull {
+                number: number as u32,
+                url: url.to_string(),
+            }),
+            _ => Err(refused("the host opened no pull request")),
         }
     }
 }

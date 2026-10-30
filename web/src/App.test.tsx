@@ -102,6 +102,7 @@ const selfReview = {
   mode: { mode: "self", reason: "no pull request to tell" },
   pending: {},
   pendingFailed: null,
+  draft: null,
 };
 
 const emptyDiff = {

@@ -11,6 +11,7 @@ import type { DiffView } from "@/hooks/useDiffView";
 import { GitHubMark } from "@/components/GitHubMark";
 import { Connection } from "@/review/Connection";
 import { ReviewMode } from "@/review/ReviewMode";
+import { CreatePullRequest } from "@/review/CreatePullRequest";
 import { StopReview } from "@/review/StopReview";
 import { SubmitReview } from "@/review/SubmitReview";
 import type { GitHubState } from "@/hooks/useGitHub";
@@ -30,6 +31,7 @@ export function TopBar({
   onNextUnread,
   github,
   threads,
+  agent,
   onStopped,
 }: TopBarProps) {
   const done = review.totalFiles > 0 && review.viewedFiles === review.totalFiles;
@@ -155,6 +157,9 @@ export function TopBar({
           {pull && peer && pull.connection === "ready" && (
             <SubmitReview pull={pull} threads={threads} onSubmit={github.submit} />
           )}
+          {pull?.connection === "no-pull-request" && (
+            <CreatePullRequest pull={pull} branch={review.branch} agent={agent} github={github} />
+          )}
           <StopReview branch={review.branch} onStopped={onStopped} />
         </div>
       </div>
@@ -239,6 +244,8 @@ type TopBarProps = {
   threads: CommentView[];
   /** The server said it is stopping: the page is over. */
   onStopped: () => void;
+  /** The harness Generate reaches, or null. */
+  agent: string | null;
 };
 
 type SidebarToggleProps = {

@@ -18,6 +18,15 @@ pub(super) enum GithubAction {
     Ticks,
     /// Send the review to the pull request.
     Review(ReviewArgs),
+    /// Write the title and description for the pull request the reviewer is
+    /// about to open from farol. Opens nothing: the reviewer does, from the page.
+    Draft {
+        #[arg(long, allow_hyphen_values = true)]
+        title: String,
+        /// The description. Markdown.
+        #[arg(long, allow_hyphen_values = true)]
+        text: String,
+    },
 }
 
 impl Action for GithubAction {
@@ -33,6 +42,11 @@ impl Action for GithubAction {
                     flush();
                     std::process::exit(1);
                 }
+                Ok(())
+            }
+            GithubAction::Draft { title, text } => {
+                ctx.write_pull_draft.execute(&title, &text)?;
+                println!("Wrote the pull request draft; the reviewer sees it in farol.");
                 Ok(())
             }
             GithubAction::Ticks => {

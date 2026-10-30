@@ -251,6 +251,7 @@ export default function App() {
           github={github}
           threads={comments.all}
           onStopped={() => setStopped(true)}
+          agent={comments.agent}
         />
         {sidebarOpen && (
           <Sidebar

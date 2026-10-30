@@ -123,6 +123,7 @@ mod tests {
             pending: vec![],
             pending_failed: None,
             read: vec![],
+            draft: None,
         }
     }
 
