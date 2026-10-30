@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { GitHubState } from "@/hooks/useGitHub";
-import type { PullDraftView } from "@/api";
+import type { OpenedPullView, PullDraftView } from "@/api";
 
 /** What the Create pull request form holds: the title and description being
  * written, whether the agent was asked for a draft, and whether the pull
@@ -14,6 +14,7 @@ export function usePullRequestForm(draft: PullDraftView | null, github: GitHubSt
   const [body, setBody] = useState("");
   const [asked, setAsked] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [opened, setOpened] = useState<OpenedPullView | null>(null);
   // The draft there was when Generate was pressed. Only a different one is
   // the answer: the old one is still there the moment the agent is asked, and
   // taking it would fill the form with what it already said.
@@ -44,12 +45,12 @@ export function usePullRequestForm(draft: PullDraftView | null, github: GitHubSt
       before.current = draft ? said(draft) : null;
       setAsked(await github.generatePullDraft());
     },
-    /** True once the pull request is open. */
+    /** The pull request, once it is open, for the dialog to say where. */
+    opened,
     create: async () => {
       setCreating(true);
-      const opened = await github.openPull(title, body);
+      setOpened(await github.openPull(title, body));
       setCreating(false);
-      return opened !== null;
     },
   };
 }

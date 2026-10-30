@@ -61,11 +61,13 @@ export function useGitHub(onError: (message: string) => void, generation = 0) {
       }
       await load();
     },
-    /** The pull request the host opened, or null when it did not open. */
+    /** The pull request the host opened, or null when it did not open. Not
+     * reloaded here: once there is a pull request the button that opened it
+     * goes, and the dialog saying where it went would go with it. The caller
+     * reloads when the reviewer is done reading. */
     openPull: async (title: string, body: string): Promise<OpenedPullView | null> => {
       try {
         const opened = await api.openPull(title, body);
-        await load();
         return opened;
       } catch (e) {
         onError(said(e));

@@ -44,6 +44,12 @@ it("pushes and opens a branch GitHub has not seen, with no Generate when no agen
   fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Stop from the page" } });
   fireEvent.click(screen.getByRole("button", { name: "Push and create" }));
   await waitFor(() => expect(gh.openPull).toHaveBeenCalledWith("Stop from the page", ""));
+  expect(await screen.findByText("Pull request #13 opened")).toBeTruthy();
+  expect(
+    screen.getByRole("link", { name: /example.test\/pull\/13/ }).getAttribute("href"),
+    "the reviewer is told where it went",
+  ).toBe("https://example.test/pull/13");
+  expect(gh.reload, "the page learns of it only once the dialog closes").not.toHaveBeenCalled();
 });
 
 it("starts from the agent's draft and asks for a new one with Generate", () => {
