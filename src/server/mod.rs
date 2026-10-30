@@ -81,6 +81,9 @@ struct AppState {
     /// connection that never ends — so a browser sitting on this route was
     /// enough to make the server ignore a `SIGTERM` for good.
     stopping: signal::Receiver<bool>,
+    /// Asked for by the page: the reviewer finished and stops the server from
+    /// the screen, the same graceful way a `SIGTERM` does.
+    stop: Arc<tokio::sync::Notify>,
 }
 
 impl AppState {
@@ -95,6 +98,7 @@ impl AppState {
             preferences,
             changes: changes.clone(),
             stopping,
+            stop: Arc::new(tokio::sync::Notify::new()),
         });
         (state, changes)
     }
@@ -155,6 +159,7 @@ async fn serve(config: ServeConfig) -> Result<()> {
 
     // The same entry the registry holds, so that asking the server who it is
     // and asking the file who it should be can be compared.
+    let asked = state.stop.clone();
     let app = routes::router(state);
 
     println!("farol is reading at {url}");
@@ -165,7 +170,10 @@ async fn serve(config: ServeConfig) -> Result<()> {
 
     let served = axum::serve(listener, app)
         .with_graceful_shutdown(async move {
-            stopped().await;
+            tokio::select! {
+                _ = stopped() => {}
+                _ = asked.notified() => {}
+            }
             // Say so before the wait begins, or the wait never ends: the open
             // change streams have to close themselves, and nothing else is
             // going to close them.

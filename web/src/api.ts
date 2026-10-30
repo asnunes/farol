@@ -33,6 +33,8 @@ export const api = {
   setViewed: (path: string, viewed: boolean) =>
     send("/api/viewed", "POST", { path, viewed }),
   /** Mark a lens as seen, or take the mark back; it is pinned to the answer. */
+  /** Stop the server; it answers before it goes. */
+  stop: () => send("/api/stop", "POST"),
   seeLens: (lens: string, target: LensTarget, seen: boolean) =>
     send("/api/lenses/seen", "POST", { lens, target, seen }),
 

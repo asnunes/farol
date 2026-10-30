@@ -18,6 +18,15 @@ pub(super) async fn health(State(state): State<Arc<AppState>>) -> impl IntoRespo
     Json(state.session.identity())
 }
 
+/// Stop the server, asked for by the reviewer from the page. Answered before
+/// the shutdown begins, so the page hears that it worked rather than seeing
+/// the connection cut; the shutdown then runs the way a `SIGTERM` does, and the
+/// server takes itself off the list of what is running.
+pub(super) async fn stop(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    state.stop.notify_one();
+    axum::http::StatusCode::ACCEPTED
+}
+
 pub(super) async fn configure(
     State(state): State<Arc<AppState>>,
     Json(config): Json<SessionConfig>,

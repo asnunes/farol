@@ -38,6 +38,9 @@ export default function App() {
     generation,
   } = useReview();
   const [helpOpen, setHelpOpen] = useState(false);
+  // Stopped from the page: nothing on it will answer any more, so it says so
+  // instead of looking alive.
+  const [stopped, setStopped] = useState(false);
   const { open: sidebarOpen, toggle, dismiss } = useSidebar();
   // Where focus goes when the sidebar it opens is taken out from under it.
   const sidebarToggle = useRef<HTMLButtonElement>(null);
@@ -187,6 +190,18 @@ export default function App() {
     toggleActivity: () => setActivityOpen((open) => !open),
   });
 
+  if (stopped) {
+    return (
+      <div className="stopped grid h-dvh place-items-center bg-ground">
+        <div className="flex flex-col items-center gap-2 text-center">
+          <h1 className="font-sans text-lg font-semibold text-ink">This review was stopped</h1>
+          <p className="font-sans text-sm text-ink-muted">
+            Run <code className="font-mono text-ink">farol serve</code> in the repository to open it again.
+          </p>
+        </div>
+      </div>
+    );
+  }
   if (error) {
     return (
       <Alert
@@ -235,6 +250,7 @@ export default function App() {
           onNextUnread={nextUnread}
           github={github}
           threads={comments.all}
+          onStopped={() => setStopped(true)}
         />
         {sidebarOpen && (
           <Sidebar
