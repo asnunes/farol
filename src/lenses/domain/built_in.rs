@@ -65,7 +65,7 @@ pub(super) const BUILT_IN: &[BuiltIn] = &[
         id: "summary",
         title: "Summary",
         group: LensGroup::Block,
-        prompt: "What this block does and why, and how it is built, for a reader who has never seen its types. Start with what the block makes the code do and the decision behind it: what was chosen, the alternative dropped and what the choice costs. Then how its files fit together: what is computed from what, what is stored where, which part asks which, each type or file named with what it does. Do not repeat the block's context, which is one sentence on the problem the block solves.",
+        prompt: "What this block does and why, and how it is built, for a reader who has never seen its types. Start with what the block makes the code do and the decision behind it: what was chosen, the alternative dropped and what the choice costs. Then how its files fit together, starting from the file left open as the block's core and saying why the change lives there, then what the others do around it, each type or file named with what it does. Do not repeat the block's context, which is one sentence on the problem the block solves.",
         enabled: true,
         about_lines: 6,
     },

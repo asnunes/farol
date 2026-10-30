@@ -2,7 +2,7 @@
 
 use std::fmt::{self, Display};
 
-use crate::map::application::{CheckReport, FOCUS_PER_BLOCK, FOCUS_PER_REVIEW};
+use crate::map::application::{CheckReport, FOCUS_PER_BLOCK};
 
 /// What the self-test found.
 pub struct CheckSummary<'a>(pub &'a CheckReport);
@@ -37,15 +37,15 @@ impl Display for CheckSummary<'_> {
             )?;
         }
 
-        if !report.too_much_focus.is_empty() {
+        if !report.focus_hints.is_empty() {
             writeln!(
                 f,
-                "Too much in focus: {}.",
-                report.too_much_focus.join("; ")
+                "What the blocks open: {}.",
+                report.focus_hints.join("; ")
             )?;
             writeln!(
                 f,
-                "Focus is the exception: at most {FOCUS_PER_REVIEW} per review and {FOCUS_PER_BLOCK} per block, each a file whose code could change\nwhether the reviewer approves. Run `farol file unfocus` on the rest."
+                "Each block opens its core, the file that carries its intent, and rarely more than {FOCUS_PER_BLOCK}.\nA block with nothing worth opening is not a block: move its files to the block that caused them."
             )?;
         }
 
