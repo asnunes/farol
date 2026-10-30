@@ -1610,6 +1610,38 @@ fn stopping_a_server_ends_it_and_takes_it_off_the_list() {
 }
 
 #[test]
+fn the_page_can_stop_its_own_server_and_it_takes_itself_off_the_list() {
+    let d = Detached::new();
+    let pid = d.pid_on(d.port);
+
+    let status = Command::new("curl")
+        .args([
+            "-s",
+            "-o",
+            "/dev/null",
+            "-w",
+            "%{http_code}",
+            "-X",
+            "POST",
+            &format!("http://127.0.0.1:{}/api/stop", d.port),
+        ])
+        .output()
+        .expect("curl runs");
+    assert_eq!(
+        String::from_utf8_lossy(&status.stdout),
+        "202",
+        "the page hears that it worked before the server goes"
+    );
+
+    let gone = (0..50).any(|_| {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        !running(pid)
+    });
+    assert!(gone, "the server should have stopped");
+    assert!(d.repo.ok(&["servers"]).contains("No farol server"));
+}
+
+#[test]
 fn stopping_them_all_reaches_reviews_from_other_repositories() {
     // The registry belongs to the machine, not to a repository: `--all` from
     // one checkout has to stop the review open in another.

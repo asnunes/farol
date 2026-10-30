@@ -66,6 +66,7 @@ pub(super) fn router(state: Arc<AppState>) -> Router {
         .route("/api/session", put(session::configure))
         .route("/api/watch", get(watch::watch))
         .route("/health", get(session::health))
+        .route("/api/stop", post(session::stop))
         .route("/api/{*path}", any(|| async { StatusCode::NOT_FOUND }))
         .fallback(assets::handler)
         .layer(middleware::from_fn_with_state(
