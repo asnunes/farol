@@ -1,5 +1,7 @@
 import { useState } from "react";
+import { CloudUpload, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { DriftView } from "@/api";
 
@@ -21,20 +23,26 @@ export function Drift({ drift, mine, number, branch, onPush }: DriftProps) {
   }
 
   return (
-    <span className="drift flex items-center gap-2 font-sans text-xs text-highlight">
-      {/* On your own pull request the button is the whole message: what is
-          missing, and the way to send it. */}
+    <span className="drift flex items-center font-sans text-xs text-highlight">
+      {/* An icon like the rest of the bar, the words in its tooltip. The push
+          keeps its count in sight, since it is the one that publishes. */}
       {pushable ? (
         <>
-          <Button
-            size="xs"
-            variant="outline"
-            className="h-5 px-2 text-xs"
-            title="The pull request is missing these: push them to sync read marks"
-            onClick={() => setOpen(true)}
-          >
-            Push {commits(drift.commits)}
-          </Button>
+          <Tooltip delayDuration={0}>
+            <TooltipTrigger asChild>
+              <Button
+                size="xs"
+                variant="ghost"
+                className="h-5 gap-1 px-1.5 text-xs text-highlight hover:bg-sunken hover:text-highlight"
+                aria-label={`Push ${commits(drift.commits)}`}
+                onClick={() => setOpen(true)}
+              >
+                <CloudUpload className="size-3.5" aria-hidden="true" />
+                {drift.commits}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Push {commits(drift.commits)} to the pull request to sync read marks</TooltipContent>
+          </Tooltip>
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogContent className="border-rule bg-surface sm:max-w-md">
               <DialogHeader>
@@ -61,7 +69,14 @@ export function Drift({ drift, mine, number, branch, onPush }: DriftProps) {
           </Dialog>
         </>
       ) : (
-        said(drift)
+        <Tooltip delayDuration={0}>
+          <TooltipTrigger asChild>
+            <span className="inline-flex cursor-default" role="img" aria-label={said(drift)} tabIndex={0}>
+              <TriangleAlert className="size-3.5" aria-hidden="true" />
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>{said(drift)}</TooltipContent>
+        </Tooltip>
       )}
     </span>
   );
@@ -71,11 +86,11 @@ export function Drift({ drift, mine, number, branch, onPush }: DriftProps) {
 function said(drift: DriftView): string {
   switch (drift.kind) {
     case "uncommitted":
-      return "Uncommitted changes";
+      return "Uncommitted changes: commit them to sync read marks";
     case "unpushed":
-      return `${commits(drift.commits)} unpushed`;
+      return `${commits(drift.commits)} not on the pull request yet`;
     case "newer":
-      return "Pull request is ahead: pull";
+      return "The pull request has commits you do not: pull to read them";
   }
 }
 
