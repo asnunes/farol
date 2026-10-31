@@ -11,8 +11,8 @@ use crate::agent::domain::AgentChannel;
 use crate::agent::infra::{AgentAddress, ClaudeSocket, CodexQueue};
 use crate::comments::application::{
     ChooseMode, CloseThread, CommentReach, Comments, EditPending, GeneratePending,
-    GeneratePullDraft, OpenPullRequest, PublishReview, PullRequestGate, RemovePending, ReviewModes,
-    ReviewReadiness, SendComment, WritePending, WritePullDraft,
+    GeneratePullDraft, OpenPullRequest, PublishReview, PullRequestGate, PushBranch, RemovePending,
+    ReviewModes, ReviewReadiness, SendComment, SyncReadMarks, WritePending, WritePullDraft,
 };
 use crate::comments::domain::{BranchPusher, PullDraftStore, ReviewPublisher};
 use crate::comments::infra::{
@@ -80,6 +80,7 @@ pub struct Ctx {
     pub choose_mode: ChooseMode,
     pub readiness: ReviewReadiness,
     pub publish_review: PublishReview,
+    pub sync_read_marks: SyncReadMarks,
     pub write_pull_draft: WritePullDraft,
 
     pub write_answer: WriteAnswer,
@@ -115,6 +116,8 @@ pub struct ServerUseCases {
     pub choose_mode: ChooseMode,
     pub readiness: ReviewReadiness,
     pub publish_review: PublishReview,
+    pub sync_read_marks: SyncReadMarks,
+    pub push_branch: PushBranch,
     pub open_pull_request: OpenPullRequest,
     pub generate_pull_draft: GeneratePullDraft,
 }
@@ -210,6 +213,8 @@ impl Ctx {
             read.clone(),
             drafts.clone(),
         );
+        let sync_read_marks = SyncReadMarks::new(gate.clone(), publisher.clone(), read.clone());
+        let push_branch = PushBranch::new(gate.clone(), pusher.clone());
         let publish_review = PublishReview::new(
             comments.clone(),
             gate.clone(),
@@ -220,7 +225,7 @@ impl Ctx {
         let open_pull_request = OpenPullRequest::new(
             gate.clone(),
             publisher.clone(),
-            pusher,
+            pusher.clone(),
             scope.clone(),
             drafts.clone(),
         );
@@ -277,6 +282,7 @@ impl Ctx {
             choose_mode: choose_mode.clone(),
             readiness: readiness.clone(),
             publish_review: publish_review.clone(),
+            sync_read_marks: sync_read_marks.clone(),
             write_pull_draft: WritePullDraft::new(drafts),
 
             keep_answer: KeepAnswer::new(lens_answers.clone(), write_answer.clone()),
@@ -320,6 +326,8 @@ impl Ctx {
                 choose_mode,
                 readiness,
                 publish_review,
+                sync_read_marks,
+                push_branch,
             }),
             git_dir,
             root,

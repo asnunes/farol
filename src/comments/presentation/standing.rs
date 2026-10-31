@@ -130,6 +130,7 @@ mod tests {
             mode: crate::comments::domain::ModeChoice::resolve(None, None),
             pending: vec![],
             loose: vec![],
+            drift: None,
             pending_failed: None,
             read: vec![],
             draft: None,

@@ -526,6 +526,15 @@ pub fn server_use_cases_over(
             ReviewModes::new(Arc::new(crate::testing::InMemoryModeStore::default())),
             scope.clone(),
         ),
+        push_branch: crate::comments::application::PushBranch::new(
+            gate.clone(),
+            Arc::new(RecordingPusher::default()),
+        ),
+        sync_read_marks: crate::comments::application::SyncReadMarks::new(
+            gate.clone(),
+            publisher.clone(),
+            read.clone(),
+        ),
         publish_review: PublishReview::new(comments.clone(), gate, publisher, scope, read),
         comments,
     }
@@ -739,6 +748,15 @@ impl FakePublisher {
         self
     }
 
+    /// Files already marked as read on the pull request.
+    pub fn viewing(self, paths: &[&str]) -> Self {
+        self.marked
+            .lock()
+            .unwrap()
+            .extend(paths.iter().map(|p| p.to_string()));
+        self
+    }
+
     /// A host that refuses every new pending comment.
     pub fn adding_fails(self, why: &str) -> Self {
         *self.adding.lock().unwrap() = Some(why.into());
@@ -881,8 +899,29 @@ impl crate::comments::domain::ReviewPublisher for FakePublisher {
         if let Some(why) = self.marking.lock().unwrap().clone() {
             return Err(crate::comments::domain::CommentError::Refused { what: why }.into());
         }
-        self.marked.lock().unwrap().extend_from_slice(paths);
+        let mut marked = self.marked.lock().unwrap();
+        for path in paths {
+            if !marked.contains(path) {
+                marked.push(path.clone());
+            }
+        }
         Ok(paths.len())
+    }
+
+    fn mark_unread(&self, _pull: &str, paths: &[String]) -> Result<usize> {
+        self.marked
+            .lock()
+            .unwrap()
+            .retain(|path| !paths.contains(path));
+        self.calls
+            .lock()
+            .unwrap()
+            .push(format!("unmark {}", paths.join(", ")));
+        Ok(paths.len())
+    }
+
+    fn viewed(&self, _pull: &str) -> Result<Vec<String>> {
+        Ok(self.marked())
     }
 
     fn open_pull(

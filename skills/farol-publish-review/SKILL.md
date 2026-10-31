@@ -66,7 +66,8 @@ applicable. It submits the pending review as it is on the PR. Farol also
 synchronizes current file-read marks when the PR shows the reviewed commit.
 
 For marks only, run `farol github ticks` with the same comparison options.
-This leaves the pending comments pending.
+It makes the PR's read marks match Farol's, unmarking there what is not read
+here, and leaves the pending comments pending.
 
 If Farol refuses, report the reason; do not alter the reviewed revision or
 bypass it by posting or submitting directly with `gh`.

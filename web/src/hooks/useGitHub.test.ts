@@ -79,6 +79,7 @@ function view(connection: PullRequestView["connection"]): PullRequestView {
     pending: {},
     loose: [],
     pendingFailed: null,
+    drift: null,
     draft: null,
   };
 }

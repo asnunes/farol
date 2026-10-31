@@ -70,16 +70,6 @@ impl PublishReview {
         })
     }
 
-    /// The ticks, and nothing else.
-    ///
-    /// Wanted on its own because a review is not always possible: on your own
-    /// pull request GitHub takes a comment and nothing more, and a reader who
-    /// has no comment to leave still wants the next round to show what changed.
-    pub fn ticks_only(&self) -> Result<usize> {
-        let pull = self.pull.at_head()?;
-        self.publisher.mark_read(&pull.id, &self.already_read()?)
-    }
-
     /// Mark what was read, when the pull request shows the commit it was read
     /// at. A file read at another commit has not been read in the shape the
     /// pull request shows.
@@ -141,7 +131,7 @@ mod tests {
     use crate::comments::application::testing::World;
     use crate::comments::domain::{Author, Readiness};
     use crate::progress::application::MarkViewed;
-    use crate::testing::{FakeDiffSource, FakePublisher};
+    use crate::testing::FakePublisher;
 
     #[test]
     fn the_pending_comments_go_with_the_verdict_and_are_published_on_the_host() {
@@ -252,37 +242,6 @@ mod tests {
             sent.read_failed.unwrap().contains("no permission"),
             "the reviewer has to be told which half did not happen"
         );
-    }
-
-    #[test]
-    fn the_ticks_can_go_without_a_review_at_all() {
-        let world = World::with(FakePublisher::ready_at("head").mine());
-        MarkViewed::new(world.progress.clone())
-            .execute("src/a.rs", "now")
-            .unwrap();
-
-        assert_eq!(world.publish_review().ticks_only().unwrap(), 1);
-        assert!(world.publisher.nothing_sent(), "no review was asked for");
-    }
-
-    #[test]
-    fn ticks_alone_refuse_uncommitted_work_and_another_commit() {
-        let dirty = World::over(
-            FakePublisher::ready_at("head"),
-            FakeDiffSource::with_paths(&["src/a.rs"]).dirty(),
-        );
-        assert!(
-            dirty
-                .publish_review()
-                .ticks_only()
-                .unwrap_err()
-                .to_string()
-                .contains("uncommitted")
-        );
-
-        let moved = World::with(FakePublisher::ready_at("newer77"));
-        let err = moved.publish_review().ticks_only().unwrap_err().to_string();
-        assert!(err.starts_with("Pull first"), "{err}");
     }
 
     #[test]

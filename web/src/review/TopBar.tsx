@@ -12,7 +12,9 @@ import { GitHubMark } from "@/components/GitHubMark";
 import { Connection } from "@/review/Connection";
 import { ReviewMode } from "@/review/ReviewMode";
 import { CreatePullRequest } from "@/review/pull/CreatePullRequest";
+import { Drift } from "@/review/Drift";
 import { StopReview } from "@/review/StopReview";
+import { SyncReads } from "@/review/SyncReads";
 import { SubmitReview } from "@/review/SubmitReview";
 import type { GitHubState } from "@/hooks/useGitHub";
 import type { CommentView, ReviewView, Unreadable as UnreadableView } from "@/api";
@@ -104,6 +106,10 @@ export function TopBar({
             value={review.totalFiles ? (review.viewedFiles / review.totalFiles) * 100 : 0}
             aria-label={`${review.viewedFiles} of ${review.totalFiles} read`}
           />
+          {/* Beside the count it sends: in any mode, since a review is not
+              always there to carry the marks, and on your own pull request
+              there is none at all. */}
+          {pull?.connection === "ready" && <SyncReads onSync={github.syncRead} blocked={pull.drift !== null} />}
         </div>
       </div>
 
@@ -129,6 +135,9 @@ export function TopBar({
             />
           )}
           {pull && peer && <Connection pull={pull} />}
+          {pull?.drift && (
+            <Drift drift={pull.drift} mine={pull.mine} number={pull.number} branch={review.branch} onPush={github.push} />
+          )}
         </div>
         <div className="flex shrink-0 items-center gap-3">
           {/* Counted apart, because only one of the two ever leaves farol. */}
