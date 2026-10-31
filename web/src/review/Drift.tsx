@@ -22,11 +22,18 @@ export function Drift({ drift, mine, number, branch, onPush }: DriftProps) {
 
   return (
     <span className="drift flex items-center gap-2 font-sans text-xs text-highlight">
-      {said(drift)}
-      {pushable && (
+      {/* On your own pull request the button is the whole message: what is
+          missing, and the way to send it. */}
+      {pushable ? (
         <>
-          <Button size="xs" variant="outline" className="h-5 px-2 text-xs" onClick={() => setOpen(true)}>
-            Push
+          <Button
+            size="xs"
+            variant="outline"
+            className="h-5 px-2 text-xs"
+            title="The pull request is missing these: push them to sync read marks"
+            onClick={() => setOpen(true)}
+          >
+            Push {commits(drift.commits)}
           </Button>
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogContent className="border-rule bg-surface sm:max-w-md">
@@ -53,6 +60,8 @@ export function Drift({ drift, mine, number, branch, onPush }: DriftProps) {
             </DialogContent>
           </Dialog>
         </>
+      ) : (
+        said(drift)
       )}
     </span>
   );
@@ -62,11 +71,11 @@ export function Drift({ drift, mine, number, branch, onPush }: DriftProps) {
 function said(drift: DriftView): string {
   switch (drift.kind) {
     case "uncommitted":
-      return "Uncommitted changes: commit them to sync read marks";
+      return "Uncommitted changes";
     case "unpushed":
-      return `${commits(drift.commits)} not on the pull request`;
+      return `${commits(drift.commits)} unpushed`;
     case "newer":
-      return "The pull request has commits you do not: pull to read them";
+      return "Pull request is ahead: pull";
   }
 }
 
