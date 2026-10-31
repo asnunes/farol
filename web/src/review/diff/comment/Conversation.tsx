@@ -39,7 +39,7 @@ export function Conversation({ comment, actions, remote, offerUse }: Conversatio
         />
       )}
       {comment.pending !== null && (
-        <Pending comment={comment} remote={remote} actions={actions} busy={comment.waiting !== null} />
+        <Pending id={comment.pending.id} thread={comment} remote={remote} actions={actions} busy={comment.waiting !== null} />
       )}
       {replying ? (
         <ReplyBox

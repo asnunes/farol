@@ -17,13 +17,14 @@ pub(super) enum PendingAction {
         #[arg(long, allow_hyphen_values = true)]
         text: String,
     },
-    /// Change the words of the thread's pending comment.
+    /// Change the words of a pending comment, by the GitHub id `farol github
+    /// status` lists for it.
     Edit {
         id: String,
         #[arg(long, allow_hyphen_values = true)]
         text: String,
     },
-    /// Take the thread's pending comment back off the pull request.
+    /// Take a pending comment back off the pull request, by its GitHub id.
     Remove { id: String },
 }
 
@@ -40,11 +41,11 @@ impl Action for PendingAction {
             }
             PendingAction::Edit { id, text } => {
                 ctx.edit_pending.execute(&id, &text)?;
-                println!("Changed the pending comment of thread {id}.");
+                println!("Changed pending comment {id}.");
             }
             PendingAction::Remove { id } => {
                 ctx.remove_pending.execute(&id)?;
-                println!("Removed the pending comment of thread {id} from the pull request.");
+                println!("Removed pending comment {id} from the pull request.");
             }
         }
         Ok(())

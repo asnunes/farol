@@ -499,9 +499,9 @@ pub fn server_use_cases_over(
             modes.clone(),
             publisher.clone(),
         ),
-        close_thread: CloseThread::new(comments.clone(), publisher.clone()),
+        close_thread: CloseThread::new(comments.clone()),
         write_pending: WritePending::new(comments.clone(), gate.clone(), publisher.clone()),
-        edit_pending: EditPending::new(comments.clone(), publisher.clone()),
+        edit_pending: EditPending::new(publisher.clone()),
         remove_pending: RemovePending::new(comments.clone(), publisher.clone()),
         choose_mode: ChooseMode::new(modes.clone()),
         readiness: ReviewReadiness::new(
@@ -695,6 +695,8 @@ pub struct FakePublisher {
     marking: Mutex<Option<String>>,
     /// What `add_pending` answers instead of adding.
     adding: Mutex<Option<String>>,
+    /// The lines each comment is on, for `pending_comments`.
+    lines: Mutex<Vec<(String, crate::comments::domain::Lines)>>,
 }
 
 impl FakePublisher {
@@ -718,6 +720,7 @@ impl FakePublisher {
             marked: Mutex::new(Vec::new()),
             marking: Mutex::new(None),
             adding: Mutex::new(None),
+            lines: Mutex::new(Vec::new()),
         }
     }
 
@@ -769,6 +772,15 @@ impl FakePublisher {
             .unwrap_or(crate::comments::domain::RemoteState::Gone)
     }
 
+    /// A pending comment written on the pull request's page, on these lines.
+    pub fn pending_at(self, id: &str, at: crate::comments::domain::Lines, body: &str) -> Self {
+        self.lines.lock().unwrap().push((id.into(), at));
+        self.holding(
+            id,
+            crate::comments::domain::RemoteState::Pending { body: body.into() },
+        )
+    }
+
     /// Put something on the pull request as if it had been written there.
     pub fn holding(self, id: &str, state: crate::comments::domain::RemoteState) -> Self {
         self.remote.lock().unwrap().push((id.into(), state));
@@ -785,7 +797,7 @@ impl crate::comments::domain::ReviewPublisher for FakePublisher {
         &self,
         _pull: &str,
         _head: &str,
-        _at: &crate::comments::domain::Lines,
+        at: &crate::comments::domain::Lines,
         body: &str,
     ) -> Result<String> {
         if let Some(why) = self.adding.lock().unwrap().clone() {
@@ -793,6 +805,7 @@ impl crate::comments::domain::ReviewPublisher for FakePublisher {
         }
         let mut remote = self.remote.lock().unwrap();
         let id = format!("PRRC_{}", remote.len() + 1);
+        self.lines.lock().unwrap().push((id.clone(), at.clone()));
         remote.push((
             id.clone(),
             crate::comments::domain::RemoteState::Pending { body: body.into() },
@@ -823,6 +836,30 @@ impl crate::comments::domain::ReviewPublisher for FakePublisher {
             .map(|id| crate::comments::domain::RemoteComment {
                 id: id.clone(),
                 state: self.state_of(id),
+            })
+            .collect())
+    }
+
+    fn pending_comments(
+        &self,
+        _pull: &str,
+    ) -> Result<Vec<crate::comments::domain::PendingComment>> {
+        let lines = self.lines.lock().unwrap();
+        Ok(self
+            .remote
+            .lock()
+            .unwrap()
+            .iter()
+            .filter_map(|(id, state)| match state {
+                crate::comments::domain::RemoteState::Pending { body } => {
+                    let (_, at) = lines.iter().find(|(known, _)| known == id)?;
+                    Some(crate::comments::domain::PendingComment {
+                        id: id.clone(),
+                        body: body.clone(),
+                        at: at.clone(),
+                    })
+                }
+                _ => None,
             })
             .collect())
     }

@@ -15,9 +15,6 @@ import type { CommentView } from "@/api";
  * itself. */
 export function Comment({ comment, actions }: CommentProps) {
   const remote = actions.pendingOf(comment.id);
-  // Only a comment still pending on the pull request goes when the thread
-  // does; one that went with the review stays there whatever happens here.
-  const discardsPending = comment.pending !== null && remote?.state === "pending";
   // Once there is a pending comment, Edit and Regenerate are how it changes;
   // offering every turn as a replacement too would be a third way.
   const offerUse = actions.pendingOffered && !comment.waiting && comment.pending === null;
@@ -33,7 +30,6 @@ export function Comment({ comment, actions }: CommentProps) {
         actions={actions}
         minimized={minimized}
         offerUse={offerUse}
-        discardsPending={discardsPending}
       />
       {!minimized && (
         <Conversation comment={comment} actions={actions} remote={remote} offerUse={offerUse} />

@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
 use crate::comments::application::{Comments, PullRequestGate, ReviewModes};
-use crate::comments::domain::{ModeChoice, Readiness, RemoteState, ReviewPublisher};
+use crate::comments::domain::{
+    ModeChoice, PendingComment, Readiness, RemoteState, ReviewPublisher,
+};
 use crate::error::Result;
 
 /// Where the review stands with the pull request: whether there is one to
@@ -46,20 +48,21 @@ impl ReviewReadiness {
         let branch = self.pull.branch()?;
         let readiness = self.pull.readiness()?;
         let mode = self.modes.detect(&readiness)?;
-        let (pending, pending_failed) = match readiness.can_send() {
-            true => match self.pending() {
-                Ok(pending) => (pending, None),
+        let (pending, loose, pending_failed) = match &readiness {
+            Readiness::Ready { id, .. } => match self.pending(id) {
+                Ok((pending, loose)) => (pending, loose, None),
                 // The rest of the answer is still worth having: the screen
                 // draws the threads and says the pending ones could not be read.
-                Err(error) => (vec![], Some(error.to_string())),
+                Err(error) => (vec![], vec![], Some(error.to_string())),
             },
-            false => (vec![], None),
+            _ => (vec![], vec![], None),
         };
         Ok(Standing {
             host: self.host.clone(),
             branch,
             mode,
             pending,
+            loose,
             pending_failed,
             read: self.read.execute()?,
             // Only while there is a pull request to open: once it exists, the
@@ -74,7 +77,10 @@ impl ReviewReadiness {
         })
     }
 
-    fn pending(&self) -> Result<Vec<ThreadPending>> {
+    /// Each thread's comment as the host holds it, and the rest of the pending
+    /// review: what was written on the pull request's page, and what outlived
+    /// the thread it came from.
+    fn pending(&self, pull: &str) -> Result<(Vec<ThreadPending>, Vec<PendingComment>)> {
         let threads: Vec<_> = self
             .comments
             .every()?
@@ -86,7 +92,13 @@ impl ReviewReadiness {
             .map(|(_, pending)| pending.id.clone())
             .collect();
         let remote = self.publisher.remote(&ids)?;
-        Ok(threads
+        let loose = self
+            .publisher
+            .pending_comments(pull)?
+            .into_iter()
+            .filter(|comment| !ids.contains(&comment.id))
+            .collect();
+        let pending = threads
             .into_iter()
             .zip(remote)
             .map(|((thread, _), remote)| ThreadPending {
@@ -94,7 +106,8 @@ impl ReviewReadiness {
                 at: thread.at(),
                 state: remote.state,
             })
-            .collect())
+            .collect();
+        Ok((pending, loose))
     }
 }
 
@@ -110,6 +123,8 @@ pub struct Standing {
     pub readiness: Readiness,
     pub mode: ModeChoice,
     pub pending: Vec<ThreadPending>,
+    /// Pending comments no thread here points at.
+    pub loose: Vec<PendingComment>,
     /// Why the pending comments could not be read, when they could not.
     pub pending_failed: Option<String>,
     pub read: Vec<String>,

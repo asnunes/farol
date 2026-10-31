@@ -16,6 +16,7 @@ function pull(over: Partial<PullRequestView> = {}): PullRequestView {
     numbers: [],
     mode: { mode: "self", reason: "no pull request to tell" },
     pending: {},
+    loose: [],
     pendingFailed: null,
     draft: null,
     ...over,

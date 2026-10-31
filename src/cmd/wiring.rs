@@ -224,9 +224,9 @@ impl Ctx {
             scope.clone(),
             drafts.clone(),
         );
-        let close_thread = CloseThread::new(comments.clone(), publisher.clone());
+        let close_thread = CloseThread::new(comments.clone());
         let write_pending = WritePending::new(comments.clone(), gate, publisher.clone());
-        let edit_pending = EditPending::new(comments.clone(), publisher.clone());
+        let edit_pending = EditPending::new(publisher.clone());
         let remove_pending = RemovePending::new(comments.clone(), publisher.clone());
         let choose_mode = ChooseMode::new(modes.clone());
         let write_answer = WriteAnswer::new(

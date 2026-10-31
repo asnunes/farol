@@ -36,6 +36,13 @@ impl ReviewPublisher for Unhosted {
         Err(CommentError::NoRemote.into())
     }
 
+    fn pending_comments(
+        &self,
+        _pull: &str,
+    ) -> Result<Vec<crate::comments::domain::PendingComment>> {
+        Err(CommentError::NoRemote.into())
+    }
+
     fn submit(&self, _review: &Review) -> Result<String> {
         Err(CommentError::NoRemote.into())
     }

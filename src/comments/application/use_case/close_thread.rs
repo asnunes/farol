@@ -1,39 +1,23 @@
-use std::sync::Arc;
-
 use crate::comments::application::Comments;
-use crate::comments::domain::{CommentError, RemoteState, ReviewPublisher};
 use crate::error::Result;
 
 /// Close a thread, which is to say drop it.
 ///
-/// A thread whose pending comment is still on the pull request is not closed
-/// on its own: the comment would stay in the reviewer's pending review with
-/// nothing here pointing at it. The screen asks first and then says to take
-/// it back too; the terminal refuses and says how.
+/// Its pending comment stays on the pull request. The thread is the
+/// conversation that led to it, and ending the conversation is not taking back
+/// what the reviewer means to publish: the comment is still drawn on its lines,
+/// read from the pending review, and removing it is an act of its own.
 #[derive(Clone)]
 pub struct CloseThread {
     comments: Comments,
-    publisher: Arc<dyn ReviewPublisher>,
 }
 
 impl CloseThread {
-    pub fn new(comments: Comments, publisher: Arc<dyn ReviewPublisher>) -> Self {
-        Self {
-            comments,
-            publisher,
-        }
+    pub fn new(comments: Comments) -> Self {
+        Self { comments }
     }
 
-    pub fn execute(&self, id: &str, discard_pending: bool) -> Result<()> {
-        if let Some(pending) = self.comments.get(id)?.pending {
-            let state = self.publisher.remote(std::slice::from_ref(&pending.id))?;
-            if let Some(RemoteState::Pending { .. }) = state.first().map(|remote| &remote.state) {
-                if !discard_pending {
-                    return Err(CommentError::PendingStillOpen { id: id.into() }.into());
-                }
-                self.publisher.remove_pending(&pending.id)?;
-            }
-        }
+    pub fn execute(&self, id: &str) -> Result<()> {
         self.comments.close(id)
     }
 }
@@ -44,7 +28,7 @@ mod tests {
     use crate::comments::domain::{Author, RemoteState};
 
     #[test]
-    fn a_thread_with_a_pending_comment_is_closed_only_when_told_to_take_it_back() {
+    fn closing_a_thread_leaves_its_pending_comment_on_the_pull_request() {
         let world = World::ready();
         let thread = world.thread();
         let pending = world
@@ -54,30 +38,15 @@ mod tests {
             .pending
             .unwrap();
 
-        let error = world.close_thread().execute(&thread.id, false).unwrap_err();
-        assert!(
-            error.to_string().contains("farol pending remove"),
-            "{error}"
+        world.close_thread().execute(&thread.id).unwrap();
+
+        assert_eq!(
+            world.publisher.state_of(&pending.id),
+            RemoteState::Pending {
+                body: "Rename it.".into()
+            },
+            "the comment is what the reviewer means to publish; the thread only led to it"
         );
-
-        world.close_thread().execute(&thread.id, true).unwrap();
-        assert_eq!(world.publisher.state_of(&pending.id), RemoteState::Gone);
         assert!(world.comments.all().unwrap().comments.is_empty());
-    }
-
-    #[test]
-    fn a_thread_whose_comment_went_with_the_review_closes_like_any_other() {
-        let world = World::ready();
-        let thread = world.thread();
-        world
-            .write_pending()
-            .execute(&thread.id, "Rename it.", Author::Reviewer)
-            .unwrap();
-        world
-            .publish_review()
-            .execute(crate::comments::domain::Verdict::Comment, "")
-            .unwrap();
-
-        world.close_thread().execute(&thread.id, false).unwrap();
     }
 }

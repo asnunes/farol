@@ -20,6 +20,7 @@ export function SubmitReview({ pull, threads, onSubmit }: SubmitReviewProps) {
 
   const going = threads.filter((thread) => pull.pending[thread.id]?.state === "pending");
   const staying = threads.length - going.length;
+  const count = going.length + pull.loose.length;
 
   async function submit(verdict: Verdict) {
     setBusy(true);
@@ -49,7 +50,7 @@ export function SubmitReview({ pull, threads, onSubmit }: SubmitReviewProps) {
             <DialogTitle className="font-sans text-base text-ink">
               {sent
                 ? "Review submitted"
-                : `Submit review · ${going.length} pending comment${going.length === 1 ? "" : "s"}`}
+                : `Submit review · ${count} pending comment${count === 1 ? "" : "s"}`}
             </DialogTitle>
             <DialogDescription className="text-ink-muted">
               {sent
@@ -78,6 +79,15 @@ export function SubmitReview({ pull, threads, onSubmit }: SubmitReviewProps) {
                       {where(thread)}
                     </span>{" "}
                     — {excerpt(pull.pending[thread.id]?.body ?? "")}
+                  </li>
+                ))}
+                {/* No thread here points at these, and they go all the same. */}
+                {pull.loose.map((one) => (
+                  <li key={one.id} className="text-ink-soft">
+                    <span className="font-mono text-xs text-comment-ink">
+                      {one.path}:{one.from === one.to ? one.to : `${one.from}-${one.to}`}
+                    </span>{" "}
+                    — {excerpt(one.body)}
                   </li>
                 ))}
               </ul>

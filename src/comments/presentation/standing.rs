@@ -79,22 +79,30 @@ impl Display for StandingLine<'_> {
         }
         // The pending comments, because the skill that publishes reads this to
         // show the reader what is about to go.
-        let waiting: Vec<_> = self
+        let waiting: Vec<(String, &String)> = self
             .0
             .pending
             .iter()
             .filter_map(|one| match &one.state {
-                RemoteState::Pending { body } => Some((one, body)),
+                RemoteState::Pending { body } => {
+                    Some((format!("{} (thread {})", one.at, one.thread), body))
+                }
                 _ => None,
             })
+            .chain(self.0.loose.iter().map(|one| {
+                (
+                    format!("{} (no thread, {})", one.at.at(), one.id),
+                    &one.body,
+                )
+            }))
             .collect();
         writeln!(
             f,
             "{} pending comment(s) on the pull request:",
             waiting.len()
         )?;
-        for (one, body) in waiting {
-            writeln!(f, "  {} (thread {})", one.at, one.thread)?;
+        for (at, body) in waiting {
+            writeln!(f, "  {at}")?;
             for line in body.lines() {
                 writeln!(f, "    {line}")?;
             }
@@ -121,6 +129,7 @@ mod tests {
             readiness,
             mode: crate::comments::domain::ModeChoice::resolve(None, None),
             pending: vec![],
+            loose: vec![],
             pending_failed: None,
             read: vec![],
             draft: None,

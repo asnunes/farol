@@ -84,7 +84,7 @@ impl World {
     }
 
     pub fn edit_pending(&self) -> EditPending {
-        EditPending::new(self.comments.clone(), self.publisher.clone())
+        EditPending::new(self.publisher.clone())
     }
 
     pub fn remove_pending(&self) -> RemovePending {
@@ -92,7 +92,7 @@ impl World {
     }
 
     pub fn close_thread(&self) -> CloseThread {
-        CloseThread::new(self.comments.clone(), self.publisher.clone())
+        CloseThread::new(self.comments.clone())
     }
 
     pub fn generate_pending(&self) -> GeneratePending {

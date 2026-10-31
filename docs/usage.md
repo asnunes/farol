@@ -167,10 +167,15 @@ The pending comment sits under its thread with **Edit**, **Regenerate** and
 **Remove**. A new one is written before the old one is taken back. Writing one
 needs the pull request to show the commit you are reading.
 
+Every comment in your pending review is drawn on its lines, whatever wrote it:
+one written on the pull request's page shows up too. Closing a thread leaves its
+pending comment where it is; **Remove** is what takes it back. A pending comment is
+edited and removed by its GitHub id, as `farol github status` lists it.
+
 ```bash
-farol pending write ID --text '…'   # what the agent runs
-farol pending edit ID --text '…'
-farol pending remove ID
+farol pending write THREAD_ID --text '…'   # what the agent runs
+farol pending edit GITHUB_ID --text '…'
+farol pending remove GITHUB_ID
 ```
 
 ## Send to GitHub

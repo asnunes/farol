@@ -108,16 +108,13 @@ pub enum CommentError {
     #[error("a pull request needs a title.")]
     NoTitle,
 
-    #[error("thread {id} has no pending comment — write one first")]
+    #[error(
+        "{id} is not a pending comment on the pull request\nRun `farol github status` for the ids of the pending ones."
+    )]
     NoPending { id: String },
 
     #[error(
-        "thread {id} still has a pending comment on the pull request\nRemove it with `farol pending remove {id}`, or submit the review, before closing the thread."
-    )]
-    PendingStillOpen { id: String },
-
-    #[error(
-        "the pending comment of thread {id} was already submitted with a review, so it can no longer change"
+        "the pending comment of {id} was already submitted with a review, so it can no longer change"
     )]
     AlreadyPublished { id: String },
 }

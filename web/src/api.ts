@@ -52,10 +52,8 @@ export const api = {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ ...about, body }),
     }).then(json<CommentView>),
-  /** With `discardPending`, the thread's pending comment is taken off the pull
-   * request too; without it, a thread that still has one is refused. */
-  closeComment: (id: string, discardPending = false) =>
-    send(`/api/comments/${encodeURIComponent(id)}${discardPending ? "?discardPending=true" : ""}`, "DELETE"),
+  /** The thread only: its pending comment stays on the pull request. */
+  closeComment: (id: string) => send(`/api/comments/${encodeURIComponent(id)}`, "DELETE"),
   /** The reviewer writing back under a comment; sending it on is `sendComment`. */
   replyComment: (id: string, body: string) =>
     fetch(`/api/comments/${encodeURIComponent(id)}/replies`, {
@@ -370,6 +368,9 @@ export type PullRequestView = {
   mode: { mode: ReviewMode; reason: string };
   /** By thread id. */
   pending: Record<string, RemotePendingView>;
+  /** Pending comments no thread points at: written on the pull request's page,
+   * or left behind by a thread that was closed. */
+  loose: LoosePendingView[];
   pendingFailed: string | null;
   /** What the pull request will say, while there is none open. */
   draft: PullDraftView | null;
@@ -381,6 +382,16 @@ export type PullDraftView = { title: string; body: string };
 export type OpenedPullView = { number: number; url: string };
 
 export type ReviewMode = "self" | "peer";
+
+export type LoosePendingView = {
+  /** GitHub's id for it, which editing and removing go by. */
+  id: string;
+  path: string;
+  side: Side;
+  from: number;
+  to: number;
+  body: string;
+};
 
 export type RemotePendingView = {
   state: "pending" | "published" | "gone";
