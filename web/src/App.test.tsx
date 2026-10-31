@@ -786,6 +786,25 @@ describe("open and closed", () => {
     await waitFor(() => expect(section("src/a.rs").querySelector(".diff")).toBeTruthy());
   });
 
+  it("opens a file the map left folded when it is picked in the sidebar", async () => {
+    // Picked by name, it is a file the reader wants to see, even one whose
+    // lenses stand in for it.
+    const r = review();
+    r.blocks[0].files[0].folded = true;
+    serve({ review: r });
+
+    render(<App />);
+    await waitForReading("a.rs");
+    expect(section("src/a.rs").querySelector(".diff")).toBeNull();
+
+    const target = Array.from(document.querySelectorAll(".fileitem")).find((b) =>
+      b.textContent?.includes("a.rs"),
+    );
+    fireEvent.click(target!);
+
+    await waitFor(() => expect(section("src/a.rs").querySelector(".diff")).toBeTruthy());
+  });
+
   it("moves on to the next file after one is marked read", async () => {
     // Folding the file away leaves the reader looking at whatever was under it.
     serve({ review: review() });
