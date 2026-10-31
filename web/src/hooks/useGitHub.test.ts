@@ -37,6 +37,25 @@ describe("the pull request's state", () => {
     expect(github).toHaveBeenCalledTimes(2);
   });
 
+  it("keeps asking after a push until the pull request shows the pushed commit", async () => {
+    // GitHub moves the pull request a moment after the push: the first answer
+    // still has the old commit, and stopping there left the push looking undone.
+    const behind = { ...view("ready"), drift: { kind: "unpushed" as const, commits: 1 } };
+    vi.spyOn(api, "pushBranch").mockResolvedValue(undefined);
+    const github = vi
+      .spyOn(api, "github")
+      .mockResolvedValueOnce(behind)
+      .mockResolvedValueOnce(behind)
+      .mockResolvedValue(view("ready"));
+    const { result } = renderHook(() => useGitHub(onError));
+    await waitFor(() => expect(result.current.pull?.drift).not.toBeNull());
+
+    await act(() => result.current.push());
+
+    expect(result.current.pull?.drift).toBeNull();
+    expect(github).toHaveBeenCalledTimes(3);
+  });
+
   it("is not asked again on every return once nothing is missing", async () => {
     const github = vi.spyOn(api, "github").mockResolvedValue(view("ready"));
     const { result } = renderHook(() => useGitHub(onError));
