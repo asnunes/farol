@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, type OpenedPullView, type PullRequestView, type ReviewMode, type SentView, type Verdict } from "@/api";
+import {
+  api,
+  type OpenedPullView,
+  type PullRequestView,
+  type ReviewMode,
+  type SentView,
+  type SyncedView,
+  type Verdict,
+} from "@/api";
 import { onNudge } from "@/lib/watch";
 import { usePageVisible } from "@/hooks/usePageVisible";
 import { said } from "@/lib/utils";
@@ -82,6 +90,15 @@ export function useGitHub(onError: (message: string) => void, generation = 0) {
       } catch (e) {
         onError(said(e));
         return false;
+      }
+    },
+    /** What the sync did, or null when it did not happen. */
+    syncRead: async (): Promise<SyncedView | null> => {
+      try {
+        return await api.syncRead();
+      } catch (e) {
+        onError(said(e));
+        return null;
       }
     },
     /** What the submitted review came to, or null when it did not go. */

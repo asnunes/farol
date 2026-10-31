@@ -14,6 +14,7 @@ mod publish_review;
 mod remove_pending;
 mod review_readiness;
 mod send_comment;
+mod sync_read_marks;
 mod write_pending;
 mod write_pull_draft;
 
@@ -27,5 +28,6 @@ pub use publish_review::*;
 pub use remove_pending::*;
 pub use review_readiness::*;
 pub use send_comment::*;
+pub use sync_read_marks::*;
 pub use write_pending::*;
 pub use write_pull_draft::*;

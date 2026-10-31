@@ -85,6 +85,8 @@ export const api = {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ verdict, summary }),
     }).then(json<SentView>),
+  /** The pull request's read marks made to match the ones here. */
+  syncRead: () => fetch("/api/github/read", { method: "POST" }).then(json<SyncedView>),
   /** Pushes the branch first when the host has not seen it. */
   openPull: (title: string, body: string) =>
     fetch("/api/github/pull", {
@@ -400,6 +402,9 @@ export type RemotePendingView = {
 };
 
 export type Verdict = "comment" | "request-changes" | "approve";
+
+/** What a sync of the read marks did on the pull request. */
+export type SyncedView = { number: number; marked: number; unmarked: number };
 
 export type SentView = {
   url: string;

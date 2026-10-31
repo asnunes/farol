@@ -204,7 +204,9 @@ farol github ticks
 `status` lists the pull request, the mode and the pending comments, and exits
 nonzero while the pull request cannot be reached. `review` submits the pending
 review and ticks the files you read. `ticks` sends only the read marks, and needs
-the pull request to show the commit you read.
+the pull request to show the commit you read: files read here are marked on the
+pull request, and files marked there but not read here are unmarked. The sync
+button beside the progress bar in the top bar does the same, in either mode.
 
 ## Share a map
 

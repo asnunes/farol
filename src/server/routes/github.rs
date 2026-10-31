@@ -123,6 +123,21 @@ pub(super) async fn submit_review(
     }
 }
 
+/// The pull request's read marks made to match the reviewer's here.
+pub(super) async fn sync_read_marks(
+    Extension(cases): Extension<ServerUseCases>,
+) -> impl IntoResponse {
+    match away(move || cases.sync_read_marks.execute()).await {
+        Ok(synced) => Json(view::SyncedView {
+            number: synced.number,
+            marked: synced.marked,
+            unmarked: synced.unmarked,
+        })
+        .into_response(),
+        Err(e) => fail(e),
+    }
+}
+
 #[derive(Deserialize)]
 pub(super) struct ModeBody {
     mode: crate::comments::domain::ReviewMode,

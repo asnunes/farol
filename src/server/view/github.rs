@@ -185,6 +185,14 @@ pub struct LoosePendingView {
     pub body: String,
 }
 
+/// What a sync of the read marks came to.
+#[derive(Debug, Serialize)]
+pub struct SyncedView {
+    pub number: u32,
+    pub marked: usize,
+    pub unmarked: usize,
+}
+
 /// What a submitted review came to.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
