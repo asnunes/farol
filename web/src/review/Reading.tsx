@@ -13,6 +13,7 @@ import { scrollToFile, scrollToLine } from "@/lib/scroll";
 import type { CommentActions } from "@/hooks/useComments";
 import type { DiffView } from "@/hooks/useDiffView";
 import type { OpenFiles } from "@/hooks/useOpenFiles";
+import type { OpenLenses } from "@/hooks/useOpenLenses";
 import { blockOf, linesOf, readingOrder, readingRows } from "@/api";
 import type { CitationView, CommentView, LensView, ReviewView } from "@/api";
 
@@ -29,6 +30,7 @@ export function Reading({
   onCurrent,
   onToggleViewed,
   files,
+  lenses,
   comments,
   onSeen,
 }: ReadingProps) {
@@ -67,12 +69,12 @@ export function Reading({
 
   return (
     <main ref={pane} className="pane overflow-y-auto bg-ground" data-current={current ?? ""}>
-      <ReviewLenses lenses={review.lenses} onCite={cite} onSeen={onSeen} comments={comments} />
+      <ReviewLenses lenses={review.lenses} onCite={cite} onSeen={onSeen} comments={comments} folds={lenses} />
       {readingRows(review).map((row) =>
         "block" in row ? (
           <Fragment key={row.block.slug}>
             <BlockBar block={row.block} number={row.number} total={review.blocks.length} comments={comments} />
-            <BlockLenses slug={row.block.slug} lenses={row.block.lenses} onCite={cite} onSeen={onSeen} comments={comments} />
+            <BlockLenses slug={row.block.slug} lenses={row.block.lenses} onCite={cite} onSeen={onSeen} comments={comments} folds={lenses} />
             {row.block.files.length > 0 && <CodeBar block={row.block} />}
           </Fragment>
         ) : (
@@ -170,6 +172,8 @@ type ReadingProps = {
   onCurrent: (path: string) => void;
   onToggleViewed: (path: string, viewed: boolean) => void;
   files: OpenFiles;
+  /** Which lenses are open, kept above the page with the files'. */
+  lenses: OpenLenses;
   comments: CommentActions;
   onSeen: (lens: LensView, seen: boolean) => void;
 };

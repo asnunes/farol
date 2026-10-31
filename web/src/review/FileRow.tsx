@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { Check } from "./Check";
 import type { FileLabel } from "@/lib/path";
 import type { FileView } from "@/api";
 
@@ -18,9 +19,27 @@ export function FileRow({
   comments,
   current,
   onPick,
+  onCheck,
 }: FileRowProps) {
   return (
-    <li>
+    <li className="relative">
+      {/* Over the row rather than inside it, which a button cannot be. A tick
+          from here neither opens nor folds the file, and does not move the
+          reader: it says the file was read, nothing more. */}
+      <Check
+        done={file.viewed}
+        label={`${file.viewed ? "Mark as unread" : "Mark as read"}: ${file.path}`}
+        onClick={onCheck}
+      >
+        {/* A mark on both sides, not a tick against an empty slot: the
+            gap was the only thing saying unread, and a gap is easy to miss
+            down a column of them. */}
+        {file.viewed ? (
+          <CircleCheck className="chk size-3.5 text-add-ink" aria-hidden="true" />
+        ) : (
+          <Circle className="chk size-3.5 text-faint" aria-hidden="true" />
+        )}
+      </Check>
       {/* Not hoverable: moving up to the row above passed through a tooltip
           that stayed open to be hovered, and the click landed on it. */}
       <Tooltip disableHoverableContent>
@@ -28,7 +47,7 @@ export function FileRow({
           <Button
             variant="ghost"
             className={cn(
-              "fileitem h-auto w-full justify-start gap-2 px-2 py-1 font-mono text-[0.8125rem] font-normal text-ink",
+              "fileitem h-auto w-full justify-start gap-2 py-1 pr-2 pl-[30px] font-mono text-[0.8125rem] font-normal text-ink",
               "hover:bg-sunken hover:text-ink",
               "aria-[current=true]:bg-highlight-dim aria-[current=true]:text-ink",
             )}
@@ -37,14 +56,6 @@ export function FileRow({
             aria-label={file.path}
             onClick={() => onPick(file.path)}
           >
-            {/* A mark on both sides, not a tick against an empty slot: the
-                gap was the only thing saying unread, and a gap is easy to miss
-                down a column of them. */}
-            {file.viewed ? (
-              <CircleCheck className="chk size-3.5 shrink-0 text-add-ink" aria-hidden="true" />
-            ) : (
-              <Circle className="chk size-3.5 shrink-0 text-faint" aria-hidden="true" />
-            )}
             <span
               className={cn(
                 "nm truncate",
@@ -116,4 +127,6 @@ type FileRowProps = {
   comments: number;
   current: string | null;
   onPick: (path: string) => void;
+  /** Flip the read mark, and nothing else. */
+  onCheck: () => void;
 };

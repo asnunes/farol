@@ -6,7 +6,7 @@ import { LensRow } from "./LensRow";
 import { readingOrder } from "@/api";
 import type { CommentsOn } from "@/hooks/useComments";
 import type { FileLabels } from "@/lib/path";
-import type { BlockView, ReviewView } from "@/api";
+import type { BlockView, FileView, LensView, ReviewView } from "@/api";
 
 /** Navigation only, deliberately: no prose here, or the reader would try to
  * read the map instead of the code.
@@ -22,6 +22,8 @@ export function Sidebar({
   comments,
   current,
   onPick,
+  onCheckFile,
+  onCheckLens,
 }: SidebarProps) {
   // Over the sidebar as a whole, not per block: two files called `mod.rs` are
   // two rows to tell apart wherever they were grouped.
@@ -39,7 +41,13 @@ export function Sidebar({
           </div>
           <ul className="blk-files mt-1">
             {review.lenses.map((lens) => (
-              <LensRow key={lens.id} lens={lens} current={current === `lens:pr:${lens.id}`} onPick={() => onPick(`lens:pr:${lens.id}`)} />
+              <LensRow
+                key={lens.id}
+                lens={lens}
+                current={current === `lens:pr:${lens.id}`}
+                onPick={() => onPick(`lens:pr:${lens.id}`)}
+                onCheck={() => onCheckLens(lens, `pr:${lens.id}`)}
+              />
             ))}
           </ul>
         </section>
@@ -53,6 +61,8 @@ export function Sidebar({
           number={i + 1}
           current={current}
           onPick={onPick}
+          onCheckFile={onCheckFile}
+          onCheckLens={onCheckLens}
         />
       ))}
 
@@ -67,6 +77,8 @@ function Block({
   number,
   current,
   onPick,
+  onCheckFile,
+  onCheckLens,
 }: BlockProps) {
   // Read, not worked out: the rendered list is not what the block holds, and
   // counting it was how a block that renders nothing stayed unfinishable while
@@ -109,6 +121,7 @@ function Block({
             lens={lens}
             current={current === `lens:block:${block.slug}:${lens.id}`}
             onPick={() => onPick(`lens:block:${block.slug}:${lens.id}`)}
+            onCheck={() => onCheckLens(lens, `block:${block.slug}:${lens.id}`)}
           />
         ))}
         {/* A rule between what the block says and the files it reads. */}
@@ -123,6 +136,7 @@ function Block({
             comments={comments(f.path).length}
             current={current}
             onPick={onPick}
+            onCheck={() => onCheckFile(f)}
           />
         ))}
       </ul>
@@ -137,7 +151,7 @@ type SidebarProps = {
   current: string | null;
   /** A file path, or `lens:<key>` for a lens row. */
   onPick: (place: string) => void;
-};
+} & Checks;
 
 type BlockProps = {
   block: BlockView;
@@ -146,4 +160,11 @@ type BlockProps = {
   number: number;
   current: string | null;
   onPick: (path: string) => void;
+} & Checks;
+
+/** Ticking a row from its mark, which flips the mark and changes nothing else. */
+type Checks = {
+  onCheckFile: (file: FileView) => void;
+  /** With the key its section goes by on the page. */
+  onCheckLens: (lens: LensView, key: string) => void;
 };

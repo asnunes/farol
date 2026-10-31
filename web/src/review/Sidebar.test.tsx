@@ -164,7 +164,7 @@ function show(view: ReviewView, onPick = vi.fn(), comments: CommentView[] = []) 
   const on = (path: string) => comments.filter((c) => c.about.kind === "lines" && c.about.path === path);
   return render(
     <TooltipProvider>
-      <Sidebar review={view} comments={on} current={null} onPick={onPick} />
+      <Sidebar review={view} comments={on} current={null} onPick={onPick} onCheckFile={vi.fn()} onCheckLens={vi.fn()} />
     </TooltipProvider>,
   );
 }
