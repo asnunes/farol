@@ -428,6 +428,19 @@ A label costs little room and says little. Compare:
   continuar no mesmo mapping. Se o chat mudar de mapping e depois
   voltar, a abertura pode ser enviada de novo."
 
+**The reader reads the lens instead of the code, not beside it.** A
+sentence built from the code's own names carries no meaning to someone
+who never opened the file. Say what happens in the terms of whoever uses
+the thing: what they do, what they see, what the system does in answer.
+Never translate an identifier, a test name or a type into prose. The
+Tests lens is where this fails most, because a test name is right there
+to translate:
+
+- From the code: "Uma lens segurada antes de ser vista continua aberta
+  depois."
+- From the behaviour: "Marcar uma lens como vista pelo menu lateral não
+  fecha a lens na página."
+
 Each lens shows about how long it usually runs; that is a guide, not a
 limit, and longer is not better by default. Concision comes from
 editing: cut repetition and detail the reader does not need, and keep
