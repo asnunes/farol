@@ -73,7 +73,7 @@ pub(super) const BUILT_IN: &[BuiltIn] = &[
         id: "tests",
         title: "Tests",
         group: LensGroup::File,
-        prompt: "For a file with tests, the tests this change adds or changes, one per bullet, and each case of a table-driven or parametrized test counts as a test of its own. Say what each one checks in a plain sentence, the way a describe or it reads, never by the function's name, with its line cited. Write an empty text for a file without tests. With more tests than are worth reading, keep the ones a reviewer would ask about.",
+        prompt: "For a file with tests, the tests this change adds or changes, one per bullet, and each case of a table-driven or parametrized test counts as a test of its own. Say what each one checks in a plain sentence about what the user does and sees, so someone who never opens the code understands it, with its line cited. Never translate the test's name or use the code's vocabulary. Write an empty text for a file without tests. With more tests than are worth reading, keep the ones a reviewer would ask about.",
         enabled: true,
         about_lines: 12,
     },
