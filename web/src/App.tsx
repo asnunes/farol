@@ -21,6 +21,7 @@ import { KeyBar } from "@/review/KeyBar";
 import { scrollToFile, scrollToLens, scrollToThread } from "@/lib/scroll";
 import { unreadAfter } from "@/hooks/useCurrentFile";
 import { Reading } from "@/review/Reading";
+import { Toast } from "@/review/Toast";
 import { Sidebar } from "@/review/Sidebar";
 import { TopBar } from "@/review/TopBar";
 
@@ -50,6 +51,8 @@ export default function App() {
   // the review is still on the screen and still worth reading, and blanking it
   // would take away the very thing the message is about.
   const [failed, setFailed] = useState<string | null>(null);
+  const [told, setTold] = useState<string | null>(null);
+  const forget = useCallback(() => setTold(null), []);
   const [view, setView] = useDiffView();
   const files = useOpenFiles();
   const lenses = useOpenLenses();
@@ -253,6 +256,7 @@ export default function App() {
           github={github}
           threads={comments.all}
           onStopped={() => setStopped(true)}
+          onTold={setTold}
           agent={comments.agent}
         />
         {sidebarOpen && (
@@ -314,6 +318,7 @@ export default function App() {
           />
         )}
         {failed && <Failed what={failed} onClose={() => setFailed(null)} />}
+        {told && !failed && <Toast what={told} onGone={forget} />}
       </div>
     </TooltipProvider>
   );

@@ -35,6 +35,7 @@ export function TopBar({
   threads,
   agent,
   onStopped,
+  onTold,
 }: TopBarProps) {
   const done = review.totalFiles > 0 && review.viewedFiles === review.totalFiles;
   const pull = github.pull;
@@ -109,7 +110,7 @@ export function TopBar({
           {/* Beside the count it sends: in any mode, since a review is not
               always there to carry the marks, and on your own pull request
               there is none at all. */}
-          {pull?.connection === "ready" && <SyncReads onSync={github.syncRead} blocked={pull.drift !== null} />}
+          {pull?.connection === "ready" && <SyncReads onSync={github.syncRead} onSynced={onTold} blocked={pull.drift !== null} />}
         </div>
       </div>
 
@@ -259,6 +260,8 @@ type TopBarProps = {
   onStopped: () => void;
   /** The harness Generate reaches, or null. */
   agent: string | null;
+  /** Say that something the reader asked for went through. */
+  onTold: (what: string) => void;
 };
 
 type SidebarToggleProps = {
