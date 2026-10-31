@@ -10,6 +10,7 @@ import { useActivity } from "@/hooks/useActivity";
 import { useGitHub } from "@/hooks/useGitHub";
 import { useDiffView } from "@/hooks/useDiffView";
 import { useOpenFiles } from "@/hooks/useOpenFiles";
+import { useOpenLenses } from "@/hooks/useOpenLenses";
 import { useTheme } from "@/hooks/useTheme";
 import { useReview } from "@/hooks/useReview";
 import { useShortcuts } from "@/hooks/useShortcuts";
@@ -51,6 +52,7 @@ export default function App() {
   const [failed, setFailed] = useState<string | null>(null);
   const [view, setView] = useDiffView();
   const files = useOpenFiles();
+  const lenses = useOpenLenses();
   const [theme, setTheme] = useTheme();
   const github = useGitHub(setFailed, generation);
   const comments = useComments(setFailed, generation, github);
@@ -268,6 +270,16 @@ export default function App() {
               // so it goes — and the row that was clicked goes with it.
               if (dismiss()) sidebarToggle.current?.focus();
             }}
+            // From the mark, not the row: the reader stays where they are and
+            // the item stays as open or as folded as it was.
+            onCheckFile={(file) => {
+              files.keep(file);
+              void toggleViewed(file.path, !file.viewed);
+            }}
+            onCheckLens={(lens, key) => {
+              lenses.keep(key, lens.seen);
+              void toggleSeen(lens, !lens.seen);
+            }}
           />
         )}
 
@@ -279,6 +291,7 @@ export default function App() {
           onCurrent={setCurrent}
           onToggleViewed={(path, viewed) => void mark(path, viewed)}
           files={files}
+          lenses={lenses}
           comments={comments}
           onSeen={(lens, seen) => void markLens(lens, seen)}
         />

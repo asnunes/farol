@@ -19,13 +19,22 @@ import type { FileView } from "@/api";
 export function useOpenFiles() {
   const [choice, setChoice] = useState<Record<string, Choice>>({});
 
+  const isOpen = (file: FileView) => {
+    const said = choice[file.path];
+    return said?.against === standing(file) ? said.open : !file.viewed && !file.folded;
+  };
+
   return {
-    isOpen: (file: FileView) => {
-      const said = choice[file.path];
-      return said?.against === standing(file) ? said.open : !file.viewed && !file.folded;
-    },
+    isOpen,
     set: (file: FileView, open: boolean) =>
       setChoice((all) => ({ ...all, [file.path]: { open, against: standing(file) } })),
+    /** Hold the file as it is now through the read mark about to flip, for a
+     * tick from the sidebar, which is not asking to see or to put away. */
+    keep: (file: FileView) =>
+      setChoice((all) => ({
+        ...all,
+        [file.path]: { open: isOpen(file), against: standing({ ...file, viewed: !file.viewed }) },
+      })),
   };
 }
 

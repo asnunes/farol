@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LensState } from "@/review/lenses/LensState";
@@ -6,14 +5,16 @@ import { LensText } from "@/review/lenses/LensText";
 import { SeenBox } from "@/review/lenses/SeenBox";
 import { ProseThreads } from "@/review/ProseThreads";
 import type { CommentActions } from "@/hooks/useComments";
+import type { OpenLenses } from "@/hooks/useOpenLenses";
 import type { CitationView, LensView } from "@/api";
 
 /** One lens of the pull request or of a block: open, in the flow of the
  * reading, and folded away with its chevron the way a file is. */
-export function LensSection({ lens, where, onCite, onSeen, comments }: LensSectionProps) {
-  // Seen folds it away, like a file marked read, and a reload keeps it so.
-  const [open, setOpen] = useState(!lens.seen);
-  useEffect(() => setOpen(!lens.seen), [lens.seen]);
+export function LensSection({ lens, where, onCite, onSeen, comments, folds }: LensSectionProps) {
+  // Seen folds it away, like a file marked read, unless the reader said
+  // otherwise against the mark it has now.
+  const open = folds.isOpen(where, lens.seen);
+  const setOpen = (next: boolean) => folds.set(where, lens.seen, next);
 
   return (
     <section className="lens border-b border-rule bg-ground px-4 py-3 md:px-6" data-lens={lens.id} data-lens-key={where} data-done={lens.seen ? "true" : undefined}>
@@ -66,5 +67,6 @@ type LensSectionProps = {
   where: string;
   onCite: (citation: CitationView) => void;
   onSeen: (lens: LensView, seen: boolean) => void;
+  folds: OpenLenses;
   comments: CommentActions;
 };

@@ -805,6 +805,22 @@ describe("open and closed", () => {
     await waitFor(() => expect(section("src/a.rs").querySelector(".diff")).toBeTruthy());
   });
 
+  it("ticks a file from its mark in the sidebar without folding it or moving on", async () => {
+    // Marking from the page folds the file and goes to the next; from the
+    // sidebar it is a tick and nothing more.
+    const calls = serve({ review: review() });
+    render(<App />);
+    await waitForReading("a.rs");
+    await waitFor(() => expect(section("src/a.rs").querySelector(".diff")).toBeTruthy());
+
+    fireEvent.click(screen.getByRole("button", { name: "Mark as read: src/a.rs" }));
+
+    await waitFor(() => expect(calls).toEqual([{ path: "src/a.rs", viewed: true }]));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Mark as unread: src/a.rs" })).toBeTruthy());
+    expect(section("src/a.rs").querySelector(".diff")).toBeTruthy();
+    expect(document.querySelector(".pane")?.getAttribute("data-current")).toBe("src/a.rs");
+  });
+
   it("moves on to the next file after one is marked read", async () => {
     // Folding the file away leaves the reader looking at whatever was under it.
     serve({ review: review() });

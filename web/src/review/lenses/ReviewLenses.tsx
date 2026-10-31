@@ -1,10 +1,11 @@
 import { LensSection } from "@/review/lenses/LensSection";
 import type { CommentActions } from "@/hooks/useComments";
+import type { OpenLenses } from "@/hooks/useOpenLenses";
 import type { CitationView, LensView } from "@/api";
 
 /** The pull request's lenses, before the first block: what the change is,
  * where its risk is and what was checked, read before any code. */
-export function ReviewLenses({ lenses, onCite, onSeen, comments }: ReviewLensesProps) {
+export function ReviewLenses({ lenses, onCite, onSeen, comments, folds }: ReviewLensesProps) {
   if (lenses.length === 0) return null;
   return (
     <div className="review-lenses">
@@ -12,7 +13,7 @@ export function ReviewLenses({ lenses, onCite, onSeen, comments }: ReviewLensesP
         pull request
       </div>
       {lenses.map((lens) => (
-        <LensSection key={lens.id} lens={lens} where={`pr:${lens.id}`} onCite={onCite} onSeen={onSeen} comments={comments} />
+        <LensSection key={lens.id} lens={lens} where={`pr:${lens.id}`} onCite={onCite} onSeen={onSeen} comments={comments} folds={folds} />
       ))}
     </div>
   );
@@ -23,4 +24,5 @@ type ReviewLensesProps = {
   onCite: (citation: CitationView) => void;
   onSeen: (lens: LensView, seen: boolean) => void;
   comments: CommentActions;
+  folds: OpenLenses;
 };
