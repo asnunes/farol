@@ -47,7 +47,7 @@ export function FileRow({
           <Button
             variant="ghost"
             className={cn(
-              "fileitem h-auto w-full justify-start gap-2 py-1 pr-2 pl-7 font-mono text-[0.8125rem] font-normal text-ink",
+              "fileitem h-auto w-full justify-start gap-2 py-1 pr-2 pl-[30px] font-mono text-[0.8125rem] font-normal text-ink",
               "hover:bg-sunken hover:text-ink",
               "aria-[current=true]:bg-highlight-dim aria-[current=true]:text-ink",
             )}

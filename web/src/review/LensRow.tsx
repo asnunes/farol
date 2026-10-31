@@ -21,7 +21,7 @@ export function LensRow({ lens, current, onPick, onCheck }: LensRowProps) {
       </Check>
       <Button
         variant="ghost"
-        className="lensitem h-auto w-full justify-start gap-2 py-1 pr-2 pl-7 font-sans text-[0.8125rem] font-normal text-ink hover:bg-sunken hover:text-ink aria-[current=true]:bg-highlight-dim aria-[current=true]:text-ink"
+        className="lensitem h-auto w-full justify-start gap-2 py-1 pr-2 pl-[30px] font-sans text-[0.8125rem] font-normal text-ink hover:bg-sunken hover:text-ink aria-[current=true]:bg-highlight-dim aria-[current=true]:text-ink"
         data-seen={lens.seen ? "true" : undefined}
         aria-current={current ? "true" : undefined}
         onClick={onPick}
