@@ -91,3 +91,29 @@ it("waits for a new draft after Generate instead of taking the one already there
   );
   await waitFor(() => expect((screen.getByLabelText("Title") as HTMLInputElement).value).toBe("New"));
 });
+
+it("keeps saying where the pull request went when the page learns it exists", async () => {
+  // The push and the tab coming back both reload what GitHub says, and the
+  // answer is now a pull request: the button goes, the dialog must not.
+  const gh = github();
+  const { rerender } = render(<CreatePullRequest pull={pull()} branch="feature/x" agent={null} github={gh} />);
+  fireEvent.click(screen.getByRole("button", { name: "Create pull request…" }));
+  fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Stop from the page" } });
+  fireEvent.click(screen.getByRole("button", { name: "Push and create" }));
+  expect(await screen.findByText("Pull request #13 opened")).toBeTruthy();
+
+  rerender(
+    <CreatePullRequest
+      pull={pull({ connection: "ready", number: 13, url: "https://example.test/pull/13" })}
+      branch="feature/x"
+      agent={null}
+      github={gh}
+    />,
+  );
+
+  expect(screen.getByRole("link", { name: /example.test\/pull\/13/ })).toBeTruthy();
+  fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
+  await waitFor(() => expect(screen.queryByText("Pull request #13 opened")).toBeNull());
+  expect(screen.queryByRole("button", { name: "Create pull request…" }), "there is one now").toBeNull();
+  expect(gh.reload).toHaveBeenCalled();
+});

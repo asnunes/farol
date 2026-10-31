@@ -20,16 +20,22 @@ export function CreatePullRequest({ pull, branch, agent, github }: CreatePullReq
 
   return (
     <>
-      <Button
-        size="xs"
-        className="create-pull bg-comment-ink text-surface hover:bg-comment-ink/90"
-        onClick={() => {
-          form.begin();
-          setOpen(true);
-        }}
-      >
-        Create pull request…
-      </Button>
+      {/* Only the button goes once a pull request is there. The dialog stays
+          for as long as it is open: anything that reloads the page's view of
+          GitHub — the push, a nudge, coming back to the tab after following
+          the link — would otherwise close it before the link could be read. */}
+      {pull.connection === "no-pull-request" && (
+        <Button
+          size="xs"
+          className="create-pull bg-comment-ink text-surface hover:bg-comment-ink/90"
+          onClick={() => {
+            form.begin();
+            setOpen(true);
+          }}
+        >
+          Create pull request…
+        </Button>
+      )}
       <Dialog
         open={open}
         onOpenChange={(next) => {

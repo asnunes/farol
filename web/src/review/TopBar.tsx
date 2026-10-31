@@ -160,9 +160,10 @@ export function TopBar({
           {pull && peer && pull.connection === "ready" && (
             <SubmitReview pull={pull} threads={threads} onSubmit={github.submit} />
           )}
-          {pull?.connection === "no-pull-request" && (
-            <CreatePullRequest pull={pull} branch={review.branch} agent={agent} github={github} />
-          )}
+          {/* Mounted whenever GitHub has answered, and showing its button only
+              while there is no pull request: the dialog saying where the new
+              one went has to outlive the page learning that it exists. */}
+          {pull && <CreatePullRequest pull={pull} branch={review.branch} agent={agent} github={github} />}
           <StopReview branch={review.branch} onStopped={onStopped} />
         </div>
       </div>
