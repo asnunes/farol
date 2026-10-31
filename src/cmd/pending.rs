@@ -17,16 +17,14 @@ pub(super) enum PendingAction {
         #[arg(long, allow_hyphen_values = true)]
         text: String,
     },
-    /// Change the words of a pending comment: the thread's, by the thread's
-    /// id, or one no thread points at, by the GitHub id `farol github status`
-    /// lists for it.
+    /// Change the words of a pending comment, by the GitHub id `farol github
+    /// status` lists for it.
     Edit {
         id: String,
         #[arg(long, allow_hyphen_values = true)]
         text: String,
     },
-    /// Take a pending comment back off the pull request, by the thread's id
-    /// or by the comment's own.
+    /// Take a pending comment back off the pull request, by its GitHub id.
     Remove { id: String },
 }
 

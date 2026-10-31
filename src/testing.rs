@@ -501,7 +501,7 @@ pub fn server_use_cases_over(
         ),
         close_thread: CloseThread::new(comments.clone()),
         write_pending: WritePending::new(comments.clone(), gate.clone(), publisher.clone()),
-        edit_pending: EditPending::new(comments.clone(), publisher.clone()),
+        edit_pending: EditPending::new(publisher.clone()),
         remove_pending: RemovePending::new(comments.clone(), publisher.clone()),
         choose_mode: ChooseMode::new(modes.clone()),
         readiness: ReviewReadiness::new(

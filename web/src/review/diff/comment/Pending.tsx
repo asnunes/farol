@@ -14,8 +14,8 @@ import type { CommentView, RemotePendingView } from "@/api";
  * rather than as the point of the thread.
  *
  * Drawn the same with no thread above it, for a comment written on the pull
- * request's page or left by a thread that was closed: then it goes by its own
- * id, and there is no conversation to ask the agent from. */
+ * request's page or left by a thread that was closed: then there is no
+ * conversation to ask the agent from. */
 export function Pending({ id, thread, remote, actions, busy }: PendingProps) {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState("");
@@ -156,7 +156,7 @@ export function Pending({ id, thread, remote, actions, busy }: PendingProps) {
 }
 
 type PendingProps = {
-  /** What edits and removals go by: the thread's id, or the comment's own. */
+  /** GitHub's id for the comment, which edits and removals go by. */
   id: string;
   /** The thread it came out of, when one still points at it. */
   thread: CommentView | null;

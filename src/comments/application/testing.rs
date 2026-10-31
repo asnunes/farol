@@ -84,7 +84,7 @@ impl World {
     }
 
     pub fn edit_pending(&self) -> EditPending {
-        EditPending::new(self.comments.clone(), self.publisher.clone())
+        EditPending::new(self.publisher.clone())
     }
 
     pub fn remove_pending(&self) -> RemovePending {

@@ -4,7 +4,7 @@ use crate::comments::application::Comments;
 use crate::comments::domain::{CommentError, RemoteState, ReviewPublisher};
 use crate::error::Result;
 
-/// Take a thread's pending comment back off the pull request. The thread
+/// Take a pending comment back off the pull request. A thread pointing at it
 /// stays: the conversation was never on GitHub.
 #[derive(Clone)]
 pub struct RemovePending {
@@ -23,16 +23,21 @@ impl RemovePending {
     /// One already deleted on the pull request's page is simply forgotten
     /// here; one already submitted is refused, because removing it from the
     /// thread would not remove it from the pull request.
-    /// `id` is the thread's, or the comment's own when no thread points at it.
+    /// `id` is GitHub's id for the comment. A thread that points at it forgets
+    /// it; one that was closed, or never existed, has nothing to forget.
     pub fn execute(&self, id: &str) -> Result<()> {
-        let pending = super::edit_pending::pending_named(&self.comments, id)?;
-        let state = self.publisher.remote(std::slice::from_ref(&pending.id))?;
+        let state = self.publisher.remote(&[id.to_string()])?;
         if let Some(RemoteState::Published { .. }) = state.first().map(|remote| &remote.state) {
             return Err(CommentError::AlreadyPublished { id: id.into() }.into());
         }
-        self.publisher.remove_pending(&pending.id)?;
-        if let Some(thread) = pending.thread {
-            self.comments.clear_pending(&thread)?;
+        self.publisher.remove_pending(id)?;
+        let pointing = self
+            .comments
+            .every()?
+            .into_iter()
+            .find(|thread| thread.pending.as_ref().is_some_and(|p| p.id == id));
+        if let Some(thread) = pointing {
+            self.comments.clear_pending(&thread.id)?;
         }
         Ok(())
     }
@@ -54,7 +59,7 @@ mod tests {
             .pending
             .unwrap();
 
-        world.remove_pending().execute(&thread.id).unwrap();
+        world.remove_pending().execute(&pending.id).unwrap();
 
         assert_eq!(world.publisher.state_of(&pending.id), RemoteState::Gone);
         assert_eq!(world.comments.get(&thread.id).unwrap().pending, None);
