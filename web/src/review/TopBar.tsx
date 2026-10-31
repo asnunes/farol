@@ -111,6 +111,11 @@ export function TopBar({
               always there to carry the marks, and on your own pull request
               there is none at all. */}
           {pull?.connection === "ready" && <SyncReads onSync={github.syncRead} onSynced={onTold} blocked={pull.drift !== null} />}
+          {/* Right after the sync it holds back: the reason, beside what it
+              is the reason for. */}
+          {pull?.connection === "ready" && pull.drift && (
+            <Drift drift={pull.drift} mine={pull.mine} number={pull.number} branch={review.branch} onPush={github.push} />
+          )}
         </div>
       </div>
 
@@ -136,9 +141,6 @@ export function TopBar({
             />
           )}
           {pull && peer && <Connection pull={pull} />}
-          {pull?.drift && (
-            <Drift drift={pull.drift} mine={pull.mine} number={pull.number} branch={review.branch} onPush={github.push} />
-          )}
         </div>
         <div className="flex shrink-0 items-center gap-3">
           {/* Counted apart, because only one of the two ever leaves farol. */}

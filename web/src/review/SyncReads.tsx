@@ -26,7 +26,7 @@ export function SyncReads({ onSync, onSynced, blocked }: SyncReadsProps) {
       aria-label="Sync read marks to GitHub"
       title={
         blocked
-          ? "The pull request is not at the commit you read: the line below says why"
+          ? "The pull request is not at the commit you read: the mark beside this says why"
           : "Sync read marks to GitHub"
       }
       disabled={busy || blocked}
