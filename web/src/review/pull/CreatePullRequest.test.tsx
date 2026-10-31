@@ -18,6 +18,7 @@ function pull(over: Partial<PullRequestView> = {}): PullRequestView {
     pending: {},
     loose: [],
     pendingFailed: null,
+    drift: null,
     draft: null,
     ...over,
   };
@@ -32,6 +33,7 @@ function github(): GitHubState {
     openPull: vi.fn().mockResolvedValue({ number: 13, url: "https://example.test/pull/13" }),
     generatePullDraft: vi.fn().mockResolvedValue(true),
     syncRead: vi.fn(),
+    push: vi.fn(),
   };
 }
 

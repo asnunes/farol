@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use crate::comments::domain::{CommentError, Readiness, ReviewPublisher};
+use crate::comments::domain::{CommentError, Drift, Readiness, ReviewPublisher};
 use crate::diff::application::{CommitHistory, ReviewScope};
 use crate::error::Result;
 use crate::shared::short;
@@ -78,6 +78,24 @@ impl PullRequestGate {
     /// lands on code nobody read — quietly, under the reviewer's name. So
     /// anything written onto the pull request asks this, and the refusal says
     /// which way to move.
+    /// How the commit under review stands against `head`, the pull request's,
+    /// or None when they are the same commit and nothing is uncommitted.
+    pub fn drift(&self, head: &str) -> Result<Option<Drift>> {
+        let scope = self.scope.get()?;
+        if scope.dirty {
+            return Ok(Some(Drift::Uncommitted));
+        }
+        if scope.head_sha == head {
+            return Ok(None);
+        }
+        Ok(Some(match self.history.is_ancestor(head)? {
+            true => Drift::Unpushed {
+                commits: self.history.commits_ahead_of(head),
+            },
+            false => Drift::Newer,
+        }))
+    }
+
     pub fn at_head(&self) -> Result<OpenPull> {
         let scope = self.scope.get()?;
         if scope.dirty {

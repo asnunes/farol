@@ -11,7 +11,7 @@ const SAID_FOR = 4000;
  * What it did is said beside it for a moment and then goes: it is an answer to
  * a press, not a state of the review. A refusal goes where every other one
  * does, through the caller. */
-export function SyncReads({ onSync }: SyncReadsProps) {
+export function SyncReads({ onSync, blocked }: SyncReadsProps) {
   const [busy, setBusy] = useState(false);
   const [said, setSaid] = useState<string | null>(null);
   const clearing = useRef<number | undefined>(undefined);
@@ -35,8 +35,12 @@ export function SyncReads({ onSync }: SyncReadsProps) {
         size="icon-xs"
         className="sync-reads text-faint hover:bg-sunken hover:text-ink"
         aria-label="Sync read marks to GitHub"
-        title="Sync read marks to GitHub"
-        disabled={busy}
+        title={
+          blocked
+            ? "The pull request is not at the commit you read: the line below says why"
+            : "Sync read marks to GitHub"
+        }
+        disabled={busy || blocked}
         onClick={() => void sync()}
       >
         {said ? (
@@ -64,4 +68,6 @@ function described(synced: SyncedView): string {
 type SyncReadsProps = {
   /** What the sync did, or null when it did not happen. */
   onSync: () => Promise<SyncedView | null>;
+  /** The pull request shows another commit, so there is nothing true to send. */
+  blocked: boolean;
 };

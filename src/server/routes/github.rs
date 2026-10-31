@@ -138,6 +138,14 @@ pub(super) async fn sync_read_marks(
     }
 }
 
+/// Push the reviewer's own branch, so the pull request shows what was read.
+pub(super) async fn push_branch(Extension(cases): Extension<ServerUseCases>) -> impl IntoResponse {
+    match away(move || cases.push_branch.execute()).await {
+        Ok(()) => StatusCode::NO_CONTENT.into_response(),
+        Err(e) => fail(e),
+    }
+}
+
 #[derive(Deserialize)]
 pub(super) struct ModeBody {
     mode: crate::comments::domain::ReviewMode,

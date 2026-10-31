@@ -92,6 +92,17 @@ export function useGitHub(onError: (message: string) => void, generation = 0) {
         return false;
       }
     },
+    /** Push the branch, then ask GitHub again: true once it went. */
+    push: async () => {
+      try {
+        await api.pushBranch();
+      } catch (e) {
+        onError(said(e));
+        return false;
+      }
+      await load();
+      return true;
+    },
     /** What the sync did, or null when it did not happen. */
     syncRead: async (): Promise<SyncedView | null> => {
       try {

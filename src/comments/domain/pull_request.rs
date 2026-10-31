@@ -37,3 +37,16 @@ pub struct OpenedPull {
     pub number: u32,
     pub url: String,
 }
+
+/// How the commit under review stands against the pull request's, when they
+/// differ. Each case has a different way out, and only one of them is a push.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Drift {
+    /// The working tree has changes no commit holds yet.
+    Uncommitted,
+    /// The branch has commits the pull request does not: a push brings it up.
+    Unpushed { commits: u32 },
+    /// The pull request has commits this checkout does not, or the two went
+    /// apart: a pull, and reading what came in.
+    Newer,
+}

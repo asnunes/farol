@@ -4,7 +4,7 @@ import { SyncReads } from "./SyncReads";
 
 it("says what the sync did on the pull request", async () => {
   const onSync = vi.fn().mockResolvedValue({ number: 87, marked: 12, unmarked: 1 });
-  render(<SyncReads onSync={onSync} />);
+  render(<SyncReads onSync={onSync} blocked={false} />);
 
   fireEvent.click(screen.getByRole("button", { name: "Sync read marks to GitHub" }));
 
@@ -14,10 +14,15 @@ it("says what the sync did on the pull request", async () => {
 it("says nothing of its own when the sync is refused", async () => {
   // The refusal is the caller's to show, the way every other one is.
   const onSync = vi.fn().mockResolvedValue(null);
-  render(<SyncReads onSync={onSync} />);
+  render(<SyncReads onSync={onSync} blocked={false} />);
 
   fireEvent.click(screen.getByRole("button", { name: "Sync read marks to GitHub" }));
 
   await vi.waitFor(() => expect(onSync).toHaveBeenCalled());
   expect(screen.queryByRole("status")).toBeNull();
+});
+
+it("cannot sync while the pull request shows another commit", () => {
+  render(<SyncReads onSync={vi.fn()} blocked={true} />);
+  expect(screen.getByRole("button", { name: "Sync read marks to GitHub" }).hasAttribute("disabled")).toBe(true);
 });

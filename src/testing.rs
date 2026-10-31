@@ -526,6 +526,10 @@ pub fn server_use_cases_over(
             ReviewModes::new(Arc::new(crate::testing::InMemoryModeStore::default())),
             scope.clone(),
         ),
+        push_branch: crate::comments::application::PushBranch::new(
+            gate.clone(),
+            Arc::new(RecordingPusher::default()),
+        ),
         sync_read_marks: crate::comments::application::SyncReadMarks::new(
             gate.clone(),
             publisher.clone(),

@@ -85,6 +85,8 @@ export const api = {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ verdict, summary }),
     }).then(json<SentView>),
+  /** Push the reviewer's own branch, so the pull request shows what was read. */
+  pushBranch: () => send("/api/github/push", "POST"),
   /** The pull request's read marks made to match the ones here. */
   syncRead: () => fetch("/api/github/read", { method: "POST" }).then(json<SyncedView>),
   /** Pushes the branch first when the host has not seen it. */
@@ -374,6 +376,9 @@ export type PullRequestView = {
    * or left behind by a thread that was closed. */
   loose: LoosePendingView[];
   pendingFailed: string | null;
+  /** How the commit under review stands against the pull request's, when
+   * they differ. */
+  drift: DriftView | null;
   /** What the pull request will say, while there is none open. */
   draft: PullDraftView | null;
 };
@@ -402,6 +407,10 @@ export type RemotePendingView = {
 };
 
 export type Verdict = "comment" | "request-changes" | "approve";
+
+/** Uncommitted work, commits the pull request lacks (`commits` of them), or
+ * commits it has that this checkout does not. */
+export type DriftView = { kind: "uncommitted" | "unpushed" | "newer"; commits: number | null };
 
 /** What a sync of the read marks did on the pull request. */
 export type SyncedView = { number: number; marked: number; unmarked: number };
