@@ -51,6 +51,13 @@ pub trait ReviewPublisher: Send + Sync {
     /// first succeeding.
     fn mark_read(&self, pull: &str, paths: &[String]) -> Result<usize>;
 
+    /// Take the read mark off these files on the pull request. Answers with
+    /// how many the host took.
+    fn mark_unread(&self, pull: &str, paths: &[String]) -> Result<usize>;
+
+    /// The files the reviewer has marked as read on the pull request.
+    fn viewed(&self, pull: &str) -> Result<Vec<String>>;
+
     /// Open a pull request from `branch` into `base`. The branch has to be on
     /// the host already.
     fn open_pull(&self, base: &str, branch: &str, draft: &PullDraft) -> Result<OpenedPull>;

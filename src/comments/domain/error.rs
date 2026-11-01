@@ -102,6 +102,14 @@ pub enum CommentError {
     #[error("could not push {branch} to origin: {why}\nPush it from a terminal, then try again.")]
     PushRefused { branch: String, why: String },
 
+    #[error(
+        "farol pushes only your own pull request's branch\nThis one is by somebody else: pull their commits instead."
+    )]
+    NotYourPull,
+
+    #[error("nothing to push: the pull request already has every commit of {branch}")]
+    NothingToPush { branch: String },
+
     #[error("a pull request is already open for {branch}: #{number}")]
     AlreadyOpen { branch: String, number: u32 },
 

@@ -103,6 +103,7 @@ const selfReview = {
   pending: {},
   loose: [],
   pendingFailed: null,
+    drift: null,
   draft: null,
 };
 

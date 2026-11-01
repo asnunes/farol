@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::comments::application::{Comments, PullRequestGate, ReviewModes};
 use crate::comments::domain::{
-    ModeChoice, PendingComment, Readiness, RemoteState, ReviewPublisher,
+    Drift, ModeChoice, PendingComment, Readiness, RemoteState, ReviewPublisher,
 };
 use crate::error::Result;
 
@@ -48,6 +48,10 @@ impl ReviewReadiness {
         let branch = self.pull.branch()?;
         let readiness = self.pull.readiness()?;
         let mode = self.modes.detect(&readiness)?;
+        let drift = match &readiness {
+            Readiness::Ready { head, .. } => self.pull.drift(head)?,
+            _ => None,
+        };
         let (pending, loose, pending_failed) = match &readiness {
             Readiness::Ready { id, .. } => match self.pending(id) {
                 Ok((pending, loose)) => (pending, loose, None),
@@ -64,6 +68,7 @@ impl ReviewReadiness {
             pending,
             loose,
             pending_failed,
+            drift,
             read: self.read.execute()?,
             // Only while there is a pull request to open: once it exists, the
             // draft has said what it had to.
@@ -125,6 +130,9 @@ pub struct Standing {
     pub pending: Vec<ThreadPending>,
     /// Pending comments no thread here points at.
     pub loose: Vec<PendingComment>,
+    /// How the commit under review stands against the pull request's, when
+    /// they differ.
+    pub drift: Option<Drift>,
     /// Why the pending comments could not be read, when they could not.
     pub pending_failed: Option<String>,
     pub read: Vec<String>,

@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use crate::comments::application::{
     CloseThread, CommentReach, Comments, EditPending, GeneratePending, PublishReview,
-    PullRequestGate, RemovePending, ReviewModes, WritePending,
+    PullRequestGate, RemovePending, ReviewModes, SyncReadMarks, WritePending,
 };
 use crate::comments::domain::Comment;
 use crate::comments::infra::MarkdownComments;
@@ -113,6 +113,10 @@ impl World {
             ReviewScope::new(self.source.clone()),
             self.read_files(),
         )
+    }
+
+    pub fn sync_read_marks(&self) -> SyncReadMarks {
+        SyncReadMarks::new(self.gate(), self.publisher.clone(), self.read_files())
     }
 
     /// What the reviewer read, over a review with no map: the ticks alone.

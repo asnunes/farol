@@ -14,7 +14,9 @@ pub(super) enum GithubAction {
     /// Whether the review can be sent, and what is in the way when it cannot.
     /// Exits non-zero while it cannot.
     Status,
-    /// Synchronize current file-read marks without publishing comments.
+    /// Make the pull request's read marks match farol's, without publishing
+    /// anything: files read here are marked there, and files marked there but
+    /// not read here are unmarked.
     Ticks,
     /// Send the review to the pull request.
     Review(ReviewArgs),
@@ -50,8 +52,11 @@ impl Action for GithubAction {
                 Ok(())
             }
             GithubAction::Ticks => {
-                let read = ctx.publish_review.ticks_only()?;
-                println!("{read} file(s) ticked as read on the pull request.");
+                let synced = ctx.sync_read_marks.execute()?;
+                println!(
+                    "{} file(s) marked and {} unmarked as read on pull request #{}.",
+                    synced.marked, synced.unmarked, synced.number
+                );
                 Ok(())
             }
             GithubAction::Review(args) => {

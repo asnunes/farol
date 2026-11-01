@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use serde::Serialize;
 
 use crate::comments::application::Standing;
-use crate::comments::domain::{ModeReason, Readiness, RemoteState, ReviewMode};
+use crate::comments::domain::{Drift, ModeReason, Readiness, RemoteState, ReviewMode};
 
 /// The pull request, as far as the screen needs it: whether it can be written
 /// on, which mode the review is in and why, and each thread's pending comment
@@ -37,6 +37,8 @@ pub struct PullRequestView {
     /// page, or left behind by a thread that was closed.
     pub loose: Vec<LoosePendingView>,
     pub pending_failed: Option<String>,
+    /// How the commit under review stands against the pull request's.
+    pub drift: Option<DriftView>,
     /// What the pull request will say, while there is none open: written by
     /// the agent after Generate, for the form to start from.
     pub draft: Option<PullDraftView>,
@@ -106,6 +108,20 @@ impl PullRequestView {
                 })
                 .collect(),
             pending_failed: standing.pending_failed.clone(),
+            drift: standing.drift.map(|drift| match drift {
+                Drift::Uncommitted => DriftView {
+                    kind: "uncommitted",
+                    commits: None,
+                },
+                Drift::Unpushed { commits } => DriftView {
+                    kind: "unpushed",
+                    commits: Some(commits),
+                },
+                Drift::Newer => DriftView {
+                    kind: "newer",
+                    commits: None,
+                },
+            }),
             draft: standing.draft.as_ref().map(|draft| PullDraftView {
                 title: draft.title.clone(),
                 body: draft.body.clone(),
@@ -183,6 +199,23 @@ pub struct LoosePendingView {
     pub from: u32,
     pub to: u32,
     pub body: String,
+}
+
+/// The commit under review against the pull request's.
+#[derive(Debug, Serialize)]
+pub struct DriftView {
+    /// "uncommitted", "unpushed" or "newer".
+    pub kind: &'static str,
+    /// How many commits the pull request is missing, when they are ours.
+    pub commits: Option<u32>,
+}
+
+/// What a sync of the read marks came to.
+#[derive(Debug, Serialize)]
+pub struct SyncedView {
+    pub number: u32,
+    pub marked: usize,
+    pub unmarked: usize,
 }
 
 /// What a submitted review came to.

@@ -204,7 +204,13 @@ farol github ticks
 `status` lists the pull request, the mode and the pending comments, and exits
 nonzero while the pull request cannot be reached. `review` submits the pending
 review and ticks the files you read. `ticks` sends only the read marks, and needs
-the pull request to show the commit you read.
+the pull request to show the commit you read: files read here are marked on the
+pull request, and files marked there but not read here are unmarked. The sync
+button beside the progress bar in the top bar does the same, in either mode.
+When the pull request is not at the commit you read, the button waits and the
+line under the top bar says why: uncommitted changes, commits the pull request
+lacks, or commits it has that you do not. On your own pull request, the second
+case comes with **Push**, which asks before it sends the branch.
 
 ## Share a map
 

@@ -51,6 +51,14 @@ impl ReviewPublisher for Unhosted {
         Err(CommentError::NoRemote.into())
     }
 
+    fn mark_unread(&self, _pull: &str, _paths: &[String]) -> Result<usize> {
+        Err(CommentError::NoRemote.into())
+    }
+
+    fn viewed(&self, _pull: &str) -> Result<Vec<String>> {
+        Err(CommentError::NoRemote.into())
+    }
+
     fn open_pull(
         &self,
         _base: &str,
