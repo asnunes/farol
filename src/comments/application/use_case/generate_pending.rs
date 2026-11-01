@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::agent::domain::{AgentChannel, AgentError};
 use crate::comments::application::{Comments, ReviewModes, message};
-use crate::comments::domain::{Purpose, RemoteState, ReviewPublisher};
+use crate::comments::domain::{PendingReview, Purpose, RemoteState};
 use crate::config::domain::ConfigRepository;
 use crate::error::Result;
 
@@ -17,7 +17,7 @@ pub struct GeneratePending {
     channel: Option<Arc<dyn AgentChannel>>,
     config: Arc<dyn ConfigRepository>,
     modes: ReviewModes,
-    publisher: Arc<dyn ReviewPublisher>,
+    publisher: Arc<dyn PendingReview>,
 }
 
 impl GeneratePending {
@@ -26,7 +26,7 @@ impl GeneratePending {
         channel: Option<Arc<dyn AgentChannel>>,
         config: Arc<dyn ConfigRepository>,
         modes: ReviewModes,
-        publisher: Arc<dyn ReviewPublisher>,
+        publisher: Arc<dyn PendingReview>,
     ) -> Self {
         Self {
             comments,

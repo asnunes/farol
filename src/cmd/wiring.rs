@@ -14,7 +14,9 @@ use crate::comments::application::{
     GeneratePullDraft, OpenPullRequest, PublishReview, PullRequestGate, PushBranch, RemovePending,
     ReviewModes, ReviewReadiness, SendComment, SyncReadMarks, WritePending, WritePullDraft,
 };
-use crate::comments::domain::{BranchPusher, PullDraftStore, ReviewPublisher};
+use crate::comments::domain::{
+    BranchPusher, PendingReview, PullDraftStore, PullRequests, ReadMarks,
+};
 use crate::comments::infra::{
     GhCredentials, GitHub, GitPush, JsonModeStore, JsonPullDraft, Logins, MarkdownComments,
     Unhosted,
@@ -170,16 +172,28 @@ impl Ctx {
 
         let host = remote.as_ref().map(|remote| remote.host.clone());
         let credentials = Arc::new(GhCredentials::new("gh"));
-        let publisher: Arc<dyn ReviewPublisher> = match remote {
-            Some(remote) => Arc::new(GitHub::new(
-                remote,
-                credentials.clone(),
-                serving
-                    .as_ref()
-                    .map(|serving| serving.logins.clone())
-                    .unwrap_or_default(),
-            )),
-            None => Arc::new(Unhosted),
+        // One host behind three ports: each use case is handed the one it
+        // needs, the way one GixSource stands behind the three diff ports.
+        let (pulls, pending, marks): (
+            Arc<dyn PullRequests>,
+            Arc<dyn PendingReview>,
+            Arc<dyn ReadMarks>,
+        ) = match remote {
+            Some(remote) => {
+                let github = Arc::new(GitHub::new(
+                    remote,
+                    credentials.clone(),
+                    serving
+                        .as_ref()
+                        .map(|serving| serving.logins.clone())
+                        .unwrap_or_default(),
+                ));
+                (github.clone(), github.clone(), github)
+            }
+            None => {
+                let unhosted = Arc::new(Unhosted);
+                (unhosted.clone(), unhosted.clone(), unhosted)
+            }
         };
 
         let reach = CommentReach::new(scope.clone(), diffs.clone());
@@ -203,36 +217,37 @@ impl Ctx {
             lens_answers.clone(),
         );
         let read = ListReadFiles::new(progress.clone(), scope.clone(), review.clone());
-        let gate = PullRequestGate::new(publisher.clone(), scope.clone(), history.clone());
+        let gate = PullRequestGate::new(pulls.clone(), scope.clone(), history.clone());
         let readiness = ReviewReadiness::new(
             gate.clone(),
             modes.clone(),
             comments.clone(),
-            publisher.clone(),
+            pending.clone(),
             host.clone(),
             read.clone(),
             drafts.clone(),
         );
-        let sync_read_marks = SyncReadMarks::new(gate.clone(), publisher.clone(), read.clone());
+        let sync_read_marks = SyncReadMarks::new(gate.clone(), marks.clone(), read.clone());
         let push_branch = PushBranch::new(gate.clone(), pusher.clone());
         let publish_review = PublishReview::new(
             comments.clone(),
             gate.clone(),
-            publisher.clone(),
+            pending.clone(),
+            marks,
             scope_for_publishing,
             read,
         );
         let open_pull_request = OpenPullRequest::new(
             gate.clone(),
-            publisher.clone(),
+            pulls,
             pusher.clone(),
             scope.clone(),
             drafts.clone(),
         );
         let close_thread = CloseThread::new(comments.clone());
-        let write_pending = WritePending::new(comments.clone(), gate, publisher.clone());
-        let edit_pending = EditPending::new(publisher.clone());
-        let remove_pending = RemovePending::new(comments.clone(), publisher.clone());
+        let write_pending = WritePending::new(comments.clone(), gate, pending.clone());
+        let edit_pending = EditPending::new(pending.clone());
+        let remove_pending = RemovePending::new(comments.clone(), pending.clone());
         let choose_mode = ChooseMode::new(modes.clone());
         let write_answer = WriteAnswer::new(
             lens_catalog.clone(),
@@ -315,7 +330,7 @@ impl Ctx {
                     serving.agent.as_ref().map(channel),
                     serving.config,
                     modes,
-                    publisher,
+                    pending,
                 ),
                 open_pull_request,
                 comments,

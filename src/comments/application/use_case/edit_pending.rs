@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::comments::domain::{CommentError, RemoteState, ReviewPublisher};
+use crate::comments::domain::{CommentError, PendingReview, RemoteState};
 use crate::error::Result;
 
 /// Change the words of a pending comment, where it sits on GitHub.
@@ -11,11 +11,11 @@ use crate::error::Result;
 /// a thread or without one.
 #[derive(Clone)]
 pub struct EditPending {
-    publisher: Arc<dyn ReviewPublisher>,
+    publisher: Arc<dyn PendingReview>,
 }
 
 impl EditPending {
-    pub fn new(publisher: Arc<dyn ReviewPublisher>) -> Self {
+    pub fn new(publisher: Arc<dyn PendingReview>) -> Self {
         Self { publisher }
     }
 

@@ -492,12 +492,11 @@ pub fn server_use_cases_over(
 
     let source = Arc::new(FakeDiffSource::with_paths(paths));
     let scope = ReviewScope::new(source.clone());
-    let publisher: Arc<dyn crate::comments::domain::ReviewPublisher> =
-        Arc::new(crate::comments::infra::Unhosted);
+    let unhosted = Arc::new(crate::comments::infra::Unhosted);
     let config = Arc::new(crate::testing::InMemoryConfigRepository::default());
     let modes = ReviewModes::new(Arc::new(crate::testing::InMemoryModeStore::default()));
     let gate = PullRequestGate::new(
-        publisher.clone(),
+        unhosted.clone(),
         scope.clone(),
         CommitHistory::new(source.clone()),
     );
@@ -528,25 +527,25 @@ pub fn server_use_cases_over(
             None,
             config,
             modes.clone(),
-            publisher.clone(),
+            unhosted.clone(),
         ),
         close_thread: CloseThread::new(comments.clone()),
-        write_pending: WritePending::new(comments.clone(), gate.clone(), publisher.clone()),
-        edit_pending: EditPending::new(publisher.clone()),
-        remove_pending: RemovePending::new(comments.clone(), publisher.clone()),
+        write_pending: WritePending::new(comments.clone(), gate.clone(), unhosted.clone()),
+        edit_pending: EditPending::new(unhosted.clone()),
+        remove_pending: RemovePending::new(comments.clone(), unhosted.clone()),
         choose_mode: ChooseMode::new(modes.clone()),
         readiness: ReviewReadiness::new(
             gate.clone(),
             modes,
             comments.clone(),
-            publisher.clone(),
+            unhosted.clone(),
             None,
             read.clone(),
             Arc::new(InMemoryPullDrafts::default()),
         ),
         open_pull_request: crate::comments::application::OpenPullRequest::new(
             gate.clone(),
-            publisher.clone(),
+            unhosted.clone(),
             Arc::new(RecordingPusher::default()),
             scope.clone(),
             Arc::new(InMemoryPullDrafts::default()),
@@ -563,10 +562,17 @@ pub fn server_use_cases_over(
         ),
         sync_read_marks: crate::comments::application::SyncReadMarks::new(
             gate.clone(),
-            publisher.clone(),
+            unhosted.clone(),
             read.clone(),
         ),
-        publish_review: PublishReview::new(comments.clone(), gate, publisher, scope, read),
+        publish_review: PublishReview::new(
+            comments.clone(),
+            gate,
+            unhosted.clone(),
+            unhosted,
+            scope,
+            read,
+        ),
         comments,
     }
 }
@@ -871,11 +877,29 @@ impl FakePublisher {
     }
 }
 
-impl crate::comments::domain::ReviewPublisher for FakePublisher {
+impl crate::comments::domain::PullRequests for FakePublisher {
     fn readiness(&self, _branch: &str, _head: &str) -> Result<crate::comments::domain::Readiness> {
         Ok(self.readiness.clone())
     }
 
+    fn open_pull(
+        &self,
+        base: &str,
+        branch: &str,
+        draft: &crate::comments::domain::PullDraft,
+    ) -> Result<crate::comments::domain::OpenedPull> {
+        self.calls
+            .lock()
+            .unwrap()
+            .push(format!("open {branch} into {base}: {}", draft.title));
+        Ok(crate::comments::domain::OpenedPull {
+            number: 13,
+            url: "https://example.test/pull/13".into(),
+        })
+    }
+}
+
+impl crate::comments::domain::PendingReview for FakePublisher {
     fn add_pending(
         &self,
         _pull: &str,
@@ -973,7 +997,9 @@ impl crate::comments::domain::ReviewPublisher for FakePublisher {
         }
         Ok("https://example.test/r1".into())
     }
+}
 
+impl crate::comments::domain::ReadMarks for FakePublisher {
     fn mark_read(&self, _pull: &str, paths: &[String]) -> Result<usize> {
         let taken = self.takes(paths)?;
         let mut marked = self.marked.lock().unwrap();
@@ -1000,22 +1026,6 @@ impl crate::comments::domain::ReviewPublisher for FakePublisher {
 
     fn viewed(&self, _pull: &str) -> Result<Vec<String>> {
         Ok(self.marked())
-    }
-
-    fn open_pull(
-        &self,
-        base: &str,
-        branch: &str,
-        draft: &crate::comments::domain::PullDraft,
-    ) -> Result<crate::comments::domain::OpenedPull> {
-        self.calls
-            .lock()
-            .unwrap()
-            .push(format!("open {branch} into {base}: {}", draft.title));
-        Ok(crate::comments::domain::OpenedPull {
-            number: 13,
-            url: "https://example.test/pull/13".into(),
-        })
     }
 }
 
@@ -1280,7 +1290,7 @@ mod tests {
     //! does not exist.
 
     use super::*;
-    use crate::comments::domain::{RemoteState, ReviewPublisher};
+    use crate::comments::domain::{PendingReview, ReadMarks, RemoteState};
     use crate::diff::domain::FileDiffSource;
 
     #[test]
