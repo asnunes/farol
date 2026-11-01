@@ -1,7 +1,6 @@
 use crate::diff::application::ReviewScope;
 use crate::error::Result;
 use crate::map::application::{Bundle, MapVersions};
-use crate::map::domain::{MapError, WORKING};
 use crate::shared::short;
 
 /// Write the map out for another machine to read.
@@ -31,12 +30,6 @@ impl ExportMap {
 
     pub fn execute(&self) -> Result<Export> {
         let mut map = self.versions.require_current()?;
-
-        // A map keyed to uncommitted work names a commit nobody else has, and
-        // would import as a review of code the other machine cannot fetch.
-        if map.generated_at == WORKING {
-            return Err(MapError::ExportsUncommitted.into());
-        }
 
         // A deactivated note is a decision waiting for whoever wrote it. Sent
         // along, it would arrive as a decision for somebody who cannot make it:
@@ -90,10 +83,6 @@ mod tests {
             .with_ancestors(&["abc1234"])
     }
 
-    fn abc_dirty() -> FakeDiffSource {
-        abc().dirty()
-    }
-
     fn started(svc: &crate::testing::MapServices) {
         svc.editor.edit(|_| Ok::<_, MapError>(())).unwrap();
     }
@@ -144,17 +133,6 @@ mod tests {
         let out = export.execute().unwrap();
 
         assert!(!out.body.contains("expensive prose"), "{}", out.body);
-    }
-
-    #[test]
-    fn a_map_derived_over_uncommitted_work_cannot_be_handed_over() {
-        // It names a commit nobody else can fetch.
-        let (export, svc) = exporting(abc_dirty);
-        started(&svc);
-
-        let err = export.execute().unwrap_err();
-
-        assert!(err.to_string().contains("uncommitted work"), "{err}");
     }
 
     /// A block to hang an orphaned note off, since a note needs one.

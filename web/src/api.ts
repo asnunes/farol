@@ -432,7 +432,7 @@ export type LensView = {
   title: string;
   state: "written" | "outdated" | "missing";
   text: string;
-  /** The short commit it was written at, or "uncommitted work". */
+  /** The short commit it was written at. */
   writtenAt: string | null;
   /** Files changed since it was written; zero when only its prompt did. */
   changed: number;

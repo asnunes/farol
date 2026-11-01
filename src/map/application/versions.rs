@@ -1,13 +1,13 @@
 //! Which stored version applies to where we are, and how far behind it is.
 //!
 //! Read-only. It changes when the rules of lineage change — what counts as an
-//! ancestor, how uncommitted work is keyed — and for no other reason.
+//! ancestor — and for no other reason.
 
 use std::sync::Arc;
 
 use crate::diff::application::{CommitHistory, ReviewScope};
 use crate::error::Result;
-use crate::map::domain::{MapError, MapRepository, ReviewMap, WORKING};
+use crate::map::domain::{MapError, MapRepository, ReviewMap};
 
 #[derive(Clone)]
 pub struct MapVersions {
@@ -25,14 +25,9 @@ impl MapVersions {
         }
     }
 
-    /// The version key for where we are: a commit, or the working-tree marker.
+    /// The version key for where we are: the commit under review.
     pub fn target(&self) -> Result<String> {
-        let scope = self.scope.get()?;
-        Ok(if scope.dirty {
-            WORKING.to_string()
-        } else {
-            scope.head_sha.clone()
-        })
+        Ok(self.scope.get()?.head_sha.clone())
     }
 
     /// The version stored for exactly where we are, if there is one.
@@ -69,21 +64,16 @@ impl MapVersions {
         self.history.commits_ahead_of(&map.generated_at)
     }
 
-    /// The map to inherit from: uncommitted work first, then the newest stored
-    /// commit that is an ancestor of where we are now.
+    /// The map to inherit from: the newest stored commit that is an ancestor
+    /// of where we are now.
     pub fn parent_of(&self, target: &str) -> Result<Option<(String, ReviewMap)>> {
-        if target != WORKING
-            && let Some(wip) = self.repo.load_at(WORKING)?
-        {
-            return Ok(Some((WORKING.to_string(), wip)));
-        }
         self.nearest_ancestor(target)
     }
 
     fn nearest_ancestor(&self, target: &str) -> Result<Option<(String, ReviewMap)>> {
         let mut best: Option<(u32, String)> = None;
         for sha in self.repo.stored_shas()? {
-            if sha == target || sha == WORKING || !self.history.is_ancestor(&sha)? {
+            if sha == target || !self.history.is_ancestor(&sha)? {
                 continue;
             }
             let distance = self.history.commits_ahead_of(&sha);
@@ -160,34 +150,5 @@ mod tests {
 
         let err = versions.require_current().unwrap_err();
         assert!(err.to_string().contains("feature/x"), "{err}");
-    }
-
-    #[test]
-    fn uncommitted_work_is_keyed_apart_from_the_commit_it_sits_on() {
-        let versions = seeded(
-            FakeDiffSource::with_paths(&["a.rs"])
-                .on_commit("head")
-                .dirty(),
-            &[],
-        );
-
-        assert_eq!(versions.target().unwrap(), WORKING);
-    }
-
-    #[test]
-    fn a_working_map_is_inherited_ahead_of_any_commit() {
-        // Work in progress is the newest thing there is, whatever the history
-        // says about distances.
-        let source = FakeDiffSource::with_paths(&["a.rs"])
-            .on_commit("head")
-            .with_ancestors(&["old"])
-            .at_distance("old", 1);
-        let repo = Arc::new(InMemoryMapRepository::new());
-        repo.seed(ReviewMap::new("feature/x", "main", "old"));
-        repo.seed(ReviewMap::new("feature/x", "main", WORKING));
-        let versions = services(source, repo).versions;
-
-        let (sha, _) = versions.parent_of("head").unwrap().unwrap();
-        assert_eq!(sha, WORKING);
     }
 }

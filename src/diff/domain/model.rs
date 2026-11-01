@@ -197,7 +197,6 @@ pub struct Scope {
     pub base_sha: String,
     pub head_sha: String,
     pub merge_base: bool,
-    pub dirty: bool,
     pub files: Vec<FileChange>,
 }
 
@@ -404,7 +403,6 @@ mod tests {
             base_sha: "x".into(),
             head_sha: "y".into(),
             merge_base: true,
-            dirty: false,
             files: paths
                 .iter()
                 .map(|p| FileChange {

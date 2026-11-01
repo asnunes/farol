@@ -3,7 +3,7 @@
 use std::fmt::{self, Display};
 
 use super::text::indent_rest;
-use crate::map::domain::{ReviewMap, WORKING};
+use crate::map::domain::ReviewMap;
 use crate::shared::short;
 
 /// The map itself. Deliberately without the deactivated notes: this stays a
@@ -18,11 +18,7 @@ impl Display for MapReport<'_> {
         let map = self.map;
         writeln!(f, "map for {} → {}", map.branch, map.base)?;
 
-        let at = if map.generated_at == WORKING {
-            "uncommitted work".to_string()
-        } else {
-            short(&map.generated_at)
-        };
+        let at = short(&map.generated_at);
         match self.behind {
             0 => writeln!(f, "generated at {at}")?,
             1 => writeln!(f, "generated at {at} (1 commit behind HEAD)")?,
@@ -153,18 +149,6 @@ mod tests {
     fn an_empty_map_says_so_instead_of_printing_nothing() {
         let m = ReviewMap::new("b", "main", "abc1234");
         assert!(render(&m, 0).contains("The map is empty"));
-    }
-
-    #[test]
-    fn a_map_of_uncommitted_work_says_so_instead_of_printing_a_sha() {
-        // There is no commit to name, and a seven-character slice of the
-        // sentinel would be gibberish.
-        let mut m = sample();
-        m.generated_at = crate::map::domain::WORKING.to_string();
-
-        let out = render(&m, 0);
-
-        assert!(out.contains("generated at uncommitted work"), "{out}");
     }
 
     #[test]

@@ -21,18 +21,15 @@ pub(super) enum Side<'a> {
     /// The file does not exist on this side — an addition or a deletion.
     Absent,
     Object(&'a Blob),
-    /// Uncommitted work, which has no object to point at yet.
-    Worktree,
 }
 
 impl Side<'_> {
-    /// A null id means "no object": with a worktree root set for this side git
-    /// reads the file from disk, and without one the side simply is not there.
-    /// The empty blob would be wrong — it is an object, and a fresh repository
-    /// has never stored it.
+    /// A null id means "no object": the side simply is not there. The empty
+    /// blob would be wrong — it is an object, and a fresh repository has never
+    /// stored it.
     pub(super) fn id(&self, hash: gix::hash::Kind) -> gix::ObjectId {
         match self {
-            Side::Absent | Side::Worktree => gix::ObjectId::null(hash),
+            Side::Absent => gix::ObjectId::null(hash),
             Side::Object(blob) => blob.id,
         }
     }
@@ -74,13 +71,10 @@ mod tests {
 
     #[test]
     fn a_side_with_no_object_hands_git_the_null_id() {
-        // Both mean "no object here": with a worktree root set git reads the
-        // file from disk, and without one the side simply is not there. The
-        // empty blob would be wrong — it is an object, and a fresh repository
-        // has never stored it.
+        // The empty blob would be wrong: it is an object, and a fresh
+        // repository has never stored it.
         let null = gix::ObjectId::null(gix::hash::Kind::Sha1);
 
         assert_eq!(Side::Absent.id(gix::hash::Kind::Sha1), null);
-        assert_eq!(Side::Worktree.id(gix::hash::Kind::Sha1), null);
     }
 }

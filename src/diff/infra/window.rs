@@ -6,7 +6,7 @@
 //! repo with a vendor directory, was a gigabyte held for as long as the server
 //! ran.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use super::blob::{Blob, Diffed, Side};
 use super::git::Git;
@@ -18,18 +18,12 @@ pub(super) struct Window {
     pub files: Vec<FileChange>,
     pub base_blobs: BTreeMap<String, Blob>,
     pub head_blobs: BTreeMap<String, Blob>,
-    /// Paths whose new side is uncommitted work, so it has no object to point
-    /// at and has to be read from disk again when the diff is asked for.
-    pub from_worktree: BTreeSet<String>,
 }
 
 impl Window {
-    pub fn of(git: &Git, base: gix::ObjectId, head: gix::ObjectId, dirty: bool) -> Result<Self> {
-        let mut named = Self::named(git, base, head)?;
-        if dirty {
-            Self::add_worktree(git, &mut named)?;
-        }
-        Self::read(git, base, named)
+    pub fn of(git: &Git, base: gix::ObjectId, head: gix::ObjectId) -> Result<Self> {
+        let named = Self::named(git, base, head)?;
+        Self::read(git, named)
     }
 
     /// Name both sides of every changed file, without reading any of them.
@@ -90,48 +84,17 @@ impl Window {
         Ok(out)
     }
 
-    /// Fold uncommitted work into the window.
-    fn add_worktree(git: &Git, named: &mut BTreeMap<String, Sides>) -> Result<()> {
-        for path in git.worktree_changes()? {
-            let sides = named.entry(path).or_default();
-            sides.from_worktree = true;
-            sides.new_id = None;
-        }
-        Ok(())
-    }
-
     /// Read the bytes for the window, and only for the window.
-    fn read(git: &Git, base: gix::ObjectId, named: BTreeMap<String, Sides>) -> Result<Self> {
+    fn read(git: &Git, named: BTreeMap<String, Sides>) -> Result<Self> {
         let mut files = Vec::new();
         let mut base_blobs = BTreeMap::new();
         let mut head_blobs = BTreeMap::new();
-        let mut from_worktree = BTreeSet::new();
 
         for (path, sides) in named {
             let old_key = sides.old_path.clone().unwrap_or_else(|| path.clone());
 
-            let old = match sides.old_id {
-                Some(id) => Some(git.blob(id)?),
-                // A path git only knows about from the worktree still has a
-                // base side, and the tree is where to find it.
-                None if sides.from_worktree => git.blob_at(base, &old_key)?,
-                None => None,
-            };
-
-            let new = match sides.new_id {
-                Some(id) => Some(git.blob(id)?),
-                None if sides.from_worktree => git.worktree_blob(&path)?,
-                None => None,
-            };
-
-            // A file whose uncommitted edits happen to restore the base is not
-            // a change, whatever status said about it. A rename is exempt:
-            // moving a file without touching it leaves both sides the same blob
-            // on purpose, and that move is still something to report.
-            if sides.old_path.is_none() && old.as_ref().map(|b| b.id) == new.as_ref().map(|b| b.id)
-            {
-                continue;
-            }
+            let old = sides.old_id.map(|id| git.blob(id)).transpose()?;
+            let new = sides.new_id.map(|id| git.blob(id)).transpose()?;
 
             let status = match (&sides.old_path, &old, &new) {
                 (Some(_), _, _) => FileStatus::Renamed,
@@ -146,7 +109,7 @@ impl Window {
             let (additions, deletions) = match git.diff(
                 &path,
                 old.as_ref().map(Side::Object).unwrap_or(Side::Absent),
-                Self::new_side(new.as_ref(), sides.from_worktree),
+                new.as_ref().map(Side::Object).unwrap_or(Side::Absent),
             )? {
                 Diffed::Untouchable => (0, 0),
                 Diffed::Text(h) => (h.additions, h.deletions),
@@ -171,9 +134,6 @@ impl Window {
                 base_blobs.insert(old_key, blob);
             }
             if let Some(blob) = new {
-                if sides.from_worktree {
-                    from_worktree.insert(path.clone());
-                }
                 head_blobs.insert(path, blob);
             }
         }
@@ -183,16 +143,7 @@ impl Window {
             files,
             base_blobs,
             head_blobs,
-            from_worktree,
         })
-    }
-
-    fn new_side(blob: Option<&Blob>, from_worktree: bool) -> Side<'_> {
-        match (blob, from_worktree) {
-            (None, _) => Side::Absent,
-            (Some(_), true) => Side::Worktree,
-            (Some(blob), false) => Side::Object(blob),
-        }
     }
 }
 
@@ -207,9 +158,6 @@ struct Sides {
     old_path: Option<String>,
     old_id: Option<gix::ObjectId>,
     new_id: Option<gix::ObjectId>,
-    /// Set when the new side is uncommitted work, which has no id in the object
-    /// database until it is read off disk.
-    from_worktree: bool,
 }
 
 #[cfg(test)]
@@ -222,11 +170,11 @@ mod tests {
     }
 
     /// The window between `main` and the branch, as `open` would build it.
-    fn window(f: &Fixture, dirty: bool) -> Window {
+    fn window(f: &Fixture) -> Window {
         let git = f.open();
         let base = git.resolve("main").unwrap();
         let head = git.resolve("HEAD").unwrap();
-        Window::of(&git, base, head, dirty).expect("the window should build")
+        Window::of(&git, base, head).expect("the window should build")
     }
 
     fn paths(w: &Window) -> Vec<&str> {
@@ -244,7 +192,7 @@ mod tests {
         f.write("changed.rs", &numbered(10));
         f.commit("change one file");
 
-        let w = window(&f, false);
+        let w = window(&f);
 
         assert_eq!(paths(&w), vec!["changed.rs"]);
         assert!(!w.head_blobs.contains_key("untouched.rs"));
@@ -260,7 +208,7 @@ mod tests {
         f.write("a.rs", &numbered(12));
         f.commit("extend a");
 
-        let w = window(&f, false);
+        let w = window(&f);
 
         assert_eq!(w.files[0].status, FileStatus::Modified);
         assert_eq!(w.base_blobs["a.rs"].data, numbered(10).into_bytes());
@@ -279,7 +227,7 @@ mod tests {
         f.write("arrives.rs", &numbered(30));
         f.commit("swap them");
 
-        let w = window(&f, false);
+        let w = window(&f);
 
         assert!(!w.base_blobs.contains_key("arrives.rs"));
         assert!(!w.head_blobs.contains_key("goes.rs"));
@@ -299,7 +247,7 @@ mod tests {
         f.git(&["mv", "old/a.rs", "new/a.rs"]);
         f.commit("move it");
 
-        let w = window(&f, false);
+        let w = window(&f);
 
         assert_eq!(w.files[0].status, FileStatus::Renamed);
         assert_eq!(w.files[0].old_path.as_deref(), Some("old/a.rs"));
@@ -319,7 +267,7 @@ mod tests {
         }
         f.commit("three files");
 
-        assert_eq!(paths(&window(&f, false)), vec!["a.rs", "m.rs", "z.rs"]);
+        assert_eq!(paths(&window(&f)), vec!["a.rs", "m.rs", "z.rs"]);
     }
 
     #[test]
@@ -333,81 +281,8 @@ mod tests {
         .unwrap();
         f.commit("add a binary");
 
-        let w = window(&f, false);
+        let w = window(&f);
 
         assert_eq!((w.files[0].additions, w.files[0].deletions), (0, 0));
-    }
-
-    #[test]
-    fn uncommitted_work_joins_the_window_only_when_asked_for() {
-        let f = Fixture::new();
-        f.write("a.rs", &numbered(10));
-        f.commit("add a");
-        f.on_branch("feature/x");
-        f.write("a.rs", &numbered(12));
-        f.commit("extend a");
-        f.write("a.rs", &numbered(20));
-
-        assert_eq!(
-            window(&f, false).head_blobs["a.rs"].data,
-            numbered(12).into_bytes(),
-            "without --dirty the committed side is what is read"
-        );
-
-        let dirty = window(&f, true);
-        assert_eq!(dirty.head_blobs["a.rs"].data, numbered(20).into_bytes());
-        assert!(
-            dirty.from_worktree.contains("a.rs"),
-            "the diff has to be pointed at the working tree later"
-        );
-    }
-
-    #[test]
-    fn work_staged_and_then_undone_on_disk_is_not_a_change() {
-        // The index says the file moved and the worktree says it moved back,
-        // so git reports it on both counts — but against the base there is
-        // nothing to read, and listing it would send the reviewer to an empty
-        // diff.
-        let f = Fixture::new();
-        f.write("a.rs", &numbered(10));
-        f.commit("add a");
-        f.on_branch("feature/x");
-        f.write("b.rs", "so the branch is not empty\n");
-        f.commit("add b");
-
-        f.write("a.rs", "changed my mind\n");
-        f.git(&["add", "a.rs"]);
-        f.write("a.rs", &numbered(10));
-
-        assert!(
-            f.open()
-                .worktree_changes()
-                .unwrap()
-                .iter()
-                .any(|p| p == "a.rs"),
-            "git should be reporting it, or this test proves nothing"
-        );
-        assert_eq!(paths(&window(&f, true)), vec!["b.rs"]);
-    }
-
-    #[test]
-    fn a_file_only_the_worktree_knows_about_still_gets_its_base_side() {
-        // Uncommitted edits to a file the branch had not touched: the base is
-        // in the tree even though the tree diff never mentioned it.
-        let f = Fixture::new();
-        f.write("a.rs", &numbered(10));
-        f.commit("add a");
-        f.on_branch("feature/x");
-        f.write("b.rs", "unrelated\n");
-        f.commit("add b");
-        f.write("a.rs", &numbered(30));
-
-        let w = window(&f, true);
-
-        assert_eq!(w.base_blobs["a.rs"].data, numbered(10).into_bytes());
-        assert_eq!(
-            w.files.iter().find(|c| c.path == "a.rs").unwrap().status,
-            FileStatus::Modified
-        );
     }
 }

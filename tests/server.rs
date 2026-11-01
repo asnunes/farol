@@ -1170,7 +1170,6 @@ fn explicit_arguments_update_the_same_process_and_port() {
             "--no-open",
         ],
         vec!["serve", "main", head.trim(), "--no-open"],
-        vec!["serve", "--dirty", "--no-open"],
         vec!["serve", "--no-open", "--no-watch"],
     ] {
         let said = s.repo.ok(&args);
@@ -1233,23 +1232,14 @@ fn a_symbolic_head_follows_changes_but_an_explicit_commit_stays_selected() {
 }
 
 #[test]
-fn dirty_reads_and_direct_comparisons_use_the_updated_window() {
+fn a_direct_comparison_uses_the_updated_window() {
     let s = Serving::new();
-    s.repo.ok(&["serve", "--dirty", "--no-open"]);
-    s.repo.write("src/a.rs", "first uncommitted edit\n");
-    assert!(
-        s.get("/api/file?path=src/a.rs")
-            .contains("first uncommitted edit")
-    );
-    s.repo.write("src/a.rs", "second uncommitted edit\n");
-    assert!(
-        s.get("/api/lines?path=src/a.rs&from=1&to=1")
-            .contains("second uncommitted edit")
-    );
     s.repo.ok(&["serve", "--no-open"]);
+    s.repo.write("src/a.rs", "uncommitted edit\n");
     assert!(
         !s.get("/api/file?path=src/a.rs")
-            .contains("uncommitted edit")
+            .contains("uncommitted edit"),
+        "only commits are reviewed: work on disk stays out of the diff"
     );
     s.repo.ok(&["serve", "HEAD", "--direct", "--no-open"]);
     assert_eq!(

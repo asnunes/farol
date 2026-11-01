@@ -44,7 +44,7 @@ pub enum CommentError {
     NoSummary,
 
     #[error(
-        "this review covers uncommitted work, and a pull request can only be reviewed at a commit\nCommit the change and derive the map again."
+        "the branch has uncommitted changes, and a pull request can only be reviewed at a commit\nCommit the change and derive the map again."
     )]
     Uncommitted,
 

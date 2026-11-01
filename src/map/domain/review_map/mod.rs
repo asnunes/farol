@@ -29,7 +29,7 @@ pub struct ReviewMap {
     pub version: u32,
     pub branch: String,
     pub base: String,
-    /// Commit this version was built against, or `working` for uncommitted work.
+    /// Commit this version was built against.
     pub generated_at: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent: Option<String>,

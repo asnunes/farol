@@ -72,17 +72,11 @@ impl PullRequestGate {
         }
     }
 
-    /// The open pull request, showing the commit the reviewer is reading.
-    ///
-    /// A comment is anchored by line number, and against another commit it
-    /// lands on code nobody read — quietly, under the reviewer's name. So
-    /// anything written onto the pull request asks this, and the refusal says
-    /// which way to move.
     /// How the commit under review stands against `head`, the pull request's,
     /// or None when they are the same commit and nothing is uncommitted.
     pub fn drift(&self, head: &str) -> Result<Option<Drift>> {
         let scope = self.scope.get()?;
-        if scope.dirty {
+        if self.history.uncommitted()? {
             return Ok(Some(Drift::Uncommitted));
         }
         if scope.head_sha == head {
@@ -96,9 +90,15 @@ impl PullRequestGate {
         }))
     }
 
+    /// The open pull request, showing the commit the reviewer is reading.
+    ///
+    /// A comment is anchored by line number, and against another commit it
+    /// lands on code nobody read — quietly, under the reviewer's name. So
+    /// anything written onto the pull request asks this, and the refusal says
+    /// which way to move.
     pub fn at_head(&self) -> Result<OpenPull> {
         let scope = self.scope.get()?;
-        if scope.dirty {
+        if self.history.uncommitted()? {
             return Err(CommentError::Uncommitted.into());
         }
         let pull = self.open()?;

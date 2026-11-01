@@ -79,7 +79,7 @@ impl PublishReview {
         if read.is_empty() {
             return Ok(0);
         }
-        if scope.dirty || scope.head_sha != pull.head {
+        if self.pull.drift(&pull.head)?.is_some() {
             return Err(crate::error::Error::msg(format!(
                 "the pull request is at {}, you read {}",
                 short(&pull.head),

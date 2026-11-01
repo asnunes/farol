@@ -22,8 +22,7 @@ Follow the general Farol verification workflow. If coverage or note
 decisions remain unresolved, return to map maintenance.
 
 The export must describe committed code that the reviewer can obtain.
-If the map covers uncommitted work, explain what prevents the export;
-do not create a commit merely to complete this workflow.
+Do not create a commit merely to complete this workflow.
 
 ## Export the file
 
