@@ -69,7 +69,7 @@ impl MapRepository for JsonMapRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::map::domain::{Position, WORKING};
+    use crate::map::domain::Position;
     use crate::testing::slug;
 
     fn repo() -> (tempfile::TempDir, JsonMapRepository) {
@@ -158,17 +158,6 @@ mod tests {
     }
 
     #[test]
-    fn uncommitted_work_is_stored_alongside_the_commits() {
-        // It is keyed by a sentinel rather than a sha, and has to be listed
-        // like any other version or derivation would not find it to inherit.
-        let (_dir, repo) = repo();
-        repo.save(&mapped(WORKING)).unwrap();
-
-        assert_eq!(repo.stored_shas().unwrap(), vec![WORKING]);
-        assert!(repo.load_at(WORKING).unwrap().is_some());
-    }
-
-    #[test]
     fn a_store_that_was_never_written_to_lists_nothing() {
         // The directory does not exist yet on a fresh branch; that is not a
         // failure to report.
@@ -204,7 +193,7 @@ mod tests {
         // there; refusing would fail a command that did nothing wrong.
         let (_dir, repo) = repo();
 
-        assert!(repo.delete(WORKING).is_ok());
+        assert!(repo.delete("never-saved").is_ok());
     }
 
     #[test]

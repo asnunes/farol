@@ -284,8 +284,9 @@ Separate worktrees have separate servers and stores.
 
 - **Base:** `main`, falling back to `master`. The default head is the current
   branch. Detached HEAD is refused because maps belong to branches.
-- **Diff:** taken from the merge base. `--direct` compares the two refs directly;
-  `--dirty` includes uncommitted work.
+- **Diff:** taken from the merge base. `--direct` compares the two refs
+  directly. Only commits are reviewed: work on disk stays out until it is
+  committed.
 - **Refresh:** map and current-branch changes announce an update. The reader
   decides when to load it. `--no-watch` disables these notifications.
 - **Progress:** a read file stays read until its contents change. Shifts in diff

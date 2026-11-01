@@ -69,6 +69,11 @@ pub trait CommitHistorySource: Send + Sync {
     /// Whether `sha` is an ancestor of `HEAD` — used to walk back to the newest
     /// commit that still has a map.
     fn is_ancestor(&self, sha: &str) -> Result<bool>;
+
+    /// Whether the branch under review has changes no commit holds yet. Only
+    /// a review of the branch you are standing on can: any other ref is all
+    /// commits.
+    fn uncommitted(&self) -> Result<bool>;
 }
 
 #[cfg(test)]

@@ -6,7 +6,7 @@ use crate::diff::domain::Side;
 use crate::lenses::application::Lensed;
 use crate::lenses::domain::{Freshness, LensTarget};
 use crate::progress::domain::Progress;
-use crate::shared::{WORKING, short};
+use crate::shared::short;
 
 /// One lens on one target, and what it said.
 #[derive(Debug, Serialize)]
@@ -17,7 +17,7 @@ pub struct LensView {
     /// `written`, `outdated`, or `missing` when nothing was written yet.
     pub state: &'static str,
     pub text: String,
-    /// The short commit it was written at, or `uncommitted work`.
+    /// The short commit it was written at.
     pub written_at: Option<String>,
     /// Files changed since it was written; zero when only its prompt did.
     pub changed: usize,
@@ -60,11 +60,7 @@ impl LensView {
             title: lensed.lens.title.clone(),
             state,
             text: answer.text.clone(),
-            written_at: Some(if answer.written_at == WORKING {
-                "uncommitted work".into()
-            } else {
-                short(&answer.written_at)
-            }),
+            written_at: Some(short(&answer.written_at)),
             changed,
             citations: answer
                 .citations

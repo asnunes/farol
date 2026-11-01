@@ -4,7 +4,7 @@
 //! [`Git`]'s job and building the window is [`Window`]'s; what is left here is
 //! the shape of the ports.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use super::blob::{Blob, Diffed, Side};
 use super::git::Git;
@@ -20,7 +20,6 @@ pub struct ScopeRequest {
     pub base: Option<String>,
     pub head: Option<String>,
     pub direct: bool,
-    pub dirty: bool,
 }
 
 pub struct GixSource {
@@ -31,9 +30,6 @@ pub struct GixSource {
     /// path -> blob on each side, for the review window only.
     base_blobs: BTreeMap<String, Blob>,
     head_blobs: BTreeMap<String, Blob>,
-    /// Paths whose new side is uncommitted work: there is no object to hand
-    /// git, so the diff has to point it at the working tree instead.
-    from_worktree: BTreeSet<String>,
 }
 
 impl GixSource {
@@ -50,16 +46,6 @@ impl GixSource {
         };
         let head_ref = req.head.clone().unwrap_or_else(|| current.clone());
 
-        // Uncommitted work belongs to the tree you are standing in; asking for
-        // it while pointing head somewhere else is a contradiction, not a
-        // detail to paper over.
-        if req.dirty && head_ref != current {
-            return Err(Error::DirtyOnOtherHead {
-                head: head_ref,
-                current,
-            });
-        }
-
         let head_id = git.resolve(&head_ref)?;
         let base_tip = git.resolve(&base_ref)?;
         let base_id = if req.direct {
@@ -68,7 +54,7 @@ impl GixSource {
             git.merge_base(base_tip, head_id)?
         };
 
-        let window = Window::of(&git, base_id, head_id, req.dirty)?;
+        let window = Window::of(&git, base_id, head_id)?;
 
         let scope = Scope {
             branch: current,
@@ -77,7 +63,6 @@ impl GixSource {
             base_sha: base_id.to_hex().to_string(),
             head_sha: head_id.to_hex().to_string(),
             merge_base: !req.direct,
-            dirty: req.dirty,
             files: window.files,
         };
 
@@ -86,7 +71,6 @@ impl GixSource {
             scope,
             base_blobs: window.base_blobs,
             head_blobs: window.head_blobs,
-            from_worktree: window.from_worktree,
         })
     }
 
@@ -136,7 +120,7 @@ impl FileDiffSource for GixSource {
         let diffed = self.git().diff(
             path,
             old.map(Side::Object).unwrap_or(Side::Absent),
-            self.new_side(path, new),
+            self.new_side(new),
         )?;
 
         Ok(Self::assemble(
@@ -166,12 +150,8 @@ impl FileDiffSource for GixSource {
         let from_id = git.resolve(from)?;
         let old = git.blob_at(from_id, path)?;
 
-        let new = if to == crate::shared::WORKING {
-            git.worktree_blob(path)?
-        } else {
-            let to_id = git.resolve(to)?;
-            git.blob_at(to_id, path)?
-        };
+        let to_id = git.resolve(to)?;
+        let new = git.blob_at(to_id, path)?;
 
         // Identical content is the same blob, so git's id settles it without
         // comparing the bytes.
@@ -182,11 +162,7 @@ impl FileDiffSource for GixSource {
         let diffed = git.diff(
             path,
             old.as_ref().map(Side::Object).unwrap_or(Side::Absent),
-            if to == crate::shared::WORKING {
-                Side::Worktree
-            } else {
-                new.as_ref().map(Side::Object).unwrap_or(Side::Absent)
-            },
+            new.as_ref().map(Side::Object).unwrap_or(Side::Absent),
         )?;
 
         Ok(Some(Self::assemble(
@@ -217,12 +193,8 @@ impl GixSource {
         }
     }
 
-    fn new_side<'a>(&self, path: &str, blob: Option<&'a Blob>) -> Side<'a> {
-        match blob {
-            None => Side::Absent,
-            Some(_) if self.from_worktree.contains(path) => Side::Worktree,
-            Some(blob) => Side::Object(blob),
-        }
+    fn new_side<'a>(&self, blob: Option<&'a Blob>) -> Side<'a> {
+        blob.map(Side::Object).unwrap_or(Side::Absent)
     }
 
     fn assemble(
@@ -267,9 +239,6 @@ impl CommitHistorySource for GixSource {
     }
 
     fn commits_ahead_of(&self, sha: &str) -> Result<u32> {
-        if sha == crate::shared::WORKING {
-            return Ok(0);
-        }
         let git = self.git();
         let target = git.resolve(sha)?;
         let head = git.resolve(&self.scope.head_sha)?;
@@ -277,15 +246,22 @@ impl CommitHistorySource for GixSource {
     }
 
     fn is_ancestor(&self, sha: &str) -> Result<bool> {
-        if sha == crate::shared::WORKING {
-            return Ok(false);
-        }
         let git = self.git();
         let Ok(target) = git.resolve(sha) else {
             return Ok(false);
         };
         let head = git.resolve(&self.scope.head_sha)?;
         Ok(git.is_ancestor(target, head))
+    }
+
+    /// Asked of the working tree when the question comes, not when the scope
+    /// is read: it walks the checkout, and only talking to the pull request
+    /// needs the answer.
+    fn uncommitted(&self) -> Result<bool> {
+        if self.scope.head_ref != self.scope.branch {
+            return Ok(false);
+        }
+        Ok(!self.git().worktree_changes()?.is_empty())
     }
 }
 
@@ -327,6 +303,35 @@ mod tests {
             .expect("the edited line should be there");
         assert_eq!(added.content, "CHANGED");
         assert_eq!(added.new_number, Some(20));
+    }
+
+    #[test]
+    fn an_edit_on_disk_is_uncommitted_work_only_on_the_branch_you_stand_on() {
+        // It holds back what goes to the pull request, so it has to be the
+        // checkout's real state and not something the reviewer remembered to
+        // ask for.
+        let f = edited();
+        assert!(
+            !f.source("feature/x", ScopeRequest::default())
+                .uncommitted()
+                .unwrap()
+        );
+
+        f.write("src/a.rs", "an edit nobody committed\n");
+        assert!(
+            f.source("feature/x", ScopeRequest::default())
+                .uncommitted()
+                .unwrap()
+        );
+
+        let other = ScopeRequest {
+            head: Some("main".into()),
+            ..ScopeRequest::default()
+        };
+        assert!(
+            !f.source("feature/x", other).uncommitted().unwrap(),
+            "a review of another ref is all commits, whatever is on disk"
+        );
     }
 
     #[test]
@@ -425,34 +430,6 @@ mod tests {
     }
 
     #[test]
-    fn under_dirty_the_new_side_comes_off_disk() {
-        let f = edited();
-        f.write(
-            "src/a.rs",
-            &numbered(40).replace("line 20\n", "UNCOMMITTED\n"),
-        );
-
-        let diff = f
-            .source(
-                "feature/x",
-                ScopeRequest {
-                    dirty: true,
-                    ..Default::default()
-                },
-            )
-            .file_diff("src/a.rs")
-            .unwrap();
-
-        assert!(
-            diff.hunks[0]
-                .lines
-                .iter()
-                .any(|l| l.kind == LineKind::Added && l.content == "UNCOMMITTED"),
-            "the object database has no such blob yet"
-        );
-    }
-
-    #[test]
     fn a_binary_file_arrives_with_no_hunks_and_says_why() {
         let f = Fixture::new();
         f.on_branch("feature/x");
@@ -536,46 +513,6 @@ mod tests {
             .expect("the file changed between them");
 
         assert_eq!((diff.additions, diff.deletions), (1, 1));
-    }
-
-    #[test]
-    fn the_working_tree_can_be_the_far_side_of_a_comparison() {
-        // How a map written against uncommitted work is brought forward.
-        let f = edited();
-        let head = f.git(&["rev-parse", "HEAD"]);
-        f.write(
-            "src/a.rs",
-            &numbered(40).replace("line 20\n", "UNCOMMITTED\n"),
-        );
-
-        let diff = f
-            .source(
-                "feature/x",
-                ScopeRequest {
-                    dirty: true,
-                    ..Default::default()
-                },
-            )
-            .file_diff_between(&head, crate::shared::WORKING, "src/a.rs")
-            .unwrap()
-            .expect("the working tree differs from the commit");
-
-        assert!(
-            diff.hunks[0]
-                .lines
-                .iter()
-                .any(|l| l.content == "UNCOMMITTED")
-        );
-    }
-
-    #[test]
-    fn uncommitted_work_is_never_behind_and_never_an_ancestor() {
-        // It is not a commit, so the questions history answers do not apply.
-        let f = edited();
-        let source = f.source("feature/x", ScopeRequest::default());
-
-        assert_eq!(source.commits_ahead_of(crate::shared::WORKING).unwrap(), 0);
-        assert!(!source.is_ancestor(crate::shared::WORKING).unwrap());
     }
 
     #[test]

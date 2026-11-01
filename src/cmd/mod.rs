@@ -62,9 +62,6 @@ pub struct ScopeFlags {
     /// Diff the two refs directly instead of from their merge base.
     #[arg(long, global = true)]
     direct: bool,
-    /// Include uncommitted changes from the working tree.
-    #[arg(long, global = true)]
-    dirty: bool,
 }
 
 impl ScopeFlags {
@@ -92,7 +89,6 @@ impl ScopeArgs {
             base: self.base.clone(),
             head,
             direct: self.flags.direct,
-            dirty: self.flags.dirty,
         }
     }
 
@@ -261,11 +257,11 @@ mod tests {
 
     #[test]
     fn the_window_flags_reach_every_group() {
-        // They are global so `farol block add … --dirty` works, rather than
+        // They are global so `farol block add … --direct` works, rather than
         // making the author remember which groups accept them.
         for group in [
-            vec!["scope", "--dirty"],
-            vec!["map", "show", "--dirty"],
+            vec!["scope", "--direct"],
+            vec!["map", "show", "--direct"],
             vec!["block", "remove", "core", "--direct"],
             vec!["file", "unfocus", "core", "a.rs", "--base", "develop"],
         ] {
@@ -277,10 +273,7 @@ mod tests {
     fn the_window_flags_become_the_request_that_opens_the_scope() {
         let args = ScopeArgs {
             base: Some("develop".into()),
-            flags: ScopeFlags {
-                direct: true,
-                dirty: true,
-            },
+            flags: ScopeFlags { direct: true },
         };
 
         let req = args.request(Some("feature/x".into()));
@@ -288,7 +281,6 @@ mod tests {
         assert_eq!(req.base.as_deref(), Some("develop"));
         assert_eq!(req.head.as_deref(), Some("feature/x"));
         assert!(req.direct);
-        assert!(req.dirty);
     }
 
     #[test]
@@ -298,7 +290,6 @@ mod tests {
         assert_eq!(req.base, None, "main, then master, is decided further down");
         assert_eq!(req.head, None);
         assert!(!req.direct);
-        assert!(!req.dirty);
     }
 
     #[test]

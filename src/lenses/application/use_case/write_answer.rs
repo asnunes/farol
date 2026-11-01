@@ -10,7 +10,6 @@ use crate::lenses::domain::{
 };
 use crate::map::application::MapVersions;
 use crate::map::domain::MapError;
-use crate::shared::WORKING;
 
 /// Write what a lens says about its target, replacing what it said before.
 ///
@@ -94,11 +93,7 @@ impl WriteAnswer {
             target,
             citations: self.check(&text)?,
             text,
-            written_at: if scope.dirty {
-                WORKING.to_string()
-            } else {
-                scope.head_sha.clone()
-            },
+            written_at: scope.head_sha.clone(),
             prompt_hash: lens.prompt_hash(),
             open,
         };

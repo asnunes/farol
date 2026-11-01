@@ -130,20 +130,6 @@ impl Git {
         }
     }
 
-    /// A file as it sits in the working tree. It has no id in the object
-    /// database yet, so we compute the one git would give it on commit.
-    pub fn worktree_blob(&self, path: &str) -> Result<Option<Blob>> {
-        let Some(dir) = self.workdir() else {
-            return Ok(None);
-        };
-        let Ok(data) = std::fs::read(dir.join(path)) else {
-            return Ok(None);
-        };
-        let id = gix::objs::compute_hash(self.repo.object_hash(), gix::object::Kind::Blob, &data)
-            .map_err(|e| Error::msg(format!("cannot hash working tree file: {e}")))?;
-        Ok(Some(Blob { data, id }))
-    }
-
     // ---- differences ----------------------------------------------------
 
     /// The diff of one file, as git would compute it.
@@ -158,10 +144,7 @@ impl Git {
         use gix::diff::blob::pipeline::{Mode, WorktreeRoots};
         use gix::diff::blob::platform::prepare_diff::Operation;
 
-        let roots = WorktreeRoots {
-            old_root: matches!(old, Side::Worktree).then(|| self.workdir_owned()),
-            new_root: matches!(new, Side::Worktree).then(|| self.workdir_owned()),
-        };
+        let roots = WorktreeRoots::default();
         let mut platform = self
             .repo
             .diff_resource_cache(Mode::ToGit, roots)
@@ -199,10 +182,6 @@ impl Git {
             algorithm,
             &outcome.interned_input(),
         )))
-    }
-
-    fn workdir_owned(&self) -> std::path::PathBuf {
-        self.workdir().unwrap_or(Path::new(".")).to_path_buf()
     }
 
     /// What turning `base` into `head` would take, renames included.
@@ -383,26 +362,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn a_worktree_file_gets_the_id_it_will_have_once_committed() {
-        // This is what lets a file marked as read under --dirty stay read after
-        // the commit: the same content keeps the same identity.
-        let f = Fixture::new();
-        f.write("draft.txt", "work in progress\n");
-        let uncommitted = f.open().worktree_blob("draft.txt").unwrap().unwrap();
-
-        f.commit("commit the draft");
-        let committed = f.git(&["rev-parse", "HEAD:draft.txt"]);
-
-        assert_eq!(uncommitted.hash(), committed);
-    }
-
-    #[test]
-    fn a_file_that_is_not_on_disk_has_no_worktree_blob() {
-        let f = Fixture::new();
-        assert!(f.open().worktree_blob("deleted.txt").unwrap().is_none());
-    }
-
     // ---- what changed ---------------------------------------------------
 
     #[test]
@@ -509,32 +468,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn uncommitted_content_is_diffed_against_what_was_committed() {
-        let f = Fixture::new();
-        f.write("a.txt", "one\ntwo\n");
-        f.commit("commit it");
-        let committed = f.open().blob_at(f.sha("HEAD"), "a.txt").unwrap().unwrap();
-        f.write("a.txt", "one\nCHANGED\n");
-
-        let Diffed::Text(out) = f
-            .open()
-            .diff("a.txt", Side::Object(&committed), Side::Worktree)
-            .unwrap()
-        else {
-            panic!("a text file should be diffable");
-        };
-
-        assert_eq!((out.additions, out.deletions), (1, 1));
-        assert!(
-            out.hunks[0]
-                .lines
-                .iter()
-                .any(|l| l.kind == LineKind::Added && l.content == "CHANGED"),
-            "the new side has to come off disk, not out of the object database"
-        );
-    }
-
     // ---- repositories without a working tree ----------------------------
 
     fn bare() -> tempfile::TempDir {
@@ -546,16 +479,6 @@ mod tests {
             .expect("git should run");
         assert!(out.status.success());
         dir
-    }
-
-    #[test]
-    fn a_repository_with_no_working_tree_has_no_worktree_blob_to_offer() {
-        // A bare clone has no files on disk; asking is not an error, there is
-        // simply nothing there.
-        let dir = bare();
-        let git = Git::new(gix::open(dir.path()).unwrap());
-
-        assert!(git.worktree_blob("a.rs").unwrap().is_none());
     }
 
     #[test]

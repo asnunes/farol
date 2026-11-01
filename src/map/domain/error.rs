@@ -80,11 +80,6 @@ pub enum MapError {
         range: LineRange,
     },
 
-    #[error(
-        "this map was derived against uncommitted work\nCommit, run `farol map derive`, and export that — the other machine cannot fetch what is not a commit."
-    )]
-    ExportsUncommitted,
-
     #[error("this is not a farol export: {why}")]
     NotAnExport { why: String },
 
@@ -128,9 +123,6 @@ mod tests {
     fn what_sharing_refuses_says_which_way_out_there_is() {
         // Each of these is read by somebody holding a file and no idea why it
         // was turned away, so naming the cause is half the message.
-        let uncommitted = MapError::ExportsUncommitted.to_string();
-        assert!(uncommitted.contains("farol map derive"), "{uncommitted}");
-
         let foreign = MapError::ForeignBase {
             theirs: "abc1234".into(),
             ours: "def5678".into(),

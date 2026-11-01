@@ -11,7 +11,7 @@ use super::reconciler::MapReconciler;
 use super::versions::MapVersions;
 use crate::diff::application::ReviewScope;
 use crate::error::Result;
-use crate::map::domain::{MapRepository, ReviewMap, WORKING};
+use crate::map::domain::{MapRepository, ReviewMap};
 
 #[derive(Clone)]
 pub struct MapDerivation {
@@ -71,12 +71,6 @@ impl MapDerivation {
         self.reconciler.prune_gone_files(&mut map)?;
         self.repo.save(&map)?;
 
-        // A working map that has been absorbed must not keep being picked as
-        // the parent of every future commit.
-        if !scope.dirty && map.parent.as_deref() == Some(WORKING) {
-            self.repo.delete(WORKING)?;
-        }
-
         Ok(Derived { map, created: true })
     }
 }
@@ -89,9 +83,8 @@ pub struct Derived {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::map::domain::MapError;
-    use crate::map::domain::{LineRange, NoteFate, OrphanReason, Position};
+    use crate::map::domain::{LineRange, NoteFate, OrphanReason};
     use crate::testing::{
         FakeDiffSource, InMemoryMapRepository, hunk, map_with_note, services, slug,
     };
@@ -197,62 +190,5 @@ mod tests {
         assert!(map.blocks().is_empty());
         assert_eq!(map.generated_at, "head");
         assert_eq!(map.parent, None);
-    }
-
-    #[test]
-    fn committing_absorbs_the_working_map_instead_of_leaving_it_behind() {
-        // The map written against uncommitted work becomes the map of the
-        // commit. Leaving the working copy in place would make it the parent
-        // of every future commit, so the branch would keep inheriting from a
-        // version that no longer means anything.
-        let repo = Arc::new(InMemoryMapRepository::new());
-        let dirty = services(
-            FakeDiffSource::with_paths(&["a.rs"])
-                .on_commit("head")
-                .dirty(),
-            repo.clone(),
-        );
-        dirty
-            .editor
-            .edit(|m| m.add_block(&slug("core"), "written while dirty", "c", Position::End))
-            .unwrap();
-        assert_eq!(repo.stored_shas().unwrap(), vec![WORKING]);
-
-        // Now it is committed: the same work, under a sha.
-        let committed = services(
-            FakeDiffSource::with_paths(&["a.rs"]).on_commit("head"),
-            repo.clone(),
-        );
-        let derived = committed.derivation.derive().unwrap();
-
-        assert!(derived.created);
-        assert_eq!(derived.map.generated_at, "head");
-        assert_eq!(
-            derived.map.block(&slug("core")).unwrap().title,
-            "written while dirty",
-            "the prose has to survive the commit"
-        );
-        assert_eq!(
-            repo.stored_shas().unwrap(),
-            vec!["head"],
-            "the working copy is gone, not merely superseded"
-        );
-    }
-
-    #[test]
-    fn a_working_map_is_kept_while_the_work_is_still_uncommitted() {
-        // Deriving again while dirty must not delete what it just inherited.
-        let repo = Arc::new(InMemoryMapRepository::new());
-        let svc = services(
-            FakeDiffSource::with_paths(&["a.rs"])
-                .on_commit("head")
-                .dirty(),
-            repo.clone(),
-        );
-        svc.editor.edit(|_| Ok::<_, MapError>(())).unwrap();
-
-        svc.derivation.derive().unwrap();
-
-        assert_eq!(repo.stored_shas().unwrap(), vec![WORKING]);
     }
 }

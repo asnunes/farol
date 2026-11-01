@@ -16,9 +16,6 @@ impl Display for ScopeReport<'_> {
             "review scope for {}{separator}{}",
             scope.base_ref, scope.head_ref
         )?;
-        if scope.dirty {
-            writeln!(f, "including uncommitted changes")?;
-        }
         writeln!(f, "{} files\n", scope.files.len())?;
 
         for file in &scope.files {
@@ -64,7 +61,6 @@ mod tests {
             base_sha: "aaa".into(),
             head_sha: "bbb".into(),
             merge_base: true,
-            dirty: false,
             files,
         }
     }
@@ -106,18 +102,6 @@ mod tests {
         .to_string();
 
         assert!(out.contains("new/a.rs (was old/a.rs)"), "{out}");
-    }
-
-    #[test]
-    fn uncommitted_work_is_announced_because_it_will_not_be_there_tomorrow() {
-        let mut dirty = scope(vec![]);
-        dirty.dirty = true;
-
-        assert!(
-            ScopeReport(&dirty)
-                .to_string()
-                .contains("including uncommitted changes")
-        );
     }
 
     #[test]

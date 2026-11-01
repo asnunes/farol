@@ -18,7 +18,7 @@ pub struct LensAnswer {
     /// Markdown. Empty is an answer too: the session looked and the lens does
     /// not apply, and saying so keeps it from being asked again.
     pub text: String,
-    /// The commit it was written at, or `working` for uncommitted work.
+    /// The commit it was written at.
     pub written_at: String,
     pub covers: Vec<Covered>,
     pub prompt_hash: String,

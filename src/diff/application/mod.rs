@@ -95,6 +95,10 @@ impl CommitHistory {
     pub fn is_ancestor(&self, sha: &str) -> Result<bool> {
         self.source.is_ancestor(sha)
     }
+
+    pub fn uncommitted(&self) -> Result<bool> {
+        self.source.uncommitted()
+    }
 }
 
 #[cfg(test)]
@@ -183,6 +187,9 @@ mod tests {
         }
         fn is_ancestor(&self, _sha: &str) -> Result<bool> {
             Err(Error::Message("shallow clone".into()))
+        }
+        fn uncommitted(&self) -> Result<bool> {
+            unreachable!("BrokenHistory is only asked about distance and ancestry")
         }
     }
 

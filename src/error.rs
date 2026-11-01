@@ -29,11 +29,6 @@ pub enum Error {
     #[error("no base branch found — tried 'main' and 'master'")]
     NoBaseBranch,
 
-    #[error(
-        "--dirty only works on the branch you are standing on; head resolved to '{head}' but you are on '{current}'"
-    )]
-    DirtyOnOtherHead { head: String, current: String },
-
     // ---- refusals that belong to a layer --------------------------------
     #[error(transparent)]
     Map(#[from] MapError),
@@ -114,18 +109,6 @@ mod tests {
         .into();
 
         assert!(e.to_string().contains("nowhere.rs"), "{e}");
-    }
-
-    #[test]
-    fn dirty_on_another_head_names_both_sides_of_the_contradiction() {
-        let e = Error::DirtyOnOtherHead {
-            head: "other".into(),
-            current: "feature/x".into(),
-        };
-
-        let msg = e.to_string();
-        assert!(msg.contains("other"), "{msg}");
-        assert!(msg.contains("feature/x"), "{msg}");
     }
 
     #[test]

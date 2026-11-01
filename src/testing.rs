@@ -26,6 +26,7 @@ pub struct FakeDiffSource {
     shown: Vec<(String, Vec<Hunk>)>,
     ancestors: Vec<String>,
     distances: Vec<(String, u32)>,
+    uncommitted: bool,
 }
 
 impl FakeDiffSource {
@@ -44,7 +45,6 @@ impl FakeDiffSource {
                 base_sha: "base".into(),
                 head_sha: "head".into(),
                 merge_base: true,
-                dirty: false,
                 files: paths.iter().map(|p| change(p)).collect(),
             },
             between: Vec::new(),
@@ -52,6 +52,7 @@ impl FakeDiffSource {
             shown: Vec::new(),
             ancestors: Vec::new(),
             distances: Vec::new(),
+            uncommitted: false,
         }
     }
 
@@ -75,9 +76,9 @@ impl FakeDiffSource {
         self
     }
 
-    /// As if `--dirty` were given, so the working-tree marker is the target.
+    /// As if the checkout had changes no commit holds yet.
     pub fn dirty(mut self) -> Self {
-        self.scope.dirty = true;
+        self.uncommitted = true;
         self
     }
 
@@ -228,6 +229,10 @@ impl CommitHistorySource for FakeDiffSource {
 
     fn is_ancestor(&self, sha: &str) -> Result<bool> {
         Ok(self.ancestors.iter().any(|s| s == sha))
+    }
+
+    fn uncommitted(&self) -> Result<bool> {
+        Ok(self.uncommitted)
     }
 }
 
