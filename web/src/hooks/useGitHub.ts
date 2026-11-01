@@ -12,6 +12,9 @@ import { onNudge } from "@/lib/watch";
 import { usePageVisible } from "@/hooks/usePageVisible";
 import { said } from "@/lib/utils";
 
+/** How long to wait before each look at the pull request after a push. */
+const AFTER_PUSH = [0, 1500, 3000, 5000];
+
 /** The pull request, the review mode, and each thread's pending comment as
  * GitHub holds it.
  *
@@ -28,6 +31,7 @@ export function useGitHub(onError: (message: string) => void, generation = 0) {
     try {
       const next = await api.github();
       if (request === latest.current) setPull(next);
+      return next;
     } catch (e) {
       if (request === latest.current) onError(said(e));
     }
@@ -50,7 +54,9 @@ export function useGitHub(onError: (message: string) => void, generation = 0) {
   // a review that is ready does not reach GitHub on every switch of tabs.
   const visible = usePageVisible();
   const wasVisible = useRef(visible);
-  const missing = pull !== null && pull.connection !== "ready" && pull.connection !== "no-remote";
+  // A drift counts: a push or a pull from a terminal is fixed somewhere else too.
+  const missing =
+    pull !== null && ((pull.connection !== "ready" && pull.connection !== "no-remote") || pull.drift !== null);
   useEffect(() => {
     const returned = visible && !wasVisible.current;
     wasVisible.current = visible;
@@ -92,7 +98,10 @@ export function useGitHub(onError: (message: string) => void, generation = 0) {
         return false;
       }
     },
-    /** Push the branch, then ask GitHub again: true once it went. */
+    /** Push the branch, then ask GitHub again until the pull request shows
+     * it: true once it went. GitHub moves the pull request to the pushed
+     * commit a few seconds after the push, so the first answer still has the
+     * old one, and asking once left the push looking undone. */
     push: async () => {
       try {
         await api.pushBranch();
@@ -100,7 +109,11 @@ export function useGitHub(onError: (message: string) => void, generation = 0) {
         onError(said(e));
         return false;
       }
-      await load();
+      for (const wait of AFTER_PUSH) {
+        await new Promise((done) => setTimeout(done, wait));
+        const next = await load();
+        if (!next?.drift) break;
+      }
       return true;
     },
     /** What the sync did, or null when it did not happen. */
