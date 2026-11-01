@@ -8,7 +8,7 @@ use axum::{Extension, Json};
 use serde::Deserialize;
 
 use super::{fail, view};
-use crate::cmd::ServerUseCases;
+use crate::server::ServerUseCases;
 
 /// Everything the screen needs to draw itself, in one call.
 pub(super) async fn review(Extension(cases): Extension<ServerUseCases>) -> impl IntoResponse {

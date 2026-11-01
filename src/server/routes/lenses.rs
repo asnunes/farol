@@ -10,9 +10,9 @@ use serde::{Deserialize, Serialize};
 
 use super::super::AppState;
 use super::{away, fail};
-use crate::cmd::ServerUseCases;
 use crate::error::Result;
 use crate::lenses::domain::{LensCatalog, LensGroup, LensId, LensTarget};
+use crate::server::ServerUseCases;
 
 pub(super) async fn list(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     answer(state.preferences.list_lenses.execute())

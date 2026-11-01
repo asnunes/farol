@@ -4,9 +4,9 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::watch;
 
 use crate::agent::infra::AgentAddress;
-use crate::cmd::{ServerUseCaseFactory, ServerUseCases};
 use crate::diff::infra::ScopeRequest;
 use crate::error::Result;
+use crate::server::{ServerUseCaseFactory, ServerUseCases};
 
 use super::{Registry, ServerEntry};
 

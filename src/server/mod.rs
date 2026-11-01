@@ -5,6 +5,7 @@
 //! `assets` serves the frontend. What is left here is starting and stopping.
 
 mod assets;
+mod cases;
 mod control;
 pub mod detach;
 mod health;
@@ -16,6 +17,7 @@ mod session;
 pub mod view;
 mod watch;
 
+pub use cases::{ConfigUseCases, ServerUseCaseFactory, ServerUseCases};
 pub use registry::{Registry, ServerEntry};
 pub use server_list::ServerList;
 pub use session::SessionConfig;
@@ -27,7 +29,6 @@ use tokio::sync::broadcast;
 // `watch` next door is the file watcher; this one is the shutdown signal.
 use tokio::sync::watch as signal;
 
-use crate::cmd::ServerUseCaseFactory;
 use crate::error::{Error, Result};
 
 /// Which port to listen on, and what to do if it is taken.
@@ -53,7 +54,7 @@ pub const FIRST_PORT: u16 = 4600;
 const PORTS_TO_TRY: u16 = 64;
 
 pub struct ServeConfig {
-    pub preferences: crate::cmd::ConfigUseCases,
+    pub preferences: ConfigUseCases,
     pub check_head: crate::diff::application::CheckHead,
     pub factory: Arc<dyn ServerUseCaseFactory>,
     pub session: SessionConfig,
@@ -69,7 +70,7 @@ pub struct ServeConfig {
 }
 
 struct AppState {
-    preferences: crate::cmd::ConfigUseCases,
+    preferences: ConfigUseCases,
     /// Transport holds use cases and nothing else: the routes translate HTTP
     /// into a call and back, and own no business logic of their own.
     session: Arc<session::Session>,
@@ -89,7 +90,7 @@ struct AppState {
 impl AppState {
     fn new(
         session: session::Session,
-        preferences: crate::cmd::ConfigUseCases,
+        preferences: ConfigUseCases,
         stopping: signal::Receiver<bool>,
     ) -> (Arc<Self>, broadcast::Sender<String>) {
         let (changes, _) = broadcast::channel(16);
@@ -256,7 +257,7 @@ mod tests {
         let (_dir, use_cases) = crate::testing::server_use_cases();
         let (state, changes) = AppState::new(
             routes::tests::session(use_cases, _dir.path()),
-            crate::cmd::ConfigUseCases::new(
+            ConfigUseCases::new(
                 Arc::new(crate::testing::InMemoryConfigRepository::default()),
                 Arc::new(crate::testing::InMemoryLensCatalog::default()),
             ),

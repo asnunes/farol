@@ -11,7 +11,7 @@ use axum::{Extension, Json};
 use serde::Deserialize;
 
 use super::{away, fail, view};
-use crate::cmd::ServerUseCases;
+use crate::server::ServerUseCases;
 
 /// The pull request, its mode and each thread's pending comment. Asked of
 /// GitHub, so off the request thread.

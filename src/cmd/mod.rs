@@ -28,9 +28,7 @@ use serve::ServeArgs;
 use servers::ServersArgs;
 use thread::ThreadAction;
 
-pub use wiring::{
-    ConfigUseCases, Ctx, ServerUseCaseFactory, ServerUseCases, Serving, server_factory,
-};
+pub use wiring::{Ctx, Ports, Serving, server_factory, server_use_cases};
 
 use crate::diff::infra::ScopeRequest;
 use crate::error::Result;
