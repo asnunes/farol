@@ -711,6 +711,10 @@ pub struct FakePublisher {
     adding: Mutex<Option<String>>,
     /// The lines each comment is on, for `pending_comments`.
     lines: Mutex<Vec<(String, crate::comments::domain::Lines)>>,
+    /// How many comments were ever added, which is what names the next one.
+    /// Never the size of what is held: that shrinks on a removal, and the
+    /// next id would then repeat one still there, which GitHub never does.
+    added: Mutex<usize>,
 }
 
 impl FakePublisher {
@@ -735,6 +739,7 @@ impl FakePublisher {
             marking: Mutex::new(None),
             adding: Mutex::new(None),
             lines: Mutex::new(Vec::new()),
+            added: Mutex::new(0),
         }
     }
 
@@ -827,7 +832,9 @@ impl crate::comments::domain::ReviewPublisher for FakePublisher {
             return Err(crate::comments::domain::CommentError::Refused { what: why }.into());
         }
         let mut remote = self.remote.lock().unwrap();
-        let id = format!("PRRC_{}", remote.len() + 1);
+        let mut added = self.added.lock().unwrap();
+        *added += 1;
+        let id = format!("PRRC_{added}");
         self.lines.lock().unwrap().push((id.clone(), at.clone()));
         remote.push((
             id.clone(),

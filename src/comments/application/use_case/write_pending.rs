@@ -132,6 +132,30 @@ mod tests {
     }
 
     #[test]
+    fn rewriting_again_and_again_keeps_the_latest_on_the_pull_request() {
+        // Each rewrite adds the new comment before taking the old one back.
+        // GitHub never hands out an id twice, so the latest always survives.
+        let world = World::ready();
+        let thread = world.thread();
+        let write = world.write_pending();
+
+        let mut latest = None;
+        for body in ["First.", "Second.", "Third."] {
+            latest = write
+                .execute(&thread.id, body, Author::Reviewer)
+                .unwrap()
+                .pending;
+        }
+
+        assert_eq!(
+            world.publisher.state_of(&latest.unwrap().id),
+            RemoteState::Pending {
+                body: "Third.".into()
+            }
+        );
+    }
+
+    #[test]
     fn a_failed_write_keeps_the_comment_already_there() {
         let world = World::with(FakePublisher::ready_at("head").adding_fails("rate limited"));
         let thread = world.thread();
