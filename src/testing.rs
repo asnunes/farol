@@ -76,6 +76,25 @@ impl FakeDiffSource {
         self
     }
 
+    /// A commit this history has: the two ends of the review, and every one a
+    /// test declared as an ancestor, a distance or one side of a diff.
+    fn knows(&self, sha: &str) -> bool {
+        sha == self.scope.head_sha
+            || sha == self.scope.base_sha
+            || self.ancestors.iter().any(|s| s == sha)
+            || self.distances.iter().any(|(s, _)| s == sha)
+            || self
+                .between
+                .iter()
+                .any(|((f, t, _), _)| f == sha || t == sha)
+    }
+
+    /// The paths under review, for a fake host that has to know which files
+    /// its pull request holds.
+    pub fn paths(&self) -> Vec<String> {
+        self.scope.files.iter().map(|f| f.path.clone()).collect()
+    }
+
     /// As if the checkout had changes no commit holds yet.
     pub fn dirty(mut self) -> Self {
         self.uncommitted = true;
@@ -205,6 +224,13 @@ impl FileDiffSource for FakeDiffSource {
     }
 
     fn file_diff_between(&self, from: &str, to: &str, path: &str) -> Result<Option<FileDiff>> {
+        // git cannot diff from a commit it does not have, and says so. Calling
+        // that "identical" is what once hid a derive that failed for real.
+        for sha in [from, to] {
+            if !self.knows(sha) {
+                return Err(crate::error::Error::msg(format!("cannot resolve '{sha}'")));
+            }
+        }
         Ok(self
             .between
             .iter()
@@ -711,6 +737,9 @@ pub struct FakePublisher {
     adding: Mutex<Option<String>>,
     /// The lines each comment is on, for `pending_comments`.
     lines: Mutex<Vec<(String, crate::comments::domain::Lines)>>,
+    /// The files the pull request holds, when a test says. Marking a file it
+    /// does not hold is not taken, as on GitHub.
+    pr_files: Mutex<Option<Vec<String>>>,
     /// How many comments were ever added, which is what names the next one.
     /// Never the size of what is held: that shrinks on a removal, and the
     /// next id would then repeat one still there, which GitHub never does.
@@ -740,6 +769,7 @@ impl FakePublisher {
             adding: Mutex::new(None),
             lines: Mutex::new(Vec::new()),
             added: Mutex::new(0),
+            pr_files: Mutex::new(None),
         }
     }
 
@@ -756,6 +786,31 @@ impl FakePublisher {
     pub fn marking_fails(self, why: &str) -> Self {
         *self.marking.lock().unwrap() = Some(why.into());
         self
+    }
+
+    /// The files the pull request holds; a mark on any other is not taken.
+    pub fn holding_files(self, paths: Vec<String>) -> Self {
+        *self.pr_files.lock().unwrap() = Some(paths);
+        self
+    }
+
+    /// The paths of `paths` the pull request holds, and the refusal GitHub
+    /// gives when it holds none of them.
+    fn takes(&self, paths: &[String]) -> Result<Vec<String>> {
+        if let Some(why) = self.marking.lock().unwrap().clone() {
+            return Err(crate::comments::domain::CommentError::Refused { what: why }.into());
+        }
+        let taken: Vec<String> = match &*self.pr_files.lock().unwrap() {
+            Some(held) => paths.iter().filter(|p| held.contains(p)).cloned().collect(),
+            None => paths.to_vec(),
+        };
+        if taken.is_empty() && !paths.is_empty() {
+            return Err(crate::comments::domain::CommentError::Refused {
+                what: "no such file in the pull request".into(),
+            }
+            .into());
+        }
+        Ok(taken)
     }
 
     /// Files already marked as read on the pull request.
@@ -844,12 +899,24 @@ impl crate::comments::domain::ReviewPublisher for FakePublisher {
         Ok(id)
     }
 
+    /// Like GitHub: a comment that is not there is refused, and one already
+    /// submitted takes the new words and stays submitted.
     fn edit_pending(&self, id: &str, body: &str) -> Result<()> {
-        for (known, state) in self.remote.lock().unwrap().iter_mut() {
-            if known == id {
-                *state = crate::comments::domain::RemoteState::Pending { body: body.into() };
+        use crate::comments::domain::RemoteState;
+        let mut remote = self.remote.lock().unwrap();
+        let Some((_, state)) = remote.iter_mut().find(|(known, _)| known == id) else {
+            return Err(crate::comments::domain::CommentError::Refused {
+                what: format!("Could not resolve to a node with the global id of '{id}'"),
             }
-        }
+            .into());
+        };
+        *state = match state {
+            RemoteState::Published { url, .. } => RemoteState::Published {
+                body: body.into(),
+                url: url.clone(),
+            },
+            _ => RemoteState::Pending { body: body.into() },
+        };
         self.calls.lock().unwrap().push(format!("edit {id}"));
         Ok(())
     }
@@ -908,28 +975,27 @@ impl crate::comments::domain::ReviewPublisher for FakePublisher {
     }
 
     fn mark_read(&self, _pull: &str, paths: &[String]) -> Result<usize> {
-        if let Some(why) = self.marking.lock().unwrap().clone() {
-            return Err(crate::comments::domain::CommentError::Refused { what: why }.into());
-        }
+        let taken = self.takes(paths)?;
         let mut marked = self.marked.lock().unwrap();
-        for path in paths {
+        for path in &taken {
             if !marked.contains(path) {
                 marked.push(path.clone());
             }
         }
-        Ok(paths.len())
+        Ok(taken.len())
     }
 
     fn mark_unread(&self, _pull: &str, paths: &[String]) -> Result<usize> {
+        let taken = self.takes(paths)?;
         self.marked
             .lock()
             .unwrap()
-            .retain(|path| !paths.contains(path));
+            .retain(|path| !taken.contains(path));
         self.calls
             .lock()
             .unwrap()
-            .push(format!("unmark {}", paths.join(", ")));
-        Ok(paths.len())
+            .push(format!("unmark {}", taken.join(", ")));
+        Ok(taken.len())
     }
 
     fn viewed(&self, _pull: &str) -> Result<Vec<String>> {
@@ -1204,5 +1270,64 @@ impl crate::lenses::domain::LensAnswerRepository for InMemoryLensAnswers {
         });
         all.push(answer.clone());
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    //! The fakes held to what the real adapters do. A fake more permissive
+    //! than the thing it stands in for lets a test pass over behaviour that
+    //! does not exist.
+
+    use super::*;
+    use crate::comments::domain::{RemoteState, ReviewPublisher};
+    use crate::diff::domain::FileDiffSource;
+
+    #[test]
+    fn a_diff_from_a_commit_the_history_does_not_have_is_refused() {
+        let source = FakeDiffSource::with_paths(&["a.rs"]);
+        assert!(source.file_diff_between("nowhere", "head", "a.rs").is_err());
+        assert!(
+            source
+                .file_diff_between("base", "head", "a.rs")
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn a_mark_on_a_file_the_pull_request_does_not_hold_is_not_taken() {
+        let host = FakePublisher::ready_at("head").holding_files(vec!["a.rs".into()]);
+        assert_eq!(
+            host.mark_read("PR", &["a.rs".into(), "elsewhere.rs".into()])
+                .unwrap(),
+            1
+        );
+        assert!(
+            host.mark_read("PR", &["elsewhere.rs".into()]).is_err(),
+            "GitHub refuses when it takes none"
+        );
+        assert!(host.mark_unread("PR", &["elsewhere.rs".into()]).is_err());
+    }
+
+    #[test]
+    fn editing_a_comment_that_is_not_there_is_refused_and_a_submitted_one_stays_submitted() {
+        let host = FakePublisher::ready_at("head").holding(
+            "PRRC_sent",
+            RemoteState::Published {
+                body: "Old.".into(),
+                url: "https://example.test/1".into(),
+            },
+        );
+        assert!(host.edit_pending("PRRC_missing", "x").is_err());
+
+        host.edit_pending("PRRC_sent", "New.").unwrap();
+        assert_eq!(
+            host.state_of("PRRC_sent"),
+            RemoteState::Published {
+                body: "New.".into(),
+                url: "https://example.test/1".into(),
+            }
+        );
     }
 }

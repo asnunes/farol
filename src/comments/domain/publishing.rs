@@ -35,6 +35,10 @@ pub trait ReviewPublisher: Send + Sync {
     /// Every comment in the reviewer's pending review on `pull`, wherever it
     /// was written: here, on the pull request's page, or by a thread that has
     /// since been closed. The pending review is the list; farol keeps none.
+    ///
+    /// Only comments on lines: one on a whole file, or on lines a later push
+    /// made outdated, has nowhere to be drawn and is left out, though a submit
+    /// still sends it. GitHub's answer stops at its first 100 threads.
     fn pending_comments(&self, pull: &str) -> Result<Vec<PendingComment>>;
 
     /// Submit the pending review with the verdict and summary, or post the
@@ -55,7 +59,8 @@ pub trait ReviewPublisher: Send + Sync {
     /// how many the host took.
     fn mark_unread(&self, pull: &str, paths: &[String]) -> Result<usize>;
 
-    /// The files the reviewer has marked as read on the pull request.
+    /// The files the reviewer has marked as read on the pull request. GitHub's
+    /// answer stops at the pull request's first 100 files.
     fn viewed(&self, pull: &str) -> Result<Vec<String>>;
 
     /// Open a pull request from `branch` into `base`. The branch has to be on
