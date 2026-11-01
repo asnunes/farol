@@ -16,7 +16,7 @@ use crate::server::ServerUseCases;
 /// What the reviewer wrote back, which is everything still waiting for an
 /// answer: closing a comment removes it, so there is nothing here to filter.
 pub(super) async fn comments(Extension(cases): Extension<ServerUseCases>) -> impl IntoResponse {
-    match cases.comments.all() {
+    match cases.list_threads.execute() {
         Ok(found) => {
             Json(view::CommentsView::of(&found, cases.send_comment.harness())).into_response()
         }
@@ -88,7 +88,7 @@ pub(super) async fn write_comment(
     let written = body
         .about
         .parse()
-        .and_then(|about| cases.comments.add_about(about, &body.body));
+        .and_then(|about| cases.add_thread.execute(about, &body.body));
     match written {
         Ok(comment) => Json(view::CommentView::of(&comment)).into_response(),
         Err(e) => fail(e),
@@ -118,7 +118,7 @@ pub(super) async fn reply_comment(
     Json(reply): Json<NewReply>,
 ) -> impl IntoResponse {
     let author = crate::comments::domain::Author::Reviewer;
-    match away(move || cases.comments.reply(&id, author, &reply.body)).await {
+    match away(move || cases.reply_to_thread.execute(&id, author, &reply.body)).await {
         Ok(comment) => Json(view::CommentView::of(&comment)).into_response(),
         Err(e) => fail(e),
     }

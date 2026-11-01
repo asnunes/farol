@@ -14,7 +14,7 @@ pub use use_case::*;
 use std::sync::Arc;
 
 use crate::comments::domain::{
-    Author, Comment, CommentError, CommentStore, Found, Lines, PendingRef, Purpose, Subject,
+    Author, Clock, Comment, CommentError, CommentStore, Found, Lines, PendingRef, Purpose, Subject,
 };
 use crate::diff::domain::Side;
 use crate::error::Result;
@@ -31,14 +31,21 @@ pub struct Comments {
     /// question from what the diff shows.
     scope: GetScope,
     reach: CommentReach,
+    clock: Arc<dyn Clock>,
 }
 
 impl Comments {
-    pub fn new(store: Arc<dyn CommentStore>, scope: GetScope, reach: CommentReach) -> Self {
+    pub fn new(
+        store: Arc<dyn CommentStore>,
+        scope: GetScope,
+        reach: CommentReach,
+        clock: Arc<dyn Clock>,
+    ) -> Self {
         Self {
             store,
             scope,
             reach,
+            clock,
         }
     }
 
@@ -62,29 +69,77 @@ impl Comments {
         Ok(found)
     }
 
-    /// Written against the review, not against a path someone typed: a file
-    /// outside the window, a span past the end of the file and a span the diff
-    /// never printed are all refused here rather than in each caller. The CLI
-    /// and the browser reach this by different roads and the rule has to be the
-    /// same on both.
+    /// A thread on anything a reviewer can talk about, checked the way that
+    /// thing is checked. Matched exhaustively, so a kind of subject added later
+    /// cannot slip past without its own rule.
     ///
-    /// The last of the three is GitHub's rule, applied early: a review comment
-    /// can only sit on a line the diff reaches. Refusing at writing time costs
-    /// the reviewer one attempt; letting it through costs them the comment,
-    /// discovered at the moment they meant to send the review.
-    ///
-    /// The span is counted on the side it was written on, and the two are
-    /// checked differently. The length of the file only bounds the new side —
-    /// it is the length of the file as it now reads, and the old side is a file
-    /// that no longer exists at that length, or at all. What bounds the old
-    /// side is the diff itself, which never prints a line the pre-image did not
-    /// have.
-    pub fn add(&self, path: &str, side: Side, from: u32, to: u32, body: &str) -> Result<Comment> {
+    /// Lines are written against the review, not against a path someone
+    /// typed: a file outside the window, a span past the end of the file and a
+    /// span the diff never printed are all refused. The last of the three is
+    /// GitHub's rule, applied early: a review comment can only sit on a line
+    /// the diff reaches. Refusing at writing time costs the reviewer one
+    /// attempt; letting it through costs them the comment, discovered at the
+    /// moment they meant to send the review.
+    pub fn add(&self, about: Subject, body: &str) -> Result<Comment> {
         if body.trim().is_empty() {
             return Err(CommentError::Empty.into());
         }
+        let about = match about {
+            Subject::Lines(lines) => Subject::Lines(self.on_diff(&lines)?),
+            Subject::Lens { lens, target } => {
+                match &target {
+                    LensTarget::File { path } => {
+                        self.scope.path(path)?;
+                    }
+                    LensTarget::Pr | LensTarget::Block { .. } => {}
+                }
+                Subject::Lens { lens, target }
+            }
+            Subject::Block { slug } => Subject::Block { slug },
+        };
+        let comment = Comment {
+            id: self.clock.id(),
+            about,
+            body: body.trim().to_string(),
+            pending: None,
+            conversation: Default::default(),
+        };
+        self.store.save(&comment)?;
+        Ok(comment)
+    }
 
-        let path = self.scope.path(path)?;
+    /// A thread on a span of lines, spelled flat the way tests think of it.
+    #[cfg(test)]
+    pub fn add_lines(
+        &self,
+        path: &str,
+        side: Side,
+        from: u32,
+        to: u32,
+        body: &str,
+    ) -> Result<Comment> {
+        self.add(
+            Subject::Lines(Lines {
+                path: path.into(),
+                side,
+                from,
+                to,
+            }),
+            body,
+        )
+    }
+
+    /// The span, proven to be on the diff, with its path as the review names
+    /// it.
+    ///
+    /// Counted on the side it was written on, and the two are checked
+    /// differently. The length of the file only bounds the new side — it is
+    /// the length of the file as it now reads, and the old side is a file that
+    /// no longer exists at that length, or at all. What bounds the old side is
+    /// the diff itself, which never prints a line the pre-image did not have.
+    fn on_diff(&self, lines: &Lines) -> Result<Lines> {
+        let Lines { side, from, to, .. } = *lines;
+        let path = self.scope.path(&lines.path)?;
         let range = LineRange::new(from, to)?;
         if side == Side::New {
             range.require_within(&path)?;
@@ -98,49 +153,12 @@ impl Comments {
             }
             .into());
         }
-
-        let comment = Comment {
-            id: fresh_id(),
-            about: Subject::Lines(Lines {
-                path: path.as_str().to_string(),
-                side,
-                from,
-                to,
-            }),
-            body: body.trim().to_string(),
-            pending: None,
-            conversation: Default::default(),
-        };
-        self.store.save(&comment)?;
-        Ok(comment)
-    }
-
-    /// A thread on anything a reviewer can talk about. Lines go through
-    /// `add`, which holds them to the diff; a lens or a block's description
-    /// has no line to check, and a lens on a file is held to the review.
-    pub fn add_about(&self, about: Subject, body: &str) -> Result<Comment> {
-        if let Subject::Lines(lines) = &about {
-            return self.add(&lines.path, lines.side, lines.from, lines.to, body);
-        }
-        if body.trim().is_empty() {
-            return Err(CommentError::Empty.into());
-        }
-        if let Subject::Lens {
-            target: LensTarget::File { path },
-            ..
-        } = &about
-        {
-            self.scope.path(path)?;
-        }
-        let comment = Comment {
-            id: fresh_id(),
-            about,
-            body: body.trim().to_string(),
-            pending: None,
-            conversation: Default::default(),
-        };
-        self.store.save(&comment)?;
-        Ok(comment)
+        Ok(Lines {
+            path: path.as_str().to_string(),
+            side,
+            from,
+            to,
+        })
     }
 
     /// One thread, wherever its lines are now, or the refusal that says how to
@@ -201,17 +219,17 @@ impl Comments {
         if body.trim().is_empty() {
             return Err(CommentError::Empty.into());
         }
-        self.edit(id, |comment| comment.reply(from, body, &now()))
+        self.edit(id, |comment| comment.reply(from, body, &self.clock.now()))
     }
 
     /// The agent says it has started on the comment.
     pub fn acknowledge(&self, id: &str, by: &str) -> Result<Comment> {
-        self.edit(id, |comment| comment.acknowledged(by, &now()))
+        self.edit(id, |comment| comment.acknowledged(by, &self.clock.now()))
     }
 
     /// Record that the comment was handed to an agent, and what for.
     pub fn sent(&self, id: &str, to: &str, purpose: Purpose) -> Result<Comment> {
-        self.edit(id, |comment| comment.sent(to, &now(), purpose))
+        self.edit(id, |comment| comment.sent(to, &self.clock.now(), purpose))
     }
 
     /// One comment the review still holds, changed and written back. Read
@@ -236,29 +254,6 @@ impl Comments {
             false => Err(CommentError::Unknown { id: id.into() }.into()),
         }
     }
-}
-
-/// Seconds since the epoch, the clock `viewed` is stamped with too.
-fn now() -> String {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or_default()
-        .to_string()
-}
-
-/// An id that survives leaving this machine.
-///
-/// Comments are meant to travel: the reviewer's come back to the author, and
-/// two sets get read together. A counter would collide the moment that happens,
-/// so this is the clock plus the process, which two machines cannot both
-/// produce.
-fn fresh_id() -> String {
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_nanos())
-        .unwrap_or_default();
-    format!("{now:x}-{:x}", std::process::id())
 }
 
 #[cfg(test)]
@@ -299,6 +294,10 @@ mod tests {
     /// The same, onto a folder the caller already has — which is how a test
     /// puts one review's comments in front of a later review's diff.
     fn over_at(dir: &std::path::Path, source: FakeDiffSource) -> Comments {
+        clocked(dir, source, Arc::new(crate::comments::infra::SystemClock))
+    }
+
+    fn clocked(dir: &std::path::Path, source: FakeDiffSource, clock: Arc<dyn Clock>) -> Comments {
         let store = Store::new(dir, "feature/x");
         let source = Arc::new(source);
         let scope = ReviewScope::new(source.clone());
@@ -306,7 +305,40 @@ mod tests {
             Arc::new(MarkdownComments::new(&store, dir)),
             GetScope::new(scope.clone()),
             CommentReach::new(scope, crate::diff::application::FileDiffs::new(source)),
+            clock,
         )
+    }
+
+    /// Always the same moment and the same id, so a test can say what a
+    /// thread was stamped with.
+    struct StoppedClock;
+
+    impl Clock for StoppedClock {
+        fn now(&self) -> String {
+            "1700000000".into()
+        }
+
+        fn id(&self) -> String {
+            "fixed-id".into()
+        }
+    }
+
+    #[test]
+    fn a_thread_and_its_replies_are_stamped_by_the_clock_it_is_handed() {
+        // Read straight off the system once, so no test could say what a
+        // reply was stamped with.
+        let dir = tempfile::tempdir().unwrap();
+        let comments = clocked(dir.path(), a_file(), Arc::new(StoppedClock));
+
+        let thread = comments
+            .add_lines("src/a.rs", Side::New, 10, 12, "Why?")
+            .unwrap();
+        let answered = comments
+            .reply(&thread.id, Author::Agent("Codex".into()), "Because.")
+            .unwrap();
+
+        assert_eq!(thread.id, "fixed-id");
+        assert_eq!(answered.conversation.replies[0].at, "1700000000");
     }
 
     fn hunk(start: u32, lines: u32) -> Hunk {
@@ -323,7 +355,7 @@ mod tests {
     fn a_conversation_survives_the_store_and_an_agents_answer_settles_it() {
         let (_dir, comments) = comments();
         let one = comments
-            .add("src/a.rs", Side::New, 82, 116, "Why this order?")
+            .add_lines("src/a.rs", Side::New, 82, 116, "Why this order?")
             .unwrap();
 
         comments
@@ -368,7 +400,7 @@ mod tests {
     fn a_comment_is_written_and_read_back() {
         let (_dir, comments) = comments();
         comments
-            .add("src/a.rs", Side::New, 82, 116, "Why this order?")
+            .add_lines("src/a.rs", Side::New, 82, 116, "Why this order?")
             .unwrap();
 
         let all = comments.all().unwrap().comments;
@@ -380,7 +412,11 @@ mod tests {
     fn an_empty_comment_is_refused() {
         let (_dir, comments) = comments();
 
-        assert!(comments.add("src/a.rs", Side::New, 1, 1, "   \n ").is_err());
+        assert!(
+            comments
+                .add_lines("src/a.rs", Side::New, 1, 1, "   \n ")
+                .is_err()
+        );
         assert!(comments.all().unwrap().comments.is_empty());
     }
 
@@ -391,7 +427,7 @@ mod tests {
         let (_dir, comments) = comments();
 
         let err = comments
-            .add("elsewhere.rs", Side::New, 1, 1, "Why?")
+            .add_lines("elsewhere.rs", Side::New, 1, 1, "Why?")
             .unwrap_err();
 
         assert!(err.to_string().contains("elsewhere.rs"), "{err}");
@@ -404,7 +440,7 @@ mod tests {
         let (_dir, comments) = comments();
 
         let err = comments
-            .add("src/a.rs", Side::New, 300, 320, "Why?")
+            .add_lines("src/a.rs", Side::New, 300, 320, "Why?")
             .unwrap_err();
 
         assert!(err.to_string().contains("200"), "{err}");
@@ -421,7 +457,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let when_written = over_at(dir.path(), a_file());
         let one = when_written
-            .add("src/a.rs", Side::New, 12, 12, "Why this order?")
+            .add_lines("src/a.rs", Side::New, 12, 12, "Why this order?")
             .unwrap();
 
         let after_pulling = over_at(dir.path(), a_file().showing("src/a.rs", vec![hunk(40, 3)]));
@@ -451,7 +487,7 @@ mod tests {
         // than answer, and failing here would take the whole list down with it.
         let dir = tempfile::tempdir().unwrap();
         over_at(dir.path(), a_file())
-            .add("src/a.rs", Side::New, 12, 12, "Why this order?")
+            .add_lines("src/a.rs", Side::New, 12, 12, "Why this order?")
             .unwrap();
 
         let elsewhere = over_at(dir.path(), FakeDiffSource::with_paths(&["src/b.rs"]));
@@ -467,7 +503,7 @@ mod tests {
         // is told why, rather than that the thread does not exist.
         let dir = tempfile::tempdir().unwrap();
         let one = over_at(dir.path(), a_file())
-            .add("src/a.rs", Side::New, 12, 12, "Why this order?")
+            .add_lines("src/a.rs", Side::New, 12, 12, "Why this order?")
             .unwrap();
 
         let moved = over_at(dir.path(), a_file().showing("src/a.rs", vec![hunk(40, 3)]));
@@ -485,7 +521,7 @@ mod tests {
         let (_dir, comments) = comments_showing(vec![hunk(10, 5), hunk(40, 3)]);
 
         let err = comments
-            .add("src/a.rs", Side::New, 30, 30, "Why?")
+            .add_lines("src/a.rs", Side::New, 30, 30, "Why?")
             .unwrap_err();
 
         let msg = err.to_string();
@@ -500,9 +536,17 @@ mod tests {
         // a check on the ends alone would wave through.
         let (_dir, comments) = comments_showing(vec![hunk(10, 5), hunk(40, 3)]);
 
-        assert!(comments.add("src/a.rs", Side::New, 12, 41, "Why?").is_err());
+        assert!(
+            comments
+                .add_lines("src/a.rs", Side::New, 12, 41, "Why?")
+                .is_err()
+        );
         // And the span that stays inside one hunk goes in.
-        assert!(comments.add("src/a.rs", Side::New, 12, 14, "Why?").is_ok());
+        assert!(
+            comments
+                .add_lines("src/a.rs", Side::New, 12, 14, "Why?")
+                .is_ok()
+        );
     }
 
     #[test]
@@ -523,12 +567,24 @@ mod tests {
 
         assert!(
             comments
-                .add("src/a.rs", Side::Old, 40, 42, "Why drop this?")
+                .add_lines("src/a.rs", Side::Old, 40, 42, "Why drop this?")
                 .is_ok()
         );
-        assert!(comments.add("src/a.rs", Side::Old, 60, 60, "Why?").is_err());
-        assert!(comments.add("src/a.rs", Side::New, 60, 62, "Why?").is_ok());
-        assert!(comments.add("src/a.rs", Side::New, 40, 40, "Why?").is_err());
+        assert!(
+            comments
+                .add_lines("src/a.rs", Side::Old, 60, 60, "Why?")
+                .is_err()
+        );
+        assert!(
+            comments
+                .add_lines("src/a.rs", Side::New, 60, 62, "Why?")
+                .is_ok()
+        );
+        assert!(
+            comments
+                .add_lines("src/a.rs", Side::New, 40, 40, "Why?")
+                .is_err()
+        );
 
         let all = comments.all().unwrap().comments;
         assert_eq!(all.len(), 2);
@@ -558,15 +614,19 @@ mod tests {
 
         assert!(
             comments
-                .add("gone.rs", Side::Old, 3, 7, "Where did this go?")
+                .add_lines("gone.rs", Side::Old, 3, 7, "Where did this go?")
                 .is_ok()
         );
         assert!(
-            comments.add("gone.rs", Side::Old, 3, 11, "Why?").is_err(),
+            comments
+                .add_lines("gone.rs", Side::Old, 3, 11, "Why?")
+                .is_err(),
             "past the end of what the diff printed"
         );
         assert!(
-            comments.add("gone.rs", Side::New, 1, 1, "Why?").is_err(),
+            comments
+                .add_lines("gone.rs", Side::New, 1, 1, "Why?")
+                .is_err(),
             "there is no new side to ask about"
         );
     }
@@ -577,10 +637,10 @@ mod tests {
         // as it was and another about line 12 as it now reads.
         let (_dir, comments) = comments();
         comments
-            .add("src/a.rs", Side::Old, 12, 12, "Why was this here?")
+            .add_lines("src/a.rs", Side::Old, 12, 12, "Why was this here?")
             .unwrap();
         comments
-            .add("src/a.rs", Side::New, 12, 12, "Why is this here?")
+            .add_lines("src/a.rs", Side::New, 12, 12, "Why is this here?")
             .unwrap();
 
         let all = comments.all().unwrap().comments;
@@ -600,7 +660,9 @@ mod tests {
         // Closing is answering, and an answered question is not a thing the
         // review keeps: the list is what is still waiting.
         let (_dir, comments) = comments();
-        let one = comments.add("src/a.rs", Side::New, 1, 1, "Why?").unwrap();
+        let one = comments
+            .add_lines("src/a.rs", Side::New, 1, 1, "Why?")
+            .unwrap();
 
         comments.close(&one.id).unwrap();
 
@@ -621,8 +683,12 @@ mod tests {
         // They are written to travel: the reviewer's come back to the author
         // and the two sets are read side by side.
         let (_dir, comments) = comments();
-        comments.add("src/a.rs", Side::New, 1, 1, "one").unwrap();
-        comments.add("src/a.rs", Side::New, 2, 2, "two").unwrap();
+        comments
+            .add_lines("src/a.rs", Side::New, 1, 1, "one")
+            .unwrap();
+        comments
+            .add_lines("src/a.rs", Side::New, 2, 2, "two")
+            .unwrap();
 
         let all = comments.all().unwrap().comments;
         assert_ne!(all[0].id, all[1].id);
@@ -634,7 +700,7 @@ mod tests {
         let (_dir, comments) = comments();
 
         let one = comments
-            .add_about(
+            .add(
                 Subject::Lens {
                     lens: LensId::parse("overview").unwrap(),
                     target: LensTarget::Pr,

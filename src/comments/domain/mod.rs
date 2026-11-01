@@ -1,3 +1,4 @@
+mod clock;
 mod credentials;
 mod error;
 mod mode;
@@ -6,6 +7,7 @@ mod pull_request;
 mod read_marks;
 mod subject;
 
+pub use clock::*;
 pub use credentials::*;
 pub use error::*;
 pub use mode::*;

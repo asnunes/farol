@@ -94,6 +94,7 @@ mod tests {
                 Arc::new(MarkdownComments::new(&store, dir.path())),
                 GetScope::new(scope.clone()),
                 CommentReach::new(scope, FileDiffs::new(source)),
+                Arc::new(crate::comments::infra::SystemClock),
             );
             Self {
                 _dir: dir,
@@ -126,7 +127,7 @@ mod tests {
 
         fn comment(&self) -> Comment {
             self.comments
-                .add("src/a.rs", Side::New, 82, 116, "Why this order?")
+                .add_lines("src/a.rs", Side::New, 82, 116, "Why this order?")
                 .unwrap()
         }
     }
