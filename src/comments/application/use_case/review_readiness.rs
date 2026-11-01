@@ -19,7 +19,7 @@ pub struct ReviewReadiness {
     comments: Comments,
     publisher: Arc<dyn PendingReview>,
     host: Option<String>,
-    read: crate::lenses::application::ListReadFiles,
+    read: std::sync::Arc<dyn crate::comments::domain::ReadFiles>,
     drafts: std::sync::Arc<dyn crate::comments::domain::PullDraftStore>,
 }
 
@@ -30,7 +30,7 @@ impl ReviewReadiness {
         comments: Comments,
         publisher: Arc<dyn PendingReview>,
         host: Option<String>,
-        read: crate::lenses::application::ListReadFiles,
+        read: std::sync::Arc<dyn crate::comments::domain::ReadFiles>,
         drafts: std::sync::Arc<dyn crate::comments::domain::PullDraftStore>,
     ) -> Self {
         Self {
@@ -69,7 +69,7 @@ impl ReviewReadiness {
             loose,
             pending_failed,
             drift,
-            read: self.read.execute()?,
+            read: self.read.read()?,
             // Only while there is a pull request to open: once it exists, the
             // draft has said what it had to.
             draft: match readiness {

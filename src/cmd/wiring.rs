@@ -17,7 +17,7 @@ use crate::comments::application::{
 };
 use crate::comments::domain::{
     BranchPusher, Clock, CommentStore, ModeStore, PendingReview, PullDraftStore, PullRequests,
-    ReadMarks,
+    ReadFiles, ReadMarks,
 };
 use crate::comments::infra::{
     GhCredentials, GitHub, GitPush, JsonModeStore, JsonPullDraft, Logins, MarkdownComments,
@@ -357,6 +357,16 @@ pub fn server_use_cases(ports: &Ports, serving: Serving) -> ServerUseCases {
     }
 }
 
+/// The files read, as the lenses' use case answers it, behind the port the
+/// comments' use cases take: they learn a list of paths, not how it is made.
+struct LensAwareReads(ListReadFiles);
+
+impl ReadFiles for LensAwareReads {
+    fn read(&self) -> Result<Vec<String>> {
+        self.0.execute()
+    }
+}
+
 /// What the CLI and the server both build from the ports, built once here so
 /// the two can only differ in what they add on top.
 struct Shared {
@@ -400,7 +410,11 @@ impl Shared {
             ports.lens_catalog.clone(),
             ports.lens_answers.clone(),
         );
-        let read = ListReadFiles::new(progress.clone(), scope.clone(), review.clone());
+        let read: Arc<dyn ReadFiles> = Arc::new(LensAwareReads(ListReadFiles::new(
+            progress.clone(),
+            scope.clone(),
+            review.clone(),
+        )));
         let gate = PullRequestGate::new(ports.pulls.clone(), scope.clone(), history);
         Self {
             readiness: ReviewReadiness::new(
@@ -418,7 +432,6 @@ impl Shared {
                 gate.clone(),
                 ports.pending.clone(),
                 ports.marks.clone(),
-                scope.clone(),
                 read,
             ),
             close_thread: CloseThread::new(comments.clone()),

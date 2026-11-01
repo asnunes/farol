@@ -1,6 +1,7 @@
 //! The lenses as the screen reads them: which are on, what each said, and
 //! whether that still matches the review.
 
+use crate::diff::domain::FileChange;
 use crate::lenses::domain::{Freshness, LensAnswer, LensDefinition, LensGroup};
 use crate::map::application::ReviewSnapshot;
 use crate::map::domain::{ReviewMap, Slug};
@@ -62,17 +63,27 @@ impl LensReading {
             })
     }
 
-    /// Every file under review the reader has read: ticked and unchanged since,
-    /// or covered by its block's lenses.
+    /// Whether the reader has read a file: ticked and still the same file, or
+    /// covered by its block's lenses.
+    ///
+    /// The one place the rule is written. The row on screen, the block's count
+    /// and what the pull request is told all ask this, so the three cannot come
+    /// to disagree about what was read.
+    pub fn is_read(&self, map: &ReviewMap, progress: &Progress, change: &FileChange) -> bool {
+        // Comparing paths alone was what kept a file struck through after it
+        // had changed under the mark, which is the one thing this is supposed
+        // to catch.
+        progress.is_current(&change.path, &change.content_hash)
+            || self.covers(map, progress, &change.path)
+    }
+
+    /// Every file under review the reader has read.
     pub fn read_paths(&self, snapshot: &ReviewSnapshot) -> Vec<String> {
         snapshot
             .scope
             .files
             .iter()
-            .filter(|f| {
-                snapshot.progress.is_current(&f.path, &f.content_hash)
-                    || self.covers(&snapshot.map, &snapshot.progress, &f.path)
-            })
+            .filter(|f| self.is_read(&snapshot.map, &snapshot.progress, f))
             .map(|f| f.path.clone())
             .collect()
     }
@@ -175,6 +186,33 @@ mod tests {
         assert!(
             !reading.covers(&map, &progress, "dense.rs"),
             "a file in focus is read by its own tick"
+        );
+    }
+
+    #[test]
+    fn a_file_is_read_while_its_tick_holds_or_its_block_covers_it() {
+        // The one rule the row, the block's count and the pull request share.
+        let mut map = map_with(&["core"]);
+        map.add_file(&slug("core"), "a.rs", None, None).unwrap();
+        let reading = LensReading {
+            lenses: LensCatalog::default().enabled(),
+            answers: vec![],
+        };
+        let change = |hash: &str| FileChange {
+            path: "a.rs".into(),
+            old_path: None,
+            status: crate::diff::domain::FileStatus::Modified,
+            additions: 1,
+            deletions: 0,
+            content_hash: hash.into(),
+        };
+        let mut progress = Progress::new();
+        progress.mark("a.rs", "blob-1", "now");
+
+        assert!(reading.is_read(&map, &progress, &change("blob-1")));
+        assert!(
+            !reading.is_read(&map, &progress, &change("blob-2")),
+            "a tick on the file as it was is not a read of the file as it is"
         );
     }
 
