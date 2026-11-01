@@ -397,6 +397,8 @@ export type LoosePendingView = {
   side: Side;
   from: number;
   to: number;
+  /** Where it is, as the server words it, `(old)` included. */
+  at: string;
   body: string;
 };
 

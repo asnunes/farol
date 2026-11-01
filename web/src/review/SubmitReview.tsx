@@ -84,9 +84,7 @@ export function SubmitReview({ pull, threads, onSubmit }: SubmitReviewProps) {
                 {/* No thread here points at these, and they go all the same. */}
                 {pull.loose.map((one) => (
                   <li key={one.id} className="text-ink-soft">
-                    <span className="font-mono text-xs text-comment-ink">
-                      {one.path}:{one.from === one.to ? one.to : `${one.from}-${one.to}`}
-                    </span>{" "}
+                    <span className="font-mono text-xs text-comment-ink">{one.at}</span>{" "}
                     — {excerpt(one.body)}
                   </li>
                 ))}

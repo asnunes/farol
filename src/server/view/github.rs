@@ -104,6 +104,7 @@ impl PullRequestView {
                     },
                     from: one.at.from,
                     to: one.at.to,
+                    at: one.at.at(),
                     body: one.body.clone(),
                 })
                 .collect(),
@@ -198,6 +199,10 @@ pub struct LoosePendingView {
     pub side: &'static str,
     pub from: u32,
     pub to: u32,
+    /// Where it is, the way a person reads it, with `(old)` on the old side:
+    /// built once here rather than again by the screen, which once left the
+    /// side out.
+    pub at: String,
     pub body: String,
 }
 
@@ -226,4 +231,43 @@ pub struct SentView {
     pub comments: usize,
     pub read: usize,
     pub read_failed: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::comments::domain::{Lines, ModeChoice, PendingComment};
+    use crate::diff::domain::Side;
+
+    #[test]
+    fn a_pending_comment_with_no_thread_says_which_side_it_is_on() {
+        // Line 12 removed and line 12 kept are two passages. The screen built
+        // this itself once and dropped the side, so the comment read as being
+        // about the new code.
+        let standing = Standing {
+            host: None,
+            branch: "feat/x".into(),
+            readiness: Readiness::NoRemote,
+            mode: ModeChoice::resolve(None, None),
+            pending: vec![],
+            loose: vec![PendingComment {
+                id: "PRRC_1".into(),
+                body: "Why remove this?".into(),
+                at: Lines {
+                    path: "src/a.rs".into(),
+                    side: Side::Old,
+                    from: 12,
+                    to: 12,
+                },
+            }],
+            pending_failed: None,
+            drift: None,
+            read: vec![],
+            draft: None,
+        };
+
+        let view = PullRequestView::of(&standing);
+
+        assert_eq!(view.loose[0].at, "src/a.rs:12 (old)");
+    }
 }
