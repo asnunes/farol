@@ -41,6 +41,8 @@ impl World {
     }
 
     pub fn over(publisher: FakePublisher, source: FakeDiffSource) -> Self {
+        // The pull request holds the files under review, as GitHub's would.
+        let publisher = publisher.holding_files(source.paths());
         let dir = tempfile::tempdir().unwrap();
         let store = Store::new(dir.path(), "feature/x");
         let source = Arc::new(source);

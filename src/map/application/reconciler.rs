@@ -109,8 +109,11 @@ mod tests {
 
     #[test]
     fn a_file_that_did_not_change_leaves_its_notes_exactly_where_they_are() {
-        // No diff between the two commits, so nothing to recompute.
-        let source = FakeDiffSource::with_paths(&["a.rs"]);
+        // No diff between the two commits, so nothing to recompute. Both are
+        // commits the history has; one it does not have is refused, as by git.
+        let source = FakeDiffSource::with_paths(&["a.rs"])
+            .on_commit("new")
+            .with_ancestors(&["old"]);
         let mut map = map_with_note("old", range(40, 45), "still true");
 
         reconciler(source).reanchor(&mut map, "old", "new").unwrap();

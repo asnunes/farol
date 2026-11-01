@@ -77,7 +77,14 @@ impl MapVersions {
                 continue;
             }
             let distance = self.history.commits_ahead_of(&sha);
-            if best.as_ref().map(|(d, _)| distance < *d).unwrap_or(true) {
+            // A tie is broken by the sha, not by the order storage hands them
+            // back in, which no two stores agree on. Ties are real: a history
+            // that cannot be walked reads every distance as zero.
+            let nearer = best
+                .as_ref()
+                .map(|(d, s)| (distance, &sha) < (*d, s))
+                .unwrap_or(true);
+            if nearer {
                 best = Some((distance, sha));
             }
         }
@@ -131,6 +138,22 @@ mod tests {
         let map = versions.current().unwrap().unwrap();
         assert_eq!(map.generated_at, "near", "the closest one, not just any");
         assert_eq!(versions.behind(&map), 2);
+    }
+
+    #[test]
+    fn two_ancestors_at_the_same_distance_settle_the_same_way_whatever_the_store() {
+        // A history that cannot be walked reads every distance as zero. The
+        // choice then has to come from the shas, not from the order a store
+        // lists them in, which the JSON store and the fake do not share.
+        for order in [["bbb", "aaa"], ["aaa", "bbb"]] {
+            let versions = seeded(
+                FakeDiffSource::with_paths(&["a.rs"])
+                    .on_commit("head")
+                    .with_ancestors(&["aaa", "bbb"]),
+                &order,
+            );
+            assert_eq!(versions.current().unwrap().unwrap().generated_at, "aaa");
+        }
     }
 
     #[test]

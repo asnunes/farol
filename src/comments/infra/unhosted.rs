@@ -28,12 +28,21 @@ impl ReviewPublisher for Unhosted {
         Err(CommentError::NoRemote.into())
     }
 
+    /// With no host, no comment is there, and taking back one that is not
+    /// there is not an error. Refusing left a thread from before the remote
+    /// went holding a pending comment it could never let go of.
     fn remove_pending(&self, _id: &str) -> Result<()> {
-        Err(CommentError::NoRemote.into())
+        Ok(())
     }
 
-    fn remote(&self, _ids: &[String]) -> Result<Vec<RemoteComment>> {
-        Err(CommentError::NoRemote.into())
+    fn remote(&self, ids: &[String]) -> Result<Vec<RemoteComment>> {
+        Ok(ids
+            .iter()
+            .map(|id| RemoteComment {
+                id: id.clone(),
+                state: crate::comments::domain::RemoteState::Gone,
+            })
+            .collect())
     }
 
     fn pending_comments(
@@ -66,5 +75,23 @@ impl ReviewPublisher for Unhosted {
         _draft: &crate::comments::domain::PullDraft,
     ) -> Result<crate::comments::domain::OpenedPull> {
         Err(CommentError::NoRemote.into())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::comments::domain::RemoteState;
+
+    #[test]
+    fn with_no_host_every_comment_is_gone_and_letting_one_go_succeeds() {
+        // A thread written before the remote went still names a pending
+        // comment. It has to be able to let go of it.
+        let host = Unhosted;
+        assert_eq!(
+            host.remote(&["PRRC_1".into()]).unwrap()[0].state,
+            RemoteState::Gone
+        );
+        assert!(host.remove_pending("PRRC_1").is_ok());
     }
 }
