@@ -15,14 +15,14 @@ use crate::error::Result;
 pub struct SyncReadMarks {
     pull: PullRequestGate,
     publisher: Arc<dyn ReadMarks>,
-    read: crate::lenses::application::ListReadFiles,
+    read: std::sync::Arc<dyn crate::comments::domain::ReadFiles>,
 }
 
 impl SyncReadMarks {
     pub fn new(
         pull: PullRequestGate,
         publisher: Arc<dyn ReadMarks>,
-        read: crate::lenses::application::ListReadFiles,
+        read: std::sync::Arc<dyn crate::comments::domain::ReadFiles>,
     ) -> Self {
         Self {
             pull,
@@ -35,7 +35,7 @@ impl SyncReadMarks {
     /// commit has not been read in the shape the pull request shows.
     pub fn execute(&self) -> Result<Synced> {
         let pull = self.pull.at_head()?;
-        let read = self.read.execute()?;
+        let read = self.read.read()?;
         let stale: Vec<String> = self
             .publisher
             .viewed(&pull.id)?

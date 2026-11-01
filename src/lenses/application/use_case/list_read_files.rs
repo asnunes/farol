@@ -24,19 +24,13 @@ impl ListReadFiles {
     }
 
     pub fn execute(&self) -> Result<Vec<String>> {
-        let mut read = self.progress.current_paths(&self.scope.get()?.files)?;
-        // No map means no blocks, so nothing is covered; the ticks still are.
         match self.review.execute() {
-            Ok((snapshot, lenses)) => {
-                for path in lenses.read_paths(&snapshot) {
-                    if !read.contains(&path) {
-                        read.push(path);
-                    }
-                }
+            Ok((snapshot, lenses)) => Ok(lenses.read_paths(&snapshot)),
+            // No map means no blocks, so nothing is covered; the ticks still are.
+            Err(Error::Map(MapError::NoMap { .. })) => {
+                self.progress.current_paths(&self.scope.get()?.files)
             }
-            Err(Error::Map(MapError::NoMap { .. })) => {}
-            Err(e) => return Err(e),
+            Err(e) => Err(e),
         }
-        Ok(read)
     }
 }

@@ -4,9 +4,7 @@ use crate::comments::application::{Comments, OpenPull, PullRequestGate};
 use crate::comments::domain::{
     CommentError, PendingReview, ReadMarks, RemoteState, Review, Verdict,
 };
-use crate::diff::application::ReviewScope;
 use crate::error::Result;
-use crate::shared::short;
 
 /// Submit the review: the verdict and summary, over the pending comments that
 /// are already on the pull request.
@@ -22,8 +20,7 @@ pub struct PublishReview {
     pull: PullRequestGate,
     pending: Arc<dyn PendingReview>,
     marks: Arc<dyn ReadMarks>,
-    scope: ReviewScope,
-    read: crate::lenses::application::ListReadFiles,
+    read: std::sync::Arc<dyn crate::comments::domain::ReadFiles>,
 }
 
 impl PublishReview {
@@ -32,15 +29,13 @@ impl PublishReview {
         pull: PullRequestGate,
         pending: Arc<dyn PendingReview>,
         marks: Arc<dyn ReadMarks>,
-        scope: ReviewScope,
-        read: crate::lenses::application::ListReadFiles,
+        read: std::sync::Arc<dyn crate::comments::domain::ReadFiles>,
     ) -> Self {
         Self {
             comments,
             pull,
             pending,
             marks,
-            scope,
             read,
         }
     }
@@ -78,25 +73,22 @@ impl PublishReview {
     /// Mark what was read, when the pull request shows the commit it was read
     /// at. A file read at another commit has not been read in the shape the
     /// pull request shows.
+    ///
+    /// Held to the commit by the gate's own rule, the one every other write on
+    /// the pull request answers to, so the refusal reads the same here as
+    /// anywhere: whose commits are missing, and what to run.
     fn tick(&self, pull: &OpenPull) -> Result<usize> {
-        let scope = self.scope.get()?;
         let read = self.already_read()?;
         if read.is_empty() {
             return Ok(0);
         }
-        if self.pull.drift(&pull.head)?.is_some() {
-            return Err(crate::error::Error::msg(format!(
-                "the pull request is at {}, you read {}",
-                short(&pull.head),
-                short(&scope.head_sha)
-            )));
-        }
+        self.pull.at_head()?;
         self.marks.mark_read(&pull.id, &read)
     }
 
     /// The files the reviewer has read and that have not moved since.
     fn already_read(&self) -> Result<Vec<String>> {
-        self.read.execute()
+        self.read.read()
     }
 
     /// How many of the threads' comments are about to go, as the host has

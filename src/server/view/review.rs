@@ -76,12 +76,7 @@ impl ReviewView {
             let viewed_files = held
                 .iter()
                 .filter_map(|path| scope.change(path))
-                // The same question `FileView` asks of a row: read, and still
-                // the same file.
-                .filter(|change| {
-                    progress.is_current(&change.path, &change.content_hash)
-                        || lenses.covers(map, progress, &change.path)
-                })
+                .filter(|change| lenses.is_read(map, progress, change))
                 .count();
 
             blocks.push(BlockView {
@@ -198,14 +193,8 @@ impl FileView {
             .unwrap_or_default();
         line_notes.sort_by_key(|n| (n.from, n.to));
 
-        // Read *and still the same file*. Comparing paths alone was what kept
-        // a file struck through after it had changed under the mark, which is
-        // the one thing this is supposed to catch.
-        //
-        // Or covered: a file with nothing of its own to read counts as read
-        // once its block's lenses are seen.
         let covered = lenses.covers(map, progress, path);
-        let viewed = progress.is_current(path, &change.content_hash) || covered;
+        let viewed = lenses.is_read(map, progress, change);
 
         let file_lenses = LensView::all(lenses.for_file(path), progress);
         FileView {

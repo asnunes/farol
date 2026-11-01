@@ -114,7 +114,6 @@ impl World {
             self.gate(),
             self.publisher.clone(),
             self.publisher.clone(),
-            ReviewScope::new(self.source.clone()),
             self.read_files(),
         )
     }
@@ -123,23 +122,26 @@ impl World {
         SyncReadMarks::new(self.gate(), self.publisher.clone(), self.read_files())
     }
 
-    /// What the reviewer read, over a review with no map: the ticks alone.
-    fn read_files(&self) -> crate::lenses::application::ListReadFiles {
-        let scope = ReviewScope::new(self.source.clone());
-        let versions = crate::map::application::MapVersions::new(
-            scope.clone(),
-            CommitHistory::new(self.source.clone()),
-            Arc::new(crate::testing::InMemoryMapRepository::default()),
-        );
-        crate::lenses::application::ListReadFiles::new(
-            self.progress.clone(),
-            scope.clone(),
-            crate::lenses::application::GetReviewWithLenses::new(
-                crate::map::application::GetReview::new(versions, scope, self.progress.clone()),
-                Arc::new(crate::testing::InMemoryLensCatalog::default()),
-                Arc::new(crate::testing::InMemoryLensAnswers::default()),
-            ),
-        )
+    /// What the reviewer read: the files ticked and unchanged since. Through
+    /// the port, so these tests need no map and no lenses to learn a list of
+    /// paths.
+    fn read_files(&self) -> Arc<dyn crate::comments::domain::ReadFiles> {
+        Arc::new(Ticked {
+            progress: self.progress.clone(),
+            scope: ReviewScope::new(self.source.clone()),
+        })
+    }
+}
+
+/// The files ticked, with no lens to cover any other.
+struct Ticked {
+    progress: ProgressStore,
+    scope: ReviewScope,
+}
+
+impl crate::comments::domain::ReadFiles for Ticked {
+    fn read(&self) -> crate::error::Result<Vec<String>> {
+        self.progress.current_paths(&self.scope.get()?.files)
     }
 }
 
