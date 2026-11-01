@@ -10,16 +10,18 @@ use std::sync::Arc;
 use crate::agent::domain::AgentChannel;
 use crate::agent::infra::{AgentAddress, ClaudeSocket, CodexQueue};
 use crate::comments::application::{
-    ChooseMode, CloseThread, CommentReach, Comments, EditPending, GeneratePending,
-    GeneratePullDraft, OpenPullRequest, PublishReview, PullRequestGate, PushBranch, RemovePending,
-    ReviewModes, ReviewReadiness, SendComment, SyncReadMarks, WritePending, WritePullDraft,
+    AcknowledgeThread, AddThread, ChooseMode, CloseThread, CommentReach, Comments, EditPending,
+    GeneratePending, GeneratePullDraft, ListThreads, OpenPullRequest, PublishReview,
+    PullRequestGate, PushBranch, RemovePending, ReplyToThread, ReviewModes, ReviewReadiness,
+    SendComment, SyncReadMarks, WritePending, WritePullDraft,
 };
 use crate::comments::domain::{
-    BranchPusher, CommentStore, ModeStore, PendingReview, PullDraftStore, PullRequests, ReadMarks,
+    BranchPusher, Clock, CommentStore, ModeStore, PendingReview, PullDraftStore, PullRequests,
+    ReadMarks,
 };
 use crate::comments::infra::{
     GhCredentials, GitHub, GitPush, JsonModeStore, JsonPullDraft, Logins, MarkdownComments,
-    Unhosted,
+    SystemClock, Unhosted,
 };
 use crate::config::domain::ConfigRepository;
 use crate::config::infra::JsonConfigRepository;
@@ -78,7 +80,10 @@ pub struct Ctx {
     pub import_map: ImportMap,
     pub scope: GetScope,
 
-    pub comments: Comments,
+    pub add_thread: AddThread,
+    pub list_threads: ListThreads,
+    pub reply_to_thread: ReplyToThread,
+    pub acknowledge_thread: AcknowledgeThread,
     pub close_thread: CloseThread,
     pub write_pending: WritePending,
     pub edit_pending: EditPending,
@@ -167,7 +172,10 @@ impl Ctx {
             import_map: ImportMap::new(scope.clone(), ports.maps.clone()),
             scope: GetScope::new(scope.clone()),
 
-            comments: shared.comments,
+            acknowledge_thread: AcknowledgeThread::new(shared.comments.clone()),
+            add_thread: shared.add_thread,
+            list_threads: shared.list_threads,
+            reply_to_thread: shared.reply_to_thread,
             close_thread: shared.close_thread,
             write_pending: shared.write_pending,
             edit_pending: shared.edit_pending,
@@ -224,6 +232,7 @@ pub struct Ports {
     pub pending: Arc<dyn PendingReview>,
     pub marks: Arc<dyn ReadMarks>,
     pub pusher: Arc<dyn BranchPusher>,
+    pub clock: Arc<dyn Clock>,
     /// The host the repository's remote is on, for the screen's login hint.
     pub host: Option<String>,
 }
@@ -286,6 +295,7 @@ impl Ports {
             pending,
             marks,
             pusher,
+            clock: Arc::new(SystemClock),
             host,
         })
     }
@@ -333,7 +343,9 @@ pub fn server_use_cases(ports: &Ports, serving: Serving) -> ServerUseCases {
             ports.drafts.clone(),
         ),
         review: shared.review,
-        comments: shared.comments,
+        add_thread: shared.add_thread,
+        list_threads: shared.list_threads,
+        reply_to_thread: shared.reply_to_thread,
         close_thread: shared.close_thread,
         write_pending: shared.write_pending,
         edit_pending: shared.edit_pending,
@@ -356,6 +368,9 @@ struct Shared {
     gate: PullRequestGate,
     review: GetReviewWithLenses,
     comments: Comments,
+    add_thread: AddThread,
+    reply_to_thread: ReplyToThread,
+    list_threads: ListThreads,
     close_thread: CloseThread,
     write_pending: WritePending,
     edit_pending: EditPending,
@@ -375,6 +390,7 @@ impl Shared {
             ports.comments.clone(),
             GetScope::new(scope.clone()),
             CommentReach::new(scope.clone(), diffs.clone()),
+            ports.clock.clone(),
         );
         let versions = MapVersions::new(scope.clone(), history.clone(), ports.maps.clone());
         let progress = ProgressStore::new(ports.progress.clone(), diffs.clone());
@@ -406,6 +422,9 @@ impl Shared {
                 read,
             ),
             close_thread: CloseThread::new(comments.clone()),
+            add_thread: AddThread::new(comments.clone()),
+            reply_to_thread: ReplyToThread::new(comments.clone()),
+            list_threads: ListThreads::new(comments.clone()),
             write_pending: WritePending::new(comments.clone(), gate.clone(), ports.pending.clone()),
             edit_pending: EditPending::new(ports.pending.clone()),
             remove_pending: RemovePending::new(comments.clone(), ports.pending.clone()),

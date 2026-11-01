@@ -1,3 +1,4 @@
+pub mod clock;
 pub mod gh_credentials;
 pub mod git_push;
 pub mod github;
@@ -6,6 +7,7 @@ pub mod mode_store;
 pub mod pull_draft_store;
 pub mod unhosted;
 
+pub use clock::SystemClock;
 pub use gh_credentials::GhCredentials;
 pub use git_push::GitPush;
 pub use github::{GitHub, Logins};

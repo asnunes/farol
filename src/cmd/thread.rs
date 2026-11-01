@@ -3,7 +3,7 @@
 use clap::Subcommand;
 
 use super::{Action, Ctx};
-use crate::comments::domain::Author;
+use crate::comments::domain::{Author, Lines, Subject};
 use crate::comments::presentation::CommentList;
 use crate::diff::domain::Side;
 use crate::error::Result;
@@ -54,12 +54,18 @@ impl Action for ThreadAction {
                 // too. The side arrived proven, parsed by clap on the way in.
                 let range = LineRange::parse(&range)?;
 
-                let one = ctx.comments.add(&path, side, range.from, range.to, &text)?;
+                let about = Subject::Lines(Lines {
+                    path,
+                    side,
+                    from: range.from,
+                    to: range.to,
+                });
+                let one = ctx.add_thread.execute(about, &text)?;
                 println!("Wrote thread {} on {}.", one.id, one.at());
                 Ok(())
             }
             ThreadAction::List => {
-                print!("{}", CommentList(&ctx.comments.all()?));
+                print!("{}", CommentList(&ctx.list_threads.execute()?));
                 Ok(())
             }
             ThreadAction::Close { id } => {
@@ -69,7 +75,7 @@ impl Action for ThreadAction {
             }
             ThreadAction::Ack { id } => {
                 let by = super::wiring::harness_here().unwrap_or("agent");
-                ctx.comments.acknowledge(&id, by)?;
+                ctx.acknowledge_thread.execute(&id, by)?;
                 println!("Marked thread {id} as being worked on by {by}.");
                 Ok(())
             }
@@ -78,7 +84,7 @@ impl Action for ThreadAction {
                     Some(name) => Author::Agent(name.to_string()),
                     None => Author::Reviewer,
                 };
-                ctx.comments.reply(&id, from, &text)?;
+                ctx.reply_to_thread.execute(&id, from, &text)?;
                 println!("Replied to thread {id}.");
                 Ok(())
             }

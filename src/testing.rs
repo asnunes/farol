@@ -441,6 +441,7 @@ pub fn thread_store(paths: &[&str]) -> (tempfile::TempDir, crate::comments::appl
         Arc::new(MarkdownComments::new(&store, dir.path())),
         GetScope::new(scope.clone()),
         crate::comments::application::CommentReach::new(scope, FileDiffs::new(source)),
+        Arc::new(crate::comments::infra::SystemClock),
     );
     (dir, comments)
 }
@@ -494,6 +495,7 @@ pub fn fake_ports(paths: &[&str]) -> (tempfile::TempDir, crate::cmd::Ports) {
         pending: unhosted.clone(),
         marks: unhosted,
         pusher: Arc::new(RecordingPusher::default()),
+        clock: Arc::new(crate::comments::infra::SystemClock),
         host: None,
     };
     (dir, ports)

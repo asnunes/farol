@@ -7,9 +7,9 @@
 
 use crate::agent::infra::AgentAddress;
 use crate::comments::application::{
-    ChooseMode, CloseThread, Comments, EditPending, GeneratePending, GeneratePullDraft,
-    OpenPullRequest, PublishReview, PushBranch, RemovePending, ReviewReadiness, SendComment,
-    SyncReadMarks, WritePending,
+    AddThread, ChooseMode, CloseThread, EditPending, GeneratePending, GeneratePullDraft,
+    ListThreads, OpenPullRequest, PublishReview, PushBranch, RemovePending, ReplyToThread,
+    ReviewReadiness, SendComment, SyncReadMarks, WritePending,
 };
 use crate::diff::infra::ScopeRequest;
 use crate::error::Result;
@@ -31,7 +31,9 @@ pub struct ServerUseCases {
     pub file_lines: GetFileLines,
     pub mark_viewed: MarkViewed,
     pub unmark_viewed: UnmarkViewed,
-    pub comments: Comments,
+    pub add_thread: AddThread,
+    pub list_threads: ListThreads,
+    pub reply_to_thread: ReplyToThread,
     pub close_thread: CloseThread,
     pub send_comment: SendComment,
     pub generate_pending: GeneratePending,

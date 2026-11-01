@@ -51,6 +51,7 @@ impl World {
             Arc::new(MarkdownComments::new(&store, dir.path())),
             GetScope::new(scope.clone()),
             CommentReach::new(scope, FileDiffs::new(source.clone())),
+            Arc::new(crate::comments::infra::SystemClock),
         );
         Self {
             _dir: dir,
@@ -69,7 +70,7 @@ impl World {
 
     pub fn thread(&self) -> Comment {
         self.comments
-            .add("src/a.rs", Side::New, 10, 12, "Why this order?")
+            .add_lines("src/a.rs", Side::New, 10, 12, "Why this order?")
             .unwrap()
     }
 
