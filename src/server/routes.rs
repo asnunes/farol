@@ -120,7 +120,7 @@ pub(super) mod tests {
     //! that fails, which no amount of driving the real binary can arrange.
 
     use super::*;
-    use crate::cmd::ServerUseCases;
+    use crate::server::ServerUseCases;
     use crate::server::SessionConfig;
     use crate::server::{Registry, ServerEntry};
     use crate::testing::FakeDiffSource;
@@ -157,39 +157,21 @@ pub(super) mod tests {
     async fn a_review_that_cannot_be_assembled_is_a_bad_request_not_a_silent_empty_page() {
         // If the progress store is unreadable the screen must say so rather
         // than render as though nothing had been read.
-        use crate::diff::application::{FileDiffs, ReviewScope};
-        use crate::map::application::GetReview;
-        use crate::progress::application::ProgressStore;
-
         let paths = ["a.rs"];
-        let diffs = FileDiffs::new(Arc::new(FakeDiffSource::with_paths(&paths)));
-        let maps = crate::testing::services(
-            FakeDiffSource::with_paths(&paths),
-            Arc::new(crate::testing::InMemoryMapRepository::new()),
-        );
+        let (_dir, mut ports) = crate::testing::fake_ports(&paths);
+        let maps = Arc::new(crate::testing::InMemoryMapRepository::new());
         // A map has to exist, or the request fails looking for one and never
         // reaches the collaborator this test is about.
-        maps.editor
+        crate::testing::services(FakeDiffSource::with_paths(&paths), maps.clone())
+            .editor
             .edit(|_| Ok::<_, crate::map::domain::MapError>(()))
             .unwrap();
-        let broken = ProgressStore::new(
-            Arc::new(crate::testing::BrokenProgressRepository),
-            diffs.clone(),
-        );
-        let (_dir, comments) = crate::testing::thread_store(&paths);
-        let use_cases = crate::testing::server_use_cases_over(
-            &paths,
-            comments,
-            GetReview::new(
-                maps.versions,
-                ReviewScope::new(Arc::new(FakeDiffSource::with_paths(&paths))),
-                broken.clone(),
-            ),
-            broken,
-        );
+        ports.maps = maps;
+        ports.progress = Arc::new(crate::testing::BrokenProgressRepository);
+        let use_cases = crate::testing::serve(&ports);
         let (state, _) = AppState::new(
             session(use_cases, _dir.path()),
-            crate::cmd::ConfigUseCases::new(
+            crate::server::ConfigUseCases::new(
                 Arc::new(crate::testing::InMemoryConfigRepository::default()),
                 Arc::new(crate::testing::InMemoryLensCatalog::default()),
             ),

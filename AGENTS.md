@@ -165,10 +165,13 @@ impl MapSession {
 ```
 
 **`src/cmd/wiring.rs` is the composition root and the only place a concrete
-implementation is named.** `Ctx::from_workspace` chooses `GixSource`,
-`JsonMapRepository` and `JsonProgressRepository`; `Ctx::new` takes them. If you
-find yourself writing `SomeConcrete::new()` anywhere else, the dependency wants
-to be a parameter instead.
+implementation is named.** `Ports::of_workspace` chooses `GixSource`,
+`JsonMapRepository`, `GitHub` and the rest; the CLI's `Ctx` and the server's
+`server_use_cases` are both built from a `Ports`, through the same shared
+assembly. The tests build a `Ports` of fakes (`testing::fake_ports`) and go
+through that assembly too, so the server a test exercises is wired as the one a
+reviewer runs. If you find yourself writing `SomeConcrete::new()` anywhere
+else, the dependency wants to be a parameter instead.
 
 ### Use case and service are different things
 

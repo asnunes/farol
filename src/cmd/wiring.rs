@@ -15,7 +15,7 @@ use crate::comments::application::{
     ReviewModes, ReviewReadiness, SendComment, SyncReadMarks, WritePending, WritePullDraft,
 };
 use crate::comments::domain::{
-    BranchPusher, PendingReview, PullDraftStore, PullRequests, ReadMarks,
+    BranchPusher, CommentStore, ModeStore, PendingReview, PullDraftStore, PullRequests, ReadMarks,
 };
 use crate::comments::infra::{
     GhCredentials, GitHub, GitPush, JsonModeStore, JsonPullDraft, Logins, MarkdownComments,
@@ -24,13 +24,14 @@ use crate::comments::infra::{
 use crate::config::domain::ConfigRepository;
 use crate::config::infra::JsonConfigRepository;
 use crate::diff::application::{CommitHistory, FileDiffs, ReviewScope};
+use crate::diff::domain::{CommitHistorySource, FileDiffSource, ReviewScopeSource};
 use crate::diff::infra::{GixSource, ScopeRequest};
 use crate::error::Result;
 use crate::lenses::application::{
     AddLens, DeleteLens, DisableLens, EnableLens, GetReviewWithLenses, KeepAnswer, ListLenses,
     ListReadFiles, PendingAnswers, SeeLens, ShowAnswer, UpdateLens, WriteAnswer,
 };
-use crate::lenses::domain::LensCatalogRepository;
+use crate::lenses::domain::{LensAnswerRepository, LensCatalogRepository};
 use crate::lenses::infra::{JsonLensAnswers, JsonLensCatalog};
 use crate::map::application::{
     AddBlock, AddFile, AddLineNote, CheckMap, DeriveMap, DiscardNote, ExportMap, FocusFile,
@@ -38,9 +39,12 @@ use crate::map::application::{
     MapReconciler, MapVersions, MoveBlock, RemoveBlock, RemoveFile, RemoveLineNote, ResetMap,
     RestoreNote, ShowMap, UpdateBlock, UpdateFile, UpdateLineNote,
 };
+use crate::map::domain::MapRepository;
 use crate::map::infra::JsonMapRepository;
 use crate::progress::application::{MarkViewed, ProgressStore, UnmarkViewed};
+use crate::progress::domain::ProgressRepository;
 use crate::progress::infra::JsonProgressRepository;
+use crate::server::{ConfigUseCases, ServerUseCaseFactory, ServerUseCases};
 use crate::shared::paths::Workspace;
 
 /// Every use case one invocation can reach.
@@ -90,38 +94,8 @@ pub struct Ctx {
     pub pending_answers: PendingAnswers,
     pub show_answer: ShowAnswer,
 
-    /// Only when serving: the CLI never sends to an agent, and building this
-    /// would make every command resolve the configuration folder for nothing.
-    server: Option<ServerUseCases>,
     git_dir: PathBuf,
     root: PathBuf,
-}
-
-/// The subset a running server needs, kept together so `serve` hands over one
-/// value instead of six.
-#[derive(Clone)]
-pub struct ServerUseCases {
-    pub scope: GetScope,
-    pub review: GetReviewWithLenses,
-    pub see_lens: SeeLens,
-    pub file_diff: GetFileDiff,
-    pub file_lines: GetFileLines,
-    pub mark_viewed: MarkViewed,
-    pub unmark_viewed: UnmarkViewed,
-    pub comments: Comments,
-    pub close_thread: CloseThread,
-    pub send_comment: SendComment,
-    pub generate_pending: GeneratePending,
-    pub write_pending: WritePending,
-    pub edit_pending: EditPending,
-    pub remove_pending: RemovePending,
-    pub choose_mode: ChooseMode,
-    pub readiness: ReviewReadiness,
-    pub publish_review: PublishReview,
-    pub sync_read_marks: SyncReadMarks,
-    pub push_branch: PushBranch,
-    pub open_pull_request: OpenPullRequest,
-    pub generate_pull_draft: GeneratePullDraft,
 }
 
 /// What a server adds to a context: the session it reports to, and where the
@@ -129,8 +103,6 @@ pub struct ServerUseCases {
 pub struct Serving {
     pub agent: Option<AgentAddress>,
     pub config: Arc<dyn ConfigRepository>,
-    /// Who the GitHub token belongs to, kept across requests.
-    pub logins: Arc<Logins>,
 }
 
 impl Ctx {
@@ -140,128 +112,34 @@ impl Ctx {
     }
 
     pub fn at(root: &Path, request: ScopeRequest) -> Result<Self> {
-        Self::assemble(root, request, None)
-    }
-
-    fn assemble(root: &Path, request: ScopeRequest, serving: Option<Serving>) -> Result<Self> {
         let workspace = Workspace::discover(root)?;
         let git_dir = workspace.git_dir().to_path_buf();
         let root = workspace.root();
-        let branch = workspace.branch().to_string();
-        // Both read before the repository is handed to the diff source, which
-        // consumes it.
         let name = workspace.name();
-        let remote = workspace.remote();
+        let ports = Ports::of_workspace(workspace, &request, Arc::default())?;
+        let shared = Shared::over(&ports);
 
-        let comment_store = Arc::new(MarkdownComments::new(&workspace.store(), &root));
-        let pusher: Arc<dyn BranchPusher> = Arc::new(GitPush::new(workspace.root()));
-        // Read here by the CLI too: the session writes answers from the terminal
-        // and each one is checked against the user's lenses.
-        let lens_catalog = lens_catalog()?;
-        let lens_answers = Arc::new(JsonLensAnswers::new(workspace.store().lenses_dir()));
-        let modes = ReviewModes::new(Arc::new(JsonModeStore::new(workspace.store())));
-        let drafts: Arc<dyn PullDraftStore> = Arc::new(JsonPullDraft::new(workspace.store()));
-        let maps = Arc::new(JsonMapRepository::new(workspace.store()));
-        let maps_for_sharing = maps.clone();
-        let progress_repo = Arc::new(JsonProgressRepository::new(workspace.store()));
-        let source = Arc::new(GixSource::open(workspace.into_repo(), &branch, &request)?);
-
-        let scope = ReviewScope::new(source.clone());
-        let diffs = FileDiffs::new(source.clone());
-        let history = CommitHistory::new(source);
-
-        let host = remote.as_ref().map(|remote| remote.host.clone());
-        let credentials = Arc::new(GhCredentials::new("gh"));
-        // One host behind three ports: each use case is handed the one it
-        // needs, the way one GixSource stands behind the three diff ports.
-        let (pulls, pending, marks): (
-            Arc<dyn PullRequests>,
-            Arc<dyn PendingReview>,
-            Arc<dyn ReadMarks>,
-        ) = match remote {
-            Some(remote) => {
-                let github = Arc::new(GitHub::new(
-                    remote,
-                    credentials.clone(),
-                    serving
-                        .as_ref()
-                        .map(|serving| serving.logins.clone())
-                        .unwrap_or_default(),
-                ));
-                (github.clone(), github.clone(), github)
-            }
-            None => {
-                let unhosted = Arc::new(Unhosted);
-                (unhosted.clone(), unhosted.clone(), unhosted)
-            }
-        };
-
-        let reach = CommentReach::new(scope.clone(), diffs.clone());
-        let comments = Comments::new(
-            comment_store.clone(),
-            GetScope::new(scope.clone()),
-            reach.clone(),
+        let reconciler = MapReconciler::new(shared.scope.clone(), shared.diffs.clone());
+        let derivation = MapDerivation::new(
+            shared.versions.clone(),
+            shared.scope.clone(),
+            reconciler,
+            ports.maps.clone(),
         );
-        let reconciler = MapReconciler::new(scope.clone(), diffs.clone());
-        let versions = MapVersions::new(scope.clone(), history.clone(), maps.clone());
-        let derivation =
-            MapDerivation::new(versions.clone(), scope.clone(), reconciler, maps.clone());
-        let editor = MapEditor::new(derivation.clone(), versions.clone(), maps);
-        let progress = ProgressStore::new(progress_repo, diffs.clone());
-        let scope_for_publishing = scope.clone();
-        let scope_for_lines = scope.clone();
-
-        let review = GetReviewWithLenses::new(
-            GetReview::new(versions.clone(), scope.clone(), progress.clone()),
-            lens_catalog.clone(),
-            lens_answers.clone(),
+        let editor = MapEditor::new(
+            derivation.clone(),
+            shared.versions.clone(),
+            ports.maps.clone(),
         );
-        let read = ListReadFiles::new(progress.clone(), scope.clone(), review.clone());
-        let gate = PullRequestGate::new(pulls.clone(), scope.clone(), history.clone());
-        let readiness = ReviewReadiness::new(
-            gate.clone(),
-            modes.clone(),
-            comments.clone(),
-            pending.clone(),
-            host.clone(),
-            read.clone(),
-            drafts.clone(),
-        );
-        let sync_read_marks = SyncReadMarks::new(gate.clone(), marks.clone(), read.clone());
-        let push_branch = PushBranch::new(gate.clone(), pusher.clone());
-        let publish_review = PublishReview::new(
-            comments.clone(),
-            gate.clone(),
-            pending.clone(),
-            marks,
-            scope_for_publishing,
-            read,
-        );
-        let open_pull_request = OpenPullRequest::new(
-            gate.clone(),
-            pulls,
-            pusher.clone(),
-            scope.clone(),
-            drafts.clone(),
-        );
-        let close_thread = CloseThread::new(comments.clone());
-        let write_pending = WritePending::new(comments.clone(), gate, pending.clone());
-        let edit_pending = EditPending::new(pending.clone());
-        let remove_pending = RemovePending::new(comments.clone(), pending.clone());
-        let choose_mode = ChooseMode::new(modes.clone());
         let write_answer = WriteAnswer::new(
-            lens_catalog.clone(),
-            lens_answers.clone(),
-            scope.clone(),
-            diffs.clone(),
-            versions.clone(),
+            ports.lens_catalog.clone(),
+            ports.lens_answers.clone(),
+            shared.scope.clone(),
+            shared.diffs.clone(),
+            shared.versions.clone(),
         );
-        let pending_answers = PendingAnswers::new(
-            lens_catalog.clone(),
-            lens_answers.clone(),
-            scope.clone(),
-            versions.clone(),
-        );
+        let versions = shared.versions.clone();
+        let scope = shared.scope.clone();
 
         Ok(Self {
             add_block: AddBlock::new(editor.clone()),
@@ -286,64 +164,30 @@ impl Ctx {
             check_map: CheckMap::new(versions.clone(), scope.clone()),
             reset_map: ResetMap::new(editor),
             export_map: ExportMap::new(versions.clone(), scope.clone(), name),
-            import_map: ImportMap::new(scope.clone(), maps_for_sharing),
+            import_map: ImportMap::new(scope.clone(), ports.maps.clone()),
             scope: GetScope::new(scope.clone()),
 
-            comments: comments.clone(),
-            close_thread: close_thread.clone(),
-            write_pending: write_pending.clone(),
-            edit_pending: edit_pending.clone(),
-            remove_pending: remove_pending.clone(),
-            choose_mode: choose_mode.clone(),
-            readiness: readiness.clone(),
-            publish_review: publish_review.clone(),
-            sync_read_marks: sync_read_marks.clone(),
-            write_pull_draft: WritePullDraft::new(drafts),
+            comments: shared.comments,
+            close_thread: shared.close_thread,
+            write_pending: shared.write_pending,
+            edit_pending: shared.edit_pending,
+            remove_pending: shared.remove_pending,
+            choose_mode: shared.choose_mode,
+            readiness: shared.readiness,
+            publish_review: shared.publish_review,
+            sync_read_marks: shared.sync_read_marks,
+            write_pull_draft: WritePullDraft::new(ports.drafts.clone()),
 
-            keep_answer: KeepAnswer::new(lens_answers.clone(), write_answer.clone()),
+            keep_answer: KeepAnswer::new(ports.lens_answers.clone(), write_answer.clone()),
             write_answer,
-            pending_answers,
-            show_answer: ShowAnswer::new(lens_answers.clone()),
+            pending_answers: PendingAnswers::new(
+                ports.lens_catalog.clone(),
+                ports.lens_answers.clone(),
+                scope,
+                versions,
+            ),
+            show_answer: ShowAnswer::new(ports.lens_answers.clone()),
 
-            server: serving.map(|serving| ServerUseCases {
-                scope: GetScope::new(scope.clone()),
-                see_lens: SeeLens::new(lens_answers.clone(), progress.clone()),
-                review,
-                file_diff: GetFileDiff::new(diffs),
-                file_lines: GetFileLines::new(scope_for_lines),
-                mark_viewed: MarkViewed::new(progress.clone()),
-                unmark_viewed: UnmarkViewed::new(progress),
-                send_comment: SendComment::new(
-                    comments.clone(),
-                    serving.agent.as_ref().map(channel),
-                    serving.config.clone(),
-                    modes.clone(),
-                ),
-                generate_pull_draft: GeneratePullDraft::new(
-                    serving.agent.as_ref().map(channel),
-                    serving.config.clone(),
-                    modes.clone(),
-                    scope.clone(),
-                ),
-                generate_pending: GeneratePending::new(
-                    comments.clone(),
-                    serving.agent.as_ref().map(channel),
-                    serving.config,
-                    modes,
-                    pending,
-                ),
-                open_pull_request,
-                comments,
-                close_thread,
-                write_pending,
-                edit_pending,
-                remove_pending,
-                choose_mode,
-                readiness,
-                publish_review,
-                sync_read_marks,
-                push_branch,
-            }),
             git_dir,
             root,
         })
@@ -356,6 +200,225 @@ impl Ctx {
     /// The working tree the review is of.
     pub fn root(&self) -> &PathBuf {
         &self.root
+    }
+}
+
+/// The ports one review runs on.
+///
+/// The real program chooses them in `of_workspace`; the tests hand in fakes.
+/// Both then build the use cases through the same functions, so the server a
+/// test exercises is wired exactly as the one a reviewer runs, rather than by a
+/// second assembly that drifts from it.
+pub struct Ports {
+    pub scope: Arc<dyn ReviewScopeSource>,
+    pub diffs: Arc<dyn FileDiffSource>,
+    pub history: Arc<dyn CommitHistorySource>,
+    pub comments: Arc<dyn CommentStore>,
+    pub maps: Arc<dyn MapRepository>,
+    pub progress: Arc<dyn ProgressRepository>,
+    pub lens_catalog: Arc<dyn LensCatalogRepository>,
+    pub lens_answers: Arc<dyn LensAnswerRepository>,
+    pub modes: Arc<dyn ModeStore>,
+    pub drafts: Arc<dyn PullDraftStore>,
+    pub pulls: Arc<dyn PullRequests>,
+    pub pending: Arc<dyn PendingReview>,
+    pub marks: Arc<dyn ReadMarks>,
+    pub pusher: Arc<dyn BranchPusher>,
+    /// The host the repository's remote is on, for the screen's login hint.
+    pub host: Option<String>,
+}
+
+impl Ports {
+    /// The real implementations for one repository.
+    fn of_workspace(
+        workspace: Workspace,
+        request: &ScopeRequest,
+        logins: Arc<Logins>,
+    ) -> Result<Self> {
+        let branch = workspace.branch().to_string();
+        let remote = workspace.remote();
+        let host = remote.as_ref().map(|remote| remote.host.clone());
+        let comments = Arc::new(MarkdownComments::new(&workspace.store(), &workspace.root()));
+        let maps = Arc::new(JsonMapRepository::new(workspace.store()));
+        let progress = Arc::new(JsonProgressRepository::new(workspace.store()));
+        let lens_answers = Arc::new(JsonLensAnswers::new(workspace.store().lenses_dir()));
+        let modes = Arc::new(JsonModeStore::new(workspace.store()));
+        let drafts = Arc::new(JsonPullDraft::new(workspace.store()));
+        let pusher = Arc::new(GitPush::new(workspace.root()));
+        // Read by the CLI too: the session writes answers from the terminal and
+        // each one is checked against the user's lenses.
+        let lens_catalog = lens_catalog()?;
+        let source = Arc::new(GixSource::open(workspace.into_repo(), &branch, request)?);
+
+        // One host behind three ports: each use case is handed the one it
+        // needs, the way one GixSource stands behind the three diff ports.
+        let (pulls, pending, marks): (
+            Arc<dyn PullRequests>,
+            Arc<dyn PendingReview>,
+            Arc<dyn ReadMarks>,
+        ) = match remote {
+            Some(remote) => {
+                let github = Arc::new(GitHub::new(
+                    remote,
+                    Arc::new(GhCredentials::new("gh")),
+                    logins,
+                ));
+                (github.clone(), github.clone(), github)
+            }
+            None => {
+                let unhosted = Arc::new(Unhosted);
+                (unhosted.clone(), unhosted.clone(), unhosted)
+            }
+        };
+
+        Ok(Self {
+            scope: source.clone(),
+            diffs: source.clone(),
+            history: source,
+            comments,
+            maps,
+            progress,
+            lens_catalog,
+            lens_answers,
+            modes,
+            drafts,
+            pulls,
+            pending,
+            marks,
+            pusher,
+            host,
+        })
+    }
+}
+
+/// The server's use cases over a set of ports, for one request.
+///
+/// Builds only what a server needs: a request used to assemble the whole CLI
+/// bag as well and throw it away.
+pub fn server_use_cases(ports: &Ports, serving: Serving) -> ServerUseCases {
+    let shared = Shared::over(ports);
+    let agent = serving.agent.as_ref().map(channel);
+    ServerUseCases {
+        scope: GetScope::new(shared.scope.clone()),
+        see_lens: SeeLens::new(ports.lens_answers.clone(), shared.progress.clone()),
+        file_diff: GetFileDiff::new(shared.diffs.clone()),
+        file_lines: GetFileLines::new(shared.scope.clone()),
+        mark_viewed: MarkViewed::new(shared.progress.clone()),
+        unmark_viewed: UnmarkViewed::new(shared.progress.clone()),
+        send_comment: SendComment::new(
+            shared.comments.clone(),
+            agent.clone(),
+            serving.config.clone(),
+            shared.modes.clone(),
+        ),
+        generate_pull_draft: GeneratePullDraft::new(
+            agent.clone(),
+            serving.config.clone(),
+            shared.modes.clone(),
+            shared.scope.clone(),
+        ),
+        generate_pending: GeneratePending::new(
+            shared.comments.clone(),
+            agent,
+            serving.config,
+            shared.modes.clone(),
+            ports.pending.clone(),
+        ),
+        push_branch: PushBranch::new(shared.gate.clone(), ports.pusher.clone()),
+        open_pull_request: OpenPullRequest::new(
+            shared.gate.clone(),
+            ports.pulls.clone(),
+            ports.pusher.clone(),
+            shared.scope.clone(),
+            ports.drafts.clone(),
+        ),
+        review: shared.review,
+        comments: shared.comments,
+        close_thread: shared.close_thread,
+        write_pending: shared.write_pending,
+        edit_pending: shared.edit_pending,
+        remove_pending: shared.remove_pending,
+        choose_mode: shared.choose_mode,
+        readiness: shared.readiness,
+        publish_review: shared.publish_review,
+        sync_read_marks: shared.sync_read_marks,
+    }
+}
+
+/// What the CLI and the server both build from the ports, built once here so
+/// the two can only differ in what they add on top.
+struct Shared {
+    scope: ReviewScope,
+    diffs: FileDiffs,
+    versions: MapVersions,
+    progress: ProgressStore,
+    modes: ReviewModes,
+    gate: PullRequestGate,
+    review: GetReviewWithLenses,
+    comments: Comments,
+    close_thread: CloseThread,
+    write_pending: WritePending,
+    edit_pending: EditPending,
+    remove_pending: RemovePending,
+    choose_mode: ChooseMode,
+    readiness: ReviewReadiness,
+    publish_review: PublishReview,
+    sync_read_marks: SyncReadMarks,
+}
+
+impl Shared {
+    fn over(ports: &Ports) -> Self {
+        let scope = ReviewScope::new(ports.scope.clone());
+        let diffs = FileDiffs::new(ports.diffs.clone());
+        let history = CommitHistory::new(ports.history.clone());
+        let comments = Comments::new(
+            ports.comments.clone(),
+            GetScope::new(scope.clone()),
+            CommentReach::new(scope.clone(), diffs.clone()),
+        );
+        let versions = MapVersions::new(scope.clone(), history.clone(), ports.maps.clone());
+        let progress = ProgressStore::new(ports.progress.clone(), diffs.clone());
+        let modes = ReviewModes::new(ports.modes.clone());
+        let review = GetReviewWithLenses::new(
+            GetReview::new(versions.clone(), scope.clone(), progress.clone()),
+            ports.lens_catalog.clone(),
+            ports.lens_answers.clone(),
+        );
+        let read = ListReadFiles::new(progress.clone(), scope.clone(), review.clone());
+        let gate = PullRequestGate::new(ports.pulls.clone(), scope.clone(), history);
+        Self {
+            readiness: ReviewReadiness::new(
+                gate.clone(),
+                modes.clone(),
+                comments.clone(),
+                ports.pending.clone(),
+                ports.host.clone(),
+                read.clone(),
+                ports.drafts.clone(),
+            ),
+            sync_read_marks: SyncReadMarks::new(gate.clone(), ports.marks.clone(), read.clone()),
+            publish_review: PublishReview::new(
+                comments.clone(),
+                gate.clone(),
+                ports.pending.clone(),
+                ports.marks.clone(),
+                scope.clone(),
+                read,
+            ),
+            close_thread: CloseThread::new(comments.clone()),
+            write_pending: WritePending::new(comments.clone(), gate.clone(), ports.pending.clone()),
+            edit_pending: EditPending::new(ports.pending.clone()),
+            remove_pending: RemovePending::new(comments.clone(), ports.pending.clone()),
+            choose_mode: ChooseMode::new(modes.clone()),
+            scope,
+            diffs,
+            versions,
+            progress,
+            modes,
+            gate,
+            review,
+            comments,
+        }
     }
 }
 
@@ -396,19 +459,6 @@ fn config_repository() -> Result<Arc<dyn ConfigRepository>> {
     )))
 }
 
-#[derive(Clone)]
-pub struct ConfigUseCases {
-    pub get: crate::config::application::GetConfig,
-    pub set_setting: crate::config::application::SetSetting,
-    pub reset_setting: crate::config::application::ResetSetting,
-    pub list_lenses: ListLenses,
-    pub add_lens: AddLens,
-    pub update_lens: UpdateLens,
-    pub enable_lens: EnableLens,
-    pub disable_lens: DisableLens,
-    pub delete_lens: DeleteLens,
-}
-
 impl ConfigUseCases {
     pub fn new(
         repo: Arc<dyn crate::config::domain::ConfigRepository>,
@@ -443,22 +493,17 @@ pub fn server_factory(root: PathBuf) -> Result<Arc<dyn ServerUseCaseFactory>> {
     }))
 }
 
-/// A request gets one Git window, shared by all the use cases it invokes.
-/// Keeping the factory instead of its result lets the next request follow refs.
-pub trait ServerUseCaseFactory: Send + Sync {
-    fn build(&self, request: ScopeRequest, agent: Option<AgentAddress>) -> Result<ServerUseCases>;
-}
-
 impl ServerUseCaseFactory for WorkspaceUseCases {
     fn build(&self, request: ScopeRequest, agent: Option<AgentAddress>) -> Result<ServerUseCases> {
-        let serving = Serving {
-            agent,
-            config: self.config.clone(),
-            logins: self.logins.clone(),
-        };
-        Ok(Ctx::assemble(&self.root, request, Some(serving))?
-            .server
-            .expect("a serving context always assembles the server's use cases"))
+        let workspace = Workspace::discover(&self.root)?;
+        let ports = Ports::of_workspace(workspace, &request, self.logins.clone())?;
+        Ok(server_use_cases(
+            &ports,
+            Serving {
+                agent,
+                config: self.config.clone(),
+            },
+        ))
     }
 }
 

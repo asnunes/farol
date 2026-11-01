@@ -101,7 +101,7 @@ impl ServeArgs {
         }
     }
 
-    fn serve(self, preferences: super::ConfigUseCases, open_browser: bool) -> Result<()> {
+    fn serve(self, preferences: crate::server::ConfigUseCases, open_browser: bool) -> Result<()> {
         let session = self.session();
         let workspace = Workspace::here()?;
         let root = workspace.root().canonicalize()?;

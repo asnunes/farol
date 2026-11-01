@@ -7,11 +7,11 @@ use axum::{Extension, Json};
 use serde::Deserialize;
 
 use super::{away, fail, view};
-use crate::cmd::ServerUseCases;
 use crate::comments::domain::{Lines, Subject};
 use crate::diff::domain::Side;
 use crate::lenses::domain::{LensId, LensTarget};
 use crate::map::domain::Slug;
+use crate::server::ServerUseCases;
 
 /// What the reviewer wrote back, which is everything still waiting for an
 /// answer: closing a comment removes it, so there is nothing here to filter.
