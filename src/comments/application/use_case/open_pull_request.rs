@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::comments::application::PullRequestGate;
 use crate::comments::domain::{
-    BranchPusher, CommentError, OpenedPull, PullDraft, PullDraftStore, Readiness, ReviewPublisher,
+    BranchPusher, CommentError, OpenedPull, PullDraft, PullDraftStore, PullRequests, Readiness,
 };
 use crate::diff::application::ReviewScope;
 use crate::error::Result;
@@ -16,7 +16,7 @@ use crate::error::Result;
 #[derive(Clone)]
 pub struct OpenPullRequest {
     gate: PullRequestGate,
-    publisher: Arc<dyn ReviewPublisher>,
+    publisher: Arc<dyn PullRequests>,
     pusher: Arc<dyn BranchPusher>,
     scope: ReviewScope,
     drafts: Arc<dyn PullDraftStore>,
@@ -25,7 +25,7 @@ pub struct OpenPullRequest {
 impl OpenPullRequest {
     pub fn new(
         gate: PullRequestGate,
-        publisher: Arc<dyn ReviewPublisher>,
+        publisher: Arc<dyn PullRequests>,
         pusher: Arc<dyn BranchPusher>,
         scope: ReviewScope,
         drafts: Arc<dyn PullDraftStore>,

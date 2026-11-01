@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::comments::application::PullRequestGate;
-use crate::comments::domain::ReviewPublisher;
+use crate::comments::domain::ReadMarks;
 use crate::error::Result;
 
 /// Make the pull request's read marks say what farol's do: every file read
@@ -14,14 +14,14 @@ use crate::error::Result;
 #[derive(Clone)]
 pub struct SyncReadMarks {
     pull: PullRequestGate,
-    publisher: Arc<dyn ReviewPublisher>,
+    publisher: Arc<dyn ReadMarks>,
     read: crate::lenses::application::ListReadFiles,
 }
 
 impl SyncReadMarks {
     pub fn new(
         pull: PullRequestGate,
-        publisher: Arc<dyn ReviewPublisher>,
+        publisher: Arc<dyn ReadMarks>,
         read: crate::lenses::application::ListReadFiles,
     ) -> Self {
         Self {

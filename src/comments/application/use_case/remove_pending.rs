@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::comments::application::Comments;
-use crate::comments::domain::{CommentError, RemoteState, ReviewPublisher};
+use crate::comments::domain::{CommentError, PendingReview, RemoteState};
 use crate::error::Result;
 
 /// Take a pending comment back off the pull request. A thread pointing at it
@@ -9,11 +9,11 @@ use crate::error::Result;
 #[derive(Clone)]
 pub struct RemovePending {
     comments: Comments,
-    publisher: Arc<dyn ReviewPublisher>,
+    publisher: Arc<dyn PendingReview>,
 }
 
 impl RemovePending {
-    pub fn new(comments: Comments, publisher: Arc<dyn ReviewPublisher>) -> Self {
+    pub fn new(comments: Comments, publisher: Arc<dyn PendingReview>) -> Self {
         Self {
             comments,
             publisher,

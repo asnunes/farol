@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::comments::application::{Comments, PullRequestGate};
 use crate::comments::domain::{
-    Author, Comment, CommentError, PendingRef, RemoteState, ReviewPublisher,
+    Author, Comment, CommentError, PendingRef, PendingReview, RemoteState,
 };
 use crate::error::Result;
 
@@ -20,14 +20,14 @@ use crate::error::Result;
 pub struct WritePending {
     comments: Comments,
     pull: PullRequestGate,
-    publisher: Arc<dyn ReviewPublisher>,
+    publisher: Arc<dyn PendingReview>,
 }
 
 impl WritePending {
     pub fn new(
         comments: Comments,
         pull: PullRequestGate,
-        publisher: Arc<dyn ReviewPublisher>,
+        publisher: Arc<dyn PendingReview>,
     ) -> Self {
         Self {
             comments,

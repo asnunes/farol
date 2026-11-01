@@ -1,4 +1,7 @@
-use crate::comments::domain::{CommentError, Readiness, RemoteComment, Review, ReviewPublisher};
+use crate::comments::domain::{
+    CommentError, OpenedPull, PendingComment, PendingReview, PullDraft, PullRequests, ReadMarks,
+    Readiness, RemoteComment, Review,
+};
 use crate::error::Result;
 
 /// A repository with nowhere to publish to.
@@ -9,11 +12,17 @@ use crate::error::Result;
 /// and a screen that has to guess what a missing publisher means.
 pub struct Unhosted;
 
-impl ReviewPublisher for Unhosted {
+impl PullRequests for Unhosted {
     fn readiness(&self, _branch: &str, _head: &str) -> Result<Readiness> {
         Ok(Readiness::NoRemote)
     }
 
+    fn open_pull(&self, _base: &str, _branch: &str, _draft: &PullDraft) -> Result<OpenedPull> {
+        Err(CommentError::NoRemote.into())
+    }
+}
+
+impl PendingReview for Unhosted {
     fn add_pending(
         &self,
         _pull: &str,
@@ -45,17 +54,16 @@ impl ReviewPublisher for Unhosted {
             .collect())
     }
 
-    fn pending_comments(
-        &self,
-        _pull: &str,
-    ) -> Result<Vec<crate::comments::domain::PendingComment>> {
+    fn pending_comments(&self, _pull: &str) -> Result<Vec<PendingComment>> {
         Err(CommentError::NoRemote.into())
     }
 
     fn submit(&self, _review: &Review) -> Result<String> {
         Err(CommentError::NoRemote.into())
     }
+}
 
+impl ReadMarks for Unhosted {
     fn mark_read(&self, _pull: &str, _paths: &[String]) -> Result<usize> {
         Err(CommentError::NoRemote.into())
     }
@@ -65,15 +73,6 @@ impl ReviewPublisher for Unhosted {
     }
 
     fn viewed(&self, _pull: &str) -> Result<Vec<String>> {
-        Err(CommentError::NoRemote.into())
-    }
-
-    fn open_pull(
-        &self,
-        _base: &str,
-        _branch: &str,
-        _draft: &crate::comments::domain::PullDraft,
-    ) -> Result<crate::comments::domain::OpenedPull> {
         Err(CommentError::NoRemote.into())
     }
 }

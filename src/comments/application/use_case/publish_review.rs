@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
 use crate::comments::application::{Comments, OpenPull, PullRequestGate};
-use crate::comments::domain::{CommentError, RemoteState, Review, ReviewPublisher, Verdict};
+use crate::comments::domain::{
+    CommentError, PendingReview, ReadMarks, RemoteState, Review, Verdict,
+};
 use crate::diff::application::ReviewScope;
 use crate::error::Result;
 use crate::shared::short;
@@ -18,7 +20,8 @@ use crate::shared::short;
 pub struct PublishReview {
     comments: Comments,
     pull: PullRequestGate,
-    publisher: Arc<dyn ReviewPublisher>,
+    pending: Arc<dyn PendingReview>,
+    marks: Arc<dyn ReadMarks>,
     scope: ReviewScope,
     read: crate::lenses::application::ListReadFiles,
 }
@@ -27,14 +30,16 @@ impl PublishReview {
     pub fn new(
         comments: Comments,
         pull: PullRequestGate,
-        publisher: Arc<dyn ReviewPublisher>,
+        pending: Arc<dyn PendingReview>,
+        marks: Arc<dyn ReadMarks>,
         scope: ReviewScope,
         read: crate::lenses::application::ListReadFiles,
     ) -> Self {
         Self {
             comments,
             pull,
-            publisher,
+            pending,
+            marks,
             scope,
             read,
         }
@@ -51,7 +56,7 @@ impl PublishReview {
         }
         let comments = self.pending_count()?;
 
-        let url = self.publisher.submit(&Review {
+        let url = self.pending.submit(&Review {
             pull: pull.id.clone(),
             head: pull.head.clone(),
             summary: summary.to_string(),
@@ -86,7 +91,7 @@ impl PublishReview {
                 short(&scope.head_sha)
             )));
         }
-        self.publisher.mark_read(&pull.id, &read)
+        self.marks.mark_read(&pull.id, &read)
     }
 
     /// The files the reviewer has read and that have not moved since.
@@ -104,7 +109,7 @@ impl PublishReview {
             .filter_map(|thread| thread.pending.map(|pending| pending.id))
             .collect();
         Ok(self
-            .publisher
+            .pending
             .remote(&ids)?
             .iter()
             .filter(|remote| matches!(remote.state, RemoteState::Pending { .. }))

@@ -112,6 +112,7 @@ impl World {
             self.comments.clone(),
             self.gate(),
             self.publisher.clone(),
+            self.publisher.clone(),
             ReviewScope::new(self.source.clone()),
             self.read_files(),
         )

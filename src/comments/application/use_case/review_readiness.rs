@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::comments::application::{Comments, PullRequestGate, ReviewModes};
 use crate::comments::domain::{
-    Drift, ModeChoice, PendingComment, Readiness, RemoteState, ReviewPublisher,
+    Drift, ModeChoice, PendingComment, PendingReview, Readiness, RemoteState,
 };
 use crate::error::Result;
 
@@ -17,7 +17,7 @@ pub struct ReviewReadiness {
     pull: PullRequestGate,
     modes: ReviewModes,
     comments: Comments,
-    publisher: Arc<dyn ReviewPublisher>,
+    publisher: Arc<dyn PendingReview>,
     host: Option<String>,
     read: crate::lenses::application::ListReadFiles,
     drafts: std::sync::Arc<dyn crate::comments::domain::PullDraftStore>,
@@ -28,7 +28,7 @@ impl ReviewReadiness {
         pull: PullRequestGate,
         modes: ReviewModes,
         comments: Comments,
-        publisher: Arc<dyn ReviewPublisher>,
+        publisher: Arc<dyn PendingReview>,
         host: Option<String>,
         read: crate::lenses::application::ListReadFiles,
         drafts: std::sync::Arc<dyn crate::comments::domain::PullDraftStore>,

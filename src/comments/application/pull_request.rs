@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use crate::comments::domain::{CommentError, Drift, Readiness, ReviewPublisher};
+use crate::comments::domain::{CommentError, Drift, PullRequests, Readiness};
 use crate::diff::application::{CommitHistory, ReviewScope};
 use crate::error::Result;
 use crate::shared::short;
@@ -15,14 +15,14 @@ use crate::shared::short;
 /// the same refusal differently.
 #[derive(Clone)]
 pub struct PullRequestGate {
-    publisher: Arc<dyn ReviewPublisher>,
+    publisher: Arc<dyn PullRequests>,
     scope: ReviewScope,
     history: CommitHistory,
 }
 
 impl PullRequestGate {
     pub fn new(
-        publisher: Arc<dyn ReviewPublisher>,
+        publisher: Arc<dyn PullRequests>,
         scope: ReviewScope,
         history: CommitHistory,
     ) -> Self {
