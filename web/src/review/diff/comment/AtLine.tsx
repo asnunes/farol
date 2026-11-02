@@ -1,7 +1,7 @@
 import { Box } from "./Box";
 import { threadOn } from "./quoted";
 import { Comment } from "./Comment";
-import { Pending } from "./Pending";
+import { Loose } from "./Loose";
 import { commentsAt, numberOn } from "../line";
 import type { Anchor, Commentary } from "../line";
 
@@ -19,7 +19,7 @@ import type { Anchor, Commentary } from "../line";
 export function AtLine({ at, commentary }: AtLineProps) {
   const { path, comments, actions, select } = commentary;
   const here = commentsAt(comments, at);
-  const loose = actions.looseOn(path).filter((one) => numberOn(at[one.side], one.side) === one.to);
+  const loose = actions.looseOn(path).filter(({ lines }) => lines && numberOn(at[lines.side], lines.side) === lines.to);
 
   // The box sits where the finished comment will: under the last line of the
   // span, on the side it was dragged on, which is where the reader stopped
@@ -34,22 +34,8 @@ export function AtLine({ at, commentary }: AtLineProps) {
       {here.map((comment) => (
         <Comment key={comment.id} comment={comment} actions={actions} />
       ))}
-      {/* In the pending review with no thread pointing at it: still what goes
-          when the review is submitted, so still drawn where it will land. */}
       {loose.map((one) => (
-        <div
-          key={one.id}
-          data-pending={one.id}
-          className="comment commented border-b border-comment-rule bg-comment-bg py-2 pr-4 pl-8 md:pr-6 md:pl-16"
-        >
-          <Pending
-            id={one.id}
-            thread={null}
-            remote={{ state: "pending", body: one.body, url: null }}
-            actions={actions}
-            busy={false}
-          />
-        </div>
+        <Loose key={one.id} one={one} actions={actions} />
       ))}
       {writing && (
         <Box

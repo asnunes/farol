@@ -2,6 +2,7 @@ import { useOpened } from "@/hooks/useOpened";
 import { DiffHunk } from "./DiffHunk";
 import { Gap } from "./Gap";
 import { Opened } from "./Opened";
+import { Loose } from "./comment/Loose";
 import { gapsOf, opening } from "./gaps";
 import { useLineSelection } from "./useLineSelection";
 import type { Opened as OpenedRange } from "@/hooks/useOpened";
@@ -24,13 +25,22 @@ export function Diff({ diff, file, view, comments, actions }: DiffProps) {
   // drag started here has no business reaching into the file below.
   const select = useLineSelection();
 
+  // Pending comments on the file as a whole, or outdated by a later push:
+  // no line to sit under, and they go with the review all the same.
+  const onFile = actions.looseOn(file.path).filter((one) => one.lines === null);
+
   if (diff.binary) {
     // Nothing to read line by line, so say that rather than show an empty pane
     // the reviewer would take for a loading failure.
     return (
-      <div className="diff nodiff px-6 py-6 font-sans text-sm text-ink-muted">
-        Binary file — not shown
-      </div>
+      <>
+        {onFile.map((one) => (
+          <Loose key={one.id} one={one} actions={actions} />
+        ))}
+        <div className="diff nodiff px-6 py-6 font-sans text-sm text-ink-muted">
+          Binary file — not shown
+        </div>
+      </>
     );
   }
 
@@ -61,6 +71,9 @@ export function Diff({ diff, file, view, comments, actions }: DiffProps) {
 
   return (
     <div className="diff overflow-x-auto font-mono text-xs leading-relaxed md:text-[0.8125rem]">
+      {onFile.map((one) => (
+        <Loose key={one.id} one={one} actions={actions} />
+      ))}
       {diff.hunks.map((hunk, i) => {
         // The gap above this hunk: the leading one for the first hunk, and the
         // one between neighbours after that.

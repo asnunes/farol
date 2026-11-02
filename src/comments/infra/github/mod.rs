@@ -220,10 +220,26 @@ mod tests {
             "a submitted reply is the pull request's, not pending"
         );
         assert_eq!(found[0].id, "PRRC_2");
+        let lines = found[0].at.lines().unwrap();
         assert_eq!(
-            (found[0].at.from, found[0].at.to, found[0].at.side),
+            (lines.from, lines.to, lines.side),
             (10, 12, crate::diff::domain::Side::Old)
         );
+    }
+
+    #[test]
+    fn a_pending_comment_with_no_line_still_comes_back_on_its_file() {
+        // Left out, it was missing from the screen and the Submit dialog while
+        // the submit sent it all the same.
+        let thread = |outdated| {
+            serde_json::json!({
+                "path": "src/a.rs", "line": null, "isOutdated": outdated,
+                "comments": { "nodes": [{ "id": "PRRC_3", "body": "On the file.", "state": "PENDING" }] },
+            })
+        };
+
+        assert_eq!(pending_in(&thread(false))[0].at.at(), "src/a.rs (file)");
+        assert_eq!(pending_in(&thread(true))[0].at.at(), "src/a.rs (outdated)");
     }
 
     #[test]
