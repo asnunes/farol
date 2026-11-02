@@ -150,6 +150,17 @@ export type LensHere = { lens: LensView; block: BlockView | null };
 /** One line of the page: a block's band, or a file under it. */
 export type ReadingRow = { block: BlockView; number: number } | { file: FileView };
 
+/** The block the reader is in, whether `current` names one of its files or
+ * one of its lenses. The sidebar's highlight and the `[` `]` keys both ask
+ * this, so the two agree on a block lens too. */
+export function blockAt(review: ReviewView, current: string | null): FileHome | null {
+  if (current === null) return null;
+  const onFile = blockOf(review, current);
+  if (onFile) return onFile;
+  const block = lensAt(review, current)?.block;
+  return block ? { block, index: review.blocks.indexOf(block) } : null;
+}
+
 /** The block a file is rendered under, for the band above the diff. */
 export function blockOf(review: ReviewView, path: string): FileHome | null {
   for (let i = 0; i < review.blocks.length; i++) {

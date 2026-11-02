@@ -13,7 +13,7 @@ export function ReviewLenses({ lenses, onCite, onSeen, comments, folds }: Review
         pull request
       </div>
       {lenses.map((lens) => (
-        <LensSection key={lens.id} lens={lens} where={lens.key} onCite={onCite} onSeen={onSeen} comments={comments} folds={folds} />
+        <LensSection key={lens.id} lens={lens} onCite={onCite} onSeen={onSeen} comments={comments} folds={folds} />
       ))}
     </div>
   );

@@ -18,7 +18,6 @@ use crate::comments::domain::{
 };
 use crate::diff::domain::Side;
 use crate::error::Result;
-use crate::lenses::domain::LensTarget;
 use crate::map::application::GetScope;
 use crate::map::domain::LineRange;
 
@@ -87,11 +86,8 @@ impl Comments {
         let about = match about {
             Subject::Lines(lines) => Subject::Lines(self.on_diff(&lines)?),
             Subject::Lens { lens, target } => {
-                match &target {
-                    LensTarget::File { path } => {
-                        self.scope.path(path)?;
-                    }
-                    LensTarget::Pr | LensTarget::Block { .. } => {}
+                if let Some(path) = target.path() {
+                    self.scope.path(path)?;
                 }
                 Subject::Lens { lens, target }
             }

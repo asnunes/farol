@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { blockOf, lensAt, type FileView, type LensView, type ReviewView } from "@/api";
+import { blockAt, lensAt, type FileView, type LensView, type ReviewView } from "@/api";
 
 /** How the modifier is written on this machine, as the prefix it is: `⌘B` on a
  * Mac, `Ctrl+B` anywhere else. Spelled out by the key bar, the help and the
@@ -90,7 +90,7 @@ export function useShortcuts({
         case "[":
         case "]": {
           e.preventDefault();
-          const here = blockOf(review, current ?? "");
+          const here = blockAt(review, current);
           if (!here) break;
           const target = review.blocks[here.index + (e.key === "]" ? 1 : -1)];
           if (target?.files[0]) goTo(target.files[0].path);

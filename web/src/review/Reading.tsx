@@ -74,7 +74,7 @@ export function Reading({
         "block" in row ? (
           <Fragment key={row.block.slug}>
             <BlockBar block={row.block} number={row.number} total={review.blocks.length} comments={comments} />
-            <BlockLenses slug={row.block.slug} lenses={row.block.lenses} onCite={cite} onSeen={onSeen} comments={comments} folds={lenses} />
+            <BlockLenses lenses={row.block.lenses} onCite={cite} onSeen={onSeen} comments={comments} folds={lenses} />
             {row.block.files.length > 0 && <CodeBar block={row.block} />}
           </Fragment>
         ) : (

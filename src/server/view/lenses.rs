@@ -3,7 +3,7 @@
 use serde::Serialize;
 
 use crate::diff::domain::Side;
-use crate::lenses::application::Lensed;
+use crate::lenses::application::{LensReading, Lensed};
 use crate::lenses::domain::{Freshness, LensTarget};
 use crate::progress::domain::Progress;
 use crate::shared::short;
@@ -47,9 +47,12 @@ pub enum LensState {
 }
 
 impl LensView {
-    /// The lenses on one target, each with the key its section goes by.
-    pub fn all(lensed: Vec<Lensed<'_>>, progress: &Progress, on: &LensTarget) -> Vec<Self> {
-        lensed
+    /// The lenses on one target, each with the key its section goes by. The
+    /// target is named once and both finds the lenses and keys them, so the
+    /// two cannot be handed different ones.
+    pub fn all(lenses: &LensReading, progress: &Progress, on: &LensTarget) -> Vec<Self> {
+        lenses
+            .on(on)
             .into_iter()
             .map(|l| Self::of(l, progress, on))
             .collect()

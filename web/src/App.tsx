@@ -75,7 +75,7 @@ export default function App() {
     order,
     index,
     goTo,
-    goToPlace,
+    pick,
     nextUnread,
     mark,
     markLens,
@@ -166,11 +166,7 @@ export default function App() {
             comments={comments.on}
             current={current}
             onPick={(place) => {
-              // A file picked by name is a file the reader wants to see, even
-              // one the map left folded behind its lenses.
-              const file = order.find((f) => f.path === place);
-              if (file) files.set(file, true);
-              goToPlace(place);
+              pick(place);
               // Over the code, picking is the end of what the sidebar was for,
               // so it goes — and the row that was clicked goes with it.
               if (dismiss()) sidebarToggle.current?.focus();

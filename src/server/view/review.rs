@@ -86,7 +86,7 @@ impl ReviewView {
                 title: block.title.clone(),
                 context: block.context.clone(),
                 lenses: LensView::all(
-                    lenses.for_block(&block.slug),
+                    lenses,
                     progress,
                     &LensTarget::Block {
                         slug: block.slug.clone(),
@@ -126,7 +126,7 @@ impl ReviewView {
             total_files,
             viewed_files,
             first_unread,
-            lenses: LensView::all(lenses.for_pr(), progress, &LensTarget::Pr),
+            lenses: LensView::all(lenses, progress, &LensTarget::Pr),
         }
     }
 }
@@ -207,7 +207,7 @@ impl FileView {
         let viewed = lenses.is_read(map, progress, change);
 
         let file_lenses = LensView::all(
-            lenses.for_file(path),
+            lenses,
             progress,
             &LensTarget::File {
                 path: path.to_string(),

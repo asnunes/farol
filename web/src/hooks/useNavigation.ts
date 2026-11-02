@@ -4,7 +4,6 @@ import { unreadAfter } from "@/hooks/useCurrentFile";
 import type { CommentActions } from "@/hooks/useComments";
 import type { OpenFiles } from "@/hooks/useOpenFiles";
 import { scrollToFile, scrollToLens, scrollToThread } from "@/lib/scroll";
-import { unreachable } from "@/lib/utils";
 
 /** How the reader moves through the review: where they are in the reading
  * order, going to a file or a lens, the next unread, and what marking
@@ -29,7 +28,7 @@ export function useNavigation({ review, current, setCurrent, toggleViewed, toggl
   // scroll would mean waiting for the observer to answer, and two presses in a
   // row would both count from the file the reader had already left.
   const goTo = useCallback(
-    (path: string) => {
+    (path: string, asked = false) => {
       setCurrent(path);
       // Going to a file opens it. Being taken to one that stayed folded away
       // because it had been read would look like arriving nowhere.
@@ -40,8 +39,10 @@ export function useNavigation({ review, current, setCurrent, toggleViewed, toggl
       //
       // Not one whose lenses stand in for it: its lenses are on screen, and
       // the code stays behind Show code unless the map puts it in focus.
+      // Unless the reader asked for the file by name: then it is the code
+      // they want to see.
       const file = reading.current.find((f) => f.path === path);
-      if (file && !(file.folded && !file.viewed)) files.set(file, true);
+      if (file && (asked || !(file.folded && !file.viewed))) files.set(file, true);
       scrollToFile(path);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -83,27 +84,34 @@ export function useNavigation({ review, current, setCurrent, toggleViewed, toggl
       //
       // From the lens that was marked, which is not always where the reader
       // is: a tick can be clicked on a lens that has not reached the line yet.
-      const from = placeOf(lens) ?? current;
+      // A lens that is a place of its own; a file's lens sits inside its file,
+      // and the reader's place stands for it.
+      const at = lensPlace(lens.key);
+      const from = review && lensAt(review, at) ? at : current;
       return toggleSeen(lens, seen).then(() => {
         if (seen) requestAnimationFrame(() => goToPlace(unreadAfter(from)));
       });
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [current, toggleSeen],
+    [current, review, toggleSeen],
   );
 
   // A place is a file path or `lens:<key>`; going to a lens names it and
   // scrolls, going to a file goes the way the keys do.
-  function goToPlace(place: string | null) {
+  function goToPlace(place: string | null, asked = false) {
     if (!place) return;
     const key = lensKeyOf(place);
     if (key) {
       setCurrent(place);
       scrollToLens(key);
     } else {
-      goTo(place);
+      goTo(place, asked);
     }
   }
+
+  // Picked by name from the sidebar: a file the reader wants to see, even one
+  // the map left folded behind its lenses.
+  const pick = (place: string) => goToPlace(place, true);
 
   // From the activity box to a thread: its file opened if reading had folded
   // it, the thread opened if the reader had minimised it, and the thread
@@ -124,26 +132,10 @@ export function useNavigation({ review, current, setCurrent, toggleViewed, toggl
     scrollToThread(thread.id);
   };
 
-  return { order, index, goTo, goToPlace, nextUnread, mark, markLens, jumpToThread };
+  return { order, index, goTo, pick, nextUnread, mark, markLens, jumpToThread };
 }
 
 export type Navigation = ReturnType<typeof useNavigation>;
-
-/** The place a pull request or block lens holds on the page, as `lens:<key>`. */
-function placeOf(lens: LensView): string | null {
-  const target = lens.target;
-  if (!target) return null;
-  switch (target.kind) {
-    case "pr":
-    case "block":
-      return lensPlace(lens.key);
-    // A file's lens sits inside the file, which is the place to go to.
-    case "file":
-      return null;
-    default:
-      return unreachable(target);
-  }
-}
 
 type NavigationInputs = {
   review: ReviewView | null;

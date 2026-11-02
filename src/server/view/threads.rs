@@ -8,7 +8,6 @@ use serde::Serialize;
 use crate::comments::domain::{Author, Comment, Found, Purpose, Stage, Subject};
 use crate::comments::presentation::says;
 use crate::diff::domain::Side;
-use crate::lenses::domain::LensTarget;
 
 /// The comments, under the file each one is about, and what the store could not
 /// read at all.
@@ -125,10 +124,7 @@ impl CommentView {
                 },
                 Subject::Lens { lens, target } => AboutView::Lens {
                     key: target.key(lens),
-                    file: match target {
-                        LensTarget::File { path } => Some(path.clone()),
-                        LensTarget::Pr | LensTarget::Block { .. } => None,
-                    },
+                    file: target.path().map(str::to_string),
                 },
                 Subject::Block { slug } => AboutView::Block {
                     slug: slug.to_string(),

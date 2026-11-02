@@ -2,10 +2,12 @@ import { ScanSearch } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Check } from "./Check";
-import type { LensView } from "@/api";
+import { lensPlace, type LensView } from "@/api";
 
 /** One lens in the sidebar, beside the files: seen or not, and a way to it. */
 export function LensRow({ lens, current, onPick, onCheck }: LensRowProps) {
+  const place = lensPlace(lens.key);
+  const here = current === place;
   return (
     <li className="relative">
       {/* Ticks the lens as seen, or takes it back, without opening, folding or
@@ -13,7 +15,7 @@ export function LensRow({ lens, current, onPick, onCheck }: LensRowProps) {
       <Check
         done={lens.seen}
         label={`${lens.seen ? "Mark as not seen" : "Mark as seen"}: ${lens.title}`}
-        onClick={onCheck}
+        onClick={() => onCheck(lens)}
       >
         {/* A lens, not a ring: the ring is a file's, and a lens beside the
             files read as one more of them. Green once seen, as a file's is. */}
@@ -23,10 +25,10 @@ export function LensRow({ lens, current, onPick, onCheck }: LensRowProps) {
         variant="ghost"
         className="lensitem h-auto w-full justify-start gap-2 py-1 pr-2 pl-[30px] font-sans text-[0.8125rem] font-normal text-ink hover:bg-sunken hover:text-ink aria-[current=true]:bg-highlight-dim aria-[current=true]:text-ink"
         data-seen={lens.seen ? "true" : undefined}
-        aria-current={current ? "true" : undefined}
-        onClick={onPick}
+        aria-current={here ? "true" : undefined}
+        onClick={() => onPick(place)}
       >
-        <span className={cn("nm truncate", lens.seen && "text-faint line-through", current && "font-semibold")}>{lens.title}</span>
+        <span className={cn("nm truncate", lens.seen && "text-faint line-through", here && "font-semibold")}>{lens.title}</span>
         {lens.state === "outdated" && (
           <span className="ml-auto shrink-0 text-[0.625rem] text-highlight">outdated</span>
         )}
@@ -38,8 +40,9 @@ export function LensRow({ lens, current, onPick, onCheck }: LensRowProps) {
 type LensRowProps = {
   lens: LensView;
   /** The lens the reader is on, from where the pane is scrolled. */
-  current: boolean;
-  onPick: () => void;
+  /** Where the reader is: a file path, or a lens's place. */
+  current: string | null;
+  onPick: (place: string) => void;
   /** Flip the seen mark, and nothing else. */
-  onCheck: () => void;
+  onCheck: (lens: LensView) => void;
 };

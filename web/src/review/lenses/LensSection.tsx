@@ -10,14 +10,14 @@ import type { CitationView, LensView } from "@/api";
 
 /** One lens of the pull request or of a block: open, in the flow of the
  * reading, and folded away with its chevron the way a file is. */
-export function LensSection({ lens, where, onCite, onSeen, comments, folds }: LensSectionProps) {
+export function LensSection({ lens, onCite, onSeen, comments, folds }: LensSectionProps) {
   // Seen folds it away, like a file marked read, unless the reader said
   // otherwise against the mark it has now.
-  const open = folds.isOpen(where, lens.seen);
-  const setOpen = (next: boolean) => folds.set(where, lens.seen, next);
+  const open = folds.isOpen(lens.key, lens.seen);
+  const setOpen = (next: boolean) => folds.set(lens.key, lens.seen, next);
 
   return (
-    <section className="lens border-b border-rule bg-ground px-4 py-3 md:px-6" data-lens={lens.id} data-lens-key={where} data-place data-done={lens.seen ? "true" : undefined}>
+    <section className="lens border-b border-rule bg-ground px-4 py-3 md:px-6" data-lens={lens.id} data-lens-key={lens.key} data-place data-done={lens.seen ? "true" : undefined}>
       <div className="flex items-center gap-2">
         <Button
           variant="ghost"
@@ -53,7 +53,7 @@ export function LensSection({ lens, where, onCite, onSeen, comments, folds }: Le
         <ProseThreads
           about={open && lens.target ? { lens: lens.id, target: lens.target } : null}
           label={`Thread on the ${lens.title} lens`}
-          threads={comments.onLens(where)}
+          threads={comments.onLens(lens.key)}
           actions={comments}
         />
       </div>
@@ -63,8 +63,6 @@ export function LensSection({ lens, where, onCite, onSeen, comments, folds }: Le
 
 type LensSectionProps = {
   lens: LensView;
-  /** Which lens on which target, as the sidebar finds it. */
-  where: string;
   onCite: (citation: CitationView) => void;
   onSeen: (lens: LensView, seen: boolean) => void;
   folds: OpenLenses;
