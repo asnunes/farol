@@ -1,31 +1,15 @@
 import { act, renderHook } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 import { useNavigation } from "./useNavigation";
-import { file } from "@/review/diff/testing";
-import type { ReviewView } from "@/api";
+import { block, file, review as reviewOf } from "@/review/diff/testing";
 
 it("goes to the next unread ahead, and wraps to the review's first unread past the end", () => {
   // Wrapping round is the server's answer, not a search from the top: the
   // file to go back to is the same first-unread the page landed on.
-  const review = {
-    blocks: [
-      {
-        slug: "core",
-        title: "Core",
-        context: "",
-        lenses: [],
-        files: [
-          file({ path: "a.rs", viewed: false }),
-          file({ path: "b.rs", viewed: true }),
-          file({ path: "c.rs", viewed: false }),
-        ],
-        totalFiles: 3,
-        viewedFiles: 1,
-      },
-    ],
-    lenses: [],
-    firstUnread: "a.rs",
-  } as unknown as ReviewView;
+  const review = reviewOf(
+    [block("core", [file({ path: "a.rs" }), file({ path: "b.rs", viewed: true }), file({ path: "c.rs" })])],
+    { firstUnread: "a.rs" },
+  );
   const setCurrent = vi.fn();
   const nav = (current: string) => {
     const { result } = renderHook(() =>

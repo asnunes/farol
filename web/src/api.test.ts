@@ -1,40 +1,16 @@
 import { describe, expect, it } from "vitest";
+import { block, file as fileView, review as reviewOf } from "./review/diff/testing";
 import { blockAt, blockOf, lensAt, lensKeyOf, lensPlace, readingOrder, readingRows, type FileView, type ReviewView } from "./api";
 
 function file(path: string, viewed = false): FileView {
-  return {
-    path,
-    status: "modified",
-    additions: 1,
-    deletions: 0,
-    viewed,
-    note: null,
-    lineNotes: [],
-    focus: null,
-    lenses: [],
-    folded: false,
-    covered: false,
-  };
+  return fileView({ path, viewed });
 }
 
 function review(): ReviewView {
-  return {
-    branch: "feature/x",
-    base: "main",
-    generatedAt: "abc1234",
-    commitsBehind: 0,
-    blocks: [
-      { slug: "one", title: "First", context: "", lenses: [], files: [file("a.rs", true), file("b.rs")],
-        totalFiles: 2, viewedFiles: 1 },
-      { slug: "two", title: "Second", context: "", lenses: [], files: [file("c.rs")],
-        totalFiles: 1, viewedFiles: 0 },
-    ],
-    unmapped: [],
-    totalFiles: 3,
-    viewedFiles: 1,
-    firstUnread: "b.rs",
-    lenses: [],
-  };
+  return reviewOf([
+    block("one", [file("a.rs", true), file("b.rs")], { title: "First" }),
+    block("two", [file("c.rs")], { title: "Second" }),
+  ]);
 }
 
 describe("reading order", () => {
