@@ -92,11 +92,36 @@ layers:
 # What has to pass before a commit.
 check: check-rust check-web
 
-# Everything the Rust side has to satisfy.
+# Everything the Rust side has to satisfy. The test run regenerates the wire
+# types, so a view changed without them shows up here as a diff.
 check-rust: layers
     cargo test --locked
     cargo clippy --locked --all-targets -- -D warnings
     cargo fmt --check
+    just wire-fresh
+
+# The TypeScript the screen reads the wire in, from the Rust views. Generated
+# by `cargo test`; this runs only the part that writes it.
+#
+# Regenerate web/src/wire.
+wire:
+    cargo test --locked --lib export_bindings
+
+# A difference means a view changed and `just wire` was not run before
+# committing.
+#
+# Check that web/src/wire is what the views say.
+wire-fresh:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # Staged and not yet committed is fine; what is not staged, or not
+    # tracked at all, is what the generation changed.
+    changed=$(git status --porcelain -- web/src/wire | grep -vE '^[MADRC] ' || true)
+    if [ -n "$changed" ]; then
+      echo "$changed"
+      echo "web/src/wire is out of date: run 'just wire' and commit the result" >&2
+      exit 1
+    fi
 
 # `tsc` is here and not in `npm test` because vitest does not typecheck: a test
 # can pass while naming a field that does not exist.

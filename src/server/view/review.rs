@@ -14,6 +14,7 @@ use crate::progress::domain::Progress;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct ReviewView {
     pub branch: String,
     pub base: String,
@@ -125,6 +126,7 @@ impl ReviewView {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct BlockView {
     pub slug: String,
     pub title: String,
@@ -141,9 +143,10 @@ pub struct BlockView {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct FileView {
     pub path: String,
-    pub status: &'static str,
+    pub status: crate::diff::domain::FileStatus,
     pub additions: u32,
     pub deletions: u32,
     pub viewed: bool,
@@ -199,7 +202,7 @@ impl FileView {
         let file_lenses = LensView::all(lenses.for_file(path), progress);
         FileView {
             path: path.to_string(),
-            status: change.status.label(),
+            status: change.status,
             additions: change.additions,
             deletions: change.deletions,
             viewed,
@@ -216,6 +219,7 @@ impl FileView {
 /// A note pinned to a span of lines on the new side.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct LineNoteView {
     pub from: u32,
     pub to: u32,
@@ -478,9 +482,9 @@ mod tests {
         assert_eq!(
             pr,
             vec![
-                ("overview", "missing"),
-                ("risk", "missing"),
-                ("evidence", "missing")
+                ("overview", super::super::LensState::Missing),
+                ("risk", super::super::LensState::Missing),
+                ("evidence", super::super::LensState::Missing)
             ],
             "the pull request's lenses are drawn, written or not"
         );

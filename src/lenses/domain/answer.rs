@@ -66,11 +66,17 @@ impl LensAnswer {
 
 /// What a lens answer is about.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "lowercase")]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub enum LensTarget {
     Pr,
-    Block { slug: Slug },
-    File { path: String },
+    Block {
+        #[cfg_attr(test, ts(type = "string"))]
+        slug: Slug,
+    },
+    File {
+        path: String,
+    },
 }
 
 impl LensTarget {

@@ -4,7 +4,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { lensAt, readingOrder, type CommentView, type LensView } from "@/api";
-import { cn } from "@/lib/utils";
+import { cn, unreachable } from "@/lib/utils";
 import { useComments } from "@/hooks/useComments";
 import { useActivity } from "@/hooks/useActivity";
 import { useGitHub } from "@/hooks/useGitHub";
@@ -356,12 +356,17 @@ function Failed({ what, onClose }: { what: string; onClose: () => void }) {
 
 /** The place a pull request or block lens holds on the page, as `lens:<key>`. */
 function placeOf(lens: LensView): string | null {
-  switch (lens.target?.kind) {
+  const target = lens.target;
+  if (!target) return null;
+  switch (target.kind) {
     case "pr":
       return `lens:pr:${lens.id}`;
     case "block":
-      return `lens:block:${lens.target.slug}:${lens.id}`;
-    default:
+      return `lens:block:${target.slug}:${lens.id}`;
+    // A file's lens sits inside the file, which is the place to go to.
+    case "file":
       return null;
+    default:
+      return unreachable(target);
   }
 }

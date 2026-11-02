@@ -74,6 +74,7 @@ impl ModeChoice {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub enum ReviewMode {
     /// The branch is the reviewer's own; the agent is the one that wrote it.
     #[serde(rename = "self")]

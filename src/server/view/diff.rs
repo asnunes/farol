@@ -13,9 +13,10 @@ use crate::diff::domain::{FileDiff, Hunk, Line, LineKind};
 /// because the screen has never had a use for either.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct FileDiffView {
     pub path: String,
-    pub status: &'static str,
+    pub status: crate::diff::domain::FileStatus,
     pub hunks: Vec<HunkView>,
     /// git will not diff this file: binary content, or `-diff` in
     /// `.gitattributes`. There are no hunks, and the screen says so instead of
@@ -32,7 +33,7 @@ impl FileDiffView {
     pub fn of(diff: &FileDiff) -> Self {
         Self {
             path: diff.path.clone(),
-            status: diff.status.label(),
+            status: diff.status,
             hunks: diff.hunks.iter().map(HunkView::of).collect(),
             binary: diff.binary,
             additions: diff.additions,
@@ -44,6 +45,7 @@ impl FileDiffView {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct HunkView {
     pub old_start: u32,
     pub old_lines: u32,
@@ -66,8 +68,9 @@ impl HunkView {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct LineView {
-    pub kind: &'static str,
+    pub kind: LineKind,
     pub old_number: Option<u32>,
     pub new_number: Option<u32>,
     pub content: String,
@@ -76,11 +79,7 @@ pub struct LineView {
 impl LineView {
     fn of(line: &Line) -> Self {
         Self {
-            kind: match line.kind {
-                LineKind::Context => "context",
-                LineKind::Added => "added",
-                LineKind::Removed => "removed",
-            },
+            kind: line.kind,
             old_number: line.old_number,
             new_number: line.new_number,
             content: line.content.clone(),
@@ -93,6 +92,7 @@ impl LineView {
 /// The lines and nothing else: which line each one is, and which it was before
 /// the change, the page works out from the hunks it already has.
 #[derive(Debug, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct LinesView {
     pub lines: Vec<String>,
 }

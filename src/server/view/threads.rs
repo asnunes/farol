@@ -29,6 +29,7 @@ use crate::lenses::domain::{LensId, LensTarget};
 /// by reviewed path has nowhere to put one whose path is exactly what broke.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct CommentsView {
     pub files: BTreeMap<String, Vec<CommentView>>,
     /// Threads on a lens, under the key the page gives the lens's section:
@@ -94,6 +95,7 @@ impl CommentsView {
 /// `Comment` would exist for nothing but this hop.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct CommentView {
     pub id: String,
     pub about: AboutView,
@@ -133,12 +135,12 @@ impl CommentView {
             pending: comment.pending.as_ref().map(|pending| match &pending.by {
                 Author::Reviewer => PendingByView {
                     id: pending.id.clone(),
-                    by: "reviewer",
+                    by: TurnBy::Reviewer,
                     name: "you".into(),
                 },
                 Author::Agent(name) => PendingByView {
                     id: pending.id.clone(),
-                    by: "agent",
+                    by: TurnBy::Agent,
                     name: name.clone(),
                 },
             }),
@@ -148,13 +150,13 @@ impl CommentView {
                 .iter()
                 .map(|reply| match &reply.from {
                     Author::Reviewer => ReplyView {
-                        from: "reviewer",
+                        from: TurnBy::Reviewer,
                         name: "You".into(),
                         body: reply.body.clone(),
                         at: reply.at.clone(),
                     },
                     Author::Agent(name) => ReplyView {
-                        from: "agent",
+                        from: TurnBy::Agent,
                         name: name.clone(),
                         body: reply.body.clone(),
                         at: reply.at.clone(),
@@ -168,12 +170,12 @@ impl CommentView {
                 .map(|waiting| WaitingView {
                     on: waiting.on.clone(),
                     stage: match waiting.stage {
-                        Stage::Sent => "sent",
-                        Stage::Working => "working",
+                        Stage::Sent => StageView::Sent,
+                        Stage::Working => StageView::Working,
                     },
                     purpose: match waiting.purpose {
-                        Purpose::Answer => "answer",
-                        Purpose::Pending => "pending",
+                        Purpose::Answer => PurposeView::Answer,
+                        Purpose::Pending => PurposeView::Pending,
                     },
                     since: waiting.since.clone(),
                 }),
@@ -184,9 +186,10 @@ impl CommentView {
 /// One turn of a comment's conversation.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct ReplyView {
-    /// "reviewer" or "agent", which decides which side of the exchange it reads on.
-    pub from: &'static str,
+    /// Which side of the exchange it reads on.
+    pub from: TurnBy,
     /// Who to name it as: "You" for the reviewer, the harness for an agent.
     pub name: String,
     pub body: String,
@@ -197,7 +200,8 @@ pub struct ReplyView {
 /// What a thread is about, for the wire: the same three shapes as
 /// `Subject`, tagged so the page can tell them apart.
 #[derive(Debug, Serialize)]
-#[serde(tag = "kind", rename_all = "camelCase")]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub enum AboutView {
     /// The screen draws it in the column it was written in; the two columns
     /// number separately.
@@ -228,24 +232,24 @@ fn lens_key(lens: &LensId, target: &LensTarget) -> String {
 /// Something owed, as the screen marks it.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct WaitingView {
     pub on: String,
-    /// "sent" until the agent acknowledges, "working" after.
-    pub stage: &'static str,
-    /// "answer" or "pending": what the badge says is being done.
-    pub purpose: &'static str,
+    pub stage: StageView,
+    /// What the badge says is being done.
+    pub purpose: PurposeView,
     /// Seconds since the epoch.
     pub since: String,
 }
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct PendingByView {
     /// GitHub's id for the comment, which tells one pending comment from the
     /// one that replaced it.
     pub id: String,
-    /// "reviewer" or "agent".
-    pub by: &'static str,
+    pub by: TurnBy,
     /// "you", or the harness.
     pub name: String,
 }
@@ -255,11 +259,40 @@ pub struct PendingByView {
 /// says which file that was.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct UnreadableView {
     pub file: String,
     pub about: Option<String>,
     pub excerpt: Option<String>,
     pub why: &'static str,
+}
+
+/// Who took a turn, or wrote a pending comment.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
+pub enum TurnBy {
+    Reviewer,
+    Agent,
+}
+
+/// Where a handed-over thread is: sent until the agent acknowledges, working
+/// after.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
+pub enum StageView {
+    Sent,
+    Working,
+}
+
+/// What an agent owes on a thread.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
+pub enum PurposeView {
+    Answer,
+    Pending,
 }
 
 #[cfg(test)]

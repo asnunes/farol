@@ -109,7 +109,7 @@ const selfReview = {
 
 const emptyDiff = {
   path: "",
-  status: "modified",
+  status: "modified" as const,
   hunks: [],
   binary: false,
   additions: 0,

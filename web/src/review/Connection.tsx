@@ -2,6 +2,7 @@ import { Check, Copy as CopyIcon, ExternalLink } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useCopy } from "@/hooks/useCopy";
+import { unreachable } from "@/lib/utils";
 import type { PullRequestView } from "@/api";
 
 /** What stands between a peer review and the pull request, said once, in the
@@ -47,6 +48,8 @@ export function Connection({ pull }: ConnectionProps) {
           More than one pull request shows this commit: {pull.numbers.map((n) => `#${n}`).join(", ")}
         </Badge>
       );
+    default:
+      return unreachable(pull.connection);
   }
 }
 

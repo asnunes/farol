@@ -15,11 +15,9 @@ use crate::comments::domain::{Drift, ModeReason, Readiness, RemoteState, ReviewM
 /// the threads should not wait for that to be drawn.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct PullRequestView {
-    /// "ready", "connect", "no-pull-request", "ambiguous" or "no-remote" —
-    /// the five things the screen says, which is fewer than the reasons:
-    /// everything a login fixes reads the same to the reviewer.
-    pub connection: &'static str,
+    pub connection: Connection,
     pub number: Option<u32>,
     pub mine: bool,
     pub author: Option<String>,
@@ -48,7 +46,7 @@ impl PullRequestView {
     pub fn of(standing: &Standing) -> Self {
         let host = standing.host.as_deref().unwrap_or("github.com");
         let mut view = Self {
-            connection: "no-remote",
+            connection: Connection::NoRemote,
             number: None,
             mine: false,
             author: None,
@@ -57,10 +55,7 @@ impl PullRequestView {
             login: format!("gh auth login --hostname {host}"),
             numbers: vec![],
             mode: ModeView {
-                mode: match standing.mode.mode {
-                    ReviewMode::SelfReview => "self",
-                    ReviewMode::PeerReview => "peer",
-                },
+                mode: standing.mode.mode,
                 reason: match &standing.mode.why {
                     ModeReason::Chosen => "chosen by you".into(),
                     ModeReason::Author { mine: true, .. } => "the pull request is yours".into(),
@@ -74,17 +69,17 @@ impl PullRequestView {
                 .map(|one| {
                     let view = match &one.state {
                         RemoteState::Pending { body } => RemotePendingView {
-                            state: "pending",
+                            state: PendingState::Pending,
                             body: Some(body.clone()),
                             url: None,
                         },
                         RemoteState::Published { body, url } => RemotePendingView {
-                            state: "published",
+                            state: PendingState::Published,
                             body: Some(body.clone()),
                             url: Some(url.clone()),
                         },
                         RemoteState::Gone => RemotePendingView {
-                            state: "gone",
+                            state: PendingState::Gone,
                             body: None,
                             url: None,
                         },
@@ -98,10 +93,7 @@ impl PullRequestView {
                 .map(|one| LoosePendingView {
                     id: one.id.clone(),
                     path: one.at.path.clone(),
-                    side: match one.at.side {
-                        crate::diff::domain::Side::Old => "old",
-                        crate::diff::domain::Side::New => "new",
-                    },
+                    side: one.at.side,
                     from: one.at.from,
                     to: one.at.to,
                     at: one.at.at(),
@@ -111,15 +103,15 @@ impl PullRequestView {
             pending_failed: standing.pending_failed.clone(),
             drift: standing.drift.map(|drift| match drift {
                 Drift::Uncommitted => DriftView {
-                    kind: "uncommitted",
+                    kind: DriftKind::Uncommitted,
                     commits: None,
                 },
                 Drift::Unpushed { commits } => DriftView {
-                    kind: "unpushed",
+                    kind: DriftKind::Unpushed,
                     commits: Some(commits),
                 },
                 Drift::Newer => DriftView {
-                    kind: "newer",
+                    kind: DriftKind::Newer,
                     commits: None,
                 },
             }),
@@ -136,20 +128,20 @@ impl PullRequestView {
                 url,
                 ..
             } => {
-                view.connection = "ready";
+                view.connection = Connection::Ready;
                 view.number = Some(*pull_request);
                 view.mine = *mine;
                 view.author = Some(author.clone());
                 view.url = Some(url.clone());
             }
-            Readiness::NoToken | Readiness::TokenRefused => view.connection = "connect",
-            Readiness::BranchNotPushed => view.connection = "no-pull-request",
+            Readiness::NoToken | Readiness::TokenRefused => view.connection = Connection::Connect,
+            Readiness::BranchNotPushed => view.connection = Connection::NoPullRequest,
             Readiness::NoPullRequest { open_at } => {
-                view.connection = "no-pull-request";
+                view.connection = Connection::NoPullRequest;
                 view.open_at = Some(open_at.clone());
             }
             Readiness::Ambiguous { numbers } => {
-                view.connection = "ambiguous";
+                view.connection = Connection::Ambiguous;
                 view.numbers = numbers.clone();
             }
             Readiness::NoRemote => {}
@@ -158,8 +150,43 @@ impl PullRequestView {
     }
 }
 
+/// Whether the pull request can be written on, in the five things the screen
+/// says: fewer than the reasons, because everything a login fixes reads the
+/// same to the reviewer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
+pub enum Connection {
+    Ready,
+    Connect,
+    NoPullRequest,
+    Ambiguous,
+    NoRemote,
+}
+
+/// A pending comment as GitHub now holds it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
+pub enum PendingState {
+    Pending,
+    Published,
+    Gone,
+}
+
+/// How the commit under review stands against the pull request's.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
+pub enum DriftKind {
+    Uncommitted,
+    Unpushed,
+    Newer,
+}
+
 /// The title and description the pull request will be opened with.
 #[derive(Debug, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct PullDraftView {
     pub title: String,
     pub body: String,
@@ -167,6 +194,7 @@ pub struct PullDraftView {
 
 /// The pull request the host just opened.
 #[derive(Debug, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct OpenedPullView {
     pub number: u32,
     pub url: String,
@@ -174,29 +202,29 @@ pub struct OpenedPullView {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct ModeView {
-    /// "self" or "peer".
-    pub mode: &'static str,
+    pub mode: ReviewMode,
     /// What the screen says beside it.
     pub reason: String,
 }
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct RemotePendingView {
-    /// "pending", "published" or "gone".
-    pub state: &'static str,
+    pub state: PendingState,
     pub body: Option<String>,
     pub url: Option<String>,
 }
 
 /// A pending comment with no thread, on the lines it is about.
 #[derive(Debug, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct LoosePendingView {
     pub id: String,
     pub path: String,
-    /// "old" or "new".
-    pub side: &'static str,
+    pub side: crate::diff::domain::Side,
     pub from: u32,
     pub to: u32,
     /// Where it is, the way a person reads it, with `(old)` on the old side:
@@ -208,15 +236,16 @@ pub struct LoosePendingView {
 
 /// The commit under review against the pull request's.
 #[derive(Debug, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct DriftView {
-    /// "uncommitted", "unpushed" or "newer".
-    pub kind: &'static str,
+    pub kind: DriftKind,
     /// How many commits the pull request is missing, when they are ours.
     pub commits: Option<u32>,
 }
 
 /// What a sync of the read marks came to.
 #[derive(Debug, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct SyncedView {
     pub number: u32,
     pub marked: usize,
@@ -226,6 +255,7 @@ pub struct SyncedView {
 /// What a submitted review came to.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct SentView {
     pub url: String,
     pub comments: usize,

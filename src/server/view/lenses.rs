@@ -11,11 +11,11 @@ use crate::shared::short;
 /// One lens on one target, and what it said.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct LensView {
     pub id: String,
     pub title: String,
-    /// `written`, `outdated`, or `missing` when nothing was written yet.
-    pub state: &'static str,
+    pub state: LensState,
     pub text: String,
     /// The short commit it was written at.
     pub written_at: Option<String>,
@@ -31,6 +31,18 @@ pub struct LensView {
     pub open: Option<String>,
 }
 
+/// How a lens stands with the review.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
+pub enum LensState {
+    /// Nothing written yet.
+    Missing,
+    Written,
+    /// Written, and the code or the prompt moved since.
+    Outdated,
+}
+
 impl LensView {
     pub fn all(lensed: Vec<Lensed<'_>>, progress: &Progress) -> Vec<Self> {
         lensed.into_iter().map(|l| Self::of(l, progress)).collect()
@@ -41,7 +53,7 @@ impl LensView {
             return Self {
                 id: lensed.lens.id.to_string(),
                 title: lensed.lens.title.clone(),
-                state: "missing",
+                state: LensState::Missing,
                 text: String::new(),
                 written_at: None,
                 changed: 0,
@@ -52,8 +64,8 @@ impl LensView {
             };
         };
         let (state, changed) = match freshness {
-            Freshness::Written => ("written", 0),
-            Freshness::Outdated { changed } => ("outdated", changed),
+            Freshness::Written => (LensState::Written, 0),
+            Freshness::Outdated { changed } => (LensState::Outdated, changed),
         };
         Self {
             id: lensed.lens.id.to_string(),
@@ -83,6 +95,7 @@ impl LensView {
 
 /// A place in the code the page can take the reader to.
 #[derive(Debug, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct CitationView {
     pub text: String,
     pub path: String,
