@@ -635,3 +635,23 @@ describe("where the keyboard is left when a comment box closes", () => {
     expect(document.activeElement).toBe(plus);
   });
 });
+
+describe("pending comments with no thread here", () => {
+  it("draws one on the file as a whole above the code, and one on a line under that line", () => {
+    // Left out, a comment GitHub held on the file was missing from the page
+    // while the submit sent it all the same.
+    const actions = {
+      ...noComments(),
+      looseOn: () => [
+        { id: "PRRC_file", path: "src/a.rs", lines: null, at: "src/a.rs (file)", body: "On the whole file." },
+        { id: "PRRC_line", path: "src/a.rs", lines: { side: "new" as const, from: 2, to: 2 }, at: "src/a.rs:2", body: "On line two." },
+      ],
+    };
+    const { container } = render(<Diff diff={diff()} file={file()} view="unified" comments={[]} actions={actions} />);
+
+    const drawn = [...container.querySelectorAll("[data-pending], .row")].map((el) =>
+      el.getAttribute("data-pending") ?? "row",
+    );
+    expect(drawn).toEqual(["PRRC_file", "row", "row", "PRRC_line"]);
+  });
+});

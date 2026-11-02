@@ -30,9 +30,9 @@ pub trait PendingReview: Send + Sync {
     /// was written: here, on the pull request's page, or by a thread that has
     /// since been closed. The pending review is the list; farol keeps none.
     ///
-    /// Only comments on lines: one on a whole file, or on lines a later push
-    /// made outdated, has nowhere to be drawn and is left out, though a submit
-    /// still sends it. GitHub's answer stops at its first 100 threads.
+    /// Every one of them, including those on a file as a whole or on lines a
+    /// later push made outdated: a submit sends them all, so the reviewer is
+    /// shown them all. GitHub's answer stops at its first 100 threads.
     fn pending_comments(&self, pull: &str) -> Result<Vec<PendingComment>>;
 
     /// Submit the pending review with the verdict and summary, or post the
@@ -40,12 +40,49 @@ pub trait PendingReview: Send + Sync {
     fn submit(&self, review: &Review) -> Result<String>;
 }
 
-/// A comment in the pending review, with the lines it is on.
+/// A comment in the pending review, with where it is.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PendingComment {
     pub id: String,
     pub body: String,
-    pub at: Lines,
+    pub at: PendingAt,
+}
+
+/// Where a pending comment sits. Not always on lines: GitHub also holds
+/// comments on a file as a whole, and drops the line of one a later push left
+/// outdated. Both still go out with the review.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PendingAt {
+    Lines(Lines),
+    File { path: String, outdated: bool },
+}
+
+impl PendingAt {
+    pub fn path(&self) -> &str {
+        match self {
+            Self::Lines(lines) => &lines.path,
+            Self::File { path, .. } => path,
+        }
+    }
+
+    pub fn lines(&self) -> Option<&Lines> {
+        match self {
+            Self::Lines(lines) => Some(lines),
+            Self::File { .. } => None,
+        }
+    }
+
+    /// Where it is, the way a person reads it.
+    pub fn at(&self) -> String {
+        match self {
+            Self::Lines(lines) => lines.at(),
+            Self::File {
+                path,
+                outdated: true,
+            } => format!("{path} (outdated)"),
+            Self::File { path, .. } => format!("{path} (file)"),
+        }
+    }
 }
 
 /// One comment as the host has it.

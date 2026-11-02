@@ -86,10 +86,12 @@ impl PullRequestView {
                 .iter()
                 .map(|one| LoosePendingView {
                     id: one.id.clone(),
-                    path: one.at.path.clone(),
-                    side: one.at.side,
-                    from: one.at.from,
-                    to: one.at.to,
+                    path: one.at.path().to_string(),
+                    lines: one.at.lines().map(|lines| SpanView {
+                        side: lines.side,
+                        from: lines.from,
+                        to: lines.to,
+                    }),
                     at: one.at.at(),
                     body: one.body.clone(),
                 })
@@ -212,20 +214,29 @@ pub struct RemotePendingView {
     pub url: Option<String>,
 }
 
-/// A pending comment with no thread, on the lines it is about.
+/// A pending comment with no thread, where it is.
 #[derive(Debug, Serialize)]
 #[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct LoosePendingView {
     pub id: String,
     pub path: String,
-    pub side: crate::diff::domain::Side,
-    pub from: u32,
-    pub to: u32,
+    /// None for one on the file as a whole, or outdated by a later push: the
+    /// screen draws it above the file's code rather than under a line.
+    pub lines: Option<SpanView>,
     /// Where it is, the way a person reads it, with `(old)` on the old side:
     /// built once here rather than again by the screen, which once left the
     /// side out.
     pub at: String,
     pub body: String,
+}
+
+/// The lines a pending comment is on, read against `side`.
+#[derive(Debug, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
+pub struct SpanView {
+    pub side: crate::diff::domain::Side,
+    pub from: u32,
+    pub to: u32,
 }
 
 /// The commit under review against the pull request's.
@@ -260,7 +271,7 @@ pub struct SentView {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::comments::domain::{Lines, ModeChoice, PendingComment};
+    use crate::comments::domain::{Lines, ModeChoice, PendingAt, PendingComment};
     use crate::diff::domain::Side;
 
     #[test]
@@ -277,12 +288,12 @@ mod tests {
             loose: vec![PendingComment {
                 id: "PRRC_1".into(),
                 body: "Why remove this?".into(),
-                at: Lines {
+                at: PendingAt::Lines(Lines {
                     path: "src/a.rs".into(),
                     side: Side::Old,
                     from: 12,
                     to: 12,
-                },
+                }),
             }],
             pending_failed: None,
             drift: None,

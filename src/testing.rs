@@ -913,7 +913,7 @@ impl crate::comments::domain::PendingReview for FakePublisher {
                     Some(crate::comments::domain::PendingComment {
                         id: id.clone(),
                         body: body.clone(),
-                        at: at.clone(),
+                        at: crate::comments::domain::PendingAt::Lines(at.clone()),
                     })
                 }
                 _ => None,

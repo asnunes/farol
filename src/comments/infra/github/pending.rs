@@ -4,7 +4,7 @@ use serde::Serialize;
 
 use super::*;
 use crate::comments::domain::{
-    Lines, PendingComment, PendingReview, RemoteComment, RemoteState, Review,
+    Lines, PendingAt, PendingComment, PendingReview, RemoteComment, RemoteState, Review,
 };
 
 impl PendingReview for GitHub {
@@ -203,25 +203,28 @@ impl From<&Lines> for Thread {
     }
 }
 
-/// The pending comments of one review thread, on the thread's lines. A thread
-/// without a line is on the file as a whole, which farol has no place to draw.
+/// The pending comments of one review thread, where the thread is. One
+/// without a line is on the file as a whole, or outdated by a later push;
+/// either way it goes out with the review, so it comes back too.
 pub(super) fn pending_in(thread: &serde_json::Value) -> Vec<PendingComment> {
     let side = |key: &str| unsided(thread.get(key).and_then(|s| s.as_str()));
-    let (Some(path), Some(to)) = (
-        thread.get("path").and_then(|p| p.as_str()),
-        thread.get("line").and_then(|l| l.as_u64()),
-    ) else {
+    let Some(path) = thread.get("path").and_then(|p| p.as_str()) else {
         return vec![];
     };
-    let from = thread
-        .get("startLine")
-        .and_then(|l| l.as_u64())
-        .unwrap_or(to);
-    let at = Lines {
-        path: path.to_string(),
-        side: side("diffSide"),
-        from: from as u32,
-        to: to as u32,
+    let at = match thread.get("line").and_then(|l| l.as_u64()) {
+        Some(to) => PendingAt::Lines(Lines {
+            path: path.to_string(),
+            side: side("diffSide"),
+            from: thread
+                .get("startLine")
+                .and_then(|l| l.as_u64())
+                .unwrap_or(to) as u32,
+            to: to as u32,
+        }),
+        None => PendingAt::File {
+            path: path.to_string(),
+            outdated: thread.get("isOutdated").and_then(|o| o.as_bool()) == Some(true),
+        },
     };
     thread
         .pointer("/comments/nodes")
@@ -323,7 +326,7 @@ fn unsided(side: Option<&str>) -> crate::diff::domain::Side {
 pub(super) const PENDING_REVIEW: &str = "query($pull: ID!) { node(id: $pull) { ... on PullRequest { reviews(states: [PENDING], first: 1) { nodes { id comments { totalCount } } } } } }";
 // ponytail: the first 100 threads and 50 comments each; paginate if a pull
 // request ever carries more.
-pub(super) const PENDING_THREADS: &str = "query($pull: ID!) { node(id: $pull) { ... on PullRequest { reviewThreads(first: 100) { nodes { path line startLine diffSide comments(first: 50) { nodes { id body state } } } } } } }";
+pub(super) const PENDING_THREADS: &str = "query($pull: ID!) { node(id: $pull) { ... on PullRequest { reviewThreads(first: 100) { nodes { path line startLine diffSide isOutdated comments(first: 50) { nodes { id body state } } } } } } }";
 pub(super) const NUMBER: &str =
     "query($pull: ID!) { node(id: $pull) { ... on PullRequest { number } } }";
 pub(super) const START_REVIEW: &str = "mutation($pull: ID!, $head: GitObjectID!) { addPullRequestReview(input: {pullRequestId: $pull, commitOID: $head}) { pullRequestReview { id } } }";
