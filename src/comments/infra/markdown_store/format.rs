@@ -9,7 +9,7 @@ use crate::comments::domain::{
     Unreadable, Waiting,
 };
 use crate::diff::domain::Side;
-use crate::lenses::domain::{LensId, LensTarget};
+use crate::lenses::domain::{LensGroup, LensId, LensTarget};
 use crate::map::domain::Slug;
 
 /// The file a thread is kept as.
@@ -86,37 +86,42 @@ fn about(subject: &Subject) -> String {
 
 /// `pr`, `block <slug>` or `file <path>`: what a lens thread's lens is on.
 fn lens_on(raw: &str) -> Option<LensTarget> {
-    match raw.split_once(' ') {
-        None if raw == "pr" => Some(LensTarget::Pr),
-        Some(("block", slug)) => Some(LensTarget::Block {
-            slug: Slug::parse(slug.trim()).ok()?,
+    let (group, rest) = raw.split_once(' ').unwrap_or((raw, ""));
+    let rest = rest.trim();
+    // Over the groups rather than over the words, so a group added later
+    // stops this compiling until it can be read back.
+    match LensGroup::parse(group).ok()? {
+        LensGroup::Pr => rest.is_empty().then_some(LensTarget::Pr),
+        LensGroup::Block => Some(LensTarget::Block {
+            slug: Slug::parse(rest).ok()?,
         }),
-        Some(("file", path)) => Some(LensTarget::File {
-            path: path.trim().to_string(),
+        LensGroup::File => (!rest.is_empty()).then(|| LensTarget::File {
+            path: rest.to_string(),
         }),
-        _ => None,
     }
 }
 
 /// Where a turn of the conversation starts in the file.
 const REPLY: &str = "<!-- farol:reply ";
 
-fn stage(stage: Stage) -> &'static str {
-    match stage {
-        Stage::Sent => "sent",
-        Stage::Working => "working",
-    }
+/// A stage as its serde name, and back: one derive spells both, so a stage
+/// added later is read the way it is written instead of as unknown.
+fn stage(stage: Stage) -> String {
+    serde_json::to_value(stage)
+        .ok()
+        .and_then(|v| v.as_str().map(str::to_string))
+        .unwrap_or_default()
+}
+
+fn stage_of(raw: &str) -> Option<Stage> {
+    serde_json::from_value(serde_json::Value::String(raw.to_string())).ok()
 }
 
 /// `sent 1734567 Claude Code`: the stage, when, and the harness, which may
 /// have spaces in its name and so goes last.
 fn waiting(raw: &str) -> Option<Waiting> {
     let mut parts = raw.splitn(3, ' ');
-    let stage = match parts.next()? {
-        "sent" => Stage::Sent,
-        "working" => Stage::Working,
-        _ => return None,
-    };
+    let stage = stage_of(parts.next()?)?;
     let since = parts.next()?.to_string();
     let on = parts.next().unwrap_or("agent").trim().to_string();
     Some(Waiting {
@@ -132,12 +137,18 @@ fn waiting(raw: &str) -> Option<Waiting> {
 fn pending(raw: &str) -> Option<PendingRef> {
     let mut parts = raw.splitn(3, ' ');
     let id = parts.next()?.to_string();
-    let by = match parts.next()? {
-        "reviewer" => Author::Reviewer,
-        "agent" => Author::Agent(parts.next().unwrap_or("agent").trim().to_string()),
-        _ => return None,
-    };
+    let by = author(parts.next()?, parts.next())?;
     Some(PendingRef { id, by })
+}
+
+/// `reviewer`, or `agent` and the harness's name: who wrote a turn or a
+/// pending comment, read the one way both are written.
+fn author(kind: &str, name: Option<&str>) -> Option<Author> {
+    match kind {
+        "reviewer" => Some(Author::Reviewer),
+        "agent" => Some(Author::Agent(name.unwrap_or("agent").trim().to_string())),
+        _ => None,
+    }
 }
 
 /// The question, then each turn under its marker. A marker that cannot be read
@@ -153,11 +164,7 @@ fn conversation(body: &str) -> (String, Vec<Reply>) {
                 let mut parts = who.trim().splitn(3, ' ');
                 let kind = parts.next()?;
                 let at = parts.next()?.to_string();
-                let from = match kind {
-                    "reviewer" => Author::Reviewer,
-                    "agent" => Author::Agent(parts.next().unwrap_or("agent").trim().to_string()),
-                    _ => return None,
-                };
+                let from = author(kind, parts.next())?;
                 Some(Reply {
                     from,
                     body: String::new(),
@@ -305,5 +312,35 @@ fn excerpt(body: &str) -> Option<String> {
     match line.chars().count() > EXCERPT {
         true => Some(line.chars().take(EXCERPT).collect::<String>() + "…"),
         false => Some(line.to_string()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_lens_target_and_every_stage_reads_back_as_it_was_written() {
+        // The reader used to be a list of words beside the writer's match, so a
+        // variant added to one was written and then read as unknown.
+        for target in [
+            LensTarget::Pr,
+            LensTarget::Block {
+                slug: Slug::parse("core").unwrap(),
+            },
+            LensTarget::File {
+                path: "src/a b.rs".into(),
+            },
+        ] {
+            let header = about(&Subject::Lens {
+                lens: LensId::parse("summary").unwrap(),
+                target: target.clone(),
+            });
+            let on = header.lines().find_map(|l| l.strip_prefix("on: ")).unwrap();
+            assert_eq!(lens_on(on), Some(target));
+        }
+        for at in [Stage::Sent, Stage::Working] {
+            assert_eq!(stage_of(&stage(at)), Some(at));
+        }
     }
 }

@@ -185,7 +185,8 @@ pub struct PendingRef {
 
 /// Sent is what farol knows on its own; working is what the agent says when it
 /// acknowledges. Nothing in between can be known: neither harness reports it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum Stage {
     Sent,
     Working,

@@ -51,21 +51,11 @@ pub enum LensGroup {
 }
 
 impl LensGroup {
+    /// Read by the same derive that writes it, so a group added later is
+    /// never written in one place and refused in another.
     pub fn parse(raw: &str) -> Result<Self, LensError> {
-        match raw {
-            "pr" => Ok(Self::Pr),
-            "block" => Ok(Self::Block),
-            "file" => Ok(Self::File),
-            other => Err(LensError::UnknownGroup(other.to_string())),
-        }
-    }
-
-    pub fn name(self) -> &'static str {
-        match self {
-            Self::Pr => "pr",
-            Self::Block => "block",
-            Self::File => "file",
-        }
+        serde_json::from_value(serde_json::Value::String(raw.to_string()))
+            .map_err(|_| LensError::UnknownGroup(raw.to_string()))
     }
 }
 
