@@ -175,8 +175,8 @@ export default function App() {
     const about = thread.about;
     if (about.kind === "lines") {
       if (!comments.drifted.some((t) => t.id === thread.id)) goTo(about.path);
-    } else if (about.kind === "lens" && about.key.startsWith("file:")) {
-      goTo(about.key.slice("file:".length, about.key.lastIndexOf(":")));
+    } else if (about.kind === "lens" && about.file !== null) {
+      goTo(about.file);
     }
     scrollToThread(thread.id);
   };
@@ -280,8 +280,8 @@ export default function App() {
               files.keep(file);
               void toggleViewed(file.path, !file.viewed);
             }}
-            onCheckLens={(lens, key) => {
-              lenses.keep(key, lens.seen);
+            onCheckLens={(lens) => {
+              lenses.keep(lens.key, lens.seen);
               void toggleSeen(lens, !lens.seen);
             }}
           />
@@ -360,9 +360,8 @@ function placeOf(lens: LensView): string | null {
   if (!target) return null;
   switch (target.kind) {
     case "pr":
-      return `lens:pr:${lens.id}`;
     case "block":
-      return `lens:block:${target.slug}:${lens.id}`;
+      return `lens:${lens.key}`;
     // A file's lens sits inside the file, which is the place to go to.
     case "file":
       return null;

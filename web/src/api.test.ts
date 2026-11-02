@@ -91,9 +91,13 @@ describe("block lookup", () => {
 describe("the lens the reader is on", () => {
   it("is found by its key, with the block it opens, and a file path is never taken for one", () => {
     const r = review();
-    const lens = { id: "architecture", title: "Architecture" } as ReviewView["lenses"][number];
+    const lens = {
+      id: "architecture",
+      key: "block:two:architecture",
+      title: "Architecture",
+    } as ReviewView["lenses"][number];
     r.blocks[1].lenses = [lens];
-    r.lenses = [{ ...lens, id: "overview" }];
+    r.lenses = [{ ...lens, id: "overview", key: "pr:overview" }];
 
     expect(lensAt(r, "lens:block:two:architecture")).toEqual({ lens, block: r.blocks[1] });
     expect(lensAt(r, "lens:pr:overview")?.block).toBeNull();

@@ -8,6 +8,7 @@ use serde::Serialize;
 use super::LensView;
 use crate::diff::domain::FileChange;
 use crate::lenses::application::LensReading;
+use crate::lenses::domain::LensTarget;
 use crate::map::application::ReviewSnapshot;
 use crate::map::domain::ReviewMap;
 use crate::progress::domain::Progress;
@@ -84,7 +85,13 @@ impl ReviewView {
                 slug: block.slug.to_string(),
                 title: block.title.clone(),
                 context: block.context.clone(),
-                lenses: LensView::all(lenses.for_block(&block.slug), progress),
+                lenses: LensView::all(
+                    lenses.for_block(&block.slug),
+                    progress,
+                    &LensTarget::Block {
+                        slug: block.slug.clone(),
+                    },
+                ),
                 files,
                 total_files: held.len(),
                 viewed_files,
@@ -119,7 +126,7 @@ impl ReviewView {
             total_files,
             viewed_files,
             first_unread,
-            lenses: LensView::all(lenses.for_pr(), progress),
+            lenses: LensView::all(lenses.for_pr(), progress, &LensTarget::Pr),
         }
     }
 }
@@ -199,7 +206,13 @@ impl FileView {
         let covered = lenses.covers(map, progress, path);
         let viewed = lenses.is_read(map, progress, change);
 
-        let file_lenses = LensView::all(lenses.for_file(path), progress);
+        let file_lenses = LensView::all(
+            lenses.for_file(path),
+            progress,
+            &LensTarget::File {
+                path: path.to_string(),
+            },
+        );
         FileView {
             path: path.to_string(),
             status: change.status,

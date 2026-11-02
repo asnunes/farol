@@ -6,6 +6,7 @@ import type { LensView } from "@/api";
 
 const tests: LensView = {
   id: "tests",
+  key: "file:src/a.rs:tests",
   title: "Tests",
   state: "written",
   text: "- a failure inside the window is tried again",

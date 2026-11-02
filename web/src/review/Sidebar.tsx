@@ -44,9 +44,9 @@ export function Sidebar({
               <LensRow
                 key={lens.id}
                 lens={lens}
-                current={current === `lens:pr:${lens.id}`}
-                onPick={() => onPick(`lens:pr:${lens.id}`)}
-                onCheck={() => onCheckLens(lens, `pr:${lens.id}`)}
+                current={current === `lens:${lens.key}`}
+                onPick={() => onPick(`lens:${lens.key}`)}
+                onCheck={() => onCheckLens(lens)}
               />
             ))}
           </ul>
@@ -87,7 +87,7 @@ function Block({
   const state =
     block.viewedFiles === block.totalFiles
       ? "done"
-      : block.files.some((f) => f.path === current) || current?.startsWith(`lens:block:${block.slug}:`)
+      : block.files.some((f) => f.path === current) || block.lenses.some((l) => current === `lens:${l.key}`)
         ? "current"
         : "todo";
 
@@ -119,9 +119,9 @@ function Block({
           <LensRow
             key={lens.id}
             lens={lens}
-            current={current === `lens:block:${block.slug}:${lens.id}`}
-            onPick={() => onPick(`lens:block:${block.slug}:${lens.id}`)}
-            onCheck={() => onCheckLens(lens, `block:${block.slug}:${lens.id}`)}
+            current={current === `lens:${lens.key}`}
+            onPick={() => onPick(`lens:${lens.key}`)}
+            onCheck={() => onCheckLens(lens)}
           />
         ))}
         {/* A rule between what the block says and the files it reads. */}
@@ -165,6 +165,5 @@ type BlockProps = {
 /** Ticking a row from its mark, which flips the mark and changes nothing else. */
 type Checks = {
   onCheckFile: (file: FileView) => void;
-  /** With the key its section goes by on the page. */
-  onCheckLens: (lens: LensView, key: string) => void;
+  onCheckLens: (lens: LensView) => void;
 };

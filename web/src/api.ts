@@ -161,13 +161,13 @@ export function blockOf(review: ReviewView, path: string): FileHome | null {
 }
 
 /** The pull request or block lens the reader is on, when `current` names one
- * rather than a file: `lens:pr:<id>` or `lens:block:<slug>:<id>`, the key the
- * section carries with `lens:` in front so it can never be taken for a path. */
+ * rather than a file: the lens's key with `lens:` in front, so it can never be
+ * taken for a path. */
 export function lensAt(review: ReviewView, current: string | null): LensHere | null {
-  const pr = review.lenses.find((lens) => current === `lens:pr:${lens.id}`);
+  const pr = review.lenses.find((lens) => current === `lens:${lens.key}`);
   if (pr) return { lens: pr, block: null };
   for (const block of review.blocks) {
-    const lens = block.lenses.find((l) => current === `lens:block:${block.slug}:${l.id}`);
+    const lens = block.lenses.find((l) => current === `lens:${l.key}`);
     if (lens) return { lens, block };
   }
   return null;

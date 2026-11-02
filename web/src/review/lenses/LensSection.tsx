@@ -17,7 +17,7 @@ export function LensSection({ lens, where, onCite, onSeen, comments, folds }: Le
   const setOpen = (next: boolean) => folds.set(where, lens.seen, next);
 
   return (
-    <section className="lens border-b border-rule bg-ground px-4 py-3 md:px-6" data-lens={lens.id} data-lens-key={where} data-done={lens.seen ? "true" : undefined}>
+    <section className="lens border-b border-rule bg-ground px-4 py-3 md:px-6" data-lens={lens.id} data-lens-key={where} data-place data-done={lens.seen ? "true" : undefined}>
       <div className="flex items-center gap-2">
         <Button
           variant="ghost"

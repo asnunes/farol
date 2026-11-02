@@ -8,7 +8,7 @@ export function BlockLenses({ slug, lenses, onCite, onSeen, comments, folds }: B
   return (
     <>
       {lenses.map((lens) => (
-        <LensSection key={lens.id} lens={lens} where={`block:${slug}:${lens.id}`} onCite={onCite} onSeen={onSeen} comments={comments} folds={folds} />
+        <LensSection key={lens.id} lens={lens} where={lens.key} onCite={onCite} onSeen={onSeen} comments={comments} folds={folds} />
       ))}
     </>
   );

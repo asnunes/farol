@@ -22,6 +22,7 @@ describe("telling the files in the sidebar apart", () => {
   it("lists the pull request's lenses first and a block's before its files, marking what was seen", () => {
     const lens = (id: string, seen: boolean) => ({
       id,
+      key: `pr:${id}`,
       title: id,
       state: "written" as const,
       text: "x",

@@ -86,4 +86,6 @@ function placeOf(el: HTMLElement): string | null {
  * being read. Near the top, because the reader works downwards. */
 const READING_LINE = 0.25;
 
-const PLACES = '[data-path], [data-lens-key^="pr:"], [data-lens-key^="block:"]';
+// A pull request or block lens is a place of its own; a file's lens is part of
+// its file, and says nothing of where the reader is.
+const PLACES = "[data-path], [data-place]";

@@ -55,7 +55,7 @@ export function speaksAbout(file: FileView): boolean {
 function FileLens({ lens, path, onCite, comments }: FileLensProps) {
   const [shown, setShown] = useState(true);
   return (
-    <div className="file-lens relative pt-1.5 pl-3.5" data-lens={lens.id} data-lens-key={`file:${path}:${lens.id}`}>
+    <div className="file-lens relative pt-1.5 pl-3.5" data-lens={lens.id} data-lens-key={lens.key}>
       <div className="flex items-center gap-2">
         <span aria-hidden="true" className="dot absolute top-3 -left-[5px] size-2 rounded-full bg-rule-strong" />
         <span className="font-mono text-[0.6875rem] tracking-wide text-ink-muted uppercase">{lens.title}</span>
@@ -85,7 +85,7 @@ function FileLens({ lens, path, onCite, comments }: FileLensProps) {
       <ProseThreads
         about={shown && lens.target ? { lens: lens.id, target: lens.target } : null}
         label={`Thread on the ${lens.title} lens`}
-        threads={comments.onLens(`file:${path}:${lens.id}`)}
+        threads={comments.onLens(lens.key)}
         actions={comments}
       />
     </div>

@@ -5,4 +5,8 @@ import type { Side } from "./Side";
  * What a thread is about, for the wire: the same three shapes as
  * `Subject`, tagged so the page can tell them apart.
  */
-export type AboutView = { "kind": "lines", path: string, side: Side, from: number, to: number, } | { "kind": "lens", key: string, } | { "kind": "block", slug: string, };
+export type AboutView = { "kind": "lines", path: string, side: Side, from: number, to: number, } | { "kind": "lens", key: string, 
+/**
+ * The file a file lens is on, for the page to open before it scrolls.
+ */
+file: string | null, } | { "kind": "block", slug: string, };

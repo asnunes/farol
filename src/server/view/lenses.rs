@@ -14,6 +14,9 @@ use crate::shared::short;
 #[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct LensView {
     pub id: String,
+    /// What its section is called on the page, and what a thread on it is
+    /// filed under. Made by the server, so the screen never builds it.
+    pub key: String,
     pub title: String,
     pub state: LensState,
     pub text: String,
@@ -44,14 +47,20 @@ pub enum LensState {
 }
 
 impl LensView {
-    pub fn all(lensed: Vec<Lensed<'_>>, progress: &Progress) -> Vec<Self> {
-        lensed.into_iter().map(|l| Self::of(l, progress)).collect()
+    /// The lenses on one target, each with the key its section goes by.
+    pub fn all(lensed: Vec<Lensed<'_>>, progress: &Progress, on: &LensTarget) -> Vec<Self> {
+        lensed
+            .into_iter()
+            .map(|l| Self::of(l, progress, on))
+            .collect()
     }
 
-    fn of(lensed: Lensed<'_>, progress: &Progress) -> Self {
+    fn of(lensed: Lensed<'_>, progress: &Progress, on: &LensTarget) -> Self {
+        let key = on.key(&lensed.lens.id);
         let Some((answer, freshness)) = lensed.answer else {
             return Self {
                 id: lensed.lens.id.to_string(),
+                key,
                 title: lensed.lens.title.clone(),
                 state: LensState::Missing,
                 text: String::new(),
@@ -69,6 +78,7 @@ impl LensView {
         };
         Self {
             id: lensed.lens.id.to_string(),
+            key,
             title: lensed.lens.title.clone(),
             state,
             text: answer.text.clone(),

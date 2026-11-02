@@ -84,6 +84,17 @@ impl LensTarget {
     /// length key: the real target is kept inside, so nothing is ever read back
     /// from the name, and a path deep enough to pass the file system's limit
     /// on a name, or one that is a prefix of another's folder, cannot break it.
+    /// What the page calls one lens's section on this target: `pr:<lens>`,
+    /// `block:<slug>:<lens>` or `file:<path>:<lens>`. Made here, once, and sent;
+    /// the screen only ever reads it back.
+    pub fn key(&self, lens: &LensId) -> String {
+        match self {
+            Self::Pr => format!("pr:{lens}"),
+            Self::Block { slug } => format!("block:{slug}:{lens}"),
+            Self::File { path } => format!("file:{path}:{lens}"),
+        }
+    }
+
     pub fn file_name(&self) -> String {
         match self {
             Self::Pr => "pr.json".into(),

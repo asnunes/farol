@@ -6,7 +6,12 @@ import type { LensTarget } from "./LensTarget";
 /**
  * One lens on one target, and what it said.
  */
-export type LensView = { id: string, title: string, state: LensState, text: string, 
+export type LensView = { id: string, 
+/**
+ * What its section is called on the page, and what a thread on it is
+ * filed under. Made by the server, so the screen never builds it.
+ */
+key: string, title: string, state: LensState, text: string, 
 /**
  * The short commit it was written at.
  */
