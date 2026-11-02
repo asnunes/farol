@@ -8,7 +8,6 @@ use serde::Serialize;
 use crate::comments::domain::{Author, Comment, Found, Purpose, Stage, Subject};
 use crate::comments::presentation::says;
 use crate::diff::domain::Side;
-use crate::lenses::domain::{LensId, LensTarget};
 
 /// The comments, under the file each one is about, and what the store could not
 /// read at all.
@@ -56,7 +55,7 @@ impl CommentsView {
         for comment in &found.comments {
             let under = match &comment.about {
                 Subject::Lines(lines) => files.entry(lines.path.clone()),
-                Subject::Lens { lens, target } => lenses.entry(lens_key(lens, target)),
+                Subject::Lens { lens, target } => lenses.entry(target.key(lens)),
                 Subject::Block { slug } => blocks.entry(slug.to_string()),
             };
             under.or_default().push(CommentView::of(comment));
@@ -124,7 +123,8 @@ impl CommentView {
                     to: lines.to,
                 },
                 Subject::Lens { lens, target } => AboutView::Lens {
-                    key: lens_key(lens, target),
+                    key: target.key(lens),
+                    file: target.path().map(str::to_string),
                 },
                 Subject::Block { slug } => AboutView::Block {
                     slug: slug.to_string(),
@@ -213,20 +213,12 @@ pub enum AboutView {
     },
     Lens {
         key: String,
+        /// The file a file lens is on, for the page to open before it scrolls.
+        file: Option<String>,
     },
     Block {
         slug: String,
     },
-}
-
-/// The key the page gives a lens's section, so a thread finds the lens it is
-/// drawn under.
-fn lens_key(lens: &LensId, target: &LensTarget) -> String {
-    match target {
-        LensTarget::Pr => format!("pr:{lens}"),
-        LensTarget::Block { slug } => format!("block:{slug}:{lens}"),
-        LensTarget::File { path } => format!("file:{path}:{lens}"),
-    }
 }
 
 /// Something owed, as the screen marks it.

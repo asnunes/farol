@@ -1,21 +1,17 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 import { FileLenses } from "./FileLenses";
-import { file, noComments } from "@/review/diff/testing";
+import { file, lens, noComments } from "@/review/diff/testing";
 import type { LensView } from "@/api";
 
-const tests: LensView = {
+const tests: LensView = lens({
   id: "tests",
+  key: "file:src/a.rs:tests",
   title: "Tests",
-  state: "written",
   text: "- a failure inside the window is tried again",
   writtenAt: "a1b2c3d",
-  changed: 0,
-  citations: [],
   target: { kind: "file", path: "src/a.rs" },
-  seen: false,
-  open: null,
-};
+});
 
 const none = () => {};
 

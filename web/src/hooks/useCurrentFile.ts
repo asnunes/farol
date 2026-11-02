@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { lensPlace } from "@/api";
 import { isSettling } from "@/lib/scroll";
 import type { ReviewView } from "@/api";
 
@@ -79,11 +80,13 @@ export function unreadAfter(current: string | null): string | null {
 
 function placeOf(el: HTMLElement): string | null {
   const { path, lensKey } = el.dataset;
-  return path ?? (lensKey ? `lens:${lensKey}` : null);
+  return path ?? (lensKey ? lensPlace(lensKey) : null);
 }
 
 /** How far down the pane a header has to be before the file counts as the one
  * being read. Near the top, because the reader works downwards. */
 const READING_LINE = 0.25;
 
-const PLACES = '[data-path], [data-lens-key^="pr:"], [data-lens-key^="block:"]';
+// A pull request or block lens is a place of its own; a file's lens is part of
+// its file, and says nothing of where the reader is.
+const PLACES = "[data-path], [data-place]";

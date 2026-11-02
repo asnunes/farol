@@ -51,7 +51,7 @@ export function Send({ comment, agent, actions, held }: SendProps) {
 type SendProps = {
   comment: CommentView;
   agent: string;
-  actions: CommentActions;
+  actions: Pick<CommentActions, "send">;
   /** Why there is nothing to send right now, shown instead of sending. */
   held: string | null;
 };

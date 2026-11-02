@@ -74,7 +74,7 @@ export function Reading({
         "block" in row ? (
           <Fragment key={row.block.slug}>
             <BlockBar block={row.block} number={row.number} total={review.blocks.length} comments={comments} />
-            <BlockLenses slug={row.block.slug} lenses={row.block.lenses} onCite={cite} onSeen={onSeen} comments={comments} folds={lenses} />
+            <BlockLenses lenses={row.block.lenses} onCite={cite} onSeen={onSeen} comments={comments} folds={lenses} />
             {row.block.files.length > 0 && <CodeBar block={row.block} />}
           </Fragment>
         ) : (
@@ -130,10 +130,10 @@ export function Reading({
  * them. */
 function unplaced(review: ReviewView, threads: CommentView[]): CommentView[] {
   const lenses = new Set([
-    ...review.lenses.map((l) => `pr:${l.id}`),
+    ...review.lenses.map((l) => l.key),
     ...review.blocks.flatMap((b) => [
-      ...b.lenses.map((l) => `block:${b.slug}:${l.id}`),
-      ...b.files.flatMap((f) => f.lenses.map((l) => `file:${f.path}:${l.id}`)),
+      ...b.lenses.map((l) => l.key),
+      ...b.files.flatMap((f) => f.lenses.map((l) => l.key)),
     ]),
   ]);
   const blocks = new Set(review.blocks.map((b) => b.slug));

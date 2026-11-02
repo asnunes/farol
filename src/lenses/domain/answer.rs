@@ -80,6 +80,26 @@ pub enum LensTarget {
 }
 
 impl LensTarget {
+    /// What the page calls one lens's section on this target: `pr:<lens>`,
+    /// `block:<slug>:<lens>` or `file:<path>:<lens>`. Made here, once, and sent;
+    /// the screen only ever reads it back.
+    pub fn key(&self, lens: &LensId) -> String {
+        match self {
+            Self::Pr => format!("pr:{lens}"),
+            Self::Block { slug } => format!("block:{slug}:{lens}"),
+            Self::File { path } => format!("file:{path}:{lens}"),
+        }
+    }
+
+    /// The file a file lens is on; none for a lens on the pull request or a
+    /// block.
+    pub fn path(&self) -> Option<&str> {
+        match self {
+            Self::File { path } => Some(path),
+            Self::Pr | Self::Block { .. } => None,
+        }
+    }
+
     /// The answer's file name under the lens's folder. A path becomes a fixed
     /// length key: the real target is kept inside, so nothing is ever read back
     /// from the name, and a path deep enough to pass the file system's limit

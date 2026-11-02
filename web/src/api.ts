@@ -150,6 +150,17 @@ export type LensHere = { lens: LensView; block: BlockView | null };
 /** One line of the page: a block's band, or a file under it. */
 export type ReadingRow = { block: BlockView; number: number } | { file: FileView };
 
+/** The block the reader is in, whether `current` names one of its files or
+ * one of its lenses. The sidebar's highlight and the `[` `]` keys both ask
+ * this, so the two agree on a block lens too. */
+export function blockAt(review: ReviewView, current: string | null): FileHome | null {
+  if (current === null) return null;
+  const onFile = blockOf(review, current);
+  if (onFile) return onFile;
+  const block = lensAt(review, current)?.block;
+  return block ? { block, index: review.blocks.indexOf(block) } : null;
+}
+
 /** The block a file is rendered under, for the band above the diff. */
 export function blockOf(review: ReviewView, path: string): FileHome | null {
   for (let i = 0; i < review.blocks.length; i++) {
@@ -160,14 +171,26 @@ export function blockOf(review: ReviewView, path: string): FileHome | null {
   return null;
 }
 
+/** Where a lens is in the reading, as `current` names it: its key with `lens:`
+ * in front, so it can never be taken for a path. The one place that spelling is
+ * written; `lensKeyOf` reads it back. */
+export function lensPlace(key: string): string {
+  return `lens:${key}`;
+}
+
+/** The lens key a place names, or null when it names a file. */
+export function lensKeyOf(place: string): string | null {
+  return place.startsWith("lens:") ? place.slice("lens:".length) : null;
+}
+
 /** The pull request or block lens the reader is on, when `current` names one
- * rather than a file: `lens:pr:<id>` or `lens:block:<slug>:<id>`, the key the
- * section carries with `lens:` in front so it can never be taken for a path. */
+ * rather than a file: the lens's key with `lens:` in front, so it can never be
+ * taken for a path. */
 export function lensAt(review: ReviewView, current: string | null): LensHere | null {
-  const pr = review.lenses.find((lens) => current === `lens:pr:${lens.id}`);
+  const pr = review.lenses.find((lens) => current === lensPlace(lens.key));
   if (pr) return { lens: pr, block: null };
   for (const block of review.blocks) {
-    const lens = block.lenses.find((l) => current === `lens:block:${block.slug}:${l.id}`);
+    const lens = block.lenses.find((l) => current === lensPlace(l.key));
     if (lens) return { lens, block };
   }
   return null;

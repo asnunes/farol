@@ -2,7 +2,8 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Sidebar } from "./Sidebar";
-import type { BlockView, CommentView, FileView, ReviewView } from "@/api";
+import { block, file as fileView, lens, review } from "@/review/diff/testing";
+import type { CommentView, FileView, ReviewView } from "@/api";
 
 describe("telling the files in the sidebar apart", () => {
   // Radix measures what it is about to place, and jsdom has no observer to
@@ -20,20 +21,13 @@ describe("telling the files in the sidebar apart", () => {
   });
 
   it("lists the pull request's lenses first and a block's before its files, marking what was seen", () => {
-    const lens = (id: string, seen: boolean) => ({
-      id,
-      title: id,
-      state: "written" as const,
-      text: "x",
-      writtenAt: "abc",
-      changed: 0,
-      citations: [],
-      target: { kind: "pr" as const },
-      seen,
-      open: null,
+    const architecture = lens({
+      id: "Architecture",
+      key: "block:first:Architecture",
+      target: { kind: "block", slug: "first" },
     });
-    const r = review([block("first", ["a.rs"], { lenses: [lens("Architecture", false)] })]);
-    r.lenses = [lens("Overview", true)];
+    const r = review([block("first", ["a.rs"], { lenses: [architecture] })]);
+    r.lenses = [lens({ id: "Overview", seen: true })];
     show(r);
 
     const items = [...document.querySelectorAll(".lensitem, .fileitem")].map((el) => el.textContent);
@@ -184,52 +178,7 @@ function tooltip(): Promise<HTMLElement> {
   return screen.findByRole("tooltip");
 }
 
+/** A file under review, at a path. */
 function file(path: string, over: Partial<FileView> = {}): FileView {
-  return {
-    path,
-    status: "modified",
-    additions: 1,
-    deletions: 0,
-    viewed: false,
-    note: null,
-    lineNotes: [],
-    focus: null,
-    lenses: [],
-    folded: false,
-    covered: false,
-    ...over,
-  };
-}
-
-/** The counts default to the rendered list, which is what they are whenever a
- * file belongs to one block only. The test about a block that renders nothing
- * passes its own. */
-function block(slug: string, paths: string[], over: Partial<BlockView> = {}): BlockView {
-  const files = paths.map((p) => file(p));
-  return {
-    slug,
-    title: slug,
-    context: "",
-    lenses: [],
-    files,
-    totalFiles: files.length,
-    viewedFiles: files.filter((f) => f.viewed).length,
-    ...over,
-  };
-}
-
-function review(blocks: BlockView[]): ReviewView {
-  return {
-    branch: "feature/x",
-    base: "main",
-    generatedAt: "abc1234",
-    commitsBehind: 0,
-    blocks,
-    unmapped: [],
-    totalFiles: blocks.flatMap((b) => b.files).length,
-    viewedFiles: 0,
-    firstUnread:
-      blocks.flatMap((b) => b.files).find((f) => !f.viewed)?.path ?? null,
-    lenses: [],
-  };
+  return fileView({ path, ...over });
 }

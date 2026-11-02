@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useHeldChoices } from "@/hooks/useHeldChoices";
 import type { FileView } from "@/api";
 
 /** Which files are open on the page.
@@ -8,33 +8,20 @@ import type { FileView } from "@/api";
  * starts closed: the reader learns the change from them, and opens the code
  * when they want it. Anything the reader says overrides that — a
  * file they opened stays open however it is marked — but only for as long as
- * the thing it was overriding holds.
- *
- * That last part is the whole of this hook. An override used to be kept
- * forever, so a file folded away because it had been read stayed folded after
- * it stopped being read: the file changed underneath, the server took the tick
- * off it, and it sat there minimised with nothing to say it wanted reading
- * again. Remembering what each choice was made against lets it lapse on its own
- * when the answer it was arguing with changes. */
+ * the thing it was overriding holds, which is `useHeldChoices`' rule, the one
+ * the lenses fold by too. */
 export function useOpenFiles() {
-  const [choice, setChoice] = useState<Record<string, Choice>>({});
-
-  const isOpen = (file: FileView) => {
-    const said = choice[file.path];
-    return said?.against === standing(file) ? said.open : !file.viewed && !file.folded;
-  };
+  const held = useHeldChoices();
+  // Open unless it was read, or the lenses speak for it.
+  const otherwise = (file: FileView) => !file.viewed && !file.folded;
 
   return {
-    isOpen,
-    set: (file: FileView, open: boolean) =>
-      setChoice((all) => ({ ...all, [file.path]: { open, against: standing(file) } })),
+    isOpen: (file: FileView) => held.isOpen(file.path, standing(file), otherwise(file)),
+    set: (file: FileView, open: boolean) => held.set(file.path, standing(file), open),
     /** Hold the file as it is now through the read mark about to flip, for a
      * tick from the sidebar, which is not asking to see or to put away. */
     keep: (file: FileView) =>
-      setChoice((all) => ({
-        ...all,
-        [file.path]: { open: isOpen(file), against: standing({ ...file, viewed: !file.viewed }) },
-      })),
+      held.keep(file.path, standing(file), otherwise(file), standing({ ...file, viewed: !file.viewed })),
   };
 }
 
@@ -46,6 +33,3 @@ export type OpenFiles = ReturnType<typeof useOpenFiles>;
 function standing(file: FileView): string {
   return `${file.viewed}:${file.folded}`;
 }
-
-/** What the reader asked for, and the standing it was asking against. */
-type Choice = { open: boolean; against: string };

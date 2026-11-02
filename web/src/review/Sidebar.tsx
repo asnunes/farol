@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 import { fileLabels } from "@/lib/path";
 import { FileRow } from "./FileRow";
 import { LensRow } from "./LensRow";
-import { readingOrder } from "@/api";
+import { blockAt, readingOrder } from "@/api";
 import type { CommentsOn } from "@/hooks/useComments";
 import type { FileLabels } from "@/lib/path";
 import type { BlockView, FileView, LensView, ReviewView } from "@/api";
@@ -32,6 +32,8 @@ export function Sidebar({
     [review],
   );
 
+  const here = blockAt(review, current);
+
   return (
     <aside className="sidebar overflow-y-auto border-rule bg-surface py-3 max-md:max-h-[33dvh] max-md:border-b md:border-r">
       {review.lenses.length > 0 && (
@@ -41,13 +43,7 @@ export function Sidebar({
           </div>
           <ul className="blk-files mt-1">
             {review.lenses.map((lens) => (
-              <LensRow
-                key={lens.id}
-                lens={lens}
-                current={current === `lens:pr:${lens.id}`}
-                onPick={() => onPick(`lens:pr:${lens.id}`)}
-                onCheck={() => onCheckLens(lens, `pr:${lens.id}`)}
-              />
+              <LensRow key={lens.id} lens={lens} current={current} onPick={onPick} onCheck={onCheckLens} />
             ))}
           </ul>
         </section>
@@ -60,6 +56,7 @@ export function Sidebar({
           comments={comments}
           number={i + 1}
           current={current}
+          reading={here?.block.slug === block.slug}
           onPick={onPick}
           onCheckFile={onCheckFile}
           onCheckLens={onCheckLens}
@@ -76,6 +73,7 @@ function Block({
   comments,
   number,
   current,
+  reading,
   onPick,
   onCheckFile,
   onCheckLens,
@@ -87,7 +85,7 @@ function Block({
   const state =
     block.viewedFiles === block.totalFiles
       ? "done"
-      : block.files.some((f) => f.path === current) || current?.startsWith(`lens:block:${block.slug}:`)
+      : reading
         ? "current"
         : "todo";
 
@@ -116,13 +114,7 @@ function Block({
       </div>
       <ul className="blk-files mt-1">
         {block.lenses.map((lens) => (
-          <LensRow
-            key={lens.id}
-            lens={lens}
-            current={current === `lens:block:${block.slug}:${lens.id}`}
-            onPick={() => onPick(`lens:block:${block.slug}:${lens.id}`)}
-            onCheck={() => onCheckLens(lens, `block:${block.slug}:${lens.id}`)}
-          />
+          <LensRow key={lens.id} lens={lens} current={current} onPick={onPick} onCheck={onCheckLens} />
         ))}
         {/* A rule between what the block says and the files it reads. */}
         {block.lenses.length > 0 && block.files.length > 0 && (
@@ -159,12 +151,13 @@ type BlockProps = {
   comments: CommentsOn;
   number: number;
   current: string | null;
+  /** The reader is in this block, on one of its files or its lenses. */
+  reading: boolean;
   onPick: (path: string) => void;
 } & Checks;
 
 /** Ticking a row from its mark, which flips the mark and changes nothing else. */
 type Checks = {
   onCheckFile: (file: FileView) => void;
-  /** With the key its section goes by on the page. */
-  onCheckLens: (lens: LensView, key: string) => void;
+  onCheckLens: (lens: LensView) => void;
 };

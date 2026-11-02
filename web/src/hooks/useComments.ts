@@ -1,13 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  api,
-  type CommentsView,
-  type CommentView,
-  type LoosePendingView,
-  type NewAbout,
-  type RemotePendingView,
-} from "@/api";
+import { api, type CommentsView, type CommentView, type NewAbout } from "@/api";
 import type { GitHubState } from "@/hooks/useGitHub";
+import { usePending, type PendingActions } from "@/hooks/usePending";
+import { useThreadFolds, type ThreadFolds } from "@/hooks/useThreadFolds";
 import { onNudge } from "@/lib/watch";
 import { said } from "@/lib/utils";
 
@@ -22,13 +17,20 @@ export function useComments(
   onError: (message: string) => void,
   generation = 0,
   github: GitHubState | null = null,
+): CommentActions {
+  const { write, ...threads } = useThreads(onError, generation, github);
+  return { ...threads, ...useThreadFolds(), ...usePending(github, write) };
+}
+
+/** The threads themselves: fetching them, keeping them current, and writing
+ * them, each write followed by asking again for everything it can touch. */
+export function useThreads(
+  onError: (message: string) => void,
+  generation: number,
+  github: GitHubState | null,
 ) {
   const [found, setFound] = useState<CommentsView>(EMPTY);
   const [loaded, setLoaded] = useState(false);
-  // Threads folded to one line by the reader. Held here rather than in each
-  // thread, because the activity box has to open one from the other end of
-  // the page.
-  const [minimized, setMinimized] = useState<ReadonlySet<string>>(new Set());
   const latest = useRef(0);
 
   const load = useCallback(async () => {
@@ -75,8 +77,6 @@ export function useComments(
     [load, onError, reloadGitHub],
   );
 
-  const pull = github?.pull ?? null;
-
   return {
     /** This file's comments: what is counted beside it and what is drawn under
      * its lines, which are the same array because the server sent them as one.
@@ -89,20 +89,6 @@ export function useComments(
     unreadable: found.unreadable,
     /** Whether the threads have come back at least once. */
     loaded,
-    isMinimized: (id: string) => minimized.has(id),
-    toggleMinimized: (id: string) =>
-      setMinimized((was) => {
-        const next = new Set(was);
-        if (!next.delete(id)) next.add(id);
-        return next;
-      }),
-    expand: (id: string) =>
-      setMinimized((was) => {
-        if (!was.has(id)) return was;
-        const next = new Set(was);
-        next.delete(id);
-        return next;
-      }),
     /** Every thread, on the diff or off it, for what counts them across files. */
     all: [
       ...Object.values(found.files).flat(),
@@ -127,21 +113,6 @@ export function useComments(
       write(api.addComment(about, body).then((comment) => api.sendComment(comment.id))),
     /** Which harness a Send reaches, or null when no session is connected. */
     agent: found.agent,
-    /** Whether threads can have comments for the pull request here: a peer
-     * review, with a pull request farol can write on. */
-    pendingOffered: pull?.mode.mode === "peer" && pull.connection === "ready",
-    /** The thread's pending comment as GitHub has it, when it has one and
-     * GitHub has answered. */
-    pendingOf: (id: string): RemotePendingView | undefined => pull?.pending[id],
-    /** A file's pending comments that no thread points at. */
-    looseOn: (path: string): LoosePendingView[] => pull?.loose.filter((one) => one.path === path) ?? [],
-    writePending: (id: string, body: string) => write(api.writePending(id, body)),
-    editPending: (id: string, body: string) => write(api.editPending(id, body)),
-    removePending: (id: string) => write(api.removePending(id)),
-    generate: (id: string, instruction = "") => write(api.generatePending(id, instruction)),
-    /** A thread whose first words go to the pull request as they are. */
-    addAsPending: (about: NewAbout, body: string) =>
-      write(api.addComment(about, body).then((comment) => api.writePending(comment.id, body))),
     /** True once the harness took it. Nothing to reload: sending changes no
      * comment, and the one the agent closes comes back through the watcher. */
     send: async (id: string) => {
@@ -153,11 +124,17 @@ export function useComments(
         return false;
       }
     },
+    /** For the pending comments, which reload the same way after a write. */
+    write,
   };
 }
 
-/** Everything the screen can do to a comment, handed down to the diff. */
-export type CommentActions = ReturnType<typeof useComments>;
+export type ThreadActions = Omit<ReturnType<typeof useThreads>, "write">;
+
+/** Everything the screen can do to a comment, handed down to the diff: the
+ * threads, which of them are folded, and their comments for the pull request.
+ * A component that needs only part of it takes a `Pick` of it. */
+export type CommentActions = ThreadActions & ThreadFolds & PendingActions;
 
 /** A file's comments, asked for by path.
  *

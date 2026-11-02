@@ -2,7 +2,7 @@
 //! whether that still matches the review.
 
 use crate::diff::domain::FileChange;
-use crate::lenses::domain::{Freshness, LensAnswer, LensDefinition, LensGroup};
+use crate::lenses::domain::{Freshness, LensAnswer, LensDefinition, LensGroup, LensTarget};
 use crate::map::application::ReviewSnapshot;
 use crate::map::domain::{ReviewMap, Slug};
 use crate::progress::domain::Progress;
@@ -15,6 +15,15 @@ pub struct LensReading {
 }
 
 impl LensReading {
+    /// The lenses on one target, the way that target's lenses are listed.
+    pub fn on(&self, target: &LensTarget) -> Vec<Lensed<'_>> {
+        match target {
+            LensTarget::Pr => self.for_pr(),
+            LensTarget::Block { slug } => self.for_block(slug),
+            LensTarget::File { path } => self.for_file(path),
+        }
+    }
+
     /// The pull request's lenses, in order, answered or not.
     pub fn for_pr(&self) -> Vec<Lensed<'_>> {
         self.in_group(LensGroup::Pr, |answer| {

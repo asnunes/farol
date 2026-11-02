@@ -1,40 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { blockOf, lensAt, readingOrder, readingRows, type FileView, type ReviewView } from "./api";
+import { block, file as fileView, review as reviewOf } from "./review/diff/testing";
+import { blockAt, blockOf, lensAt, lensKeyOf, lensPlace, readingOrder, readingRows, type FileView, type ReviewView } from "./api";
 
 function file(path: string, viewed = false): FileView {
-  return {
-    path,
-    status: "modified",
-    additions: 1,
-    deletions: 0,
-    viewed,
-    note: null,
-    lineNotes: [],
-    focus: null,
-    lenses: [],
-    folded: false,
-    covered: false,
-  };
+  return fileView({ path, viewed });
 }
 
 function review(): ReviewView {
-  return {
-    branch: "feature/x",
-    base: "main",
-    generatedAt: "abc1234",
-    commitsBehind: 0,
-    blocks: [
-      { slug: "one", title: "First", context: "", lenses: [], files: [file("a.rs", true), file("b.rs")],
-        totalFiles: 2, viewedFiles: 1 },
-      { slug: "two", title: "Second", context: "", lenses: [], files: [file("c.rs")],
-        totalFiles: 1, viewedFiles: 0 },
-    ],
-    unmapped: [],
-    totalFiles: 3,
-    viewedFiles: 1,
-    firstUnread: "b.rs",
-    lenses: [],
-  };
+  return reviewOf([
+    block("one", [file("a.rs", true), file("b.rs")], { title: "First" }),
+    block("two", [file("c.rs")], { title: "Second" }),
+  ]);
 }
 
 describe("reading order", () => {
@@ -88,12 +64,34 @@ describe("block lookup", () => {
   });
 });
 
+describe("the block the reader is in", () => {
+  it("is the block of the file they are on, or of the lens they are on", () => {
+    // The `[` `]` keys asked only about files, so on a block's lens they did
+    // nothing while the sidebar showed the block as current.
+    const r = review();
+    r.blocks[1].lenses = [{ id: "summary", key: "block:two:summary" } as ReviewView["lenses"][number]];
+
+    expect(blockAt(r, "c.rs")?.index).toBe(1);
+    expect(blockAt(r, lensPlace("block:two:summary"))?.index).toBe(1);
+    expect(blockAt(r, null)).toBeNull();
+  });
+});
+
 describe("the lens the reader is on", () => {
+  it("is named as a place and read back from it, and a file path names no lens", () => {
+    expect(lensKeyOf(lensPlace("block:two:architecture"))).toBe("block:two:architecture");
+    expect(lensKeyOf("src/a.rs")).toBeNull();
+  });
+
   it("is found by its key, with the block it opens, and a file path is never taken for one", () => {
     const r = review();
-    const lens = { id: "architecture", title: "Architecture" } as ReviewView["lenses"][number];
+    const lens = {
+      id: "architecture",
+      key: "block:two:architecture",
+      title: "Architecture",
+    } as ReviewView["lenses"][number];
     r.blocks[1].lenses = [lens];
-    r.lenses = [{ ...lens, id: "overview" }];
+    r.lenses = [{ ...lens, id: "overview", key: "pr:overview" }];
 
     expect(lensAt(r, "lens:block:two:architecture")).toEqual({ lens, block: r.blocks[1] });
     expect(lensAt(r, "lens:pr:overview")?.block).toBeNull();

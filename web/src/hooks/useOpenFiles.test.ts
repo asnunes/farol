@@ -1,6 +1,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { useOpenFiles } from "./useOpenFiles";
+import { file as fileView } from "@/review/diff/testing";
 import type { FileView } from "@/api";
 
 describe("which files are open", () => {
@@ -62,17 +63,5 @@ describe("which files are open", () => {
 });
 
 function file(path: string, viewed: boolean): FileView {
-  return {
-    path,
-    status: "modified",
-    additions: 1,
-    deletions: 0,
-    viewed,
-    note: null,
-    lineNotes: [],
-    focus: null,
-    lenses: [],
-    folded: false,
-    covered: false,
-  };
+  return fileView({ path, viewed });
 }

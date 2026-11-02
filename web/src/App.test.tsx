@@ -1,54 +1,23 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
-import { comment } from "./review/diff/testing";
+import { block, comment, file as fileView, review as reviewOf } from "./review/diff/testing";
 import { api, type FileDiff, type FileView, type ReviewView } from "./api";
 
+/** A file under review, at a path. */
 function file(path: string, over: Partial<FileView> = {}): FileView {
-  return {
-    path,
-    status: "modified",
-    additions: 2,
-    deletions: 0,
-    viewed: false,
-    note: null,
-    lineNotes: [],
-    focus: null,
-    lenses: [],
-    folded: false,
-    covered: false,
-    ...over,
-  };
+  return fileView({ path, additions: 2, ...over });
 }
 
+/** Two blocks of three files, nothing read: what most of these tests start from. */
 function review(over: Partial<ReviewView> = {}): ReviewView {
-  const built: ReviewView = {
-    branch: "feature/x",
-    base: "main",
-    generatedAt: "abc1234",
-    commitsBehind: 0,
-    blocks: [
-      {
-        slug: "first",
-        title: "The change itself",
-        context: "why it exists",
-        lenses: [],
-        files: [file("src/a.rs"), file("src/b.rs")],
-        totalFiles: 2,
-        viewedFiles: 0,
-      },
-      { slug: "second", title: "The wiring", context: "", lenses: [], files: [file("src/c.rs")],
-        totalFiles: 1, viewedFiles: 0 },
+  return reviewOf(
+    [
+      block("first", [file("src/a.rs"), file("src/b.rs")], { title: "The change itself", context: "why it exists" }),
+      block("second", [file("src/c.rs")], { title: "The wiring" }),
     ],
-    unmapped: [],
-    totalFiles: 3,
-    viewedFiles: 0,
-    firstUnread: null,
-    lenses: [],
-    ...over,
-  };
-
-  return built;
+    { firstUnread: null, ...over },
+  );
 }
 
 /** Tick a file off, and bring the counts with it — the server recomputes them
