@@ -326,8 +326,10 @@ it does not decide.
 
 **The wire is typed once, in Rust.** Every view in `src/server/view/` derives
 `ts_rs::TS` under `cfg(test)`, and `cargo test` writes the TypeScript into
-`web/src/wire/`, which `api.ts` re-exports. A fixed value is an enum, never a
-`&'static str`, so the screen gets the union of what it can be; a `switch` over
+`web/src/wire/`, which `api.ts` re-exports. Field names go out in camelCase
+and every enum value in kebab-case, set by `rename_all` and never spelled by
+hand. A fixed value is an enum, never a `&'static str`, so the screen gets the
+union of what it can be; a `switch` over
 one ends in `unreachable`, so a value added on the server stops the build
 instead of drawing nothing. Change a view, run `just wire`, commit the result:
 `just check` fails while `web/src/wire` disagrees with the views.

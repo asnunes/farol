@@ -42,7 +42,7 @@ pub struct FileChange {
 /// Anything anchored to a line has to carry the side with it, or half the time
 /// it lands on the line the reader was not looking at.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "kebab-case")]
 #[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub enum Side {
     /// The file as it was — the removals, and the left column of a split diff.
@@ -83,7 +83,7 @@ impl std::fmt::Display for Side {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "kebab-case")]
 #[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub enum LineKind {
     Context,

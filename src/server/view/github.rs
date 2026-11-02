@@ -166,7 +166,7 @@ pub enum Connection {
 
 /// A pending comment as GitHub now holds it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "kebab-case")]
 #[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub enum PendingState {
     Pending,
@@ -176,7 +176,7 @@ pub enum PendingState {
 
 /// How the commit under review stands against the pull request's.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "kebab-case")]
 #[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub enum DriftKind {
     Uncommitted,

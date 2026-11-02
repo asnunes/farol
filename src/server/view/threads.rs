@@ -200,7 +200,7 @@ pub struct ReplyView {
 /// What a thread is about, for the wire: the same three shapes as
 /// `Subject`, tagged so the page can tell them apart.
 #[derive(Debug, Serialize)]
-#[serde(tag = "kind", rename_all = "camelCase")]
+#[serde(tag = "kind", rename_all = "kebab-case")]
 #[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub enum AboutView {
     /// The screen draws it in the column it was written in; the two columns
@@ -269,7 +269,7 @@ pub struct UnreadableView {
 
 /// Who took a turn, or wrote a pending comment.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "kebab-case")]
 #[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub enum TurnBy {
     Reviewer,
@@ -279,7 +279,7 @@ pub enum TurnBy {
 /// Where a handed-over thread is: sent until the agent acknowledges, working
 /// after.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "kebab-case")]
 #[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub enum StageView {
     Sent,
@@ -288,7 +288,7 @@ pub enum StageView {
 
 /// What an agent owes on a thread.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "kebab-case")]
 #[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub enum PurposeView {
     Answer,

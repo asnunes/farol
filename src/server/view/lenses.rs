@@ -33,7 +33,7 @@ pub struct LensView {
 
 /// How a lens stands with the review.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "kebab-case")]
 #[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub enum LensState {
     /// Nothing written yet.

@@ -40,7 +40,7 @@ const DEFAULT_ABOUT_LINES: usize = 6;
 
 /// What a lens is written about.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "kebab-case")]
 pub enum LensGroup {
     /// The pull request as a whole, once.
     Pr,
