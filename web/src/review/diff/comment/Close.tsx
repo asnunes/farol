@@ -57,5 +57,5 @@ export function Close({ comment, actions }: CloseProps) {
 
 type CloseProps = {
   comment: CommentView;
-  actions: CommentActions;
+  actions: Pick<CommentActions, "close">;
 };

@@ -162,7 +162,7 @@ type PendingProps = {
   thread: CommentView | null;
   /** Undefined until GitHub has answered. */
   remote: RemotePendingView | undefined;
-  actions: CommentActions;
+  actions: Pick<CommentActions, "agent" | "editPending" | "removePending" | "generate" | "send">;
   /** An agent owes something on the thread, so nothing is offered meanwhile. */
   busy: boolean;
 };
