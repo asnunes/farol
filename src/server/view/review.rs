@@ -14,6 +14,7 @@ use crate::progress::domain::Progress;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct ReviewView {
     pub branch: String,
     pub base: String,
@@ -125,6 +126,7 @@ impl ReviewView {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct BlockView {
     pub slug: String,
     pub title: String,
@@ -141,6 +143,7 @@ pub struct BlockView {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct FileView {
     pub path: String,
     pub status: crate::diff::domain::FileStatus,
@@ -216,6 +219,7 @@ impl FileView {
 /// A note pinned to a span of lines on the new side.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct LineNoteView {
     pub from: u32,
     pub to: u32,

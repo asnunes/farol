@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub enum FileStatus {
     Added,
     Modified,
@@ -42,6 +43,7 @@ pub struct FileChange {
 /// it lands on the line the reader was not looking at.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub enum Side {
     /// The file as it was — the removals, and the left column of a split diff.
     Old,
@@ -82,6 +84,7 @@ impl std::fmt::Display for Side {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub enum LineKind {
     Context,
     Added,

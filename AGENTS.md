@@ -324,6 +324,14 @@ writer primitives, not a component layer.
 each file under the one block that reads it. The frontend renders;
 it does not decide.
 
+**The wire is typed once, in Rust.** Every view in `src/server/view/` derives
+`ts_rs::TS` under `cfg(test)`, and `cargo test` writes the TypeScript into
+`web/src/wire/`, which `api.ts` re-exports. A fixed value is an enum, never a
+`&'static str`, so the screen gets the union of what it can be; a `switch` over
+one ends in `unreachable`, so a value added on the server stops the build
+instead of drawing nothing. Change a view, run `just wire`, commit the result:
+`just check` fails while `web/src/wire` disagrees with the views.
+
 **A file belongs to one block.** It used to be allowed in several, and the
 screen then had to pick one to draw it under, carry the other blocks' notes over
 and tag the row with every block it was in — machinery for a case a line note

@@ -29,6 +29,7 @@ use crate::lenses::domain::{LensId, LensTarget};
 /// by reviewed path has nowhere to put one whose path is exactly what broke.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct CommentsView {
     pub files: BTreeMap<String, Vec<CommentView>>,
     /// Threads on a lens, under the key the page gives the lens's section:
@@ -94,6 +95,7 @@ impl CommentsView {
 /// `Comment` would exist for nothing but this hop.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct CommentView {
     pub id: String,
     pub about: AboutView,
@@ -184,6 +186,7 @@ impl CommentView {
 /// One turn of a comment's conversation.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct ReplyView {
     /// Which side of the exchange it reads on.
     pub from: TurnBy,
@@ -198,6 +201,7 @@ pub struct ReplyView {
 /// `Subject`, tagged so the page can tell them apart.
 #[derive(Debug, Serialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub enum AboutView {
     /// The screen draws it in the column it was written in; the two columns
     /// number separately.
@@ -228,6 +232,7 @@ fn lens_key(lens: &LensId, target: &LensTarget) -> String {
 /// Something owed, as the screen marks it.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct WaitingView {
     pub on: String,
     pub stage: StageView,
@@ -239,6 +244,7 @@ pub struct WaitingView {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct PendingByView {
     /// GitHub's id for the comment, which tells one pending comment from the
     /// one that replaced it.
@@ -253,6 +259,7 @@ pub struct PendingByView {
 /// says which file that was.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct UnreadableView {
     pub file: String,
     pub about: Option<String>,
@@ -263,6 +270,7 @@ pub struct UnreadableView {
 /// Who took a turn, or wrote a pending comment.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub enum TurnBy {
     Reviewer,
     Agent,
@@ -272,6 +280,7 @@ pub enum TurnBy {
 /// after.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub enum StageView {
     Sent,
     Working,
@@ -280,6 +289,7 @@ pub enum StageView {
 /// What an agent owes on a thread.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub enum PurposeView {
     Answer,
     Pending,

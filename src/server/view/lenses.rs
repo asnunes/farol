@@ -11,6 +11,7 @@ use crate::shared::short;
 /// One lens on one target, and what it said.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct LensView {
     pub id: String,
     pub title: String,
@@ -33,6 +34,7 @@ pub struct LensView {
 /// How a lens stands with the review.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub enum LensState {
     /// Nothing written yet.
     Missing,
@@ -93,6 +95,7 @@ impl LensView {
 
 /// A place in the code the page can take the reader to.
 #[derive(Debug, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct CitationView {
     pub text: String,
     pub path: String,

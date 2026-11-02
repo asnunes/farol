@@ -15,6 +15,7 @@ use crate::comments::domain::{Drift, ModeReason, Readiness, RemoteState, ReviewM
 /// the threads should not wait for that to be drawn.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct PullRequestView {
     pub connection: Connection,
     pub number: Option<u32>,
@@ -154,6 +155,7 @@ impl PullRequestView {
 /// same to the reviewer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub enum Connection {
     Ready,
     Connect,
@@ -165,6 +167,7 @@ pub enum Connection {
 /// A pending comment as GitHub now holds it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub enum PendingState {
     Pending,
     Published,
@@ -174,6 +177,7 @@ pub enum PendingState {
 /// How the commit under review stands against the pull request's.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub enum DriftKind {
     Uncommitted,
     Unpushed,
@@ -182,6 +186,7 @@ pub enum DriftKind {
 
 /// The title and description the pull request will be opened with.
 #[derive(Debug, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct PullDraftView {
     pub title: String,
     pub body: String,
@@ -189,6 +194,7 @@ pub struct PullDraftView {
 
 /// The pull request the host just opened.
 #[derive(Debug, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct OpenedPullView {
     pub number: u32,
     pub url: String,
@@ -196,6 +202,7 @@ pub struct OpenedPullView {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct ModeView {
     pub mode: ReviewMode,
     /// What the screen says beside it.
@@ -204,6 +211,7 @@ pub struct ModeView {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct RemotePendingView {
     pub state: PendingState,
     pub body: Option<String>,
@@ -212,6 +220,7 @@ pub struct RemotePendingView {
 
 /// A pending comment with no thread, on the lines it is about.
 #[derive(Debug, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct LoosePendingView {
     pub id: String,
     pub path: String,
@@ -227,6 +236,7 @@ pub struct LoosePendingView {
 
 /// The commit under review against the pull request's.
 #[derive(Debug, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct DriftView {
     pub kind: DriftKind,
     /// How many commits the pull request is missing, when they are ours.
@@ -235,6 +245,7 @@ pub struct DriftView {
 
 /// What a sync of the read marks came to.
 #[derive(Debug, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct SyncedView {
     pub number: u32,
     pub marked: usize,
@@ -244,6 +255,7 @@ pub struct SyncedView {
 /// What a submitted review came to.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct SentView {
     pub url: String,
     pub comments: usize,
