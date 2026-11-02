@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { blockOf, lensAt, lensKeyOf, lensPlace, readingOrder, readingRows, type FileView, type ReviewView } from "./api";
+import { blockAt, blockOf, lensAt, lensKeyOf, lensPlace, readingOrder, readingRows, type FileView, type ReviewView } from "./api";
 
 function file(path: string, viewed = false): FileView {
   return {
@@ -85,6 +85,19 @@ describe("block lookup", () => {
 
   it("returns nothing for a file no block reads", () => {
     expect(blockOf(review(), "Cargo.lock")).toBeNull();
+  });
+});
+
+describe("the block the reader is in", () => {
+  it("is the block of the file they are on, or of the lens they are on", () => {
+    // The `[` `]` keys asked only about files, so on a block's lens they did
+    // nothing while the sidebar showed the block as current.
+    const r = review();
+    r.blocks[1].lenses = [{ id: "summary", key: "block:two:summary" } as ReviewView["lenses"][number]];
+
+    expect(blockAt(r, "c.rs")?.index).toBe(1);
+    expect(blockAt(r, lensPlace("block:two:summary"))?.index).toBe(1);
+    expect(blockAt(r, null)).toBeNull();
   });
 });
 
