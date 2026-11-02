@@ -112,6 +112,19 @@ pub enum ModeReason {
     NoPullRequest,
 }
 
+/// One wording for the reason, so the terminal and the screen cannot tell the
+/// reader two different stories about the same choice.
+impl std::fmt::Display for ModeReason {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ModeReason::Chosen => write!(f, "chosen by you"),
+            ModeReason::Author { mine: true, .. } => write!(f, "the pull request is yours"),
+            ModeReason::Author { login, .. } => write!(f, "the pull request is by {login}"),
+            ModeReason::NoPullRequest => write!(f, "no pull request to tell"),
+        }
+    }
+}
+
 /// What `review-mode.json` holds.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StoredMode {

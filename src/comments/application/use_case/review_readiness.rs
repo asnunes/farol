@@ -140,6 +140,17 @@ pub struct Standing {
     pub draft: Option<crate::comments::domain::PullDraft>,
 }
 
+impl Standing {
+    /// The command that connects farol to the host, for the terminal and the
+    /// screen to say in the same words.
+    pub fn login(&self) -> String {
+        format!(
+            "gh auth login --hostname {}",
+            self.host.as_deref().unwrap_or("github.com")
+        )
+    }
+}
+
 /// One thread's pending comment, as the pull request has it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ThreadPending {

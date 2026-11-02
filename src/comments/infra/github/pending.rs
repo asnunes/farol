@@ -206,10 +206,7 @@ impl From<&Lines> for Thread {
 /// The pending comments of one review thread, on the thread's lines. A thread
 /// without a line is on the file as a whole, which farol has no place to draw.
 pub(super) fn pending_in(thread: &serde_json::Value) -> Vec<PendingComment> {
-    let side = |key: &str| match thread.get(key).and_then(|s| s.as_str()) {
-        Some("LEFT") => crate::diff::domain::Side::Old,
-        _ => crate::diff::domain::Side::New,
-    };
+    let side = |key: &str| unsided(thread.get(key).and_then(|s| s.as_str()));
     let (Some(path), Some(to)) = (
         thread.get("path").and_then(|p| p.as_str()),
         thread.get("line").and_then(|l| l.as_u64()),
@@ -310,6 +307,16 @@ pub(super) fn sided(side: crate::diff::domain::Side) -> &'static str {
     match side {
         Side::Old => "LEFT",
         Side::New => "RIGHT",
+    }
+}
+
+/// GitHub's side in farol's vocabulary: the reverse of `sided`, beside it so
+/// the two cannot drift apart. A thread with no side is on the new code.
+fn unsided(side: Option<&str>) -> crate::diff::domain::Side {
+    use crate::diff::domain::Side;
+    match side {
+        Some("LEFT") => Side::Old,
+        _ => Side::New,
     }
 }
 
