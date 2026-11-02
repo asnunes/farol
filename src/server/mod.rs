@@ -18,7 +18,7 @@ pub mod view;
 mod watch;
 
 pub use cases::{ConfigUseCases, ServerUseCaseFactory, ServerUseCases};
-pub use registry::{Registry, ServerEntry};
+pub use registry::{Launch, Registry, ServerEntry};
 pub use server_list::ServerList;
 pub use session::SessionConfig;
 

@@ -4,7 +4,7 @@ use clap::Args;
 
 use super::{Ctx, ScopeFlags, server_factory};
 use crate::error::Result;
-use crate::server::{Port, Registry, SessionConfig, detach};
+use crate::server::{Launch, Port, Registry, SessionConfig};
 use crate::shared::paths::Workspace;
 
 #[derive(Args)]
@@ -58,27 +58,25 @@ impl ServeArgs {
         let open_browser = config.should_open(self.open, self.no_open);
         let workspace = Workspace::here()?;
         let root = workspace.root().canonicalize()?;
-        let registry = Registry::open()?;
-        if let Some(running) = registry.serving(&root)? {
-            let entry = running.configure(&self.session())?;
-            println!("farol updated the review at {}", entry.url());
-            if self.port.is_some() {
-                println!("Reused the existing port {}.", entry.port);
+        match Registry::open()?.launch(&root, &self.session(), self.foreground)? {
+            Launch::Reused(entry) => {
+                println!("farol updated the review at {}", entry.url());
+                if self.port.is_some() {
+                    println!("Reused the existing port {}.", entry.port);
+                }
+                if open_browser {
+                    #[cfg(target_os = "macos")]
+                    let _ = std::process::Command::new("open").arg(entry.url()).spawn();
+                }
+                Ok(())
             }
-            if open_browser {
-                #[cfg(target_os = "macos")]
-                let _ = std::process::Command::new("open").arg(entry.url()).spawn();
+            Launch::Detached(entry) => {
+                println!("farol is reading at {}", entry.url());
+                println!("stop it with: farol servers stop {}", entry.port);
+                Ok(())
             }
-            return Ok(());
+            Launch::Foreground => self.serve(preferences, open_browser),
         }
-        if self.foreground {
-            return self.serve(preferences, open_browser);
-        }
-
-        let entry = detach::spawn(&registry)?;
-        println!("farol is reading at {}", entry.url());
-        println!("stop it with: farol servers stop {}", entry.port);
-        Ok(())
     }
 
     fn mode(&self) -> Option<crate::comments::domain::ReviewMode> {
@@ -137,6 +135,7 @@ impl ServeArgs {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::server::detach;
     use clap::Parser;
 
     /// `serve` on its own, so these can ask about the arguments without going

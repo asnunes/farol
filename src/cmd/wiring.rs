@@ -136,6 +136,7 @@ impl Ctx {
             shared.versions.clone(),
             ports.maps.clone(),
         );
+        let show_answer = ShowAnswer::new(ports.lens_answers.clone());
         let write_answer = WriteAnswer::new(
             ports.lens_catalog.clone(),
             ports.lens_answers.clone(),
@@ -186,7 +187,7 @@ impl Ctx {
             sync_read_marks: shared.sync_read_marks,
             write_pull_draft: WritePullDraft::new(ports.drafts.clone()),
 
-            keep_answer: KeepAnswer::new(ports.lens_answers.clone(), write_answer.clone()),
+            keep_answer: KeepAnswer::new(show_answer.clone(), write_answer.clone()),
             write_answer,
             pending_answers: PendingAnswers::new(
                 ports.lens_catalog.clone(),
@@ -194,7 +195,7 @@ impl Ctx {
                 scope,
                 versions,
             ),
-            show_answer: ShowAnswer::new(ports.lens_answers.clone()),
+            show_answer,
 
             git_dir,
             root,

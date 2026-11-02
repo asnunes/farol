@@ -30,6 +30,14 @@ const TO_STOP: Duration = Duration::from_secs(3);
 
 const POLL: Duration = Duration::from_millis(20);
 
+/// What `launch` found or started.
+pub enum Launch {
+    Reused(ServerEntry),
+    Detached(ServerEntry),
+    /// Nothing running, and the caller serves the review itself.
+    Foreground,
+}
+
 /// One running server.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -138,6 +146,27 @@ impl Registry {
     /// serving would send the reviewer to an empty tab.
     pub fn serving(&self, repo: &Path) -> Result<Option<ServerEntry>> {
         Ok(self.answering()?.into_iter().find(|e| e.repo == repo))
+    }
+
+    /// Where `farol serve` sends the reviewer: the review already open for
+    /// this worktree, pointed at what was asked, rather than a second one
+    /// beside it; otherwise a new one in the background, unless the caller
+    /// holds the terminal and serves it there.
+    ///
+    /// Here and not in the command, which is left to say what happened.
+    pub fn launch(
+        &self,
+        repo: &Path,
+        session: &super::SessionConfig,
+        foreground: bool,
+    ) -> Result<Launch> {
+        if let Some(running) = self.serving(repo)? {
+            return Ok(Launch::Reused(running.configure(session)?));
+        }
+        if foreground {
+            return Ok(Launch::Foreground);
+        }
+        Ok(Launch::Detached(super::detach::spawn(self)?))
     }
 
     /// Ask a server to stop, and wait until it has.

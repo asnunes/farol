@@ -1,8 +1,6 @@
-use std::sync::Arc;
-
 use crate::error::Result;
 use crate::lenses::application::{Aim, Said, ShowAnswer, WriteAnswer};
-use crate::lenses::domain::{LensAnswer, LensAnswerRepository, LensError, LensId};
+use crate::lenses::domain::{LensAnswer, LensError, LensId};
 
 /// Keep what a lens said, against the review as it is now.
 ///
@@ -18,11 +16,8 @@ pub struct KeepAnswer {
 }
 
 impl KeepAnswer {
-    pub fn new(answers: Arc<dyn LensAnswerRepository>, write: WriteAnswer) -> Self {
-        Self {
-            show: ShowAnswer::new(answers),
-            write,
-        }
+    pub fn new(show: ShowAnswer, write: WriteAnswer) -> Self {
+        Self { show, write }
     }
 
     pub fn execute(&self, id: &LensId, aim: Aim) -> Result<LensAnswer> {
@@ -44,8 +39,10 @@ impl KeepAnswer {
 mod tests {
     use super::*;
     use crate::diff::application::FileDiffs;
+    use crate::lenses::domain::LensAnswerRepository;
     use crate::lenses::domain::{Covered, LensTarget};
     use crate::testing::{FakeDiffSource, InMemoryLensAnswers, InMemoryLensCatalog, with_block};
+    use std::sync::Arc;
 
     #[test]
     fn a_kept_answer_keeps_its_words_and_takes_the_review_as_it_is_now() {
@@ -66,7 +63,7 @@ mod tests {
         }];
         answers.write(&old).unwrap();
 
-        let kept = KeepAnswer::new(answers, write)
+        let kept = KeepAnswer::new(ShowAnswer::new(answers), write)
             .execute(&id, Aim::Pr)
             .unwrap();
 
@@ -90,7 +87,7 @@ mod tests {
             svc.versions,
         );
 
-        let error = KeepAnswer::new(answers, write)
+        let error = KeepAnswer::new(ShowAnswer::new(answers), write)
             .execute(&LensId::parse("risk").unwrap(), Aim::Pr)
             .unwrap_err()
             .to_string();
