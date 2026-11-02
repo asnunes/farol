@@ -45,11 +45,8 @@ impl GitHub {
             return Ok(0);
         }
         let token = self.token()?;
-        let answer = self.read(self.http.post(
-            &token,
-            &self.graphql_url(),
-            serde_json::to_string(&Mutations::over(mutation, pull, paths))?,
-        )?)?;
+        let Mutations { query, variables } = Mutations::over(mutation, pull, paths);
+        let answer = self.graphql(&token, &query, variables)?;
 
         // Nothing marked and the host saying why is a refusal, not an empty
         // answer. Reported as a count it would arrive on the screen as "there

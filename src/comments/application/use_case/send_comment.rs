@@ -62,14 +62,9 @@ impl SendComment {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::comments::application::CommentReach;
     use crate::comments::domain::{Author, Comment};
-    use crate::comments::infra::MarkdownComments;
     use crate::config::domain::{SettingKey, SettingValue};
-    use crate::diff::application::{FileDiffs, ReviewScope};
     use crate::diff::domain::Side;
-    use crate::map::application::GetScope;
-    use crate::shared::paths::Store;
     use crate::testing::{
         BrokenConfigRepository, FakeDiffSource, InMemoryConfigRepository, InMemoryModeStore,
         RecordingChannel,
@@ -85,15 +80,11 @@ mod tests {
     impl World {
         fn new() -> Self {
             let dir = tempfile::tempdir().unwrap();
-            let store = Store::new(dir.path(), "feature/x");
-            let source = Arc::new(
-                FakeDiffSource::with_paths(&["src/a.rs"]).with_line_count("src/a.rs", 200),
-            );
-            let scope = ReviewScope::new(source.clone());
-            let comments = Comments::new(
-                Arc::new(MarkdownComments::new(&store, dir.path())),
-                GetScope::new(scope.clone()),
-                CommentReach::new(scope, FileDiffs::new(source)),
+            let comments = crate::testing::comments_at(
+                dir.path(),
+                Arc::new(
+                    FakeDiffSource::with_paths(&["src/a.rs"]).with_line_count("src/a.rs", 200),
+                ),
                 Arc::new(crate::comments::infra::SystemClock),
             );
             Self {

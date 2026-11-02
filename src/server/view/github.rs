@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use serde::Serialize;
 
 use crate::comments::application::Standing;
-use crate::comments::domain::{Drift, ModeReason, Readiness, RemoteState, ReviewMode};
+use crate::comments::domain::{Drift, Readiness, RemoteState, ReviewMode};
 
 /// The pull request, as far as the screen needs it: whether it can be written
 /// on, which mode the review is in and why, and each thread's pending comment
@@ -44,7 +44,6 @@ pub struct PullRequestView {
 
 impl PullRequestView {
     pub fn of(standing: &Standing) -> Self {
-        let host = standing.host.as_deref().unwrap_or("github.com");
         let mut view = Self {
             connection: Connection::NoRemote,
             number: None,
@@ -52,16 +51,11 @@ impl PullRequestView {
             author: None,
             url: None,
             open_at: None,
-            login: format!("gh auth login --hostname {host}"),
+            login: standing.login(),
             numbers: vec![],
             mode: ModeView {
                 mode: standing.mode.mode,
-                reason: match &standing.mode.why {
-                    ModeReason::Chosen => "chosen by you".into(),
-                    ModeReason::Author { mine: true, .. } => "the pull request is yours".into(),
-                    ModeReason::Author { login, .. } => format!("the pull request is by {login}"),
-                    ModeReason::NoPullRequest => "no pull request to tell".into(),
-                },
+                reason: standing.mode.why.to_string(),
             },
             pending: standing
                 .pending

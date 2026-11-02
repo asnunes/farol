@@ -1,7 +1,7 @@
 use std::fmt::{self, Display};
 
 use crate::comments::application::Standing;
-use crate::comments::domain::{ModeReason, Readiness, RemoteState, ReviewMode};
+use crate::comments::domain::{Readiness, RemoteState, ReviewMode};
 
 /// Where the review stands, for the terminal.
 ///
@@ -48,8 +48,8 @@ impl Display for StandingLine<'_> {
             ),
             Readiness::NoToken => writeln!(
                 f,
-                "no token: GitHub CLI is not authenticated for this host\nRun `gh auth login --hostname {}`.",
-                self.0.host.as_deref().unwrap_or("github.com")
+                "no token: GitHub CLI is not authenticated for this host\nRun `{}`.",
+                self.0.login()
             ),
             Readiness::TokenRefused => writeln!(
                 f,
@@ -70,13 +70,7 @@ impl Display for StandingLine<'_> {
             ReviewMode::SelfReview => "self review",
             ReviewMode::PeerReview => "peer review",
         };
-        match &self.0.mode.why {
-            ModeReason::Chosen => writeln!(f, "mode: {mode}, chosen")?,
-            ModeReason::Author { login, .. } => {
-                writeln!(f, "mode: {mode}, the pull request is by {login}")?
-            }
-            ModeReason::NoPullRequest => writeln!(f, "mode: {mode}, no pull request to tell")?,
-        }
+        writeln!(f, "mode: {mode}, {}", self.0.mode.why)?;
         // The pending comments, because the skill that publishes reads this to
         // show the reader what is about to go.
         let waiting: Vec<(String, &String)> = self

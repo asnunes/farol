@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { block, file as fileView, review as reviewOf } from "./review/diff/testing";
+import { block, file as fileView, lens, review as reviewOf } from "./review/diff/testing";
 import { blockAt, blockOf, lensAt, lensKeyOf, lensPlace, readingOrder, readingRows, type FileView, type ReviewView } from "./api";
 
 function file(path: string, viewed = false): FileView {
@@ -69,7 +69,7 @@ describe("the block the reader is in", () => {
     // The `[` `]` keys asked only about files, so on a block's lens they did
     // nothing while the sidebar showed the block as current.
     const r = review();
-    r.blocks[1].lenses = [{ id: "summary", key: "block:two:summary" } as ReviewView["lenses"][number]];
+    r.blocks[1].lenses = [lens({ id: "summary", key: "block:two:summary", target: { kind: "block", slug: "two" } })];
 
     expect(blockAt(r, "c.rs")?.index).toBe(1);
     expect(blockAt(r, lensPlace("block:two:summary"))?.index).toBe(1);
@@ -85,15 +85,11 @@ describe("the lens the reader is on", () => {
 
   it("is found by its key, with the block it opens, and a file path is never taken for one", () => {
     const r = review();
-    const lens = {
-      id: "architecture",
-      key: "block:two:architecture",
-      title: "Architecture",
-    } as ReviewView["lenses"][number];
-    r.blocks[1].lenses = [lens];
-    r.lenses = [{ ...lens, id: "overview", key: "pr:overview" }];
+    const architecture = lens({ id: "architecture", key: "block:two:architecture", target: { kind: "block", slug: "two" } });
+    r.blocks[1].lenses = [architecture];
+    r.lenses = [lens({ id: "overview" })];
 
-    expect(lensAt(r, "lens:block:two:architecture")).toEqual({ lens, block: r.blocks[1] });
+    expect(lensAt(r, "lens:block:two:architecture")).toEqual({ lens: architecture, block: r.blocks[1] });
     expect(lensAt(r, "lens:pr:overview")?.block).toBeNull();
     expect(lensAt(r, "c.rs"), "a file is a file, even beside a lens").toBeNull();
   });

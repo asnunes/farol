@@ -4,19 +4,16 @@
 use std::sync::Arc;
 
 use crate::comments::application::{
-    CloseThread, CommentReach, Comments, EditPending, GeneratePending, PublishReview,
-    PullRequestGate, RemovePending, ReviewModes, SyncReadMarks, WritePending,
+    CloseThread, Comments, EditPending, GeneratePending, PublishReview, PullRequestGate,
+    RemovePending, ReviewModes, SyncReadMarks, WritePending,
 };
 use crate::comments::domain::Comment;
-use crate::comments::infra::MarkdownComments;
 use crate::diff::application::{CommitHistory, FileDiffs, ReviewScope};
 use crate::diff::domain::Side;
-use crate::map::application::GetScope;
 use crate::progress::application::ProgressStore;
-use crate::shared::paths::Store;
 use crate::testing::{
     FakeDiffSource, FakePublisher, InMemoryConfigRepository, InMemoryModeStore,
-    InMemoryProgressRepository, RecordingChannel,
+    InMemoryProgressRepository, RecordingChannel, comments_at,
 };
 
 pub struct World {
@@ -44,13 +41,10 @@ impl World {
         // The pull request holds the files under review, as GitHub's would.
         let publisher = publisher.holding_files(source.paths());
         let dir = tempfile::tempdir().unwrap();
-        let store = Store::new(dir.path(), "feature/x");
         let source = Arc::new(source);
-        let scope = ReviewScope::new(source.clone());
-        let comments = Comments::new(
-            Arc::new(MarkdownComments::new(&store, dir.path())),
-            GetScope::new(scope.clone()),
-            CommentReach::new(scope, FileDiffs::new(source.clone())),
+        let comments = comments_at(
+            dir.path(),
+            source.clone(),
             Arc::new(crate::comments::infra::SystemClock),
         );
         Self {
@@ -153,11 +147,5 @@ fn a_file() -> FakeDiffSource {
 }
 
 pub fn hunk(start: u32, lines: u32) -> crate::diff::domain::Hunk {
-    crate::diff::domain::Hunk {
-        old_start: start,
-        old_lines: lines,
-        new_start: start,
-        new_lines: lines,
-        lines: vec![],
-    }
+    crate::testing::hunk(start, lines, lines)
 }

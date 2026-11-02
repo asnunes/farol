@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
-import { block, comment, file as fileView, review as reviewOf } from "./review/diff/testing";
+import { block, comment, file as fileView, pull, review as reviewOf } from "./review/diff/testing";
 import { api, type FileDiff, type FileView, type ReviewView } from "./api";
 
 /** A file under review, at a path. */
@@ -51,38 +51,22 @@ function aside(url: string): Response | null {
     });
   }
   if (url === "/api/github") {
-    return new Response(JSON.stringify(selfReview), {
+    return new Response(JSON.stringify(pull()), {
       headers: { "content-type": "application/json" },
     });
   }
   return null;
 }
 
-/** What a repository with nowhere to publish answers: a self review. */
-const selfReview = {
-  connection: "no-remote",
-  number: null,
-  mine: false,
-  author: null,
-  url: null,
-  openAt: null,
-  login: "gh auth login --hostname github.com",
-  numbers: [],
-  mode: { mode: "self", reason: "no pull request to tell" },
-  pending: {},
-  loose: [],
-  pendingFailed: null,
-    drift: null,
-  draft: null,
-};
 
-const emptyDiff = {
+const emptyDiff: FileDiff = {
   path: "",
-  status: "modified" as const,
+  status: "modified",
   hunks: [],
   binary: false,
   additions: 0,
   deletions: 0,
+  lineCount: 0,
 };
 
 /** The file the page says the reader is on. Every file is on the page now, so

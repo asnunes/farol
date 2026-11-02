@@ -254,11 +254,9 @@ impl Comments {
 
 #[cfg(test)]
 mod tests {
+    use super::testing::hunk;
     use super::*;
-    use crate::comments::infra::MarkdownComments;
-    use crate::diff::application::ReviewScope;
     use crate::diff::domain::Hunk;
-    use crate::shared::paths::Store;
     use crate::testing::FakeDiffSource;
 
     /// Comments over a real folder, because the store is half of what `add`
@@ -294,15 +292,7 @@ mod tests {
     }
 
     fn clocked(dir: &std::path::Path, source: FakeDiffSource, clock: Arc<dyn Clock>) -> Comments {
-        let store = Store::new(dir, "feature/x");
-        let source = Arc::new(source);
-        let scope = ReviewScope::new(source.clone());
-        Comments::new(
-            Arc::new(MarkdownComments::new(&store, dir)),
-            GetScope::new(scope.clone()),
-            CommentReach::new(scope, crate::diff::application::FileDiffs::new(source)),
-            clock,
-        )
+        crate::testing::comments_at(dir, Arc::new(source), clock)
     }
 
     /// Always the same moment and the same id, so a test can say what a
@@ -335,16 +325,6 @@ mod tests {
 
         assert_eq!(thread.id, "fixed-id");
         assert_eq!(answered.conversation.replies[0].at, "1700000000");
-    }
-
-    fn hunk(start: u32, lines: u32) -> Hunk {
-        Hunk {
-            old_start: start,
-            old_lines: lines,
-            new_start: start,
-            new_lines: lines,
-            lines: vec![],
-        }
     }
 
     #[test]

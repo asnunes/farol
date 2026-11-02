@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { useReview } from "./useReview";
-import { api, type ReviewView } from "@/api";
+import { api } from "@/api";
+import { review as reviewOf } from "@/review/diff/testing";
 
 beforeEach(() => {
   vi.stubGlobal(
@@ -21,7 +22,7 @@ afterEach(() => {
 
 it("says a mark that did not take, and answers false instead of throwing", async () => {
   // Thrown, the failure went nowhere: the page only `void`s the call.
-  const review = { blocks: [], lenses: [], firstUnread: null } as unknown as ReviewView;
+  const review = reviewOf([]);
   vi.spyOn(api, "review").mockResolvedValue(review);
   vi.spyOn(api, "setViewed").mockRejectedValue(new Error("the store is unreadable"));
   const onError = vi.fn();

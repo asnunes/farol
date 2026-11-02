@@ -126,7 +126,7 @@ impl From<&LensCatalog> for CatalogView {
                 .map(|entry| LensRow {
                     id: entry.definition.id.to_string(),
                     title: entry.definition.title,
-                    group: entry.definition.group.name(),
+                    group: entry.definition.group,
                     prompt: entry.definition.prompt,
                     enabled: entry.enabled,
                 })
@@ -139,7 +139,7 @@ impl From<&LensCatalog> for CatalogView {
 struct LensRow {
     id: String,
     title: String,
-    group: &'static str,
+    group: LensGroup,
     prompt: String,
     enabled: bool,
 }

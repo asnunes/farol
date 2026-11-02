@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { useGitHub } from "./useGitHub";
 import { api, type PullRequestView } from "@/api";
+import { pull } from "@/review/diff/testing";
 
 describe("the pull request's state", () => {
   beforeEach(() => {
@@ -85,20 +86,12 @@ function comeBack() {
 }
 
 function view(connection: PullRequestView["connection"]): PullRequestView {
-  return {
+  const open = connection === "ready";
+  return pull({
     connection,
-    number: connection === "ready" ? 7 : null,
-    mine: false,
-    author: connection === "ready" ? "alice" : null,
-    url: connection === "ready" ? "https://github.com/o/r/pull/7" : null,
-    openAt: null,
-    login: "gh auth login --hostname github.com",
-    numbers: [],
+    number: open ? 7 : null,
+    author: open ? "alice" : null,
+    url: open ? "https://github.com/o/r/pull/7" : null,
     mode: { mode: "peer", reason: "chosen by you" },
-    pending: {},
-    loose: [],
-    pendingFailed: null,
-    drift: null,
-    draft: null,
-  };
+  });
 }

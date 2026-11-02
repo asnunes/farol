@@ -109,10 +109,7 @@ impl GitHub {
     /// Where the other language is served. Enterprise puts it beside the REST
     /// root rather than under it: `/api/graphql`, not `/api/v3/graphql`.
     fn graphql_url(&self) -> String {
-        match self.remote.host.as_str() {
-            "github.com" | "www.github.com" => "https://api.github.com/graphql".into(),
-            other => format!("https://{other}/api/graphql"),
-        }
+        format!("{}/graphql", self.api().trim_end_matches("/v3"))
     }
 
     /// Whose fork the branch is on. The same repository the review is posted

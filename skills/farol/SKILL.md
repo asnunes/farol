@@ -411,16 +411,11 @@ it. Write the missing ones, following their prompt:
     farol lens write <id> --block <slug> --text '…'   # a block
     farol lens write <id> --file <path> --text '…'    # a file
 
-**A lens exists to save the reader time, and it does that by being
-understood on the first read.** Being short is worth nothing if the
-reader has to read it twice to rebuild what it meant. Write complete
-sentences in natural Portuguese, with their subjects and the connections
-that make the explanation hold: what causes what, what depends on what,
-why. Use short paragraphs when they read more clearly than bullets, and
-bullets when the content really is a list. Do not force a structure: no
-bold labels, no headline line, no fragments standing in for sentences.
+`farol lens pending` prints the rules every answer is held to, and they
+are the only copy: follow them as printed. What they cost to get wrong
+is easiest to see side by side.
 
-A label costs little room and says little. Compare:
+A label costs little room and says little:
 
 - Compressed: "A abertura é enviada uma vez por permanência no mapping.
   Mudança observada: A → B → A libera novo envio."
@@ -428,31 +423,17 @@ A label costs little room and says little. Compare:
   continuar no mesmo mapping. Se o chat mudar de mapping e depois
   voltar, a abertura pode ser enviada de novo."
 
-**The reader reads the lens instead of the code, not beside it.** A
-sentence built from the code's own names carries no meaning to someone
-who never opened the file. Say what happens in the terms of whoever uses
-the thing: what they do, what they see, what the system does in answer.
-Never translate an identifier, a test name or a type into prose. The
-Tests lens is where this fails most, because a test name is right there
-to translate:
+A sentence built from the code's own names says nothing to someone who
+never opened the file. The Tests lens is where this fails most, because
+a test name is right there to translate:
 
 - From the code: "Uma lens segurada antes de ser vista continua aberta
   depois."
 - From the behaviour: "Marcar uma lens como vista pelo menu lateral não
   fecha a lens na página."
 
-Each lens shows about how long it usually runs; that is a guide, not a
-limit, and longer is not better by default. Concision comes from
-editing: cut repetition and detail the reader does not need, and keep
-what they would otherwise have to reconstruct. Write them from what the session
-knows, in the map's language. Cite code in backticks as `path:from-to`,
-adding `(old)` for a line the change removed; a cited line that does not
-exist is refused. A file lens is offered for every file in the review:
-write an empty text for a file it does not apply to. A file lens may
-open its file with `--open '<why>'`, which is the exception: use it only
-when reading the code could change whether the reviewer approves, and
-say what they will see there. Smell always opens what it writes about.
-Files opened this way do not count against the focus limit.
+Smell always opens what it writes about. Files opened with `--open` do
+not count against the focus limit.
 
 The block's context and its Summary lens do not repeat each other. The
 context is one sentence on the problem the block solves. The Summary is

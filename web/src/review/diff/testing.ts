@@ -1,6 +1,6 @@
 import { vi } from "vitest";
 import type { CommentActions } from "@/hooks/useComments";
-import type { BlockView, CommentView, FileView, LensView, LinesAbout, ReviewView } from "@/api";
+import type { BlockView, CommentView, FileView, LensView, LinesAbout, PullRequestView, ReviewView } from "@/api";
 
 /** Comment actions that record the call and do nothing else, for the tests
  * about what reaches the screen rather than what reaches the server. */
@@ -124,6 +124,28 @@ export function lens(over: Partial<LensView> = {}): LensView {
     target: { kind: "pr" },
     seen: false,
     open: null,
+    ...over,
+  };
+}
+
+/** What the pull request panel is told by a repository with nowhere to
+ * publish: a self review. A test about a pull request passes what it has. */
+export function pull(over: Partial<PullRequestView> = {}): PullRequestView {
+  return {
+    connection: "no-remote",
+    number: null,
+    mine: false,
+    author: null,
+    url: null,
+    openAt: null,
+    login: "gh auth login --hostname github.com",
+    numbers: [],
+    mode: { mode: "self", reason: "no pull request to tell" },
+    pending: {},
+    loose: [],
+    pendingFailed: null,
+    drift: null,
+    draft: null,
     ...over,
   };
 }
