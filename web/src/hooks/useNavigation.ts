@@ -1,5 +1,5 @@
 import { useCallback, useRef } from "react";
-import { lensAt, readingOrder, type CommentView, type LensView, type ReviewView } from "@/api";
+import { lensAt, lensKeyOf, lensPlace, readingOrder, type CommentView, type LensView, type ReviewView } from "@/api";
 import { unreadAfter } from "@/hooks/useCurrentFile";
 import type { CommentActions } from "@/hooks/useComments";
 import type { OpenFiles } from "@/hooks/useOpenFiles";
@@ -95,10 +95,12 @@ export function useNavigation({ review, current, setCurrent, toggleViewed, toggl
   // A place is a file path or `lens:<key>`; going to a lens names it and
   // scrolls, going to a file goes the way the keys do.
   function goToPlace(place: string | null) {
-    if (place?.startsWith("lens:")) {
+    if (!place) return;
+    const key = lensKeyOf(place);
+    if (key) {
       setCurrent(place);
-      scrollToLens(place.slice("lens:".length));
-    } else if (place) {
+      scrollToLens(key);
+    } else {
       goTo(place);
     }
   }
@@ -134,7 +136,7 @@ function placeOf(lens: LensView): string | null {
   switch (target.kind) {
     case "pr":
     case "block":
-      return `lens:${lens.key}`;
+      return lensPlace(lens.key);
     // A file's lens sits inside the file, which is the place to go to.
     case "file":
       return null;

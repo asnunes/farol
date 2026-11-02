@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { lensPlace } from "@/api";
 import { isSettling } from "@/lib/scroll";
 import type { ReviewView } from "@/api";
 
@@ -79,7 +80,7 @@ export function unreadAfter(current: string | null): string | null {
 
 function placeOf(el: HTMLElement): string | null {
   const { path, lensKey } = el.dataset;
-  return path ?? (lensKey ? `lens:${lensKey}` : null);
+  return path ?? (lensKey ? lensPlace(lensKey) : null);
 }
 
 /** How far down the pane a header has to be before the file counts as the one

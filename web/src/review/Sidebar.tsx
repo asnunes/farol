@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 import { fileLabels } from "@/lib/path";
 import { FileRow } from "./FileRow";
 import { LensRow } from "./LensRow";
-import { readingOrder } from "@/api";
+import { lensPlace, readingOrder } from "@/api";
 import type { CommentsOn } from "@/hooks/useComments";
 import type { FileLabels } from "@/lib/path";
 import type { BlockView, FileView, LensView, ReviewView } from "@/api";
@@ -44,8 +44,8 @@ export function Sidebar({
               <LensRow
                 key={lens.id}
                 lens={lens}
-                current={current === `lens:${lens.key}`}
-                onPick={() => onPick(`lens:${lens.key}`)}
+                current={current === lensPlace(lens.key)}
+                onPick={() => onPick(lensPlace(lens.key))}
                 onCheck={() => onCheckLens(lens)}
               />
             ))}
@@ -87,7 +87,7 @@ function Block({
   const state =
     block.viewedFiles === block.totalFiles
       ? "done"
-      : block.files.some((f) => f.path === current) || block.lenses.some((l) => current === `lens:${l.key}`)
+      : block.files.some((f) => f.path === current) || block.lenses.some((l) => current === lensPlace(l.key))
         ? "current"
         : "todo";
 
@@ -119,8 +119,8 @@ function Block({
           <LensRow
             key={lens.id}
             lens={lens}
-            current={current === `lens:${lens.key}`}
-            onPick={() => onPick(`lens:${lens.key}`)}
+            current={current === lensPlace(lens.key)}
+            onPick={() => onPick(lensPlace(lens.key))}
             onCheck={() => onCheckLens(lens)}
           />
         ))}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { blockOf, lensAt, readingOrder, readingRows, type FileView, type ReviewView } from "./api";
+import { blockOf, lensAt, lensKeyOf, lensPlace, readingOrder, readingRows, type FileView, type ReviewView } from "./api";
 
 function file(path: string, viewed = false): FileView {
   return {
@@ -89,6 +89,11 @@ describe("block lookup", () => {
 });
 
 describe("the lens the reader is on", () => {
+  it("is named as a place and read back from it, and a file path names no lens", () => {
+    expect(lensKeyOf(lensPlace("block:two:architecture"))).toBe("block:two:architecture");
+    expect(lensKeyOf("src/a.rs")).toBeNull();
+  });
+
   it("is found by its key, with the block it opens, and a file path is never taken for one", () => {
     const r = review();
     const lens = {
