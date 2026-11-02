@@ -133,12 +133,12 @@ impl CommentView {
             pending: comment.pending.as_ref().map(|pending| match &pending.by {
                 Author::Reviewer => PendingByView {
                     id: pending.id.clone(),
-                    by: "reviewer",
+                    by: TurnBy::Reviewer,
                     name: "you".into(),
                 },
                 Author::Agent(name) => PendingByView {
                     id: pending.id.clone(),
-                    by: "agent",
+                    by: TurnBy::Agent,
                     name: name.clone(),
                 },
             }),
@@ -148,13 +148,13 @@ impl CommentView {
                 .iter()
                 .map(|reply| match &reply.from {
                     Author::Reviewer => ReplyView {
-                        from: "reviewer",
+                        from: TurnBy::Reviewer,
                         name: "You".into(),
                         body: reply.body.clone(),
                         at: reply.at.clone(),
                     },
                     Author::Agent(name) => ReplyView {
-                        from: "agent",
+                        from: TurnBy::Agent,
                         name: name.clone(),
                         body: reply.body.clone(),
                         at: reply.at.clone(),
@@ -168,12 +168,12 @@ impl CommentView {
                 .map(|waiting| WaitingView {
                     on: waiting.on.clone(),
                     stage: match waiting.stage {
-                        Stage::Sent => "sent",
-                        Stage::Working => "working",
+                        Stage::Sent => StageView::Sent,
+                        Stage::Working => StageView::Working,
                     },
                     purpose: match waiting.purpose {
-                        Purpose::Answer => "answer",
-                        Purpose::Pending => "pending",
+                        Purpose::Answer => PurposeView::Answer,
+                        Purpose::Pending => PurposeView::Pending,
                     },
                     since: waiting.since.clone(),
                 }),
@@ -185,8 +185,8 @@ impl CommentView {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReplyView {
-    /// "reviewer" or "agent", which decides which side of the exchange it reads on.
-    pub from: &'static str,
+    /// Which side of the exchange it reads on.
+    pub from: TurnBy,
     /// Who to name it as: "You" for the reviewer, the harness for an agent.
     pub name: String,
     pub body: String,
@@ -230,10 +230,9 @@ fn lens_key(lens: &LensId, target: &LensTarget) -> String {
 #[serde(rename_all = "camelCase")]
 pub struct WaitingView {
     pub on: String,
-    /// "sent" until the agent acknowledges, "working" after.
-    pub stage: &'static str,
-    /// "answer" or "pending": what the badge says is being done.
-    pub purpose: &'static str,
+    pub stage: StageView,
+    /// What the badge says is being done.
+    pub purpose: PurposeView,
     /// Seconds since the epoch.
     pub since: String,
 }
@@ -244,8 +243,7 @@ pub struct PendingByView {
     /// GitHub's id for the comment, which tells one pending comment from the
     /// one that replaced it.
     pub id: String,
-    /// "reviewer" or "agent".
-    pub by: &'static str,
+    pub by: TurnBy,
     /// "you", or the harness.
     pub name: String,
 }
@@ -260,6 +258,31 @@ pub struct UnreadableView {
     pub about: Option<String>,
     pub excerpt: Option<String>,
     pub why: &'static str,
+}
+
+/// Who took a turn, or wrote a pending comment.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TurnBy {
+    Reviewer,
+    Agent,
+}
+
+/// Where a handed-over thread is: sent until the agent acknowledges, working
+/// after.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum StageView {
+    Sent,
+    Working,
+}
+
+/// What an agent owes on a thread.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PurposeView {
+    Answer,
+    Pending,
 }
 
 #[cfg(test)]

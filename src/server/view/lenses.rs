@@ -14,8 +14,7 @@ use crate::shared::short;
 pub struct LensView {
     pub id: String,
     pub title: String,
-    /// `written`, `outdated`, or `missing` when nothing was written yet.
-    pub state: &'static str,
+    pub state: LensState,
     pub text: String,
     /// The short commit it was written at.
     pub written_at: Option<String>,
@@ -31,6 +30,17 @@ pub struct LensView {
     pub open: Option<String>,
 }
 
+/// How a lens stands with the review.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum LensState {
+    /// Nothing written yet.
+    Missing,
+    Written,
+    /// Written, and the code or the prompt moved since.
+    Outdated,
+}
+
 impl LensView {
     pub fn all(lensed: Vec<Lensed<'_>>, progress: &Progress) -> Vec<Self> {
         lensed.into_iter().map(|l| Self::of(l, progress)).collect()
@@ -41,7 +51,7 @@ impl LensView {
             return Self {
                 id: lensed.lens.id.to_string(),
                 title: lensed.lens.title.clone(),
-                state: "missing",
+                state: LensState::Missing,
                 text: String::new(),
                 written_at: None,
                 changed: 0,
@@ -52,8 +62,8 @@ impl LensView {
             };
         };
         let (state, changed) = match freshness {
-            Freshness::Written => ("written", 0),
-            Freshness::Outdated { changed } => ("outdated", changed),
+            Freshness::Written => (LensState::Written, 0),
+            Freshness::Outdated { changed } => (LensState::Outdated, changed),
         };
         Self {
             id: lensed.lens.id.to_string(),

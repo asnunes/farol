@@ -192,7 +192,7 @@ export type BlockView = {
 
 export type FileView = {
   path: string;
-  status: string;
+  status: FileStatus;
   additions: number;
   deletions: number;
   viewed: boolean;
@@ -210,6 +210,8 @@ export type FileView = {
   folded: boolean;
 };
 
+export type FileStatus = "added" | "modified" | "deleted" | "renamed";
+
 /** A note pinned to a span of lines on the new side. */
 export type LineNoteView = {
   from: number;
@@ -220,7 +222,7 @@ export type LineNoteView = {
 /** One file's diff, fetched when the reader opens it. */
 export type FileDiff = {
   path: string;
-  status: string;
+  status: FileStatus;
   hunks: Hunk[];
   /** git will not diff this file: binary content, or `-diff` in .gitattributes. */
   binary: boolean;
