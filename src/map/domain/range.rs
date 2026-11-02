@@ -133,16 +133,7 @@ impl std::fmt::Display for LineRange {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn hunk(old_start: u32, old_lines: u32, new_lines: u32) -> Hunk {
-        Hunk {
-            old_start,
-            old_lines,
-            new_start: old_start,
-            new_lines,
-            lines: vec![],
-        }
-    }
+    use crate::testing::hunk;
 
     fn range() -> LineRange {
         LineRange::new(82, 116).unwrap()

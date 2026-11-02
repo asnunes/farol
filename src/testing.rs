@@ -429,21 +429,33 @@ pub fn services(source: FakeDiffSource, repo: Arc<InMemoryMapRepository>) -> Map
 /// is the fragile part. The directory comes back with it because it has to
 /// outlive what is built on top of it.
 pub fn thread_store(paths: &[&str]) -> (tempfile::TempDir, crate::comments::application::Comments) {
-    use crate::comments::infra::MarkdownComments;
-    use crate::diff::application::{FileDiffs, ReviewScope};
-    use crate::map::application::GetScope;
-
     let dir = tempfile::tempdir().unwrap();
-    let store = crate::shared::paths::Store::new(dir.path(), "feature/x");
-    let source = Arc::new(FakeDiffSource::with_paths(paths));
-    let scope = ReviewScope::new(source.clone());
-    let comments = crate::comments::application::Comments::new(
-        Arc::new(MarkdownComments::new(&store, dir.path())),
-        GetScope::new(scope.clone()),
-        crate::comments::application::CommentReach::new(scope, FileDiffs::new(source)),
+    let comments = comments_at(
+        dir.path(),
+        Arc::new(FakeDiffSource::with_paths(paths)),
         Arc::new(crate::comments::infra::SystemClock),
     );
     (dir, comments)
+}
+
+/// Threads over a store in `dir`, reading this source and stamped by this
+/// clock: the one assembly every test of threads goes through, so a new
+/// collaborator of `Comments` is added here and nowhere else.
+pub fn comments_at(
+    dir: &std::path::Path,
+    source: Arc<FakeDiffSource>,
+    clock: Arc<dyn crate::comments::domain::Clock>,
+) -> crate::comments::application::Comments {
+    use crate::diff::application::{FileDiffs, ReviewScope};
+
+    let store = crate::shared::paths::Store::new(dir, "feature/x");
+    let scope = ReviewScope::new(source.clone());
+    crate::comments::application::Comments::new(
+        Arc::new(crate::comments::infra::MarkdownComments::new(&store, dir)),
+        crate::map::application::GetScope::new(scope.clone()),
+        crate::comments::application::CommentReach::new(scope, FileDiffs::new(source)),
+        clock,
+    )
 }
 
 /// Everything a server holds, over the fakes: what the tests of the server

@@ -2,26 +2,11 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 import { CreatePullRequest } from "./CreatePullRequest";
 import type { GitHubState } from "@/hooks/useGitHub";
+import { pull as pullView } from "@/review/diff/testing";
 import type { PullRequestView } from "@/api";
 
 function pull(over: Partial<PullRequestView> = {}): PullRequestView {
-  return {
-    connection: "no-pull-request",
-    number: null,
-    mine: false,
-    author: null,
-    url: null,
-    openAt: null,
-    login: "gh auth login",
-    numbers: [],
-    mode: { mode: "self", reason: "no pull request to tell" },
-    pending: {},
-    loose: [],
-    pendingFailed: null,
-    drift: null,
-    draft: null,
-    ...over,
-  };
+  return pullView({ connection: "no-pull-request", ...over });
 }
 
 function github(): GitHubState {
