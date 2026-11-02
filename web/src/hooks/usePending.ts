@@ -1,5 +1,6 @@
 import { api, type LoosePendingView, type NewAbout, type RemotePendingView } from "@/api";
 import type { GitHubState } from "@/hooks/useGitHub";
+import type { useThreads } from "@/hooks/useComments";
 
 /** The comments for the pull request: whether threads can have one here, each
  * thread's as GitHub holds it, and writing, changing and taking them back.
@@ -30,5 +31,6 @@ export function usePending(github: GitHubState | null, write: Write) {
 
 export type PendingActions = ReturnType<typeof usePending>;
 
-/** Run a write, then ask again for everything it can touch. */
-type Write = (job: Promise<unknown>) => Promise<boolean>;
+/** Run a write, then ask again for everything it can touch: the threads' own,
+ * so a pending comment reloads the same way a thread does. */
+type Write = ReturnType<typeof useThreads>["write"];

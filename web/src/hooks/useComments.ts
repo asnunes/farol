@@ -26,8 +26,8 @@ export function useComments(
  * them, each write followed by asking again for everything it can touch. */
 export function useThreads(
   onError: (message: string) => void,
-  generation = 0,
-  github: GitHubState | null = null,
+  generation: number,
+  github: GitHubState | null,
 ) {
   const [found, setFound] = useState<CommentsView>(EMPTY);
   const [loaded, setLoaded] = useState(false);

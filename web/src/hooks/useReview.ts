@@ -7,7 +7,7 @@ import { said } from "@/lib/utils";
  *
  * The repository moving is pushed, not polled: commit in another terminal and
  * the screen catches up on its own. */
-export function useReview() {
+export function useReview(onError: (message: string) => void = () => {}) {
   const [review, setReview] = useState<ReviewView | null>(null);
   const [current, setCurrent] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -53,21 +53,34 @@ export function useReview() {
     return () => off.forEach((stop) => stop());
   }, []);
 
-  const toggleViewed = useCallback(
-    async (path: string, viewed: boolean) => {
-      await api.setViewed(path, viewed);
+  // A mark that did not take is said where every other failed write is, and
+  // answered with false. Thrown, it went nowhere: the callers only `void` it.
+  const mark = useCallback(
+    async (job: () => Promise<unknown>) => {
+      try {
+        await job();
+      } catch (e) {
+        onError(said(e));
+        return false;
+      }
       await load(false);
+      return true;
     },
-    [load],
+    [load, onError],
+  );
+
+  const toggleViewed = useCallback(
+    (path: string, viewed: boolean) => mark(() => api.setViewed(path, viewed)),
+    [mark],
   );
 
   const toggleSeen = useCallback(
     async (lens: LensView, seen: boolean) => {
-      if (!lens.target) return;
-      await api.seeLens(lens.id, lens.target, seen);
-      await load(false);
+      const target = lens.target;
+      if (!target) return false;
+      return mark(() => api.seeLens(lens.id, target, seen));
     },
-    [load],
+    [mark],
   );
 
   return { review, current, setCurrent, error, toggleViewed, toggleSeen, stale, generation, refresh: load };

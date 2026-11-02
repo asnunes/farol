@@ -120,9 +120,9 @@ type Shortcuts = {
   goTo: (path: string) => void;
   /** Onward to the next file not yet read — shared with the progress count. */
   nextUnread: () => void;
-  toggleViewed: (path: string, viewed: boolean) => Promise<void>;
+  toggleViewed: (path: string, viewed: boolean) => Promise<unknown>;
   /** The same mark, on a pull request or block lens the reader is on. */
-  toggleSeen: (lens: LensView, seen: boolean) => Promise<void>;
+  toggleSeen: (lens: LensView, seen: boolean) => Promise<unknown>;
   setHelpOpen: (fn: (open: boolean) => boolean) => void;
   toggleSidebar: () => void;
   /** Open or close the agent activity box. */

@@ -26,6 +26,11 @@ import { TopBar } from "@/review/TopBar";
 /** Composition only: what is on screen and in what order. Everything that
  * decides how a thing looks lives in the piece that draws it. */
 export default function App() {
+  // What the reader just tried and did not get: a comment that would not save,
+  // a review the host turned down. Apart from the load failure, because
+  // the review is still on the screen and still worth reading, and blanking it
+  // would take away the very thing the message is about.
+  const [failed, setFailed] = useState<string | null>(null);
   const {
     review,
     current,
@@ -36,7 +41,7 @@ export default function App() {
     stale,
     refresh,
     generation,
-  } = useReview();
+  } = useReview(setFailed);
   const [helpOpen, setHelpOpen] = useState(false);
   // Stopped from the page: nothing on it will answer any more, so it says so
   // instead of looking alive.
@@ -44,11 +49,6 @@ export default function App() {
   const { open: sidebarOpen, toggle, dismiss } = useSidebar();
   // Where focus goes when the sidebar it opens is taken out from under it.
   const sidebarToggle = useRef<HTMLButtonElement>(null);
-  // What the reader just tried and did not get: a comment that would not save,
-  // a review the host turned down. Apart from the load failure above, because
-  // the review is still on the screen and still worth reading, and blanking it
-  // would take away the very thing the message is about.
-  const [failed, setFailed] = useState<string | null>(null);
   const [told, setTold] = useState<string | null>(null);
   const forget = useCallback(() => setTold(null), []);
   const [view, setView] = useDiffView();

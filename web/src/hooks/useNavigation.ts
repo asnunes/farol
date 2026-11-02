@@ -88,8 +88,8 @@ export function useNavigation({ review, current, setCurrent, toggleViewed, toggl
       // and the reader's place stands for it.
       const at = lensPlace(lens.key);
       const from = review && lensAt(review, at) ? at : current;
-      return toggleSeen(lens, seen).then(() => {
-        if (seen) requestAnimationFrame(() => goToPlace(unreadAfter(from)));
+      return toggleSeen(lens, seen).then((took) => {
+        if (seen && took) requestAnimationFrame(() => goToPlace(unreadAfter(from)));
       });
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -142,8 +142,9 @@ type NavigationInputs = {
   /** A file path, or `lens:<key>` for a pull request or block lens. */
   current: string | null;
   setCurrent: (place: string) => void;
-  toggleViewed: (path: string, viewed: boolean) => Promise<void>;
-  toggleSeen: (lens: LensView, seen: boolean) => Promise<void>;
+  /** True once the server took the mark. */
+  toggleViewed: (path: string, viewed: boolean) => Promise<boolean>;
+  toggleSeen: (lens: LensView, seen: boolean) => Promise<boolean>;
   files: OpenFiles;
   comments: Pick<CommentActions, "expand" | "drifted">;
 };
