@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { where } from "@/review/diff/comment/quoted";
+import { goingOut } from "@/hooks/usePending";
 import type { CommentView, PullRequestView, SentView, Verdict } from "@/api";
 
 /** Submitting the review: the verdict and the summary, over the pending
@@ -18,9 +19,8 @@ export function SubmitReview({ pull, threads, onSubmit }: SubmitReviewProps) {
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState<SentView | null>(null);
 
-  const going = threads.filter((thread) => pull.pending[thread.id]?.state === "pending");
+  const { going, count } = goingOut(pull, threads);
   const staying = threads.length - going.length;
-  const count = going.length + pull.loose.length;
 
   async function submit(verdict: Verdict) {
     setBusy(true);

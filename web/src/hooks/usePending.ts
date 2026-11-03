@@ -1,4 +1,11 @@
-import { api, type LoosePendingView, type NewAbout, type RemotePendingView } from "@/api";
+import {
+  api,
+  type CommentView,
+  type LoosePendingView,
+  type NewAbout,
+  type PullRequestView,
+  type RemotePendingView,
+} from "@/api";
 import type { GitHubState } from "@/hooks/useGitHub";
 import type { useThreads } from "@/hooks/useComments";
 
@@ -29,7 +36,17 @@ export function usePending(github: GitHubState | null, write: Write) {
   };
 }
 
+/** What a submit sends: each open thread whose comment is still pending on
+ * GitHub, and the pending comments no thread points at. One count for the bar
+ * and for the dialog, which used to work it out each on its own. */
+export function goingOut(pull: PullRequestView, threads: CommentView[]): GoingOut {
+  const going = threads.filter((thread) => pull.pending[thread.id]?.state === "pending");
+  return { going, count: going.length + pull.loose.length };
+}
+
 export type PendingActions = ReturnType<typeof usePending>;
+
+export type GoingOut = { going: CommentView[]; count: number };
 
 /** Run a write, then ask again for everything it can touch: the threads' own,
  * so a pending comment reloads the same way a thread does. */
