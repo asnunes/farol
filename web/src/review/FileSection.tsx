@@ -6,7 +6,7 @@ import { FileHeader } from "@/review/FileHeader";
 import { FileNote } from "@/review/FileNote";
 import { Prose } from "@/review/Prose";
 import { FileLenses } from "@/review/lenses/FileLenses";
-import type { CommentActions } from "@/hooks/useComments";
+import type { DiffActions, LensActions } from "@/hooks/useComments";
 import type { DiffView } from "@/hooks/useDiffView";
 import type { CitationView, CommentView, FileDiff, FileView } from "@/api";
 
@@ -155,6 +155,6 @@ type FileSectionProps = {
   /** This file's comments, already narrowed: the number in the header and the
    * boxes under the lines are the same list. */
   comments: CommentView[];
-  commentActions: CommentActions;
+  commentActions: DiffActions & LensActions;
   onCite: (citation: CitationView) => void;
 };

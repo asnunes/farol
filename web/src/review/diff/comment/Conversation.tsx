@@ -8,7 +8,7 @@ import { ReplyBox } from "./ReplyBox";
 import { Stage } from "./Stage";
 import { Status } from "./Status";
 import { Unsent } from "./Unsent";
-import type { CommentActions } from "@/hooks/useComments";
+import type { DrawnThreadActions } from "@/hooks/useComments";
 import type { CommentView, RemotePendingView } from "@/api";
 
 /** Everything under the question: the turns, what the agent owes, the
@@ -91,7 +91,7 @@ function unsent(comment: CommentView): boolean {
 
 type ConversationProps = {
   comment: CommentView;
-  actions: CommentActions;
+  actions: DrawnThreadActions;
   /** The thread's pending comment as GitHub has it, once GitHub has answered. */
   remote: RemotePendingView | undefined;
   /** Whether a turn may become the pending comment. */

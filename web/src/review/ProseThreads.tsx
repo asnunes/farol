@@ -3,7 +3,7 @@ import { MessageSquarePlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Box } from "@/review/diff/comment/Box";
 import { Comment } from "@/review/diff/comment/Comment";
-import type { CommentActions } from "@/hooks/useComments";
+import type { ProseActions } from "@/hooks/useComments";
 import type { CommentView, NewAbout } from "@/api";
 
 /** The threads on a lens or on a block's description, and the way to start
@@ -13,7 +13,7 @@ import type { CommentView, NewAbout } from "@/api";
  * the diff, and this text is not on it. */
 export function ProseThreads({ about, label, threads, actions }: ProseThreadsProps) {
   const [writing, setWriting] = useState(false);
-  const here: CommentActions = { ...actions, pendingOffered: false };
+  const here: ProseActions = { ...actions, pendingOffered: false };
 
   return (
     <div className="prose-threads mt-2">
@@ -54,5 +54,5 @@ type ProseThreadsProps = {
   /** The box's name: "Thread on the Overview lens", "Thread on this block". */
   label: string;
   threads: CommentView[];
-  actions: CommentActions;
+  actions: ProseActions;
 };

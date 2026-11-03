@@ -1,6 +1,6 @@
 import { Conversation } from "./Conversation";
 import { Question } from "./Question";
-import type { CommentActions } from "@/hooks/useComments";
+import type { DrawnThreadActions } from "@/hooks/useComments";
 import type { CommentView } from "@/api";
 
 /** One thread: the question the reviewer left, under the last line it is
@@ -38,4 +38,4 @@ export function Comment({ comment, actions }: CommentProps) {
   );
 }
 
-type CommentProps = { comment: CommentView; actions: CommentActions };
+type CommentProps = { comment: CommentView; actions: DrawnThreadActions };

@@ -1,5 +1,5 @@
 import { Comment } from "@/review/diff/comment/Comment";
-import type { CommentActions } from "@/hooks/useComments";
+import type { DrawnThreadActions } from "@/hooks/useComments";
 import type { CommentView } from "@/api";
 
 /** Threads whose lines the diff no longer shows, at the end of the block their
@@ -12,7 +12,7 @@ import type { CommentView } from "@/api";
  * only on a line of the diff. */
 export function DriftedThreads({ threads, actions, heading }: DriftedThreadsProps) {
   if (threads.length === 0) return null;
-  const offDiff: CommentActions = { ...actions, pendingOffered: false };
+  const offDiff: DrawnThreadActions = { ...actions, pendingOffered: false };
 
   return (
     <section className={heading ? "drifted standalone mt-6 md:mt-10" : "drifted"}>
@@ -43,7 +43,7 @@ export function DriftedThreads({ threads, actions, heading }: DriftedThreadsProp
 
 type DriftedThreadsProps = {
   threads: CommentView[];
-  actions: CommentActions;
+  actions: DrawnThreadActions;
   /** Set for the block of their own; absent at the end of a block. */
   heading?: string;
 };

@@ -4,7 +4,7 @@ import { LensState } from "@/review/lenses/LensState";
 import { LensText } from "@/review/lenses/LensText";
 import { SeenBox } from "@/review/lenses/SeenBox";
 import { ProseThreads } from "@/review/ProseThreads";
-import type { CommentActions } from "@/hooks/useComments";
+import type { LensActions } from "@/hooks/useComments";
 import type { OpenLenses } from "@/hooks/useOpenLenses";
 import type { CitationView, LensView } from "@/api";
 
@@ -66,5 +66,5 @@ type LensSectionProps = {
   onCite: (citation: CitationView) => void;
   onSeen: (lens: LensView, seen: boolean) => void;
   folds: OpenLenses;
-  comments: CommentActions;
+  comments: LensActions;
 };

@@ -1,4 +1,4 @@
-import type { CommentActions } from "@/hooks/useComments";
+import type { DiffActions } from "@/hooks/useComments";
 import type { LineSelection } from "./useLineSelection";
 import { linesOf, type CommentView, type DiffLine, type FileView, type Hunk, type Side, type LineNoteView } from "@/api";
 
@@ -11,7 +11,7 @@ import { linesOf, type CommentView, type DiffLine, type FileView, type Hunk, typ
 export type Commentary = {
   path: string;
   comments: CommentView[];
-  actions: CommentActions;
+  actions: DiffActions;
   select: LineSelection;
 };
 

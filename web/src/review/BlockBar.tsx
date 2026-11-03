@@ -1,7 +1,7 @@
 import { Prose } from "@/review/Prose";
 import { cn } from "@/lib/utils";
 import { ProseThreads } from "@/review/ProseThreads";
-import type { CommentActions } from "@/hooks/useComments";
+import type { BlockActions } from "@/hooks/useComments";
 import type { BlockView } from "@/api";
 
 /** The band above the diff: which block you are in and why it exists. */
@@ -39,5 +39,5 @@ type BlockBarProps = {
   block: BlockView;
   number: number;
   total: number;
-  comments: CommentActions;
+  comments: BlockActions;
 };
