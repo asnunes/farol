@@ -11,11 +11,11 @@ use crate::comments::domain::{Lines, Subject};
 use crate::diff::domain::Side;
 use crate::lenses::domain::{LensId, LensTarget};
 use crate::map::domain::Slug;
-use crate::server::ServerUseCases;
+use crate::server::ThreadCases;
 
 /// What the reviewer wrote back, which is everything still waiting for an
 /// answer: closing a comment removes it, so there is nothing here to filter.
-pub(super) async fn comments(Extension(cases): Extension<ServerUseCases>) -> impl IntoResponse {
+pub(super) async fn comments(Extension(cases): Extension<ThreadCases>) -> impl IntoResponse {
     match cases.list_threads.execute() {
         Ok(found) => {
             Json(view::CommentsView::of(&found, cases.send_comment.harness())).into_response()
@@ -82,7 +82,7 @@ impl NewSubject {
 }
 
 pub(super) async fn write_comment(
-    Extension(cases): Extension<ServerUseCases>,
+    Extension(cases): Extension<ThreadCases>,
     Json(body): Json<NewComment>,
 ) -> impl IntoResponse {
     let written = body
@@ -96,7 +96,7 @@ pub(super) async fn write_comment(
 }
 
 pub(super) async fn close_comment(
-    Extension(cases): Extension<ServerUseCases>,
+    Extension(cases): Extension<ThreadCases>,
     Path(id): Path<String>,
 ) -> impl IntoResponse {
     match away(move || cases.close_thread.execute(&id)).await {
@@ -113,7 +113,7 @@ pub(super) struct NewReply {
 /// The reviewer writing back under a comment. Sending it on is a second call,
 /// the same one the Send button makes.
 pub(super) async fn reply_comment(
-    Extension(cases): Extension<ServerUseCases>,
+    Extension(cases): Extension<ThreadCases>,
     Path(id): Path<String>,
     Json(reply): Json<NewReply>,
 ) -> impl IntoResponse {
@@ -127,7 +127,7 @@ pub(super) async fn reply_comment(
 /// Hand one comment to the agent session. Only the id travels: the text is
 /// built on the server from the comment as stored.
 pub(super) async fn send_comment(
-    Extension(cases): Extension<ServerUseCases>,
+    Extension(cases): Extension<ThreadCases>,
     Path(id): Path<String>,
 ) -> impl IntoResponse {
     match away(move || cases.send_comment.execute(&id)).await {

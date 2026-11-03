@@ -4,7 +4,7 @@ use clap::Args;
 
 use super::{Ctx, ScopeFlags, server_factory};
 use crate::error::Result;
-use crate::server::{Launch, Port, Registry, SessionConfig};
+use crate::server::{Launch, Port, SessionConfig};
 use crate::shared::paths::Workspace;
 
 #[derive(Args)]
@@ -58,7 +58,7 @@ impl ServeArgs {
         let open_browser = config.should_open(self.open, self.no_open);
         let workspace = Workspace::here()?;
         let root = workspace.root().canonicalize()?;
-        match Registry::open()?.launch(&root, &self.session(), self.foreground)? {
+        match super::wiring::registry()?.launch(&root, &self.session(), self.foreground)? {
             Launch::Reused(entry) => {
                 println!("farol updated the review at {}", entry.url());
                 if self.port.is_some() {
@@ -127,6 +127,7 @@ impl ServeArgs {
             git_dir: ctx.git_dir().clone(),
             common_dir: workspace.common_dir().to_path_buf(),
             repo: root,
+            registry: std::sync::Arc::new(super::wiring::registry()?),
         })
         .run()
     }

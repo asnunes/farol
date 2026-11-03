@@ -19,8 +19,6 @@ pub struct ReviewReadiness {
     comments: Comments,
     publisher: Arc<dyn PendingReview>,
     host: Option<String>,
-    read: std::sync::Arc<dyn crate::comments::domain::ReadFiles>,
-    drafts: std::sync::Arc<dyn crate::comments::domain::PullDraftStore>,
 }
 
 impl ReviewReadiness {
@@ -30,8 +28,6 @@ impl ReviewReadiness {
         comments: Comments,
         publisher: Arc<dyn PendingReview>,
         host: Option<String>,
-        read: std::sync::Arc<dyn crate::comments::domain::ReadFiles>,
-        drafts: std::sync::Arc<dyn crate::comments::domain::PullDraftStore>,
     ) -> Self {
         Self {
             pull,
@@ -39,8 +35,6 @@ impl ReviewReadiness {
             comments,
             publisher,
             host,
-            read,
-            drafts,
         }
     }
 
@@ -69,15 +63,6 @@ impl ReviewReadiness {
             loose,
             pending_failed,
             drift,
-            read: self.read.read()?,
-            // Only while there is a pull request to open: once it exists, the
-            // draft has said what it had to.
-            draft: match readiness {
-                Readiness::NoPullRequest { .. } | Readiness::BranchNotPushed => {
-                    self.drafts.read()?
-                }
-                _ => None,
-            },
             readiness,
         })
     }
@@ -135,9 +120,6 @@ pub struct Standing {
     pub drift: Option<Drift>,
     /// Why the pending comments could not be read, when they could not.
     pub pending_failed: Option<String>,
-    pub read: Vec<String>,
-    /// What the pull request will say, while there is none to open yet.
-    pub draft: Option<crate::comments::domain::PullDraft>,
 }
 
 impl Standing {

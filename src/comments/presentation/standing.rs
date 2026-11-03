@@ -104,10 +104,6 @@ impl Display for StandingLine<'_> {
         if let Some(why) = &self.0.pending_failed {
             writeln!(f, "the pending comments could not be read: {why}")?;
         }
-        writeln!(f, "{} current file(s) marked as read:", self.0.read.len())?;
-        for path in &self.0.read {
-            writeln!(f, "  {path}")?;
-        }
         Ok(())
     }
 }
@@ -126,14 +122,12 @@ mod tests {
             loose: vec![],
             drift: None,
             pending_failed: None,
-            read: vec![],
-            draft: None,
         }
     }
 
     #[test]
     fn status_tells_the_skill_when_the_pr_belongs_to_the_reader() {
-        let mut standing = at(Readiness::Ready {
+        let standing = at(Readiness::Ready {
             pull_request: 12,
             id: "id".into(),
             mine: true,
@@ -141,12 +135,9 @@ mod tests {
             author: "asnunes".into(),
             url: "https://example.test/pull/12".into(),
         });
-        standing.read = vec!["src/a.rs".into()];
         let text = StandingLine(&standing).to_string();
         assert!(text.contains("your own pull request"));
         assert!(text.contains("host: github.com"));
-        assert!(text.contains("1 current file(s)"));
-        assert!(text.contains("src/a.rs"));
     }
 
     #[test]

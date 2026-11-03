@@ -6,7 +6,7 @@ use clap::{Args, Subcommand};
 
 use super::{Action, Ctx};
 use crate::comments::domain::Verdict;
-use crate::comments::presentation::StandingLine;
+use crate::comments::presentation::{ReadList, StandingLine};
 use crate::error::Result;
 
 #[derive(Subcommand)]
@@ -37,6 +37,7 @@ impl Action for GithubAction {
             GithubAction::Status => {
                 let standing = ctx.readiness.execute()?;
                 print!("{}", StandingLine(&standing));
+                print!("{}", ReadList(&ctx.list_read_files.execute()?));
                 // The answer is on stdout either way, and the status says which
                 // answer it was: a caller that only wants to know whether to go
                 // on reads the code and never parses a word.

@@ -11,13 +11,18 @@ use axum::{Extension, Json};
 use serde::Deserialize;
 
 use super::{away, fail, view};
-use crate::server::ServerUseCases;
+use crate::server::GitHubCases;
 
 /// The pull request, its mode and each thread's pending comment. Asked of
 /// GitHub, so off the request thread.
-pub(super) async fn pull_request(Extension(cases): Extension<ServerUseCases>) -> impl IntoResponse {
-    match away(move || cases.readiness.execute()).await {
-        Ok(standing) => Json(view::PullRequestView::of(&standing)).into_response(),
+pub(super) async fn pull_request(Extension(cases): Extension<GitHubCases>) -> impl IntoResponse {
+    let answer = away(move || {
+        let standing = cases.readiness.execute()?;
+        let draft = cases.show_pull_draft.execute(&standing.readiness)?;
+        Ok((standing, draft))
+    });
+    match answer.await {
+        Ok((standing, draft)) => Json(view::PullRequestView::of(&standing, draft)).into_response(),
         Err(e) => fail(e),
     }
 }
@@ -31,7 +36,7 @@ pub(super) struct PendingBody {
 /// taken from a turn of the conversation. Either way it is the reviewer who
 /// sends them, so they are signed by the reviewer.
 pub(super) async fn write_pending(
-    Extension(cases): Extension<ServerUseCases>,
+    Extension(cases): Extension<GitHubCases>,
     Path(id): Path<String>,
     Json(pending): Json<PendingBody>,
 ) -> impl IntoResponse {
@@ -43,7 +48,7 @@ pub(super) async fn write_pending(
 }
 
 pub(super) async fn edit_pending(
-    Extension(cases): Extension<ServerUseCases>,
+    Extension(cases): Extension<GitHubCases>,
     Path(id): Path<String>,
     Json(pending): Json<PendingBody>,
 ) -> impl IntoResponse {
@@ -54,7 +59,7 @@ pub(super) async fn edit_pending(
 }
 
 pub(super) async fn remove_pending(
-    Extension(cases): Extension<ServerUseCases>,
+    Extension(cases): Extension<GitHubCases>,
     Path(id): Path<String>,
 ) -> impl IntoResponse {
     match away(move || cases.remove_pending.execute(&id)).await {
@@ -73,7 +78,7 @@ pub(super) struct GenerateBody {
 }
 
 pub(super) async fn generate_pending(
-    Extension(cases): Extension<ServerUseCases>,
+    Extension(cases): Extension<GitHubCases>,
     Path(id): Path<String>,
     body: Option<Json<GenerateBody>>,
 ) -> impl IntoResponse {
@@ -102,7 +107,7 @@ pub(super) struct SubmitBody {
 /// Only the verdict and the summary travel: what is submitted is the pending
 /// review already on the pull request, never text the request carries.
 pub(super) async fn submit_review(
-    Extension(cases): Extension<ServerUseCases>,
+    Extension(cases): Extension<GitHubCases>,
     Json(submit): Json<SubmitBody>,
 ) -> impl IntoResponse {
     use crate::comments::domain::Verdict;
@@ -124,9 +129,7 @@ pub(super) async fn submit_review(
 }
 
 /// The pull request's read marks made to match the reviewer's here.
-pub(super) async fn sync_read_marks(
-    Extension(cases): Extension<ServerUseCases>,
-) -> impl IntoResponse {
+pub(super) async fn sync_read_marks(Extension(cases): Extension<GitHubCases>) -> impl IntoResponse {
     match away(move || cases.sync_read_marks.execute()).await {
         Ok(synced) => Json(view::SyncedView {
             number: synced.number,
@@ -139,7 +142,7 @@ pub(super) async fn sync_read_marks(
 }
 
 /// Push the reviewer's own branch, so the pull request shows what was read.
-pub(super) async fn push_branch(Extension(cases): Extension<ServerUseCases>) -> impl IntoResponse {
+pub(super) async fn push_branch(Extension(cases): Extension<GitHubCases>) -> impl IntoResponse {
     match away(move || cases.push_branch.execute()).await {
         Ok(()) => StatusCode::NO_CONTENT.into_response(),
         Err(e) => fail(e),
@@ -152,7 +155,7 @@ pub(super) struct ModeBody {
 }
 
 pub(super) async fn choose_mode(
-    Extension(cases): Extension<ServerUseCases>,
+    Extension(cases): Extension<GitHubCases>,
     Json(body): Json<ModeBody>,
 ) -> impl IntoResponse {
     match away(move || cases.choose_mode.execute(body.mode)).await {
@@ -171,7 +174,7 @@ pub(super) struct PullBody {
 /// Open the pull request, pushing the branch first when the host has not seen
 /// it. GitHub's to answer, so off the request thread.
 pub(super) async fn open_pull(
-    Extension(cases): Extension<ServerUseCases>,
+    Extension(cases): Extension<GitHubCases>,
     Json(pull): Json<PullBody>,
 ) -> impl IntoResponse {
     let draft = crate::comments::domain::PullDraft {
@@ -191,7 +194,7 @@ pub(super) async fn open_pull(
 /// Ask the agent to write the pull request's title and description. It writes
 /// them back through the CLI, and the page reloads the draft when it lands.
 pub(super) async fn generate_pull_draft(
-    Extension(cases): Extension<ServerUseCases>,
+    Extension(cases): Extension<GitHubCases>,
 ) -> impl IntoResponse {
     match away(move || cases.generate_pull_draft.execute()).await {
         Ok(()) => StatusCode::ACCEPTED.into_response(),

@@ -86,8 +86,15 @@ async fn resolve(
     next: Next,
 ) -> axum::response::Response {
     match away(move || state.session.open()).await {
-        Ok(cases) => {
-            request.extensions_mut().insert(cases);
+        Ok(super::ServerUseCases {
+            reading,
+            threads,
+            github,
+        }) => {
+            let extensions = request.extensions_mut();
+            extensions.insert(reading);
+            extensions.insert(threads);
+            extensions.insert(github);
             next.run(request).await
         }
         Err(e) => fail(e),

@@ -1078,8 +1078,8 @@ pub struct FixedServerUseCases(pub crate::server::ServerUseCases);
 impl crate::server::ServerUseCaseFactory for FixedServerUseCases {
     fn build(
         &self,
-        _: crate::diff::infra::ScopeRequest,
-        _: Option<crate::agent::infra::AgentAddress>,
+        _: crate::diff::domain::ScopeRequest,
+        _: Option<crate::agent::domain::AgentAddress>,
     ) -> crate::error::Result<crate::server::ServerUseCases> {
         Ok(self.0.clone())
     }

@@ -5,13 +5,13 @@
 //! nothing in `cmd`. The composition root builds them and implements the
 //! factory.
 
-use crate::agent::infra::AgentAddress;
+use crate::agent::domain::AgentAddress;
 use crate::comments::application::{
     AddThread, ChooseMode, CloseThread, EditPending, GeneratePending, GeneratePullDraft,
     ListThreads, OpenPullRequest, PublishReview, PushBranch, RemovePending, ReplyToThread,
-    ReviewReadiness, SendComment, SyncReadMarks, WritePending,
+    ReviewReadiness, SendComment, ShowPullDraft, SyncReadMarks, WritePending,
 };
-use crate::diff::infra::ScopeRequest;
+use crate::diff::domain::ScopeRequest;
 use crate::error::Result;
 use crate::lenses::application::{
     AddLens, DeleteLens, DisableLens, EnableLens, GetReviewWithLenses, ListLenses, SeeLens,
@@ -20,10 +20,18 @@ use crate::lenses::application::{
 use crate::map::application::{GetFileDiff, GetFileLines, GetScope};
 use crate::progress::application::{MarkViewed, UnmarkViewed};
 
-/// The subset a running server needs, kept together so `serve` hands over one
-/// value instead of six.
+/// What a running server holds, split the way its routes are: each route
+/// asks for the group of its subject, and cannot reach past it.
 #[derive(Clone)]
 pub struct ServerUseCases {
+    pub reading: ReadingCases,
+    pub threads: ThreadCases,
+    pub github: GitHubCases,
+}
+
+/// The review itself: what is in it, its diffs, and what has been read.
+#[derive(Clone)]
+pub struct ReadingCases {
     pub scope: GetScope,
     pub review: GetReviewWithLenses,
     pub see_lens: SeeLens,
@@ -31,11 +39,21 @@ pub struct ServerUseCases {
     pub file_lines: GetFileLines,
     pub mark_viewed: MarkViewed,
     pub unmark_viewed: UnmarkViewed,
+}
+
+/// The reviewer's conversation, and handing a thread to the agent.
+#[derive(Clone)]
+pub struct ThreadCases {
     pub add_thread: AddThread,
     pub list_threads: ListThreads,
     pub reply_to_thread: ReplyToThread,
     pub close_thread: CloseThread,
     pub send_comment: SendComment,
+}
+
+/// The pull request: its pending review, the mode, and opening one.
+#[derive(Clone)]
+pub struct GitHubCases {
     pub generate_pending: GeneratePending,
     pub write_pending: WritePending,
     pub edit_pending: EditPending,
@@ -45,6 +63,7 @@ pub struct ServerUseCases {
     pub publish_review: PublishReview,
     pub sync_read_marks: SyncReadMarks,
     pub push_branch: PushBranch,
+    pub show_pull_draft: ShowPullDraft,
     pub open_pull_request: OpenPullRequest,
     pub generate_pull_draft: GeneratePullDraft,
 }
