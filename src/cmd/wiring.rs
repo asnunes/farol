@@ -7,13 +7,14 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use crate::agent::domain::AgentAddress;
 use crate::agent::domain::AgentChannel;
-use crate::agent::infra::{AgentAddress, ClaudeSocket, CodexQueue};
+use crate::agent::infra::{ClaudeSocket, CodexQueue};
 use crate::comments::application::{
     AcknowledgeThread, AddThread, ChooseMode, CloseThread, CommentReach, Comments, EditPending,
     GeneratePending, GeneratePullDraft, ListThreads, OpenPullRequest, PublishReview,
     PullRequestGate, PushBranch, RemovePending, ReplyToThread, ReviewModes, ReviewReadiness,
-    SendComment, SyncReadMarks, WritePending, WritePullDraft,
+    SendComment, ShowPullDraft, SyncReadMarks, WritePending, WritePullDraft,
 };
 use crate::comments::domain::{
     BranchPusher, Clock, CommentStore, ModeStore, PendingReview, PullDraftStore, PullRequests,
@@ -26,8 +27,9 @@ use crate::comments::infra::{
 use crate::config::domain::ConfigRepository;
 use crate::config::infra::JsonConfigRepository;
 use crate::diff::application::{CommitHistory, FileDiffs, ReviewScope};
+use crate::diff::domain::ScopeRequest;
 use crate::diff::domain::{CommitHistorySource, FileDiffSource, ReviewScopeSource};
-use crate::diff::infra::{GixSource, ScopeRequest};
+use crate::diff::infra::GixSource;
 use crate::error::Result;
 use crate::lenses::application::{
     AddLens, DeleteLens, DisableLens, EnableLens, GetReviewWithLenses, KeepAnswer, ListLenses,
@@ -46,7 +48,9 @@ use crate::map::infra::JsonMapRepository;
 use crate::progress::application::{MarkViewed, ProgressStore, UnmarkViewed};
 use crate::progress::domain::ProgressRepository;
 use crate::progress::infra::JsonProgressRepository;
-use crate::server::{ConfigUseCases, ServerUseCaseFactory, ServerUseCases};
+use crate::server::{
+    ConfigUseCases, GitHubCases, ReadingCases, ServerUseCaseFactory, ServerUseCases, ThreadCases,
+};
 use crate::shared::paths::Workspace;
 
 /// Every use case one invocation can reach.
@@ -90,6 +94,7 @@ pub struct Ctx {
     pub remove_pending: RemovePending,
     pub choose_mode: ChooseMode,
     pub readiness: ReviewReadiness,
+    pub list_read_files: ListReadFiles,
     pub publish_review: PublishReview,
     pub sync_read_marks: SyncReadMarks,
     pub write_pull_draft: WritePullDraft,
@@ -183,6 +188,7 @@ impl Ctx {
             remove_pending: shared.remove_pending,
             choose_mode: shared.choose_mode,
             readiness: shared.readiness,
+            list_read_files: shared.list_read_files,
             publish_review: shared.publish_review,
             sync_read_marks: shared.sync_read_marks,
             write_pull_draft: WritePullDraft::new(ports.drafts.clone()),
@@ -310,51 +316,58 @@ pub fn server_use_cases(ports: &Ports, serving: Serving) -> ServerUseCases {
     let shared = Shared::over(ports);
     let agent = serving.agent.as_ref().map(channel);
     ServerUseCases {
-        scope: GetScope::new(shared.scope.clone()),
-        see_lens: SeeLens::new(ports.lens_answers.clone(), shared.progress.clone()),
-        file_diff: GetFileDiff::new(shared.diffs.clone()),
-        file_lines: GetFileLines::new(shared.scope.clone()),
-        mark_viewed: MarkViewed::new(shared.progress.clone()),
-        unmark_viewed: UnmarkViewed::new(shared.progress.clone()),
-        send_comment: SendComment::new(
-            shared.comments.clone(),
-            agent.clone(),
-            serving.config.clone(),
-            shared.modes.clone(),
-        ),
-        generate_pull_draft: GeneratePullDraft::new(
-            agent.clone(),
-            serving.config.clone(),
-            shared.modes.clone(),
-            shared.scope.clone(),
-        ),
-        generate_pending: GeneratePending::new(
-            shared.comments.clone(),
-            agent,
-            serving.config,
-            shared.modes.clone(),
-            ports.pending.clone(),
-        ),
-        push_branch: PushBranch::new(shared.gate.clone(), ports.pusher.clone()),
-        open_pull_request: OpenPullRequest::new(
-            shared.gate.clone(),
-            ports.pulls.clone(),
-            ports.pusher.clone(),
-            shared.scope.clone(),
-            ports.drafts.clone(),
-        ),
-        review: shared.review,
-        add_thread: shared.add_thread,
-        list_threads: shared.list_threads,
-        reply_to_thread: shared.reply_to_thread,
-        close_thread: shared.close_thread,
-        write_pending: shared.write_pending,
-        edit_pending: shared.edit_pending,
-        remove_pending: shared.remove_pending,
-        choose_mode: shared.choose_mode,
-        readiness: shared.readiness,
-        publish_review: shared.publish_review,
-        sync_read_marks: shared.sync_read_marks,
+        reading: ReadingCases {
+            scope: GetScope::new(shared.scope.clone()),
+            review: shared.review,
+            see_lens: SeeLens::new(ports.lens_answers.clone(), shared.progress.clone()),
+            file_diff: GetFileDiff::new(shared.diffs.clone()),
+            file_lines: GetFileLines::new(shared.scope.clone()),
+            mark_viewed: MarkViewed::new(shared.progress.clone()),
+            unmark_viewed: UnmarkViewed::new(shared.progress.clone()),
+        },
+        threads: ThreadCases {
+            add_thread: shared.add_thread,
+            list_threads: shared.list_threads,
+            reply_to_thread: shared.reply_to_thread,
+            close_thread: shared.close_thread,
+            send_comment: SendComment::new(
+                shared.comments.clone(),
+                agent.clone(),
+                serving.config.clone(),
+                shared.modes.clone(),
+            ),
+        },
+        github: GitHubCases {
+            generate_pull_draft: GeneratePullDraft::new(
+                agent.clone(),
+                serving.config.clone(),
+                shared.modes.clone(),
+                shared.scope.clone(),
+            ),
+            generate_pending: GeneratePending::new(
+                shared.comments.clone(),
+                agent,
+                serving.config,
+                shared.modes.clone(),
+                ports.pending.clone(),
+            ),
+            push_branch: PushBranch::new(shared.gate.clone(), ports.pusher.clone()),
+            show_pull_draft: ShowPullDraft::new(ports.drafts.clone()),
+            open_pull_request: OpenPullRequest::new(
+                shared.gate.clone(),
+                ports.pulls.clone(),
+                ports.pusher.clone(),
+                shared.scope.clone(),
+                ports.drafts.clone(),
+            ),
+            write_pending: shared.write_pending,
+            edit_pending: shared.edit_pending,
+            remove_pending: shared.remove_pending,
+            choose_mode: shared.choose_mode,
+            readiness: shared.readiness,
+            publish_review: shared.publish_review,
+            sync_read_marks: shared.sync_read_marks,
+        },
     }
 }
 
@@ -388,6 +401,7 @@ struct Shared {
     remove_pending: RemovePending,
     choose_mode: ChooseMode,
     readiness: ReviewReadiness,
+    list_read_files: ListReadFiles,
     publish_review: PublishReview,
     sync_read_marks: SyncReadMarks,
 }
@@ -411,21 +425,17 @@ impl Shared {
             ports.lens_catalog.clone(),
             ports.lens_answers.clone(),
         );
-        let read: Arc<dyn ReadFiles> = Arc::new(LensAwareReads(ListReadFiles::new(
-            progress.clone(),
-            scope.clone(),
-            review.clone(),
-        )));
+        let list_read_files = ListReadFiles::new(progress.clone(), scope.clone(), review.clone());
+        let read: Arc<dyn ReadFiles> = Arc::new(LensAwareReads(list_read_files.clone()));
         let gate = PullRequestGate::new(ports.pulls.clone(), scope.clone(), history);
         Self {
+            list_read_files,
             readiness: ReviewReadiness::new(
                 gate.clone(),
                 modes.clone(),
                 comments.clone(),
                 ports.pending.clone(),
                 ports.host.clone(),
-                read.clone(),
-                ports.drafts.clone(),
             ),
             sync_read_marks: SyncReadMarks::new(gate.clone(), ports.marks.clone(), read.clone()),
             publish_review: PublishReview::new(
@@ -453,6 +463,12 @@ impl Shared {
             comments,
         }
     }
+}
+
+/// The list of servers running on this machine, wherever the environment
+/// says it lives.
+pub fn registry() -> Result<crate::server::Registry> {
+    crate::server::Registry::open()
 }
 
 pub fn config_cases() -> Result<ConfigUseCases> {

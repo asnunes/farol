@@ -34,7 +34,7 @@ struct StopArgs {
 
 impl ServersArgs {
     pub(super) fn run(self) -> Result<()> {
-        let registry = Registry::open()?;
+        let registry = super::wiring::registry()?;
 
         match self.action {
             None | Some(ServersAction::List) => {

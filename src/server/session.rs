@@ -3,8 +3,8 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use tokio::sync::watch;
 
-use crate::agent::infra::AgentAddress;
-use crate::diff::infra::ScopeRequest;
+use crate::agent::domain::AgentAddress;
+use crate::diff::domain::ScopeRequest;
 use crate::error::Result;
 use crate::server::{ServerUseCaseFactory, ServerUseCases};
 
@@ -50,7 +50,7 @@ impl Session {
         let cases = self
             .factory
             .build(config.scope.clone(), config.agent.clone())?;
-        cases.review.execute()?;
+        cases.reading.review.execute()?;
         self.record(&cases)?;
         self.config.send_replace(config);
         Ok(self.identity())
@@ -65,7 +65,7 @@ impl Session {
     }
 
     fn record(&self, cases: &ServerUseCases) -> Result<()> {
-        let scope = cases.scope.execute()?;
+        let scope = cases.reading.scope.execute()?;
         let mut entry = self.identity();
         if entry.branch == scope.branch && entry.base == scope.base_ref {
             return Ok(());

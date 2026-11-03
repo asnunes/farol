@@ -17,7 +17,9 @@ mod session;
 pub mod view;
 mod watch;
 
-pub use cases::{ConfigUseCases, ServerUseCaseFactory, ServerUseCases};
+pub use cases::{
+    ConfigUseCases, GitHubCases, ReadingCases, ServerUseCaseFactory, ServerUseCases, ThreadCases,
+};
 pub use registry::{Launch, Registry, ServerEntry};
 pub use server_list::ServerList;
 pub use session::SessionConfig;
@@ -64,6 +66,8 @@ pub struct ServeConfig {
     pub common_dir: PathBuf,
     /// The working tree, for the list of what is running.
     pub repo: PathBuf,
+    /// Where this server writes itself down, so `farol servers` can find it.
+    pub registry: Arc<Registry>,
     /// Initial identity; subsequent requests follow the working tree.
     pub branch: String,
     pub base: String,
@@ -123,7 +127,7 @@ impl Server {
 }
 
 async fn serve(config: ServeConfig) -> Result<()> {
-    let registry = Arc::new(Registry::open()?);
+    let registry = config.registry.clone();
     let (stopping, stops) = signal::channel(false);
 
     let listener = bind(config.port).await?;

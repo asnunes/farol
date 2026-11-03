@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use serde::Serialize;
 
 use crate::comments::application::Standing;
-use crate::comments::domain::{Drift, Readiness, RemoteState, ReviewMode};
+use crate::comments::domain::{Drift, PullDraft, Readiness, RemoteState, ReviewMode};
 
 /// The pull request, as far as the screen needs it: whether it can be written
 /// on, which mode the review is in and why, and each thread's pending comment
@@ -43,7 +43,7 @@ pub struct PullRequestView {
 }
 
 impl PullRequestView {
-    pub fn of(standing: &Standing) -> Self {
+    pub fn of(standing: &Standing, draft: Option<PullDraft>) -> Self {
         let mut view = Self {
             connection: Connection::NoRemote,
             number: None,
@@ -111,9 +111,9 @@ impl PullRequestView {
                     commits: None,
                 },
             }),
-            draft: standing.draft.as_ref().map(|draft| PullDraftView {
-                title: draft.title.clone(),
-                body: draft.body.clone(),
+            draft: draft.map(|draft| PullDraftView {
+                title: draft.title,
+                body: draft.body,
             }),
         };
         match &standing.readiness {
@@ -297,11 +297,9 @@ mod tests {
             }],
             pending_failed: None,
             drift: None,
-            read: vec![],
-            draft: None,
         };
 
-        let view = PullRequestView::of(&standing);
+        let view = PullRequestView::of(&standing, None);
 
         assert_eq!(view.loose[0].at, "src/a.rs:12 (old)");
     }

@@ -11,16 +11,9 @@ use super::git::Git;
 use super::window::Window;
 use crate::diff::domain::{
     CommitHistorySource, FileDiff, FileDiffSource, FileStatus, ReviewScopeSource, Scope,
+    ScopeRequest,
 };
 use crate::error::{Error, Result};
-
-/// What the caller asked for on the command line, before resolution.
-#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
-pub struct ScopeRequest {
-    pub base: Option<String>,
-    pub head: Option<String>,
-    pub direct: bool,
-}
 
 pub struct GixSource {
     /// Stored in the thread-safe form: a plain `Repository` carries `RefCell`

@@ -30,7 +30,7 @@ use thread::ThreadAction;
 
 pub use wiring::{Ctx, Ports, Serving, server_factory, server_use_cases};
 
-use crate::diff::infra::ScopeRequest;
+use crate::diff::domain::ScopeRequest;
 use crate::error::Result;
 use crate::map::domain::ReviewMap;
 use crate::map::presentation::OrphanReport;

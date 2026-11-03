@@ -8,10 +8,10 @@ use axum::{Extension, Json};
 use serde::Deserialize;
 
 use super::{fail, view};
-use crate::server::ServerUseCases;
+use crate::server::ReadingCases;
 
 /// Everything the screen needs to draw itself, in one call.
-pub(super) async fn review(Extension(cases): Extension<ServerUseCases>) -> impl IntoResponse {
+pub(super) async fn review(Extension(cases): Extension<ReadingCases>) -> impl IntoResponse {
     match cases.review.execute() {
         Ok((snapshot, lenses)) => Json(view::ReviewView::build(&snapshot, &lenses)).into_response(),
         Err(e) => fail(e),
@@ -24,7 +24,7 @@ pub(super) struct PathQuery {
 }
 
 pub(super) async fn file(
-    Extension(cases): Extension<ServerUseCases>,
+    Extension(cases): Extension<ReadingCases>,
     Query(q): Query<PathQuery>,
 ) -> impl IntoResponse {
     match cases.file_diff.execute(&q.path) {
@@ -45,7 +45,7 @@ pub(super) struct RangeQuery {
 /// Text and nothing else: which line each string is, and which line it was
 /// before the change, the page works out from the hunks it already has.
 pub(super) async fn lines(
-    Extension(cases): Extension<ServerUseCases>,
+    Extension(cases): Extension<ReadingCases>,
     Query(q): Query<RangeQuery>,
 ) -> impl IntoResponse {
     match cases.file_lines.execute(&q.path, q.from, q.to) {
@@ -61,7 +61,7 @@ pub(super) struct ViewedBody {
 }
 
 pub(super) async fn viewed(
-    Extension(cases): Extension<ServerUseCases>,
+    Extension(cases): Extension<ReadingCases>,
     Json(body): Json<ViewedBody>,
 ) -> impl IntoResponse {
     let result = if body.viewed {

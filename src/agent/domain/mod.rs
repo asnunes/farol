@@ -1,5 +1,7 @@
+mod address;
 mod error;
 
+pub use address::AgentAddress;
 pub use error::*;
 
 /// The session on the other end, whichever harness it runs in.

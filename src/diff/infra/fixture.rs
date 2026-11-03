@@ -5,7 +5,8 @@
 //! fixtures drift, and then two tests disagree about what git does.
 
 use super::git::Git;
-use super::gix_source::{GixSource, ScopeRequest};
+use super::gix_source::GixSource;
+use crate::diff::domain::ScopeRequest;
 
 /// A real repository, because every one of these answers comes from git and
 /// a fake would only be asserting what we already believe.

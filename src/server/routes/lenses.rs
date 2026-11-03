@@ -12,7 +12,7 @@ use super::super::AppState;
 use super::{away, fail};
 use crate::error::Result;
 use crate::lenses::domain::{LensCatalog, LensGroup, LensId, LensTarget};
-use crate::server::ServerUseCases;
+use crate::server::ReadingCases;
 
 pub(super) async fn list(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     answer(state.preferences.list_lenses.execute())
@@ -65,7 +65,7 @@ pub(super) async fn delete(
 
 /// The reader marking a lens as seen, or taking the mark back.
 pub(super) async fn seen(
-    Extension(cases): Extension<ServerUseCases>,
+    Extension(cases): Extension<ReadingCases>,
     Json(body): Json<SeenBody>,
 ) -> impl IntoResponse {
     let id = match LensId::parse(&body.lens) {
