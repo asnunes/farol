@@ -136,6 +136,39 @@ export type ThreadActions = Omit<ReturnType<typeof useThreads>, "write">;
  * A component that needs only part of it takes a `Pick` of it. */
 export type CommentActions = ThreadActions & ThreadFolds & PendingActions;
 
+/** What one drawn thread can do: its question, its conversation, its comment
+ * for the pull request. Every place a thread is drawn hands down this much
+ * and no more. */
+export type DrawnThreadActions = Pick<
+  CommentActions,
+  | "agent"
+  | "pendingOffered"
+  | "pendingOf"
+  | "isMinimized"
+  | "toggleMinimized"
+  | "writePending"
+  | "editPending"
+  | "removePending"
+  | "generate"
+  | "send"
+  | "reply"
+  | "close"
+>;
+
+/** Threads on prose, a lens or a block's description, and starting one. */
+export type ProseActions = DrawnThreadActions & Pick<CommentActions, "add" | "addAndSend">;
+
+/** A lens: its threads, found by the lens. */
+export type LensActions = ProseActions & Pick<CommentActions, "onLens">;
+
+/** A block's description: its threads, found by the block. */
+export type BlockActions = ProseActions & Pick<CommentActions, "onBlock">;
+
+/** A file's diff: threads under their lines, starting one on a span, and the
+ * pending comments no thread points at. */
+export type DiffActions = DrawnThreadActions &
+  Pick<CommentActions, "add" | "addAndSend" | "addAsPending" | "looseOn">;
+
 /** A file's comments, asked for by path.
  *
  * Handed around as this rather than as the whole list plus a filter at each

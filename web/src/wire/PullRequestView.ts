@@ -28,6 +28,11 @@ openAt: string | null,
  */
 login: string, numbers: Array<number>, mode: ModeView, 
 /**
+ * Whether threads can have a comment for the pull request, and a review
+ * to submit them with. Decided on the server, so the page draws it.
+ */
+pendingOffered: boolean, 
+/**
  * By thread id.
  */
 pending: { [key in string]: RemotePendingView }, 

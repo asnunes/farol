@@ -1,5 +1,5 @@
 import { Pending } from "./Pending";
-import type { CommentActions } from "@/hooks/useComments";
+import type { DrawnThreadActions } from "@/hooks/useComments";
 import type { LoosePendingView } from "@/api";
 
 /** A comment in the pending review with no thread here pointing at it: still
@@ -22,4 +22,4 @@ export function Loose({ one, actions }: LooseProps) {
   );
 }
 
-type LooseProps = { one: LoosePendingView; actions: CommentActions };
+type LooseProps = { one: LoosePendingView; actions: DrawnThreadActions };

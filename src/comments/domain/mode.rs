@@ -85,6 +85,13 @@ pub enum ReviewMode {
 }
 
 impl ReviewMode {
+    /// Whether threads may have a comment for the pull request. Only in a peer
+    /// review: on your own branch the agent answers by changing the code, and
+    /// nothing goes to the pull request.
+    pub fn offers_pending(self) -> bool {
+        matches!(self, ReviewMode::PeerReview)
+    }
+
     /// The rule every message to the agent carries, which no instruction in
     /// Settings can take out.
     ///

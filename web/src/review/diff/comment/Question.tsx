@@ -6,7 +6,7 @@ import { Send } from "./Send";
 import { UseAsPending } from "./UseAsPending";
 import { span } from "./quoted";
 import { linesOf } from "@/api";
-import type { CommentActions } from "@/hooks/useComments";
+import type { DrawnThreadActions } from "@/hooks/useComments";
 import type { CommentView } from "@/api";
 
 /** The line a thread opens on: where it is, what was asked, and what can be
@@ -67,7 +67,7 @@ function held(comment: CommentView): string | null {
 
 type QuestionProps = {
   comment: CommentView;
-  actions: CommentActions;
+  actions: DrawnThreadActions;
   minimized: boolean;
   /** Whether the question itself may become the pending comment. */
   offerUse: boolean;

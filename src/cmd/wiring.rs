@@ -449,7 +449,12 @@ impl Shared {
             add_thread: AddThread::new(comments.clone()),
             reply_to_thread: ReplyToThread::new(comments.clone()),
             list_threads: ListThreads::new(comments.clone()),
-            write_pending: WritePending::new(comments.clone(), gate.clone(), ports.pending.clone()),
+            write_pending: WritePending::new(
+                comments.clone(),
+                gate.clone(),
+                ports.pending.clone(),
+                modes.clone(),
+            ),
             edit_pending: EditPending::new(ports.pending.clone()),
             remove_pending: RemovePending::new(comments.clone(), ports.pending.clone()),
             choose_mode: ChooseMode::new(modes.clone()),

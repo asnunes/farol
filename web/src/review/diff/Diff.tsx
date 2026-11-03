@@ -7,7 +7,7 @@ import { gapsOf, opening } from "./gaps";
 import { useLineSelection } from "./useLineSelection";
 import type { Opened as OpenedRange } from "@/hooks/useOpened";
 import type { Gap as GapRange, Opening } from "./gaps";
-import type { CommentActions } from "@/hooks/useComments";
+import type { DiffActions } from "@/hooks/useComments";
 import type { DiffView } from "@/hooks/useDiffView";
 import type { CommentView, FileDiff, FileView } from "@/api";
 
@@ -129,5 +129,5 @@ type DiffProps = {
   file: FileView;
   view: DiffView;
   comments: CommentView[];
-  actions: CommentActions;
+  actions: DiffActions;
 };

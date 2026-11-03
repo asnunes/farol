@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { LensState } from "@/review/lenses/LensState";
 import { LensText } from "@/review/lenses/LensText";
 import { ProseThreads } from "@/review/ProseThreads";
-import type { CommentActions } from "@/hooks/useComments";
+import type { LensActions } from "@/hooks/useComments";
 import type { CitationView, FileView, LensView } from "@/api";
 
 /** A file's own lenses, under its header and before its diff, held to the file
@@ -97,12 +97,12 @@ type FileLensesProps = {
   open: boolean;
   onToggleOpen: () => void;
   onCite: (citation: CitationView) => void;
-  comments: CommentActions;
+  comments: LensActions;
 };
 
 type FileLensProps = {
   lens: LensView;
   path: string;
   onCite: (citation: CitationView) => void;
-  comments: CommentActions;
+  comments: LensActions;
 };

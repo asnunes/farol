@@ -125,6 +125,11 @@ pub enum CommentError {
         "the pending comment of {id} was already submitted with a review, so it can no longer change"
     )]
     AlreadyPublished { id: String },
+
+    #[error(
+        "this is a self review, which sends nothing to the pull request\nChoose peer review on screen, or run `farol serve --peer-review`, to write comments for it."
+    )]
+    SelfReview,
 }
 
 /// Pull request numbers as a person reads them: `#4, #7`.

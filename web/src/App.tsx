@@ -14,6 +14,7 @@ import { useNavigation } from "@/hooks/useNavigation";
 import { useReview } from "@/hooks/useReview";
 import { useShortcuts } from "@/hooks/useShortcuts";
 import { useSidebar } from "@/hooks/useSidebar";
+import { useStop } from "@/hooks/useStop";
 import { Activity } from "@/review/activity/Activity";
 import { HelpDialog } from "@/review/HelpDialog";
 import { KeyBar } from "@/review/KeyBar";
@@ -43,9 +44,7 @@ export default function App() {
     generation,
   } = useReview(setFailed);
   const [helpOpen, setHelpOpen] = useState(false);
-  // Stopped from the page: nothing on it will answer any more, so it says so
-  // instead of looking alive.
-  const [stopped, setStopped] = useState(false);
+  const { stopped, stop } = useStop();
   const { open: sidebarOpen, toggle, dismiss } = useSidebar();
   // Where focus goes when the sidebar it opens is taken out from under it.
   const sidebarToggle = useRef<HTMLButtonElement>(null);
@@ -156,7 +155,7 @@ export default function App() {
           onNextUnread={nextUnread}
           github={github}
           threads={comments.all}
-          onStopped={() => setStopped(true)}
+          onStop={stop}
           onTold={setTold}
           agent={comments.agent}
         />

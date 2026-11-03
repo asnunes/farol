@@ -141,6 +141,7 @@ export function pull(over: Partial<PullRequestView> = {}): PullRequestView {
     login: "gh auth login --hostname github.com",
     numbers: [],
     mode: { mode: "self", reason: "no pull request to tell" },
+    pendingOffered: false,
     pending: {},
     loose: [],
     pendingFailed: null,

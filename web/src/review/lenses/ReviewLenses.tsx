@@ -1,5 +1,5 @@
 import { LensSection } from "@/review/lenses/LensSection";
-import type { CommentActions } from "@/hooks/useComments";
+import type { LensActions } from "@/hooks/useComments";
 import type { OpenLenses } from "@/hooks/useOpenLenses";
 import type { CitationView, LensView } from "@/api";
 
@@ -23,6 +23,6 @@ type ReviewLensesProps = {
   lenses: LensView[];
   onCite: (citation: CitationView) => void;
   onSeen: (lens: LensView, seen: boolean) => void;
-  comments: CommentActions;
+  comments: LensActions;
   folds: OpenLenses;
 };
