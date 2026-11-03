@@ -36,7 +36,7 @@ export function TopBar({
   github,
   threads,
   agent,
-  onStopped,
+  onStop,
   onTold,
 }: TopBarProps) {
   const done = review.totalFiles > 0 && review.viewedFiles === review.totalFiles;
@@ -176,7 +176,7 @@ export function TopBar({
               while there is no pull request: the dialog saying where the new
               one went has to outlive the page learning that it exists. */}
           {pull && <CreatePullRequest pull={pull} branch={review.branch} agent={agent} github={github} />}
-          <StopReview branch={review.branch} onStopped={onStopped} />
+          <StopReview branch={review.branch} onStop={onStop} />
         </div>
       </div>
     </header>
@@ -223,8 +223,8 @@ type TopBarProps = {
   github: GitHubState;
   /** Every thread on the review, for the counts and the review dialog. */
   threads: CommentView[];
-  /** The server said it is stopping: the page is over. */
-  onStopped: () => void;
+  /** Stop the server; rejects with why it would not. */
+  onStop: () => Promise<void>;
   /** The harness Generate reaches, or null. */
   agent: string | null;
   /** Say that something the reader asked for went through. */

@@ -2,13 +2,12 @@ import { useState } from "react";
 import { Power } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { api } from "@/api";
 import { said } from "@/lib/utils";
 
 /** Stop the server from the page, when the review is done. Beside Submit, at
  * the end of the review bar, because it is the last thing the reviewer does —
  * and quieter than Submit, with a confirmation, because it ends the page. */
-export function StopReview({ branch, onStopped }: StopReviewProps) {
+export function StopReview({ branch, onStop }: StopReviewProps) {
   const [open, setOpen] = useState(false);
   const [stopping, setStopping] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
@@ -17,8 +16,7 @@ export function StopReview({ branch, onStopped }: StopReviewProps) {
     setStopping(true);
     setFailed(null);
     try {
-      await api.stop();
-      onStopped();
+      await onStop();
     } catch (e) {
       setFailed(said(e));
       setStopping(false);
@@ -69,6 +67,6 @@ export function StopReview({ branch, onStopped }: StopReviewProps) {
 
 type StopReviewProps = {
   branch: string;
-  /** Called once the server has said it is stopping. */
-  onStopped: () => void;
+  /** Stop the server; rejects with why it would not, which the dialog shows. */
+  onStop: () => Promise<void>;
 };
