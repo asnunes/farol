@@ -169,7 +169,7 @@ export function TopBar({
               <TooltipContent>Open PR on GitHub</TooltipContent>
             </Tooltip>
           )}
-          {pull && peer && pull.connection === "ready" && (
+          {pull?.pendingOffered && (
             <SubmitReview pull={pull} threads={threads} onSubmit={github.submit} />
           )}
           {/* Mounted whenever GitHub has answered, and showing its button only

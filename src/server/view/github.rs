@@ -29,6 +29,9 @@ pub struct PullRequestView {
     pub login: String,
     pub numbers: Vec<u32>,
     pub mode: ModeView,
+    /// Whether threads can have a comment for the pull request, and a review
+    /// to submit them with. Decided on the server, so the page draws it.
+    pub pending_offered: bool,
     /// By thread id.
     pub pending: BTreeMap<String, RemotePendingView>,
     /// Pending comments no thread points at: written on the pull request's
@@ -53,6 +56,7 @@ impl PullRequestView {
             open_at: None,
             login: standing.login(),
             numbers: vec![],
+            pending_offered: standing.offers_pending(),
             mode: ModeView {
                 mode: standing.mode.mode,
                 reason: standing.mode.why.to_string(),

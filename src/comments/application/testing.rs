@@ -47,7 +47,7 @@ impl World {
             source.clone(),
             Arc::new(crate::comments::infra::SystemClock),
         );
-        Self {
+        let world = Self {
             _dir: dir,
             comments,
             publisher: Arc::new(publisher),
@@ -59,7 +59,13 @@ impl World {
                 FileDiffs::new(source.clone()),
             ),
             source,
+        };
+        // What the page does first: ask the pull request, which settles the
+        // mode for everything after it.
+        if let Ok(readiness) = world.gate().readiness() {
+            world.modes.detect(&readiness).unwrap();
         }
+        world
     }
 
     pub fn thread(&self) -> Comment {
@@ -77,7 +83,12 @@ impl World {
     }
 
     pub fn write_pending(&self) -> WritePending {
-        WritePending::new(self.comments.clone(), self.gate(), self.publisher.clone())
+        WritePending::new(
+            self.comments.clone(),
+            self.gate(),
+            self.publisher.clone(),
+            self.modes.clone(),
+        )
     }
 
     pub fn edit_pending(&self) -> EditPending {

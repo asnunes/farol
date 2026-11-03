@@ -11,9 +11,9 @@ export function usePending(github: GitHubState | null, write: Write) {
   const pull = github?.pull ?? null;
 
   return {
-    /** Whether threads can have comments for the pull request here: a peer
-     * review, with a pull request farol can write on. */
-    pendingOffered: pull?.mode.mode === "peer" && pull.connection === "ready",
+    /** Whether threads can have comments for the pull request here, as the
+     * server decides it. */
+    pendingOffered: pull?.pendingOffered ?? false,
     /** The thread's pending comment as GitHub has it, when it has one and
      * GitHub has answered. */
     pendingOf: (id: string): RemotePendingView | undefined => pull?.pending[id],

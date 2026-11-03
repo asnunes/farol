@@ -123,6 +123,13 @@ pub struct Standing {
 }
 
 impl Standing {
+    /// Whether the screen offers comments for the pull request, and a review
+    /// to submit them with: a peer review, on a pull request farol can write
+    /// on. Decided here so the page draws it and never works it out.
+    pub fn offers_pending(&self) -> bool {
+        self.mode.mode.offers_pending() && matches!(self.readiness, Readiness::Ready { .. })
+    }
+
     /// The command that connects farol to the host, for the terminal and the
     /// screen to say in the same words.
     pub fn login(&self) -> String {

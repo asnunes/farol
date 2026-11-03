@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::comments::application::{Comments, PullRequestGate};
+use crate::comments::application::{Comments, PullRequestGate, ReviewModes};
 use crate::comments::domain::{
     Author, Comment, CommentError, PendingRef, PendingReview, RemoteState,
 };
@@ -21,6 +21,7 @@ pub struct WritePending {
     comments: Comments,
     pull: PullRequestGate,
     publisher: Arc<dyn PendingReview>,
+    modes: ReviewModes,
 }
 
 impl WritePending {
@@ -28,11 +29,13 @@ impl WritePending {
         comments: Comments,
         pull: PullRequestGate,
         publisher: Arc<dyn PendingReview>,
+        modes: ReviewModes,
     ) -> Self {
         Self {
             comments,
             pull,
             publisher,
+            modes,
         }
     }
 
@@ -45,6 +48,11 @@ impl WritePending {
         // a line GitHub would refuse is refused here, before the round trip.
         let thread = self.comments.live(id)?;
         let pull = self.pull.at_head()?;
+        // The same rule the screen draws by, after the pull request: with no
+        // pull request, that is the reason worth giving.
+        if !self.modes.current()?.mode.offers_pending() {
+            return Err(CommentError::SelfReview.into());
+        }
         if let Some(old) = &thread.pending {
             let state = self.publisher.remote(std::slice::from_ref(&old.id))?;
             if matches!(
@@ -240,5 +248,24 @@ mod tests {
             .unwrap_err();
 
         assert!(error.to_string().contains("already submitted"), "{error}");
+    }
+
+    #[test]
+    fn a_self_review_writes_nothing_for_the_pull_request() {
+        // The screen offers no pending comment on your own pull request. The
+        // CLI, or a page drawn before the mode changed, must not get one in.
+        let world = World::with(FakePublisher::ready_at("head").mine());
+        let thread = world.thread();
+
+        let error = world
+            .write_pending()
+            .execute(&thread.id, "Rename it.", Author::Reviewer)
+            .unwrap_err();
+
+        assert!(error.to_string().contains("self review"), "{error}");
+        assert!(
+            world.comments.live(&thread.id).unwrap().pending.is_none(),
+            "nothing reached GitHub, so the thread points at nothing"
+        );
     }
 }
