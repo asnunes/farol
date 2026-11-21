@@ -39,3 +39,16 @@ it("still shows a lens's threads where no new one can be started", () => {
   expect(screen.getByText("Still open.")).toBeTruthy();
   expect(screen.queryByRole("button", { name: "Comment" }), "a folded or empty lens starts no thread").toBeNull();
 });
+
+it("draws a thread on a lens with no place label and no gutter indent", () => {
+  // It sits right under the lens, so a word standing in for a place, and the
+  // indent that clears a gutter of line numbers, only pushed the question away.
+  const onLens = {
+    ...comment({ id: "t2", body: "Explain this point." }),
+    about: { kind: "lens" as const, key: "pr:overview", file: null },
+  };
+  const { container } = render(<ProseThreads about={null} label="Thread on the Overview lens" threads={[onLens]} actions={noComments()} />);
+
+  expect(container.querySelector(".lbl")).toBeNull();
+  expect(container.querySelector(".comment")?.className).not.toContain("pl-8");
+});

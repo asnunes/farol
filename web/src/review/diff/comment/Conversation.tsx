@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { cn } from "@/lib/utils";
 import { MessageSquareReply } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Generate } from "./Generate";
@@ -18,12 +19,14 @@ import type { CommentView, RemotePendingView } from "@/api";
  * answer — not up with the actions on the question. While an agent owes
  * something there is no turn to take: a reply then would land in the middle of
  * its work. */
-export function Conversation({ comment, actions, remote, offerUse }: ConversationProps) {
+export function Conversation({ comment, actions, remote, offerUse, under }: ConversationProps) {
   const [replying, setReplying] = useState(false);
   const peer = actions.pendingOffered;
 
   return (
-    <div className="thread flex flex-col gap-2 pl-6 md:pl-10">
+    // In under the question past its line label, so the turns read as answers
+    // to it; with no label there is nothing to step past.
+    <div className={cn("thread flex flex-col gap-2", under && "pl-6 md:pl-10")}>
       {comment.replies.length > 0 && (
         <Replies
           replies={comment.replies}
@@ -96,4 +99,6 @@ type ConversationProps = {
   remote: RemotePendingView | undefined;
   /** Whether a turn may become the pending comment. */
   offerUse: boolean;
+  /** Under a question with a line label to step past: a thread on code. */
+  under: boolean;
 };
