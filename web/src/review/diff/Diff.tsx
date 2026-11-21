@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useOpened } from "@/hooks/useOpened";
 import { DiffHunk } from "./DiffHunk";
 import { Gap } from "./Gap";
@@ -24,6 +25,10 @@ export function Diff({ diff, file, view, comments, actions }: DiffProps) {
   // One selection per file: the reader writes one comment at a time, and a
   // drag started here has no business reaching into the file below.
   const select = useLineSelection();
+
+  // Once per file and per stretch opened, not on every render: a drag across
+  // the gutter renders the diff at each line it crosses.
+  const widest = useMemo(() => longest(diff, opened), [diff, opened]);
 
   // Pending comments on the file as a whole, or outdated by a later push:
   // no line to sit under, and they go with the review all the same.
@@ -72,7 +77,7 @@ export function Diff({ diff, file, view, comments, actions }: DiffProps) {
   return (
     <div
       className="diff overflow-x-auto font-mono text-xs leading-relaxed md:text-[0.8125rem]"
-      style={{ "--longest-line": longest(diff, opened) } as React.CSSProperties}
+      style={{ "--longest-line": widest } as React.CSSProperties}
     >
       {onFile.map((one) => (
         <Loose key={one.id} one={one} actions={actions} />
