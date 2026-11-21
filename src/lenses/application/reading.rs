@@ -54,9 +54,14 @@ impl LensReading {
     /// focus, no lens of its own says anything, and every lens of its block
     /// is written and seen. Such a file has nothing to read that the block's
     /// lenses did not already say, so asking for its tick would be asking the
-    /// reader to mark what they never had to open. Nothing is stored: a block
-    /// lens rewritten is a block lens unseen, and the files follow it.
-    pub fn covers(&self, map: &ReviewMap, progress: &Progress, path: &str) -> bool {
+    /// reader to mark what they never had to open.
+    ///
+    /// A block lens rewritten after the reader saw it still covers the files
+    /// whose content did not change since: the rewrite was for another file of
+    /// the block, and unreading the whole block for it was what made a small
+    /// commit on a big branch take back almost everything read.
+    pub fn covers(&self, map: &ReviewMap, progress: &Progress, change: &FileChange) -> bool {
+        let path = change.path.as_str();
         let Some(block) = map.block_of(path) else {
             return false;
         };
@@ -68,6 +73,7 @@ impl LensReading {
             && lenses.iter().all(|l| {
                 l.answer.is_some_and(|(answer, _)| {
                     progress.has_seen(&answer.seen_key(), &answer.fingerprint())
+                        || progress.saw_file(&answer.seen_key(), path, &change.content_hash)
                 })
             })
     }
@@ -83,7 +89,7 @@ impl LensReading {
         // had changed under the mark, which is the one thing this is supposed
         // to catch.
         progress.is_current(&change.path, &change.content_hash)
-            || self.covers(map, progress, &change.path)
+            || self.covers(map, progress, change)
     }
 
     /// Every file under review the reader has read.
@@ -153,6 +159,36 @@ mod tests {
         (answer, Freshness::Written)
     }
 
+    /// A file under review at this content.
+    fn at(path: &str, blob: &str) -> FileChange {
+        FileChange {
+            path: path.into(),
+            old_path: None,
+            status: crate::diff::domain::FileStatus::Modified,
+            additions: 1,
+            deletions: 0,
+            content_hash: blob.into(),
+        }
+    }
+
+    /// The block's lens, written against these files at these contents.
+    fn block_lens(text: &str, written_at: &str, files: &[(&str, &str)]) -> (LensAnswer, Freshness) {
+        let (mut lens, fresh) = answer("summary", LensTarget::Block { slug: slug("core") }, text);
+        lens.written_at = written_at.into();
+        lens.covers = files
+            .iter()
+            .map(|(path, blob)| crate::lenses::domain::Covered {
+                path: path.to_string(),
+                blob: blob.to_string(),
+            })
+            .collect();
+        (lens, fresh)
+    }
+
+    fn see(progress: &mut Progress, lens: &LensAnswer) {
+        progress.see(&lens.seen_key(), &lens.fingerprint(), lens.covered(), "now");
+    }
+
     #[test]
     fn a_file_with_nothing_of_its_own_is_read_once_its_block_lenses_are_seen() {
         let mut map = map_with(&["core"]);
@@ -182,18 +218,18 @@ mod tests {
         let mut progress = Progress::new();
 
         assert!(
-            !reading.covers(&map, &progress, "plain.rs"),
+            !reading.covers(&map, &progress, &at("plain.rs", "blob")),
             "the block's lens is not seen yet"
         );
-        progress.see(&summary.0.seen_key(), &summary.0.fingerprint(), "now");
+        see(&mut progress, &summary.0);
 
-        assert!(reading.covers(&map, &progress, "plain.rs"));
+        assert!(reading.covers(&map, &progress, &at("plain.rs", "blob")));
         assert!(
-            !reading.covers(&map, &progress, "tested.rs"),
+            !reading.covers(&map, &progress, &at("tested.rs", "blob")),
             "a file with a lens of its own is read by its own tick"
         );
         assert!(
-            !reading.covers(&map, &progress, "dense.rs"),
+            !reading.covers(&map, &progress, &at("dense.rs", "blob")),
             "a file in focus is read by its own tick"
         );
     }
@@ -235,8 +271,71 @@ mod tests {
         };
 
         assert!(
-            !reading.covers(&map, &Progress::new(), "plain.rs"),
+            !reading.covers(&map, &Progress::new(), &at("plain.rs", "blob")),
             "with nothing written about the block, the file asks for its own tick"
+        );
+    }
+
+    #[test]
+    fn a_lens_the_session_keeps_after_a_commit_stays_seen_and_so_do_its_files() {
+        // A keep is the session saying the words still hold. Asking for them
+        // again unread every file the block's lenses had read for the reader.
+        let mut map = map_with(&["core"]);
+        map.add_file(&slug("core"), "a.rs", None, None).unwrap();
+        let before = block_lens("how it is built", "first", &[("a.rs", "blob-1")]);
+        let mut progress = Progress::new();
+        see(&mut progress, &before.0);
+
+        let kept = block_lens("how it is built", "second", &[("a.rs", "blob-1")]);
+        let reading = LensReading {
+            lenses: LensCatalog::default().enabled(),
+            answers: vec![kept.clone()],
+        };
+
+        assert!(progress.has_seen(&kept.0.seen_key(), &kept.0.fingerprint()));
+        assert!(reading.covers(&map, &progress, &at("a.rs", "blob-1")));
+    }
+
+    #[test]
+    fn a_rewritten_block_lens_takes_back_only_the_files_that_changed() {
+        // One file of a big block changes, the block's lens is rewritten for
+        // it, and the other files of the block were still read by the reader.
+        let mut map = map_with(&["core"]);
+        for path in ["same.rs", "moved.rs"] {
+            map.add_file(&slug("core"), path, None, None).unwrap();
+        }
+        let before = block_lens(
+            "how it is built",
+            "first",
+            &[("same.rs", "s1"), ("moved.rs", "m1")],
+        );
+        let mut progress = Progress::new();
+        see(&mut progress, &before.0);
+
+        let rewritten = block_lens(
+            "how it is built now",
+            "second",
+            &[("same.rs", "s1"), ("moved.rs", "m2")],
+        );
+        let reading = LensReading {
+            lenses: LensCatalog::default().enabled(),
+            answers: vec![rewritten.clone()],
+        };
+
+        assert!(
+            !progress.has_seen(&rewritten.0.seen_key(), &rewritten.0.fingerprint()),
+            "new words are read again"
+        );
+        assert!(reading.covers(&map, &progress, &at("same.rs", "s1")));
+        assert!(
+            !reading.covers(&map, &progress, &at("moved.rs", "m2")),
+            "the file that changed asks to be read again"
+        );
+
+        progress.unsee(&rewritten.0.seen_key());
+        assert!(
+            !reading.covers(&map, &progress, &at("same.rs", "s1")),
+            "a lens the reader took back reads nothing for them"
         );
     }
 }

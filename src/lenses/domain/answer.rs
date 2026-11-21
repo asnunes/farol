@@ -57,6 +57,15 @@ impl LensAnswer {
         stable_hash(&self.text)
     }
 
+    /// The content of each file the answer was written against, as a seen
+    /// mark keeps it: path to blob.
+    pub fn covered(&self) -> std::collections::BTreeMap<String, String> {
+        self.covers
+            .iter()
+            .map(|c| (c.path.clone(), c.blob.clone()))
+            .collect()
+    }
+
     /// Where a seen mark is kept for this answer.
     pub fn seen_key(&self) -> String {
         format!("{}/{}", self.lens, self.target.file_name())

@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 
 use crate::error::Result;
@@ -34,6 +36,11 @@ pub struct SeenLens {
     pub key: String,
     pub fingerprint: String,
     pub at: String,
+    /// The content of each file the answer covered when the reader saw it,
+    /// path to blob. What lets a rewrite of a block's lens leave alone the
+    /// files of the block that did not change: the reader still read those.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub covered: BTreeMap<String, String>,
 }
 
 impl Progress {
@@ -79,12 +86,27 @@ impl Progress {
             .any(|l| l.key == key && l.fingerprint == fingerprint)
     }
 
-    pub fn see(&mut self, key: &str, fingerprint: &str, at: &str) {
+    /// Whether the reader saw some version of the lens at `key` while it
+    /// covered this file at this content.
+    pub fn saw_file(&self, key: &str, path: &str, blob: &str) -> bool {
+        self.lenses
+            .iter()
+            .any(|l| l.key == key && l.covered.get(path).is_some_and(|b| b == blob))
+    }
+
+    pub fn see(
+        &mut self,
+        key: &str,
+        fingerprint: &str,
+        covered: BTreeMap<String, String>,
+        at: &str,
+    ) {
         self.lenses.retain(|l| l.key != key);
         self.lenses.push(SeenLens {
             key: key.into(),
             fingerprint: fingerprint.into(),
             at: at.into(),
+            covered,
         });
     }
 

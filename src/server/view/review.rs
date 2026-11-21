@@ -203,7 +203,7 @@ impl FileView {
             .unwrap_or_default();
         line_notes.sort_by_key(|n| (n.from, n.to));
 
-        let covered = lenses.covers(map, progress, path);
+        let covered = lenses.covers(map, progress, change);
         let viewed = lenses.is_read(map, progress, change);
 
         let file_lenses = LensView::all(
