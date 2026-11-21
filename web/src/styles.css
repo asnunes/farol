@@ -205,10 +205,11 @@
    a diff scannable, so the line keeps its shape and `.diff` scrolls to reach the
    end of it: one bar for the whole file, not one per line. */
 @utility diff-row {
+  --gutter: 4rem;
   display: grid;
-  grid-template-columns: 4rem minmax(0, 1fr);
+  grid-template-columns: var(--gutter) minmax(0, 1fr);
   width: max-content;
-  min-width: 100%;
+  min-width: max(100%, var(--longest-row, 0px));
 }
 
 /* Side by side: number and code twice over. The two halves are cells of one
@@ -231,10 +232,43 @@
    a line the change did not touch is the same line on both sides and is printed
    once here, and no stylesheet can see that two cells hold one line. */
 @utility stack-row {
+  --gutter: 5.5rem;
   display: grid;
   grid-template-columns: 2.75rem 2.75rem minmax(0, 1fr);
   width: max-content;
-  min-width: 100%;
+  min-width: max(100%, var(--longest-row, 0px));
+}
+
+/* Every row as wide as the file's longest line, so a short line's tint runs
+   under the long one beside it when the diff scrolls sideways. A row only knows
+   its own line, which left the tint stopping at the edge of the pane. The
+   longest line arrives in characters from the diff; the font is monospaced, so
+   characters are the measure, plus the `+ ` and the gutter. */
+.diff-row,
+.stack-row {
+  --longest-row: calc(var(--gutter) + (var(--longest-line, 0) + 2) * 1ch);
+}
+
+/* The numbers stay at the left edge while the code scrolls under them, or a
+   line read off to the right has no number to comment on. Opaque, in the
+   row's own tint, so the code passing under it does not show through. */
+.diff-row > .ln {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background-color: var(--color-surface);
+  /* The rail a note or a comment draws on the row's left edge, which this
+     cell now sits over. */
+  box-shadow: inherit;
+}
+.diff-row.add > .ln {
+  background-color: var(--color-add-bg);
+}
+.diff-row.del > .ln {
+  background-color: var(--color-del-bg);
+}
+.diff-row.picking > .ln {
+  background-color: var(--color-comment-dim);
 }
 
 /* One line per line, in the shape the file has it. Unlayered on purpose: it has
@@ -258,7 +292,7 @@
    to the code. The stacked row is already built to that measure. */
 @media (width < 48rem) {
   .diff-row {
-    grid-template-columns: 2.75rem minmax(0, 1fr);
+    --gutter: 2.75rem;
   }
 }
 
