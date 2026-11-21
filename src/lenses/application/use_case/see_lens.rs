@@ -7,7 +7,9 @@ use crate::progress::application::ProgressStore;
 /// Mark a lens as seen by the reviewer, or take the mark back.
 ///
 /// Kept with the reading progress, which the server writes, and pinned to the
-/// answer as it is: a lens the session rewrites asks to be read again.
+/// answer's words: a lens the session rewrites asks to be read again, and one
+/// it keeps does not. The mark also keeps the content of the files the answer
+/// covered, so the files that did not change stay read through a rewrite.
 #[derive(Clone)]
 pub struct SeeLens {
     answers: Arc<dyn LensAnswerRepository>,
@@ -27,7 +29,12 @@ impl SeeLens {
             .ok_or_else(|| LensError::NothingToKeep { id: id.to_string() })?;
         let mut progress = self.progress.load()?;
         if seen {
-            progress.see(&answer.seen_key(), &answer.fingerprint(), at);
+            progress.see(
+                &answer.seen_key(),
+                &answer.fingerprint(),
+                answer.covered(),
+                at,
+            );
         } else {
             progress.unsee(&answer.seen_key());
         }

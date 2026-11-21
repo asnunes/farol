@@ -48,10 +48,22 @@ impl LensAnswer {
         }
     }
 
-    /// What a seen mark is pinned to: the words and when they were written,
-    /// so a rewrite or a keep after a commit asks to be read again.
+    /// What a seen mark is pinned to: the words, and only the words. A
+    /// rewrite asks to be read again; a keep after a commit does not, because
+    /// the session judged that what the reader read still holds. Pinning it to
+    /// when the answer was written too made every keep unread the block, and
+    /// with it every file the block's lenses had read for the reader.
     pub fn fingerprint(&self) -> String {
-        stable_hash(&format!("{}\0{}", self.written_at, self.text))
+        stable_hash(&self.text)
+    }
+
+    /// The content of each file the answer was written against, as a seen
+    /// mark keeps it: path to blob.
+    pub fn covered(&self) -> std::collections::BTreeMap<String, String> {
+        self.covers
+            .iter()
+            .map(|c| (c.path.clone(), c.blob.clone()))
+            .collect()
     }
 
     /// Where a seen mark is kept for this answer.
@@ -219,5 +231,23 @@ mod tests {
             }
             .file_name()
         );
+    }
+
+    #[test]
+    fn a_keep_leaves_the_seen_mark_standing_and_a_rewrite_does_not() {
+        // A keep only moves when the answer was written; the words, which are
+        // what the reader read, stay the same.
+        let first = answer(vec![]);
+        let kept = LensAnswer {
+            written_at: "later".into(),
+            ..first.clone()
+        };
+        let rewritten = LensAnswer {
+            text: "Something else.".into(),
+            ..first.clone()
+        };
+
+        assert_eq!(kept.fingerprint(), first.fingerprint());
+        assert_ne!(rewritten.fingerprint(), first.fingerprint());
     }
 }

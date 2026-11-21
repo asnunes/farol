@@ -136,7 +136,10 @@ procedure.
 
 Reading progress is tracked separately from the map. Files remain
 marked as read while their content is unchanged; a content change
-requires them to be read again.
+requires them to be read again. A lens kept with `farol lens keep`
+stays seen, and a rewritten one is read again, so keep every lens that
+still holds rather than rewriting it with the same meaning: a rewrite
+costs the reviewer a reread.
 
 If the user is already reviewing and the task requires another commit,
 tell them before advancing the branch. Derive the map again and resolve
