@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useOpened } from "@/hooks/useOpened";
 import { DiffHunk } from "./DiffHunk";
 import { Gap } from "./Gap";
@@ -24,6 +25,10 @@ export function Diff({ diff, file, view, comments, actions }: DiffProps) {
   // One selection per file: the reader writes one comment at a time, and a
   // drag started here has no business reaching into the file below.
   const select = useLineSelection();
+
+  // Once per file and per stretch opened, not on every render: a drag across
+  // the gutter renders the diff at each line it crosses.
+  const widest = useMemo(() => longest(diff, opened), [diff, opened]);
 
   // Pending comments on the file as a whole, or outdated by a later push:
   // no line to sit under, and they go with the review all the same.
@@ -70,7 +75,10 @@ export function Diff({ diff, file, view, comments, actions }: DiffProps) {
   const tail = below ? opening(below, opened) : null;
 
   return (
-    <div className="diff overflow-x-auto font-mono text-xs leading-relaxed md:text-[0.8125rem]">
+    <div
+      className="diff overflow-x-auto font-mono text-xs leading-relaxed md:text-[0.8125rem]"
+      style={{ "--longest-line": widest } as React.CSSProperties}
+    >
       {onFile.map((one) => (
         <Loose key={one.id} one={one} actions={actions} />
       ))}
@@ -120,6 +128,29 @@ export function Diff({ diff, file, view, comments, actions }: DiffProps) {
     </div>
   );
 }
+
+/** The longest line the pane can draw, in characters, with tabs at the width
+ * the browser gives them: what every row is stretched to, so a short line's
+ * tint does not stop at the edge of the pane while a long one scrolls on. */
+function longest(diff: FileDiff, opened: OpenedRange[]): number {
+  const lines = [
+    ...diff.hunks.flatMap((hunk) => hunk.lines.map((line) => line.content)),
+    ...opened.flatMap((range) => range.lines),
+  ];
+  // A fold rather than a spread: a file of a hundred thousand lines is more
+  // arguments than a call takes.
+  return lines.reduce((most, line) => Math.max(most, columns(line)), 0);
+}
+
+/** How many columns a line takes, with each tab running to the next stop. */
+function columns(line: string): number {
+  let at = 0;
+  for (const c of line) at = c === "\t" ? at + TAB - (at % TAB) : at + 1;
+  return at;
+}
+
+/** The browser's default `tab-size`, which the diff does not change. */
+const TAB = 8;
 
 /** A hunk with no gap above it: nothing opened, nothing left closed. */
 const empty: Opening<OpenedRange> = { above: [], closed: null };

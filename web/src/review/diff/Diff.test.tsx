@@ -655,3 +655,16 @@ describe("pending comments with no thread here", () => {
     expect(drawn).toEqual(["PRRC_file", "row", "row", "PRRC_line"]);
   });
 });
+
+describe("scrolling sideways", () => {
+  it("stretches every row to the longest line, counting a tab to its stop", () => {
+    // A row only knew its own line, so a short line's tint stopped at the
+    // edge of the pane while the long line beside it scrolled on.
+    const one = diff();
+    one.hunks[0].lines[1].content = "\tlet x = 1;";
+    const { container } = render(<Diff diff={one} file={file()} view="unified" comments={[]} actions={noComments()} />);
+
+    const pane = container.querySelector<HTMLElement>(".diff");
+    expect(pane?.style.getPropertyValue("--longest-line")).toBe("18");
+  });
+});
