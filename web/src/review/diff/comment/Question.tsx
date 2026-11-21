@@ -12,11 +12,16 @@ import type { CommentView } from "@/api";
 /** The line a thread opens on: where it is, what was asked, and what can be
  * done to the thread as a whole — send it, copy it, close it, fold it. */
 export function Question({ comment, actions, minimized, offerUse }: QuestionProps) {
+  const lines = linesOf(comment);
+
   return (
     <div className="flex items-start gap-2 md:gap-3">
-      <span className="lbl mt-0.5 shrink-0 font-mono text-xs text-comment-ink">
-        {threadLabel(comment)}
-      </span>
+      {/* Where on the code it is. A thread on a lens or a block's text sits
+          right under that text, and a word standing in for a place only took
+          room from the question. */}
+      {lines && (
+        <span className="lbl mt-0.5 shrink-0 font-mono text-xs text-comment-ink">{span(lines, "–")}</span>
+      )}
 
       <div className="min-w-0 flex-1">
         {minimized ? (
@@ -72,9 +77,3 @@ type QuestionProps = {
   /** Whether the question itself may become the pending comment. */
   offerUse: boolean;
 };
-
-/** The lines a thread is on, or what it is about when it sits on no line. */
-function threadLabel(comment: CommentView): string {
-  const lines = linesOf(comment);
-  return lines ? span(lines, "–") : "Thread";
-}
