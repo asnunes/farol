@@ -85,9 +85,11 @@ export function TopBar({
         <div className="progress flex items-center gap-2 font-mono text-xs text-ink-muted">
           {done ? (
             // The only celebration in the app, and only once there is nothing
-            // left to read.
-            <span className="done" title="Everything read">
-              🎉
+            // left to read. Beside the count, not instead of it: how many files
+            // the review had is still worth knowing at the end.
+            <span className="done flex items-center gap-1 px-1" title="Everything read">
+              <span aria-hidden="true">🎉</span>
+              {review.viewedFiles} / {review.totalFiles}
             </span>
           ) : (
             // The count is what is left, so pressing it goes to what is left:
