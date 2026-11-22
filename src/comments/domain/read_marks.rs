@@ -16,8 +16,8 @@ pub trait ReadMarks: Send + Sync {
     /// took.
     fn mark_unread(&self, pull: &str, paths: &[String]) -> Result<usize>;
 
-    /// The files the reviewer has marked as read. GitHub's answer stops at
-    /// the pull request's first 100 files.
+    /// The files the reviewer has marked as read, every one of them however
+    /// many pages the host answers in.
     fn viewed(&self, pull: &str) -> Result<Vec<String>>;
 }
 
