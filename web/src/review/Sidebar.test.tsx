@@ -117,6 +117,14 @@ describe("telling the files in the sidebar apart", () => {
     expect(named("src/diff/mod.rs").querySelector(".asked")).toBeNull();
   });
 
+  it("says what the change did to each file, before its name", () => {
+    // A deleted file looked like any other until it was opened.
+    show(review([{ ...block("one", []), files: [file("gone.rs", { status: "deleted" }), file("kept.rs")] }]));
+
+    expect(named("gone.rs").querySelector(".status")?.getAttribute("aria-label")).toBe("Deleted");
+    expect(named("kept.rs").querySelector(".status")?.getAttribute("aria-label")).toBe("Modified");
+  });
+
   it("still picks the file it was clicked on", () => {
     const onPick = vi.fn();
     show(review([block("first", ["src/map/mod.rs"])]), onPick);

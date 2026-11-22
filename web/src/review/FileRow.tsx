@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { Check } from "./Check";
+import { FileStatusIcon, statusName } from "./FileStatusIcon";
 import type { FileLabel } from "@/lib/path";
 import type { FileView } from "@/api";
 
@@ -56,6 +57,12 @@ export function FileRow({
             aria-label={file.path}
             onClick={() => onPick(file.path)}
           >
+            {/* Wrapped: the button drops its own padding when an icon is a
+                direct child, and the row's left edge is where the read circle
+                sits over it. */}
+            <span className="flex shrink-0">
+              <FileStatusIcon status={file.status} className="size-3.5" />
+            </span>
             <span
               className={cn(
                 "nm truncate",
@@ -105,6 +112,7 @@ export function FileRow({
             row it covered the neighbour the reader was reaching for. */}
         <TooltipContent side="right" sideOffset={8} className="max-w-[28rem]">
           <div className="font-mono text-[0.6875rem]">{file.path}</div>
+          <div className="font-sans opacity-80">{statusName(file.status)}</div>
           {file.focus && <div className="font-sans opacity-80">{file.focus}</div>}
           {/* The button is labelled with the path, which is what a screen
               reader reads instead of the row — so the count only reaches one

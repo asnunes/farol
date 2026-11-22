@@ -2,6 +2,7 @@ import { ChevronDown, ChevronRight, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CopyPath } from "@/review/CopyPath";
+import { FileStatusIcon, statusName } from "@/review/FileStatusIcon";
 import { speaksAbout } from "@/review/lenses/FileLenses";
 import { splitPath } from "@/lib/path";
 import type { CommentView, FileView } from "@/api";
@@ -50,6 +51,10 @@ export function FileHeader({ file, open, onToggleOpen, onToggleViewed, comments 
           aria-label="Mark as read"
           title={file.covered ? "Read through its block's lenses" : "Mark as read — key ;"}
         />
+
+        <span title={statusName(file.status)} className="flex">
+          <FileStatusIcon status={file.status} className="size-4" />
+        </span>
 
         <div className="path truncate font-mono text-sm font-semibold text-ink">
           <span className="dir font-normal text-ink-muted">{dir}</span>
