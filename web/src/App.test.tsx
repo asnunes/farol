@@ -353,6 +353,19 @@ describe("keyboard navigation", () => {
     expect(reading()).toContain("c.rs");
   });
 
+  it("keeps the count beside the celebration once everything is read", async () => {
+    // The count gave way to the celebration, and the reader lost how many
+    // files the review had.
+    const r = review();
+    r.blocks.forEach((b) => b.files.forEach((f) => (f.viewed = true)));
+    markViewed(r, "src/a.rs", true);
+    serve({ review: r });
+
+    render(<App />);
+
+    await waitFor(() => expect(document.querySelector(".done")?.textContent).toContain("3 / 3"));
+  });
+
   it("n does nothing once there is nothing left unread", async () => {
     const r = review();
     r.blocks.forEach((b) => b.files.forEach((f) => (f.viewed = true)));
