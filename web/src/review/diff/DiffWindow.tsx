@@ -37,8 +37,12 @@ export function DiffWindow({
   useLayoutEffect(() => {
     const el = box.current;
     if (!el) return;
+    // The pane, not the parent: every wrapper inside the diff is as wide as
+    // its longest line, and measuring one of those would feed the width
+    // measured here back into itself.
+    const pane = el.closest(".diff") ?? el.parentElement;
     const measure = () => {
-      const available = el.parentElement?.clientWidth ?? 0;
+      const available = pane?.clientWidth ?? 0;
       if (mounted) {
         const contentWidth = Math.max(
           available,
@@ -71,7 +75,7 @@ export function DiffWindow({
         measure();
     });
     observer.observe(el);
-    if (el.parentElement) observer.observe(el.parentElement);
+    if (pane) observer.observe(pane);
     return () => observer.disconnect();
   }, [mounted, layout, measurement]);
 
@@ -114,11 +118,10 @@ export function DiffWindow({
         minWidth: canvas.current || undefined,
       }}
     >
-      {/* The outer canvas remains observable when scrolled sideways. Prose
-          inside still wraps at the pane width, not at the longest code line. */}
-      {mounted ? (
-        <div style={{ width: width.current || undefined }}>{children}</div>
-      ) : null}
+      {/* As wide as the code, so a note or a comment between its lines can
+          stay in view as the code scrolls under it; the prose itself is held
+          to the pane's width by the stylesheet. */}
+      {mounted ? <div>{children}</div> : null}
     </div>
   );
 }

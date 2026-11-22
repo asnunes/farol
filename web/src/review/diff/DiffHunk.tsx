@@ -21,7 +21,7 @@ export function DiffHunk({ hunk, file, view, commentary, gap }: DiffHunkProps) {
   const held = commentary.select.picking ?? commentary.select.composing;
 
   return (
-    <div>
+    <div className="spans">
       {gap && (
         <Gap
           gap={gap.gap}
