@@ -960,8 +960,23 @@ impl crate::comments::domain::ReadMarks for FakePublisher {
         Ok(taken.len())
     }
 
-    fn viewed(&self, _pull: &str) -> Result<Vec<String>> {
-        Ok(self.marked())
+    fn files(&self, _pull: &str) -> Result<Vec<crate::comments::domain::PullFile>> {
+        let marked = self.marked();
+        // The files the pull request holds when a test says, and otherwise
+        // only the marked ones, which is all the fake can know of.
+        let held = self
+            .pr_files
+            .lock()
+            .unwrap()
+            .clone()
+            .unwrap_or_else(|| marked.clone());
+        Ok(held
+            .into_iter()
+            .map(|path| crate::comments::domain::PullFile {
+                viewed: marked.contains(&path),
+                path,
+            })
+            .collect())
     }
 }
 

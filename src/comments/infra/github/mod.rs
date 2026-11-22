@@ -156,12 +156,14 @@ fn not_found(answer: &serde_json::Value) -> bool {
 /// refusal is written down: a missing permission arrives as a message beside a
 /// `data` full of nulls.
 fn refusal(answer: &serde_json::Value) -> Option<String> {
-    let said: Vec<&str> = answer
+    let mut said: Vec<&str> = answer
         .get("errors")?
         .as_array()?
         .iter()
         .filter_map(|e| e.get("message").and_then(|m| m.as_str()))
         .collect();
+    // One reason said once: a limit hit answers every field after it alike.
+    said.dedup();
     match said.is_empty() {
         true => None,
         false => Some(said.join("; ")),

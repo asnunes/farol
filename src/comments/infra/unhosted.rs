@@ -72,7 +72,7 @@ impl ReadMarks for Unhosted {
         Err(CommentError::NoRemote.into())
     }
 
-    fn viewed(&self, _pull: &str) -> Result<Vec<String>> {
+    fn files(&self, _pull: &str) -> Result<Vec<crate::comments::domain::PullFile>> {
         Err(CommentError::NoRemote.into())
     }
 }

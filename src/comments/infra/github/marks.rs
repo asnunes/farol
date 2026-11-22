@@ -3,7 +3,7 @@
 use serde::Serialize;
 
 use super::*;
-use crate::comments::domain::ReadMarks;
+use crate::comments::domain::{PullFile, ReadMarks};
 
 impl ReadMarks for GitHub {
     /// One request, however many files.
@@ -24,9 +24,9 @@ impl ReadMarks for GitHub {
         self.views(UNMARK, pull, paths)
     }
 
-    fn viewed(&self, pull: &str) -> Result<Vec<String>> {
+    fn files(&self, pull: &str) -> Result<Vec<PullFile>> {
         let token = self.token()?;
-        let mut viewed = Vec::new();
+        let mut all = Vec::new();
         let mut after: Option<String> = None;
         // Page by page: a pull request with more files than one page holds is
         // ordinary, and a file past the first page left out was one a sync
@@ -38,45 +38,69 @@ impl ReadMarks for GitHub {
                 serde_json::json!({ "pull": pull, "after": after }),
             )?;
             let files = data.pointer("/node/files");
-            viewed.extend(
+            all.extend(
                 files
                     .and_then(|f| f.pointer("/nodes"))
                     .and_then(|n| n.as_array())
                     .into_iter()
                     .flatten()
-                    .filter(|f| {
-                        f.get("viewerViewedState").and_then(|s| s.as_str()) == Some("VIEWED")
-                    })
-                    .filter_map(|f| Some(f.get("path")?.as_str()?.to_string())),
+                    .filter_map(|f| {
+                        Some(PullFile {
+                            path: f.get("path")?.as_str()?.to_string(),
+                            viewed: f.get("viewerViewedState").and_then(|s| s.as_str())
+                                == Some("VIEWED"),
+                        })
+                    }),
             );
             match files.and_then(next_page) {
                 Some(cursor) => after = Some(cursor),
-                None => return Ok(viewed),
+                None => return Ok(all),
             }
         }
     }
 }
 
 impl GitHub {
-    /// One mutation per path, marking or unmarking, in a single request.
+    /// One mutation per path, marking or unmarking, a batch per request.
+    ///
+    /// Batches because GitHub runs about ninety mutations in one request and
+    /// answers the rest with "Resource limits for this query exceeded": sent
+    /// whole, a sync of two hundred files marked ninety and called it done.
     fn views(&self, mutation: &str, pull: &str, paths: &[String]) -> Result<usize> {
-        if paths.is_empty() {
-            return Ok(0);
+        let mut marked = 0;
+        for batch in paths.chunks(BATCH) {
+            marked += self.batch(mutation, pull, batch)?;
         }
+        Ok(marked)
+    }
+
+    fn batch(&self, mutation: &str, pull: &str, paths: &[String]) -> Result<usize> {
         let token = self.token()?;
         let Mutations { query, variables } = Mutations::over(mutation, pull, paths);
-        let answer = self.graphql(&token, &query, variables)?;
-
-        // Nothing marked and the host saying why is a refusal, not an empty
-        // answer. Reported as a count it would arrive on the screen as "there
-        // was nothing to tick", which is what somebody whose token lacks the
-        // permission would be told.
-        match (took(&answer), refusal(&answer)) {
-            (0, Some(why)) => Err(CommentError::Refused { what: why }.into()),
-            (marked, _) => Ok(marked),
-        }
+        outcome(&self.graphql(&token, &query, variables)?)
     }
 }
+
+/// What one batch came to.
+///
+/// Nothing marked and the host saying why is a refusal, not an empty answer.
+/// Reported as a count it would arrive on the screen as "there was nothing to
+/// tick", which is what somebody whose token lacks the permission would be
+/// told. A limit hit halfway is a refusal too: the files past it were never
+/// asked about.
+fn outcome(answer: &serde_json::Value) -> Result<usize> {
+    match (took(answer), refusal(answer)) {
+        (0, Some(why)) => Err(CommentError::Refused { what: why }.into()),
+        (_, Some(why)) if why.contains("Resource limits") => {
+            Err(CommentError::Refused { what: why }.into())
+        }
+        (marked, _) => Ok(marked),
+    }
+}
+
+/// Mutations in one request. Well under the ninety or so GitHub runs before it
+/// stops, so a batch never meets the limit.
+const BATCH: usize = 50;
 
 /// A mutation per path, aliased so one request carries them all.
 ///
@@ -218,5 +242,26 @@ mod tests {
 
         assert_eq!(next_page(&more).as_deref(), Some("c100"));
         assert_eq!(next_page(&last), None);
+    }
+
+    #[test]
+    fn a_batch_cut_short_by_the_hosts_limit_is_refused_and_not_counted() {
+        // GitHub runs about ninety and answers the rest with this; counted, it
+        // reached the screen as a sync that worked.
+        let cut = serde_json::json!({
+            "data": { "m0": { "clientMutationId": null }, "m1": null },
+            "errors": [{ "message": "Resource limits for this query exceeded." }],
+        });
+        let unknown = serde_json::json!({
+            "data": { "m0": { "clientMutationId": null }, "m1": null },
+            "errors": [{ "message": "Could not resolve to a file", "path": ["m1"] }],
+        });
+
+        assert!(outcome(&cut).is_err());
+        assert_eq!(
+            outcome(&unknown).unwrap(),
+            1,
+            "a path the pull request lacks fails alone"
+        );
     }
 }
