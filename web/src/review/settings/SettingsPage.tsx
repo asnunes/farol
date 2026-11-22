@@ -1,15 +1,14 @@
 import { useEffect } from "react";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { cn, unreachable } from "@/lib/utils";
 import { useConfig } from "@/hooks/useConfig";
-import { useInstructionDrafts } from "@/hooks/useInstructionDrafts";
-import { useLensDrafts } from "@/hooks/useLensDrafts";
+import { useDrafts } from "@/hooks/useDrafts";
 import { useLenses } from "@/hooks/useLenses";
 import { SECTIONS, type SettingsSection } from "@/hooks/useSettingsRoute";
 import { GeneralSection } from "./GeneralSection";
-import { InstructionsSection } from "./InstructionsSection";
-import { LensesSection } from "./LensesSection";
+import { InstructionsSection, type InstructionDraft } from "./InstructionsSection";
+import { LensesSection, type LensDraft } from "./LensesSection";
 import { SaveBar } from "./SaveBar";
 import type { BooleanSetting, Setting, TextSetting } from "@/api";
 
@@ -23,11 +22,25 @@ export function SettingsPage({ section, onSection, onClose, guard }: SettingsPag
   const config = useConfig(true);
   const lenses = useLenses(true);
   const settings = config.config?.settings ?? [];
-  const instructions = useInstructionDrafts(settings.filter(isText), {
-    set: (key, value) => config.setSetting(key, value),
-    reset: (key) => config.resetSetting(key),
+  const texts = settings.filter(isText);
+  const instructions = useDrafts<InstructionDraft>((draft) =>
+    // Back to the default is a reset, so the file stops carrying it.
+    draft.value === texts.find((s) => s.key === draft.key)?.default
+      ? config.resetSetting(draft.key)
+      : config.setSetting(draft.key, draft.value),
+  );
+  const lensDrafts = useDrafts<LensDraft>((draft) => {
+    switch (draft.kind) {
+      case "edit":
+        return lenses.change(draft.id, { title: draft.title, prompt: draft.prompt });
+      case "remove":
+        return lenses.remove(draft.id);
+      case "add":
+        return lenses.add({ group: draft.group, title: draft.title, prompt: draft.prompt });
+      default:
+        return unreachable(draft);
+    }
   });
-  const lensDrafts = useLensDrafts(lenses.lenses, lenses);
   const unsaved = instructions.count + lensDrafts.count;
   const saving = config.saving || lenses.saving;
 
@@ -94,7 +107,7 @@ export function SettingsPage({ section, onSection, onClose, guard }: SettingsPag
                   onSet={(key, value) => void config.setSetting(key, value)}
                 />
               )}
-              {section === "instructions" && <InstructionsSection settings={settings.filter(isText)} drafts={instructions} saving={saving} />}
+              {section === "instructions" && <InstructionsSection settings={texts} drafts={instructions} saving={saving} />}
               {section === "lenses" && <LensesSection lenses={lenses} drafts={lensDrafts} />}
               {config.error && section === "general" && <p role="alert" className="text-sm text-del-ink">{config.error}</p>}
             </div>
