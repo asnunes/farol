@@ -6,6 +6,7 @@
 
 mod acknowledge_thread;
 mod add_thread;
+mod check_read_marks;
 mod choose_mode;
 mod close_thread;
 mod edit_pending;
@@ -26,6 +27,7 @@ mod write_pull_draft;
 
 pub use acknowledge_thread::*;
 pub use add_thread::*;
+pub use check_read_marks::*;
 pub use choose_mode::*;
 pub use close_thread::*;
 pub use edit_pending::*;

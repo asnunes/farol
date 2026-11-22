@@ -4,8 +4,8 @@
 use std::sync::Arc;
 
 use crate::comments::application::{
-    CloseThread, Comments, EditPending, GeneratePending, PublishReview, PullRequestGate,
-    RemovePending, ReviewModes, SyncReadMarks, WritePending,
+    CheckReadMarks, CloseThread, Comments, EditPending, GeneratePending, PublishReview,
+    PullRequestGate, RemovePending, ReviewModes, SyncReadMarks, WritePending,
 };
 use crate::comments::domain::Comment;
 use crate::diff::application::{CommitHistory, FileDiffs, ReviewScope};
@@ -121,6 +121,10 @@ impl World {
             self.publisher.clone(),
             self.read_files(),
         )
+    }
+
+    pub fn check_read_marks(&self) -> CheckReadMarks {
+        CheckReadMarks::new(self.gate(), self.publisher.clone(), self.read_files())
     }
 
     pub fn sync_read_marks(&self) -> SyncReadMarks {

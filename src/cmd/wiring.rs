@@ -11,8 +11,8 @@ use crate::agent::domain::AgentAddress;
 use crate::agent::domain::AgentChannel;
 use crate::agent::infra::{ClaudeSocket, CodexQueue};
 use crate::comments::application::{
-    AcknowledgeThread, AddThread, ChooseMode, CloseThread, CommentReach, Comments, EditPending,
-    GeneratePending, GeneratePullDraft, ListThreads, OpenPullRequest, PublishReview,
+    AcknowledgeThread, AddThread, CheckReadMarks, ChooseMode, CloseThread, CommentReach, Comments,
+    EditPending, GeneratePending, GeneratePullDraft, ListThreads, OpenPullRequest, PublishReview,
     PullRequestGate, PushBranch, RemovePending, ReplyToThread, ReviewModes, ReviewReadiness,
     SendComment, ShowPullDraft, SyncReadMarks, WritePending, WritePullDraft,
 };
@@ -367,6 +367,7 @@ pub fn server_use_cases(ports: &Ports, serving: Serving) -> ServerUseCases {
             readiness: shared.readiness,
             publish_review: shared.publish_review,
             sync_read_marks: shared.sync_read_marks,
+            check_read_marks: shared.check_read_marks,
         },
     }
 }
@@ -404,6 +405,7 @@ struct Shared {
     list_read_files: ListReadFiles,
     publish_review: PublishReview,
     sync_read_marks: SyncReadMarks,
+    check_read_marks: CheckReadMarks,
 }
 
 impl Shared {
@@ -438,6 +440,7 @@ impl Shared {
                 ports.host.clone(),
             ),
             sync_read_marks: SyncReadMarks::new(gate.clone(), ports.marks.clone(), read.clone()),
+            check_read_marks: CheckReadMarks::new(gate.clone(), ports.marks.clone(), read.clone()),
             publish_review: PublishReview::new(
                 comments.clone(),
                 gate.clone(),

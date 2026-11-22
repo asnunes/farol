@@ -142,6 +142,7 @@ export function pull(over: Partial<PullRequestView> = {}): PullRequestView {
     numbers: [],
     mode: { mode: "self", reason: "no pull request to tell" },
     pendingOffered: false,
+    readsSynced: null,
     pending: {},
     loose: [],
     pendingFailed: null,

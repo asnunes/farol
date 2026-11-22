@@ -32,6 +32,9 @@ pub struct PullRequestView {
     /// Whether threads can have a comment for the pull request, and a review
     /// to submit them with. Decided on the server, so the page draws it.
     pub pending_offered: bool,
+    /// Whether the read marks on the pull request already say what farol's
+    /// do. Absent where no sync could run, or the host could not be asked.
+    pub reads_synced: Option<bool>,
     /// By thread id.
     pub pending: BTreeMap<String, RemotePendingView>,
     /// Pending comments no thread points at: written on the pull request's
@@ -46,6 +49,14 @@ pub struct PullRequestView {
 }
 
 impl PullRequestView {
+    /// The same view, saying whether the read marks are in sync.
+    pub fn with_reads_synced(self, synced: Option<bool>) -> Self {
+        Self {
+            reads_synced: synced,
+            ..self
+        }
+    }
+
     pub fn of(standing: &Standing, draft: Option<PullDraft>) -> Self {
         let mut view = Self {
             connection: Connection::NoRemote,
@@ -57,6 +68,7 @@ impl PullRequestView {
             login: standing.login(),
             numbers: vec![],
             pending_offered: standing.offers_pending(),
+            reads_synced: None,
             mode: ModeView {
                 mode: standing.mode.mode,
                 reason: standing.mode.why.to_string(),

@@ -19,10 +19,18 @@ pub(super) async fn pull_request(Extension(cases): Extension<GitHubCases>) -> im
     let answer = away(move || {
         let standing = cases.readiness.execute()?;
         let draft = cases.show_pull_draft.execute(&standing.readiness)?;
-        Ok((standing, draft))
+        // Only where a sync could run, and never in the way of the rest: a
+        // check that fails leaves the button saying nothing about it.
+        let synced = (standing.readiness.can_send() && standing.drift.is_none())
+            .then(|| cases.check_read_marks.execute().ok())
+            .flatten();
+        Ok((standing, draft, synced))
     });
     match answer.await {
-        Ok((standing, draft)) => Json(view::PullRequestView::of(&standing, draft)).into_response(),
+        Ok((standing, draft, synced)) => {
+            Json(view::PullRequestView::of(&standing, draft).with_reads_synced(synced))
+                .into_response()
+        }
         Err(e) => fail(e),
     }
 }
