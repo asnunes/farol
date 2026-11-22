@@ -112,7 +112,7 @@ export function TopBar({
           {/* Beside the count it sends: in any mode, since a review is not
               always there to carry the marks, and on your own pull request
               there is none at all. */}
-          {pull?.connection === "ready" && <SyncReads onSync={github.syncRead} onSynced={onTold} blocked={pull.drift !== null} />}
+          {pull?.connection === "ready" && <SyncReads onSync={github.syncRead} onSynced={onTold} blocked={pull.drift !== null} synced={pull.readsSynced} />}
           {/* Right after the sync it holds back: the reason, beside what it
               is the reason for. */}
           {pull?.connection === "ready" && pull.drift && (

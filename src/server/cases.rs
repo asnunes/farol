@@ -7,9 +7,9 @@
 
 use crate::agent::domain::AgentAddress;
 use crate::comments::application::{
-    AddThread, ChooseMode, CloseThread, EditPending, GeneratePending, GeneratePullDraft,
-    ListThreads, OpenPullRequest, PublishReview, PushBranch, RemovePending, ReplyToThread,
-    ReviewReadiness, SendComment, ShowPullDraft, SyncReadMarks, WritePending,
+    AddThread, CheckReadMarks, ChooseMode, CloseThread, EditPending, GeneratePending,
+    GeneratePullDraft, ListThreads, OpenPullRequest, PublishReview, PushBranch, RemovePending,
+    ReplyToThread, ReviewReadiness, SendComment, ShowPullDraft, SyncReadMarks, WritePending,
 };
 use crate::diff::domain::ScopeRequest;
 use crate::error::Result;
@@ -62,6 +62,7 @@ pub struct GitHubCases {
     pub readiness: ReviewReadiness,
     pub publish_review: PublishReview,
     pub sync_read_marks: SyncReadMarks,
+    pub check_read_marks: CheckReadMarks,
     pub push_branch: PushBranch,
     pub show_pull_draft: ShowPullDraft,
     pub open_pull_request: OpenPullRequest,

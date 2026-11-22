@@ -26,15 +26,34 @@ impl ReadMarks for GitHub {
 
     fn viewed(&self, pull: &str) -> Result<Vec<String>> {
         let token = self.token()?;
-        let data = self.graphql_call(&token, VIEWED_FILES, serde_json::json!({ "pull": pull }))?;
-        Ok(data
-            .pointer("/node/files/nodes")
-            .and_then(|n| n.as_array())
-            .into_iter()
-            .flatten()
-            .filter(|f| f.get("viewerViewedState").and_then(|s| s.as_str()) == Some("VIEWED"))
-            .filter_map(|f| Some(f.get("path")?.as_str()?.to_string()))
-            .collect())
+        let mut viewed = Vec::new();
+        let mut after: Option<String> = None;
+        // Page by page: a pull request with more files than one page holds is
+        // ordinary, and a file past the first page left out was one a sync
+        // never unmarked.
+        loop {
+            let data = self.graphql_call(
+                &token,
+                VIEWED_FILES,
+                serde_json::json!({ "pull": pull, "after": after }),
+            )?;
+            let files = data.pointer("/node/files");
+            viewed.extend(
+                files
+                    .and_then(|f| f.pointer("/nodes"))
+                    .and_then(|n| n.as_array())
+                    .into_iter()
+                    .flatten()
+                    .filter(|f| {
+                        f.get("viewerViewedState").and_then(|s| s.as_str()) == Some("VIEWED")
+                    })
+                    .filter_map(|f| Some(f.get("path")?.as_str()?.to_string())),
+            );
+            match files.and_then(next_page) {
+                Some(cursor) => after = Some(cursor),
+                None => return Ok(viewed),
+            }
+        }
     }
 }
 
@@ -114,8 +133,17 @@ pub(super) fn took(answer: &serde_json::Value) -> usize {
 
 pub(super) const MARK: &str = "markFileAsViewed";
 pub(super) const UNMARK: &str = "unmarkFileAsViewed";
-// ponytail: the first 100 files; paginate if a pull request ever has more.
-pub(super) const VIEWED_FILES: &str = "query($pull: ID!) { node(id: $pull) { ... on PullRequest { files(first: 100) { nodes { path viewerViewedState } } } } }";
+pub(super) const VIEWED_FILES: &str = "query($pull: ID!, $after: String) { node(id: $pull) { ... on PullRequest { files(first: 100, after: $after) { nodes { path viewerViewedState } pageInfo { hasNextPage endCursor } } } } }";
+
+/// Where the next page starts, when there is one.
+fn next_page(connection: &serde_json::Value) -> Option<String> {
+    let page = connection.get("pageInfo")?;
+    if page.get("hasNextPage")?.as_bool()? {
+        Some(page.get("endCursor")?.as_str()?.to_string())
+    } else {
+        None
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -180,5 +208,15 @@ mod tests {
         );
 
         assert!(refusal(&serde_json::json!({ "data": { "m0": {} } })).is_none());
+    }
+
+    #[test]
+    fn the_viewed_files_are_read_to_the_last_page() {
+        // One page holds a hundred files, which a pull request easily passes.
+        let more = serde_json::json!({ "pageInfo": { "hasNextPage": true, "endCursor": "c100" } });
+        let last = serde_json::json!({ "pageInfo": { "hasNextPage": false, "endCursor": "c163" } });
+
+        assert_eq!(next_page(&more).as_deref(), Some("c100"));
+        assert_eq!(next_page(&last), None);
     }
 }

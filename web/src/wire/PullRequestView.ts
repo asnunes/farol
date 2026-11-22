@@ -33,6 +33,11 @@ login: string, numbers: Array<number>, mode: ModeView,
  */
 pendingOffered: boolean, 
 /**
+ * Whether the read marks on the pull request already say what farol's
+ * do. Absent where no sync could run, or the host could not be asked.
+ */
+readsSynced: boolean | null, 
+/**
  * By thread id.
  */
 pending: { [key in string]: RemotePendingView }, 
