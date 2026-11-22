@@ -16,9 +16,21 @@ pub trait ReadMarks: Send + Sync {
     /// took.
     fn mark_unread(&self, pull: &str, paths: &[String]) -> Result<usize>;
 
-    /// The files the reviewer has marked as read, every one of them however
-    /// many pages the host answers in.
-    fn viewed(&self, pull: &str) -> Result<Vec<String>>;
+    /// Every file of the pull request and whether the reviewer has marked it
+    /// as read, however many pages the host answers in.
+    ///
+    /// Every file, not only the marked ones: the review here and the pull
+    /// request can disagree about which files there are (a deletion here can
+    /// be a rename there), and a file the pull request does not have is one no
+    /// mark can be put on.
+    fn files(&self, pull: &str) -> Result<Vec<PullFile>>;
+}
+
+/// One file of the pull request, as the host lists it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PullFile {
+    pub path: String,
+    pub viewed: bool,
 }
 
 /// The files the reviewer has read here, in the review: what the read marks on

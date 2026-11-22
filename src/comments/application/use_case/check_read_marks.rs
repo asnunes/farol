@@ -32,8 +32,14 @@ impl CheckReadMarks {
     pub fn execute(&self) -> Result<bool> {
         let pull = self.pull.at_head()?;
         let read: BTreeSet<String> = self.read.read()?.into_iter().collect();
-        let viewed: BTreeSet<String> = self.publisher.viewed(&pull.id)?.into_iter().collect();
-        Ok(read == viewed)
+        // Over the pull request's files: one the review has and the pull
+        // request does not can never be marked, and must not keep the two
+        // looking out of sync forever.
+        Ok(self
+            .publisher
+            .files(&pull.id)?
+            .iter()
+            .all(|file| file.viewed == read.contains(&file.path)))
     }
 }
 
@@ -61,5 +67,29 @@ mod tests {
 
         world.sync_read_marks().execute().unwrap();
         assert!(world.check_read_marks().execute().unwrap());
+    }
+
+    #[test]
+    fn a_file_read_here_that_the_pull_request_does_not_list_leaves_the_marks_in_sync() {
+        // A deletion here can be a rename on GitHub: the path read here is one
+        // no mark can ever be put on, and the button stayed out of sync for it.
+        struct Read(Vec<String>);
+        impl crate::comments::domain::ReadFiles for Read {
+            fn read(&self) -> crate::error::Result<Vec<String>> {
+                Ok(self.0.clone())
+            }
+        }
+        let world = World::with(
+            FakePublisher::ready_at("head")
+                .mine()
+                .viewing(&["src/a.rs"]),
+        );
+        let check = super::CheckReadMarks::new(
+            world.gate(),
+            world.publisher.clone(),
+            std::sync::Arc::new(Read(vec!["src/a.rs".into(), "src/gone.rs".into()])),
+        );
+
+        assert!(check.execute().unwrap());
     }
 }

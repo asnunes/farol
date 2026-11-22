@@ -36,16 +36,21 @@ impl SyncReadMarks {
     pub fn execute(&self) -> Result<Synced> {
         let pull = self.pull.at_head()?;
         let read = self.read.read()?;
-        let stale: Vec<String> = self
-            .publisher
-            .viewed(&pull.id)?
+        let files = self.publisher.files(&pull.id)?;
+        // Only what has to change, and only files the pull request has: a
+        // mark already there costs a request for nothing, and a path it does
+        // not list cannot take one.
+        let (fresh, stale): (Vec<_>, Vec<_>) = files
             .into_iter()
-            .filter(|path| !read.contains(path))
-            .collect();
+            .filter(|file| file.viewed != read.contains(&file.path))
+            .partition(|file| !file.viewed);
+        let paths = |files: Vec<crate::comments::domain::PullFile>| {
+            files.into_iter().map(|file| file.path).collect::<Vec<_>>()
+        };
         Ok(Synced {
             number: pull.number,
-            marked: self.publisher.mark_read(&pull.id, &read)?,
-            unmarked: self.publisher.mark_unread(&pull.id, &stale)?,
+            marked: self.publisher.mark_read(&pull.id, &paths(fresh))?,
+            unmarked: self.publisher.mark_unread(&pull.id, &paths(stale))?,
         })
     }
 }
