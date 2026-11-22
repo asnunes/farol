@@ -21,9 +21,13 @@ export function useShortcuts({
   setHelpOpen,
   toggleSidebar,
   toggleActivity,
+  paused = false,
 }: Shortcuts) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // Settings covers the review, and a key pressed there is not meant for
+      // the file underneath it.
+      if (paused) return;
       // Above every guard below it: hiding the sidebar is chrome, not reading,
       // and the reader wants it while typing a comment as much as while moving
       // through files. It is also the one key here with a modifier, which is
@@ -109,7 +113,7 @@ export function useShortcuts({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [review, order, index, current, goTo, nextUnread, toggleViewed, toggleSeen, setHelpOpen, toggleSidebar, toggleActivity]);
+  }, [review, order, index, current, goTo, nextUnread, toggleViewed, toggleSeen, setHelpOpen, toggleSidebar, toggleActivity, paused]);
 }
 
 type Shortcuts = {
@@ -127,4 +131,6 @@ type Shortcuts = {
   toggleSidebar: () => void;
   /** Open or close the agent activity box. */
   toggleActivity: () => void;
+  /** Something covers the review, and the keys are not for it. */
+  paused?: boolean;
 };

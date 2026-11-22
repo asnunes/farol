@@ -18,16 +18,17 @@ export function useLenses(open: boolean) {
     return () => { active = false; };
   }, [open]);
 
-  /** True once the server kept it, so an editor knows it can close. */
-  async function save(job: Promise<LensCatalogView>): Promise<boolean> {
+  /** Null once the server kept it; otherwise why it did not. */
+  async function save(job: Promise<LensCatalogView>): Promise<string | null> {
     setSaving(true);
     setError(null);
     try {
       setCatalog(await job);
-      return true;
+      return null;
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Could not save the lens.");
-      return false;
+      const why = reason instanceof Error ? reason.message : "Could not save the lens.";
+      setError(why);
+      return why;
     } finally {
       setSaving(false);
     }

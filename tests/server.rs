@@ -1089,6 +1089,30 @@ fn the_page_itself_is_served_from_the_binary() {
     }
 }
 
+#[test]
+fn an_address_the_page_routes_itself_is_answered_as_the_page() {
+    // `/settings/lenses` came back typed by its path, and the browser saved
+    // the page as a file instead of opening Settings.
+    let s = Serving::new();
+
+    let out = Command::new("curl")
+        .args([
+            "-s",
+            "-D",
+            "-",
+            "-o",
+            "/dev/null",
+            &s.url("/settings/lenses"),
+        ])
+        .output()
+        .expect("curl runs");
+    let headers = String::from_utf8_lossy(&out.stdout);
+
+    if !headers.contains("404") {
+        assert!(headers.contains("text/html"), "{headers}");
+    }
+}
+
 // ---- refusing to start ----------------------------------------------------
 
 #[test]

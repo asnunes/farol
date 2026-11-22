@@ -353,6 +353,28 @@ describe("keyboard navigation", () => {
     expect(reading()).toContain("c.rs");
   });
 
+  it("opens Settings at its own address over the review, and closes back to it", async () => {
+    // The review stays mounted underneath, so closing Settings puts the
+    // reader back where they were instead of reloading the page.
+    serve({ review: review() });
+    render(<App />);
+    await waitForReading("src/a.rs");
+    const pane = document.querySelector(".pane");
+
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    expect(location.pathname).toBe("/settings/general");
+    expect(screen.getByRole("dialog", { name: "Settings" })).toBeTruthy();
+    expect(document.querySelector(".pane"), "the review is still there underneath").toBe(pane);
+
+    fireEvent.click(screen.getByRole("button", { name: "Lenses" }));
+    expect(location.pathname).toBe("/settings/lenses");
+
+    fireEvent.click(screen.getByRole("button", { name: "Close settings" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Settings" })).toBeNull());
+    // Back is how it leaves, and Back lands when the browser gets to it.
+    await waitFor(() => expect(location.pathname).toBe("/"));
+  });
+
   it("keeps the count beside the celebration once everything is read", async () => {
     // The count gave way to the celebration, and the reader lost how many
     // files the review had.

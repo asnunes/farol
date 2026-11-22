@@ -18,18 +18,20 @@ export function useConfig(open: boolean) {
     return () => { active = false; };
   }, [open]);
 
-  /** True once the server kept it, so a text box knows its draft is now the value. */
-  async function save(job: Promise<Config>): Promise<boolean> {
+  /** Null once the server kept it; otherwise why it did not, for the field
+   * that asked to say under itself. */
+  async function save(job: Promise<Config>): Promise<string | null> {
     setSaving(true);
     setSaved(false);
     setError(null);
     try {
       setConfig(await job);
       setSaved(true);
-      return true;
+      return null;
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Could not save settings.");
-      return false;
+      const why = reason instanceof Error ? reason.message : "Could not save settings.";
+      setError(why);
+      return why;
     } finally {
       setSaving(false);
     }
