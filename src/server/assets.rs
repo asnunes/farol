@@ -19,7 +19,14 @@ pub async fn handler(uri: Uri) -> Response {
     let path = uri.path().trim_start_matches('/');
     let path = if path.is_empty() { "index.html" } else { path };
 
-    match Assets::get(path).or_else(|| Assets::get("index.html")) {
+    // An address the page routes itself, like `/settings/lenses`, gets the
+    // page — and is answered as the page, not as whatever its path suggests:
+    // typed by the path, it came back as a download.
+    let (path, file) = match Assets::get(path) {
+        Some(file) => (path, Some(file)),
+        None => ("index.html", Assets::get("index.html")),
+    };
+    match file {
         Some(file) => {
             let mime = mime_for(path);
             ([(header::CONTENT_TYPE, mime)], file.data.into_owned()).into_response()
