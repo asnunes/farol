@@ -1,8 +1,7 @@
-import { ArrowDown, ArrowUp, Space } from "lucide-react";
+import { ArrowDown, ArrowUp, Settings, Space } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
 import { MOD } from "@/hooks/useShortcuts";
-import { Settings } from "@/review/Settings";
 import { ThemeSwitch } from "@/review/ThemeSwitch";
 import type { Theme } from "@/hooks/useTheme";
 
@@ -28,7 +27,7 @@ import type { Theme } from "@/hooks/useTheme";
  * than no row at all: it looks broken and offers nothing to press. One button
  * stands in for the whole list, which is the only way to reach the keys at all
  * on a screen with no `?` to press. */
-export function KeyBar({ theme, onTheme, sidebarOpen, onHelp }: KeyBarProps) {
+export function KeyBar({ theme, onTheme, sidebarOpen, onHelp, onSettings }: KeyBarProps) {
   const shortcuts = [
     { keys: [`${MOD}B`], what: sidebarOpen ? "hide sidebar" : "show sidebar" },
     ...SHORTCUTS,
@@ -37,7 +36,16 @@ export function KeyBar({ theme, onTheme, sidebarOpen, onHelp }: KeyBarProps) {
   return (
     <nav className="keybar col-span-full flex items-center justify-between gap-3 border-t border-rule bg-surface px-4 py-1.5 font-sans text-xs text-ink-muted md:px-5">
       <div className="flex items-center gap-2">
-        <Settings />
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          className="text-ink-muted hover:bg-transparent hover:text-ink max-md:size-9"
+          onClick={onSettings}
+          aria-label="Settings"
+          title="Settings"
+        >
+          <Settings className="size-3.5" aria-hidden="true" />
+        </Button>
         <ThemeSwitch theme={theme} onChange={onTheme} />
       </div>
 
@@ -94,6 +102,7 @@ type KeyBarProps = {
   sidebarOpen: boolean;
   /** Open the list of keys, for the screen that has no room to print it. */
   onHelp: () => void;
+  onSettings: () => void;
 };
 
 type KeyProps = { children: React.ReactNode };

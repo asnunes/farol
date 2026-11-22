@@ -14,6 +14,8 @@ import { useNavigation } from "@/hooks/useNavigation";
 import { useReview } from "@/hooks/useReview";
 import { useShortcuts } from "@/hooks/useShortcuts";
 import { useSidebar } from "@/hooks/useSidebar";
+import { useSettingsRoute } from "@/hooks/useSettingsRoute";
+import { SettingsPage } from "@/review/settings/SettingsPage";
 import { useStop } from "@/hooks/useStop";
 import { Activity } from "@/review/activity/Activity";
 import { HelpDialog } from "@/review/HelpDialog";
@@ -81,6 +83,10 @@ export default function App() {
     jumpToThread,
   } = useNavigation({ review, current, setCurrent, toggleViewed, toggleSeen, files, comments });
 
+  // Asked before Settings closes with something unsaved; Settings sets it.
+  const leave = useRef<() => boolean>(() => true);
+  const settings = useSettingsRoute(useCallback(() => leave.current(), []));
+
   useShortcuts({
     review,
     order,
@@ -93,6 +99,7 @@ export default function App() {
     setHelpOpen,
     toggleSidebar,
     toggleActivity: () => setActivityOpen((open) => !open),
+    paused: settings.section !== null,
   });
 
   if (stopped) {
@@ -201,7 +208,11 @@ export default function App() {
           onTheme={setTheme}
           sidebarOpen={sidebarOpen}
           onHelp={() => setHelpOpen(true)}
+          onSettings={() => settings.open("general")}
         />
+        {settings.section && (
+          <SettingsPage section={settings.section} onSection={settings.open} onClose={settings.close} guard={leave} />
+        )}
         <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
         {/* Only where there is an agent to hear from, or something it already
             did: on a review with neither, the corner stays empty. */}
