@@ -271,6 +271,21 @@
   background-color: var(--color-comment-dim);
 }
 
+/* What sits between the lines, a note, a thread, the box to write one, a
+   stretch left closed, stays where the reader is while the code scrolls
+   sideways under it, as wide as the pane. Left where it was, it scrolled away
+   with the code and left a hole in the middle of the file. Its parents are as
+   wide as the longest line, which is what gives it room to stay. */
+.diff .spans {
+  width: max-content;
+  min-width: 100%;
+}
+.diff :is(.note, .comment, .commentbox, .gap) {
+  position: sticky;
+  left: 0;
+  width: 100cqw;
+}
+
 /* One line per line, in the shape the file has it. Unlayered on purpose: it has
    to beat the utilities that set the same properties. */
 .diff-row .code,

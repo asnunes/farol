@@ -76,55 +76,64 @@ export function Diff({ diff, file, view, comments, actions }: DiffProps) {
 
   return (
     <div
-      className="diff overflow-x-auto font-mono text-xs leading-relaxed md:text-[0.8125rem]"
+      className="diff @container overflow-x-auto font-mono text-xs leading-relaxed md:text-[0.8125rem]"
       style={{ "--longest-line": widest } as React.CSSProperties}
     >
-      {onFile.map((one) => (
-        <Loose key={one.id} one={one} actions={actions} />
-      ))}
-      {diff.hunks.map((hunk, i) => {
-        // The gap above this hunk: the leading one for the first hunk, and the
-        // one between neighbours after that.
-        const gap = gaps.find((g) => g.to === hunk.newStart - 1);
-        const { above, closed } = gap ? opening(gap, opened) : empty;
+      {/* One wrapper as wide as the longest line, so everything between the
+          lines, down to a pending comment on the whole file, has room to
+          stay in view as the code scrolls. */}
+      <div className="spans">
+        {onFile.map((one) => (
+          <Loose key={one.id} one={one} actions={actions} />
+        ))}
+        {diff.hunks.map((hunk, i) => {
+          // The gap above this hunk: the leading one for the first hunk, and the
+          // one between neighbours after that.
+          const gap = gaps.find((g) => g.to === hunk.newStart - 1);
+          const { above, closed } = gap ? opening(gap, opened) : empty;
 
-        // Still closed and reaching down to this hunk, so its controls belong
-        // in the hunk's own band rather than in a second one right above it.
-        const joined = closed !== null && closed.to === gap?.to;
+          // Still closed and reaching down to this hunk, so its controls belong
+          // in the hunk's own band rather than in a second one right above it.
+          const joined = closed !== null && closed.to === gap?.to;
 
-        return (
-          <div key={i}>
-            {gap && (
-              <>
-                {above
-                  .filter((range) => !closed || range.to < closed.from)
-                  .map((range) => stretch(range, gap))}
+          return (
+            <div key={i}>
+              {gap && (
+                <>
+                  {above
+                    .filter((range) => !closed || range.to < closed.from)
+                    .map((range) => stretch(range, gap))}
 
-                {closed && !joined && <Gap gap={closed} onOpen={open} />}
+                  {closed && !joined && <Gap gap={closed} onOpen={open} />}
 
-                {above
-                  .filter((range) => closed !== null && range.from > closed.to)
-                  .map((range) => stretch(range, gap))}
-              </>
-            )}
+                  {above
+                    .filter(
+                      (range) => closed !== null && range.from > closed.to,
+                    )
+                    .map((range) => stretch(range, gap))}
+                </>
+              )}
 
-            <DiffHunk
-              hunk={hunk}
-              file={file}
-              view={view}
-              commentary={commentary}
-              gap={joined && closed ? { gap: closed, onOpen: open } : undefined}
-            />
-          </div>
-        );
-      })}
+              <DiffHunk
+                hunk={hunk}
+                file={file}
+                view={view}
+                commentary={commentary}
+                gap={
+                  joined && closed ? { gap: closed, onOpen: open } : undefined
+                }
+              />
+            </div>
+          );
+        })}
 
-      {below && tail && (
-        <>
-          {tail.above.map((range) => stretch(range, below))}
-          {tail.closed && <Gap gap={tail.closed} onOpen={open} />}
-        </>
-      )}
+        {below && tail && (
+          <>
+            {tail.above.map((range) => stretch(range, below))}
+            {tail.closed && <Gap gap={tail.closed} onOpen={open} />}
+          </>
+        )}
+      </div>
     </div>
   );
 }
